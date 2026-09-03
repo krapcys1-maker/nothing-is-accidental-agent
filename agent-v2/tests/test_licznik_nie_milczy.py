@@ -224,7 +224,15 @@ def alarmuje(tekst, rodzaj):
 
 
 def pelny_budzet(**zmiany):
-    b = {"notki": 5, "komentarze": 19, "lajki": 13, "restacki": 1,
+    # LICZBY BRANE Z KONFIGURACJI, NIE WPISANE NA SZTYWNO. Stalo tu
+    # `komentarze: 19, notki: 5` i test oblewal przy kazdej zmianie normy —
+    # 3 wrzesnia 2026 przy zejsciu komentarzy na 7-9 i podniesieniu notek do
+    # dziesieciu. Sedno tego pliku to ZACHOWANIE licznika przy pelnym budzecie,
+    # a nie konkretna wysokosc normy; wpisana liczba czynila z niego druga
+    # prawde, ktora rozjezdza sie z pierwsza.
+    b = {"notki": len(config.NOTE_MIX_OTHER_DAY),
+         "komentarze": sum(config.KOMENTARZE_DZIENNIE) // 2,
+         "lajki": 13, "restacki": 1,
          "subskrypcje": 0, "follow": 0}
     b.update(zmiany)
     return b
@@ -331,22 +339,38 @@ def zestaw(data_dzis, stary):
     # dokladnie jedna piata planu, JEST na czas; doba bez sladu jest na zerze.
     # Bez przyciecia planu w `--dzis` bylo odwrotnie niz w tabeli: praca
     # dostawala „1 / 5  20%!!", a bezczynnosc — cisze.
+    # DWA NALEZNE PRZEBIEGI, NIE JEDEN — od 3 wrzesnia 2026.
+    #
+    # Plan komentarzy zszedl z 19 na osiem, wiec po JEDNYM z pieciu przebiegow
+    # nalezne sa 1,6, czyli po zaokragleniu dwa — a `_znak` swiadomie milczy
+    # ponizej trzech (`MIN_PLAN_DZIENNY_DO_ZNAKU`), bo przy planie dwa jeden
+    # brakujacy element to 50 procent, liczba nieodroznialna od zaokraglenia.
+    # Ten test bada, czy licznik ODROZNIA prace od bezczynnosci, a nie gdzie
+    # stoi prog wyciszenia — wiec symulacja przesuwa sie na moment, w ktorym
+    # prog jest przekroczony. Liczby ida z konfiguracji, zeby nie rozjechaly
+    # sie przy nastepnej zmianie normy.
+    _nalezne = 2
+    _plan_kom = sum(config.KOMENTARZE_DZIENNIE) // 2
+    # SUFIT, nie zaokraglenie: „na czas" znaczy POKRYTE naleznE w calosci,
+    # a A10 zada >= 100%. Przy 3,2 naleznych zaokraglenie dalo by 3, czyli
+    # 94% — dobe na czas ukarano by za wlasne zaokraglenie.
+    _na_czas = -(-_plan_kom * _nalezne // config.PRZEBIEGOW_DZIENNIE)
     b_dzis = pelny_budzet()
-    przygotuj(wpisy + przebieg_dnia(data_dzis, {"notki": 1, "komentarze": 4}),
+    przygotuj(wpisy + przebieg_dnia(data_dzis, {"notki": 1, "komentarze": _na_czas}),
               dict(budzety, **{data_dzis: b_dzis}))
-    podepnij(norma, moment, nalezne=1, przebiegi_dzis=1)
+    podepnij(norma, moment, nalezne=_nalezne, przebiegi_dzis=_nalezne)
     _, praca = uruchom(norma, "--dzis")
-    podepnij(stary, moment, nalezne=1, przebiegi_dzis=1)
+    podepnij(stary, moment, nalezne=_nalezne, przebiegi_dzis=_nalezne)
     _, stara_praca = uruchom(stary, "--dzis")
     przygotuj(wpisy, budzety)
-    podepnij(norma, moment, nalezne=1)
+    podepnij(norma, moment, nalezne=_nalezne)
     _, martwa = uruchom(norma, "--dzis")
 
     p_praca = wiersz_dzis(praca, "komentarz")
     p_martwa = wiersz_dzis(martwa, "komentarz")
     # 19 komentarzy planu na cala dobe, po pierwszym z pieciu przebiegow
     # nalezne sa 3,8 — wiec cztery wystawione to 105%, czyli praca NA CZAS.
-    sprawdz("A10 doba na czas (4 z 19 po pierwszym z pieciu przebiegow)"
+    sprawdz("A10 doba na czas (tyle, ile nalezne po dwoch z pieciu przebiegow)"
             " nie dostaje wykrzyknika",
             p_praca and p_praca[2] >= 100 and p_praca[3] == "",
             surowy_wiersz(praca, "komentarz"))

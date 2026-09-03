@@ -64,7 +64,7 @@ def _forma(dzien_roku, od, i):
 
 
 pary = []
-for od, ile in ((0, 2), (2, 2), (4, 1)):
+for od, ile in ((0, 2), (2, 2), (4, 2), (6, 2), (8, 2)):
     t = TYPY[od:od + ile]
     f = [_forma(237, od, i) for i in range(len(t))]
     for a, b in zip(t, f):
@@ -79,23 +79,44 @@ sprawdz("dzien ma tyle form co typow", len(pary) == len(TYPY), len(pary))
 osiagalne = set()
 pary_wszystkie = set()
 for dzien in range(1, 30):
-    for od, ile in ((0, 2), (2, 2), (4, 1)):
+    for od, ile in ((0, 2), (2, 2), (4, 2), (6, 2), (8, 2)):
         for i, typ in enumerate(TYPY[od:od + ile]):
             f = _forma(dzien, od, i)
             osiagalne.add(f)
             pary_wszystkie.add((typ, f))
 brakujace = sorted(set(config.NOTE_FORM_MIX) - osiagalne)
 sprawdz("KAZDA forma wypada w ciagu miesiaca", not brakujace, brakujace)
-sprawdz("i par typ-forma jest duzo wiecej niz typow",
-        len(pary_wszystkie) >= len(TYPY) * 4, len(pary_wszystkie))
+# LICZYMY WOBEC ROZNYCH TYPOW, NIE WOBEC DLUGOSCI MIKSU. Do 3 wrzesnia 2026
+# stalo tu `len(TYPY) * 4` i dzialalo przypadkiem, bo miks mial piec pozycji
+# i cztery rozne typy. Po podwojeniu miksu do dziesieciu pozycji ten sam warunek
+# zada 40 par, a par MOZE byc najwyzej 4 x 8 = 32 — czyli asercja stala sie
+# niespelnialna z arytmetyki, a nie z wady kodu.
+#
+# Nowy warunek jest przy okazji MOCNIEJSZY: zada, zeby w ciagu miesiaca wystapil
+# KOMPLET par, a nie „duzo".
+mozliwe = len(set(TYPY)) * len(config.NOTE_FORM_MIX)
+sprawdz("w ciagu miesiaca wypada KOMPLET par typ-forma (%d)" % mozliwe,
+        len(pary_wszystkie) == mozliwe,
+        (len(pary_wszystkie), mozliwe))
 
-# KONTRDOWOD: stary wzor BEZ dryfu zostawialby czesc form nieosiagalna.
-stare_osiagalne = {config.NOTE_FORM_MIX[(od + i) % len(config.NOTE_FORM_MIX)]
-                   for od, ile in ((0, 2), (2, 2), (4, 1))
-                   for i in range(ile)}
-sprawdz("stary wzor NIE osiagal wszystkich form (test rozroznia)",
-        set(config.NOTE_FORM_MIX) - stare_osiagalne,
-        sorted(set(config.NOTE_FORM_MIX) - stare_osiagalne))
+# KONTRDOWOD PRZEPISANY, bo stary przestal rozrozniac — i to jest uczciwa
+# konsekwencja podwojenia miksu, nie usterka.
+#
+# Do 3 wrzesnia doba miala piec notek, wiec `od` dochodzilo do czterech przy
+# osmiu formach: wzor BEZ dryfu zostawial trzy formy nieosiagalne i to bylo
+# sedno tamtego kontrdowodu. Przy dziesieciu notkach `od` siega dziewieciu,
+# wiec samo modulo obchodzi juz caly miks i „nieosiagalnych form" nie ma.
+#
+# Wartosc dryfu jest jednak inna i nadal realna: bez niego KAZDY TYP MA NA STALE
+# TE SAMA FORME. Tak wlasnie wygladalo to przed poprawka — audyt zmierzyl trzy
+# z czterech typow z jedna przypisana forma. Dlatego kontrdowod pyta teraz
+# o liczbe PAR, a nie o zasieg form.
+stare_pary = {(TYPY[od + i], config.NOTE_FORM_MIX[(od + i) % len(config.NOTE_FORM_MIX)])
+              for od, ile in ((0, 2), (2, 2), (4, 2), (6, 2), (8, 2))
+              for i in range(ile)}
+sprawdz("KONTRDOWOD: bez dryfu typ dostaje na stale te sama forme"
+        " (%d par zamiast %d)" % (len(stare_pary), mozliwe),
+        len(stare_pary) < mozliwe / 2, len(stare_pary))
 
 ciekawostki = [f for t, f in pary_wszystkie if t == "CIEKAWOSTKA"]
 sprawdz("CIEKAWOSTKA nie zawsze ma te sama forme",

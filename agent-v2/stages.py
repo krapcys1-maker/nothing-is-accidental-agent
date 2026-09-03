@@ -3280,7 +3280,12 @@ def notki_dnia(
         juz_o_tym.append("%s %s" % (karta.get("article_title") or "",
                                     (karta.get("article_text") or "")[:400]))
     for nr, typ in enumerate(typy):
-        forma = formy[nr] if nr < len(formy) else "PROSTA"
+        # `formy` jest budowane RAZ NA TYLE, ILE JEST TYPOW (patrz wyzej), wiec
+        # ma zawsze tyle samo pozycji co `typy` — takze po przejsciu na dziesiec
+        # notek przy osmiu formach, bo indeks idzie modulo dlugosc miksu.
+        # Stare `if nr < len(formy) else "PROSTA"` bylo martwa galezia i przy
+        # dziesieciu notkach wygladalo na pulapke, ktora nia nie jest.
+        forma = formy[nr]
         if typ == "MYSL":
             # JEDYNY TYP BEZ KARTY DOWODOWEJ — i dlatego nie zabiera faktu z
             # puli. Fakt zuzyty na notke, ktorej nie wolno go uzyc, przepadlby

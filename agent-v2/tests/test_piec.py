@@ -326,7 +326,13 @@ sprawdz("run.py odhacza fakt dopiero po potwierdzonej publikacji",
 MIX = list(config.NOTE_MIX_OTHER_DAY)
 print("    sklad dnia: %s" % MIX)
 zebrane, juz = [], 0
-for ile in (2, 2, 1):
+# PRZEBIEGOW JEST PIEC, a doba ma od 3 wrzesnia 2026 dziesiec notek — wiec
+# rozdzial liczymy z DLUGOSCI MIKSU, a nie z wpisanej na sztywno piatki.
+# Tak samo robi produkcja: `notki_dnia` bierze wycinek `MIX[od : od + ile]`.
+podzial = [len(MIX) // config.PRZEBIEGOW_DZIENNIE] * config.PRZEBIEGOW_DZIENNIE
+for i in range(len(MIX) - sum(podzial)):
+    podzial[i] += 1
+for ile in podzial:
     kawalek = MIX[juz: juz + ile]
     zebrane += kawalek
     print("    przebieg: od=%s ile=%s -> %s" % (juz, ile, kawalek))

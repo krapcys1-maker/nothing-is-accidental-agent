@@ -67,8 +67,15 @@ sprawdz("lajki 10-16 (było 12-20)", config.LAJKI_DZIENNIE == (10, 16),
 # trafniej: bot poznaje sie nie po LICZBIE, tylko po tym, ze wystawia je jeden
 # po drugim. Razem z ta zmiana odstep poszedl na 5-15 min, a przebiegow jest
 # piec zamiast trzech, wiec 19 komentarzy rozklada sie na ~190 minut.
-sprawdz("komentarze 15-23 (bylo 8-12)", config.KOMENTARZE_DZIENNIE == (15, 23),
-        config.KOMENTARZE_DZIENNIE)
+# ZEJSCIE NA 7-9 (okolo osmiu), 3 wrzesnia 2026 — decyzja wlasciciela oparta
+# na pomiarze, nie na przeczuciu. Osiemdziesiat dwa komentarze przez dziewiec
+# dni daly PIEC odpowiedzi; notki w tym samym czasie 0,43 odpowiedzi na sztuke.
+# Panel Substacka przypisal wszystkie zapisy notkom, komentarze nie pojawily sie
+# jako zrodlo ani razu. Argument z 30 sierpnia („bot poznaje sie nie po LICZBIE,
+# tylko po serii jeden po drugim") NADAL JEST SLUSZNY — dlatego odstep zostaje
+# bez zmian, a schodzi sama liczba.
+sprawdz("komentarze 7-9, czyli okolo osmiu (bylo 15-23)",
+        config.KOMENTARZE_DZIENNIE == (7, 9), config.KOMENTARZE_DZIENNIE)
 sprawdz("i odstep urosl razem z liczba — inaczej to byloby seria",
         config.ODSTEPY["komentarz"][0] >= 300, config.ODSTEPY["komentarz"])
 sprawdz("restacki 1-2 (było 2-4)", config.RESTACK_DZIENNIE == (1, 2),
@@ -107,8 +114,15 @@ sprawdz("i to subskrypcji jest WIECEJ, bo za to placi sie skutkiem",
         (config.SUBSKRYPCJE_MIESIECZNIE, config.FOLLOW_MIESIECZNIE))
 sprawdz("KONTRDOWOD: stary uklad (30,44)+(6,12) mial to dokladnie odwrotnie",
         not (sum((6, 12)) > sum((30, 44))))
-sprawdz("notki nietknięte — to silnik wzrostu",
-        len(config.NOTE_MIX_OTHER_DAY) == 5, len(config.NOTE_MIX_OTHER_DAY))
+# NOTKI PODNIESIONE Z PIECIU NA DZIESIEC, 3 wrzesnia 2026. Zdanie „to silnik
+# wzrostu" bylo tu od poczatku jako uzasadnienie, zeby ich NIE ruszac w dol.
+# Teraz ten sam argument dziala w gore i ma juz pomiar pod soba: panel Substacka
+# przypisuje notkom piec zapisow na szesc. Polowe pisze tanszy model, wiec dwa
+# razy wiecej notek kosztuje mniej niz dotychczasowe piec na samym Opusie.
+sprawdz("notki podniesione do dziesieciu — to silnik wzrostu",
+        len(config.NOTE_MIX_OTHER_DAY) == 10, len(config.NOTE_MIX_OTHER_DAY))
+sprawdz("i material nadaza: dwa dobierania na dobe zamiast jednego",
+        config.SZUKANIE_BANKU_NA_DOBE == 2, config.SZUKANIE_BANKU_NA_DOBE)
 
 print()
 print("=== 3. KAZDE WIDELKI MAJA SENS JAKO WIDELKI ===")

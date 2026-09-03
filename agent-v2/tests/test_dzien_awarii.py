@@ -299,13 +299,21 @@ try:
 
     print()
     print("=== 4. --dzis MIERZY PLANEM DNIA, NIE AMBICJA ===")
-    # Rozbieg: plan 8 komentarzy przy normie 19. Osiem zrobionych to 100%
-    # wlasnego planu, a licznik meldowal „8 / 19  42%!!".
-    przygotuj([wpis(0, "komentarz")] * 8 + [wpis(0, "notka")] * 5,
-              {dzien(0): {"notki": 5, "komentarze": 8, "lajki": 0,
+    # Rozbieg: plan komentarzy to POLOWA normy. Tyle, ile w planie, to 100%
+    # wlasnego planu, a licznik meldowal „4 / 8  50%!!".
+    #
+    # LICZBY IDA Z KONFIGURACJI, NIE Z PAMIECI. Do 2 wrzesnia 2026 stalo tu
+    # „8 przy normie 19"; po zejsciu z komentarzami do osmiu na dobe plan
+    # zrownal sie z norma, obie miary dawaly to samo i kontrdowod przestawal
+    # czegokolwiek dowodzic — mimo ze naprawa dalej dziala.
+    _norma_kom = int(NORMY["komentarz"])
+    _rozbieg = _norma_kom // 2
+    przygotuj([wpis(0, "komentarz")] * _rozbieg + [wpis(0, "notka")] * 5,
+              {dzien(0): {"notki": 5, "komentarze": _rozbieg, "lajki": 0,
                           "restacki": 2, "subskrypcje": 0, "follow": 0}})
     kod, tekst = uruchom("--dzis")
-    sprawdz("komentarze mierzone planem dnia", "8 / 8" in tekst,
+    sprawdz("komentarze mierzone planem dnia",
+            "%d / %d" % (_rozbieg, _rozbieg) in tekst,
             [l for l in tekst.splitlines() if "komentarz" in l])
     sprawdz("czyli 100%%, bez wykrzyknika",
             any("komentarz" in l and "100%" in l and "!" not in l
@@ -323,12 +331,13 @@ try:
     # KONTRDOWOD: stara miara (dzisiejsza norma) dawala na tych samych danych
     # 42 procent i podwojny wykrzyknik. Gdyby dawala to samo, naprawa byla by
     # bez znaczenia.
-    sprawdz("KONTRDOWOD: ambicja dawala 42%% i `!!`",
-            round(100.0 * 8 / NORMY["komentarz"]) == 42
-            and norma._znak(8, NORMY["komentarz"]) == "!!",
-            NORMY["komentarz"])
+    _proc_ambicji = round(100.0 * _rozbieg / _norma_kom)
+    sprawdz("KONTRDOWOD: ambicja dawala %d%% i `!!`" % _proc_ambicji,
+            _proc_ambicji < config.PROG_ALARMU_WOLUMENU
+            and norma._znak(_rozbieg, _norma_kom) == "!!",
+            (_rozbieg, _norma_kom))
     sprawdz("KONTRDOWOD: i tej liczby juz nie ma w wydruku",
-            "8 / 19" not in tekst, tekst)
+            "%d / %d" % (_rozbieg, _norma_kom) not in tekst, tekst)
 
     # Gdy planu na dzis NIE zapisano, widok ma to POWIEDZIEC, a nie udawac
     # pomiaru wykonania.
@@ -603,8 +612,21 @@ try:
             ile_notek - 1 >= norma.MIN_PLAN_DZIENNY_DO_ZNAKU, ile_notek)
     sprawdz("wiec skrocenie NOTE_MIX_OTHER_DAY o jeden NIE wycisza notek",
             norma._znak(0, ile_notek - 1) == "!!", ile_notek - 1)
-    sprawdz("KONTRDOWOD: przy starym progu 5 wyciszalo (%d < 5)"
-            % (ile_notek - 1), ile_notek - 1 < 5, ile_notek)
+    # KONTRDOWOD ODTWARZANY, NIE OPISANY: podstawiamy STARY prog (5) i pytamy
+    # te sama funkcje o plan, jaki zostawal po skroceniu OWCZESNEJ, PIECIO-
+    # ELEMENTOWEJ krotki — czyli o cztery. Piatka i czworka sa wpisane na
+    # sztywno, bo opisuja stan SPRZED zmiany; dzisiejsza krotka ma %d pozycji
+    # i tego zagrozenia juz nie ma, wiec wyprowadzanie tych liczb z konfigu-
+    # racji zamienilo by kontrdowod w tautologie.
+    _prog_dzis = norma.MIN_PLAN_DZIENNY_DO_ZNAKU
+    try:
+        norma.MIN_PLAN_DZIENNY_DO_ZNAKU = 5
+        _wyciszone = norma._znak(0, 4)
+    finally:
+        norma.MIN_PLAN_DZIENNY_DO_ZNAKU = _prog_dzis
+    sprawdz("KONTRDOWOD: prog 5 przy planie 4 milczal calkowicie",
+            _wyciszone == "" and norma._znak(0, 4) == "!!",
+            (repr(_wyciszone), ile_notek))
 
     # ZAKAZANY KIERUNEK BYL TU ZAMROZONY OD ZLEJ STRONY. Jeden dzien, ZAPISANY
     # plan 5 notek, zero wykonanych: tabela pisala `0/5!!`, a alarm milczal

@@ -175,10 +175,42 @@ def rozklad(z_przesunieciem: bool) -> dict:
 
 bez, z_nim = rozklad(False), rozklad(True)
 typy = list(dict.fromkeys(MIKS))
-sprawdz("KONTRDOWOD: bez przesuniecia jeden pisarz NIGDY nie pisze"
-        " niektorych rodzajow",
-        any(bez[("note", t)] == 0 or bez[("note_tani", t)] == 0 for t in typy),
-        {t: (bez[("note", t)], bez[("note_tani", t)]) for t in typy})
+
+
+def rozklad_dla(miks, z_przesunieciem: bool) -> collections.Counter:
+    par = collections.Counter()
+    for doba in range(14):
+        for i, typ in enumerate(miks):
+            e = "note" if (i + (doba if z_przesunieciem else 0)) % 2 == 0 else "note_tani"
+            par[(e, typ)] += 1
+    return par
+
+
+# KONTRDOWOD NA MIKSIE PIECIOELEMENTOWYM — tym, ktory byl do 3 wrzesnia 2026.
+#
+# Przy dzisiejszym miksie DZIESIECIU pozycji problem znika sam: kazdy typ stoi
+# i na parzystym, i na nieparzystym indeksie, wiec obaj pisarze dostaja wszystko
+# nawet BEZ przesuniecia. Gdyby zostawic tu stary kontrdowod, swiecilby na
+# zielono i niczego nie pilnowal.
+#
+# Wada byla jednak prawdziwa i zostala zmierzona na produkcji: przy miksie
+# pieciu pozycji DeepSeek napisal SPROSTOWANIE, a Opus MYSL, dokladnie zgodnie
+# ze stala kolejnoscia. Dlatego kontrdowod odtwarza TAMTEN miks — a przesuniecie
+# zostaje w kodzie jako obrona na wypadek powrotu do nieparzystej dlugosci.
+MIKS_5 = ("CIEKAWOSTKA", "CIEKAWOSTKA", "DYSKUSJA", "SPROSTOWANIE", "MYSL")
+bez_5 = rozklad_dla(MIKS_5, False)
+z_nim_5 = rozklad_dla(MIKS_5, True)
+typy_5 = list(dict.fromkeys(MIKS_5))
+sprawdz("KONTRDOWOD (miks pieciu): bez przesuniecia jeden pisarz NIGDY nie"
+        " pisze niektorych rodzajow",
+        any(bez_5[("note", t)] == 0 or bez_5[("note_tani", t)] == 0 for t in typy_5),
+        {t: (bez_5[("note", t)], bez_5[("note_tani", t)]) for t in typy_5})
+sprawdz("a z przesunieciem tamten miks tez sie domyka",
+        all(z_nim_5[("note", t)] and z_nim_5[("note_tani", t)] for t in typy_5),
+        {t: (z_nim_5[("note", t)], z_nim_5[("note_tani", t)]) for t in typy_5})
+sprawdz("dzisiejszy miks ma parzysta dlugosc, wiec sam nie przypina pisarza"
+        " do rodzaju",
+        len(MIKS) % 2 == 0, len(MIKS))
 sprawdz("z przesunieciem KAZDY pisarz dostaje KAZDY rodzaj",
         all(z_nim[("note", t)] and z_nim[("note_tani", t)] for t in typy),
         {t: (z_nim[("note", t)], z_nim[("note_tani", t)]) for t in typy})

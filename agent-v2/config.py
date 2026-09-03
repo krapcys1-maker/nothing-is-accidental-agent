@@ -1549,7 +1549,21 @@ BANK_MAKS_WOLNYCH = 20
 # Sufit banku (`BANK_MAKS_WOLNYCH`) mial to zatrzymywac i przez trzy dni nie
 # zatrzymal ANI RAZU, bo obchodzila go regula o wielkim wydarzeniu — a
 # wydarzeniem bylo za kazdym razem to samo: premiera GLM 5.3 sprzed kilku dni.
-SZUKANIE_BANKU_NA_DOBE = 1
+# PODNIESIONE Z 1 NA 2 razem z przejsciem na dziesiec notek dziennie
+# (3 wrzesnia 2026). Rachunek, ktory to wymusza: dziesiec notek zjada dziesiec
+# tematow na dobe, a jedno dobieranie oddaje osiem faktow, z ktorych po odsiewie
+# swiezosci zostaje okolo pieciu. Przy jednym szukaniu bank chudl by o piec
+# dziennie i pusty bylby po pieciu dobach — czyli wrocilby dokladnie ten problem,
+# ktory 2 wrzesnia konczyl dzien na trzech notkach.
+#
+# Czego to NIE cofa: nadmiaru z 1 wrzesnia. Wtedy bylo piec szukan na dobe przy
+# banku z 58 nieuzytymi pozycjami, bo obchodzila limit regula o wielkim
+# wydarzeniu. Dzis sufit banku dziala, niewydane wracaja do puli, a odsiew nie
+# wpuszcza wariantow tego samego — wiec dwa szukania odpowiadaja realnemu
+# zuzyciu, a nie apetytowi.
+#
+# Koszt: okolo 0,078 USD za szukanie, czyli plus 2,4 USD miesiecznie.
+SZUKANIE_BANKU_NA_DOBE = 2
 
 # JAK DLUGO TO SAMO WYDARZENIE NIE OTWIERA FURTKI DRUGI RAZ.
 #
@@ -1624,7 +1638,27 @@ def losowy_ksztalt_mysli() -> str:
     """Ktory ksztalt dostaje ta MYSL. Losowany, bo wybor zbiega do stalej."""
     import random
     return random.choice(list(KSZTALTY_MYSLI))
-NOTE_MIX_OTHER_DAY = ("CIEKAWOSTKA", "CIEKAWOSTKA", "DYSKUSJA", "SPROSTOWANIE", "MYSL")
+# DZIESIEC NOTEK NA DOBE ZAMIAST PIECIU — decyzja wlasciciela, 3 wrzesnia 2026.
+# Liczba notek na dobe to DLUGOSC TEJ KROTKI i tylko ona.
+#
+# Powod: panel Substacka przypisuje notkom piec zapisow na szesc, a komentarzom
+# zero — wiec pieniadze ida tam, gdzie cos przychodzi. Polowa notek idzie
+# tanszym pisarzem (`note_tani`), wiec dwa razy wiecej notek kosztuje MNIEJ niz
+# dzisiejsze piec na samym Opusie.
+#
+# Proporcje zostaja te same, co przy pieciu — krotka jest podwojona, nie
+# przemyslana od nowa. Powod: miks byl dobrany pomiarem („konwertuja notki
+# konkretne i taktyczne, nie motywacyjne"), a podwojenie zachowuje ten rozklad
+# i nie udaje, ze mamy nowa wiedze.
+#
+# CO TO WYMUSZA PO STRONIE MATERIALU, policzone przed zmiana: bank ma dzis 24
+# rozne tematy. Przy dziesieciu notkach schodzi o dziesiec dziennie, a jedno
+# dobieranie oddaje osiem faktow, z ktorych po odsiewie swiezosci zostaje okolo
+# pieciu. Jedno szukanie na dobe znaczyloby wiec ubytek piec dziennie i pusty
+# bank po pieciu dobach. Dlatego razem z ta zmiana idzie
+# `SZUKANIE_BANKU_NA_DOBE = 2`.
+NOTE_MIX_OTHER_DAY = ("CIEKAWOSTKA", "CIEKAWOSTKA", "DYSKUSJA", "SPROSTOWANIE", "MYSL",
+                      "CIEKAWOSTKA", "CIEKAWOSTKA", "DYSKUSJA", "SPROSTOWANIE", "MYSL")
 
 # --- zachowanie spoleczne: widelki, nie stale liczby -------------------------
 # Stala liczba dziennie wyglada jak robot, bo czlowiek nie ma normy. Losujemy
@@ -1674,7 +1708,26 @@ LAJKI_DZIENNIE = (10, 16)
 # „to aforyzm, nie ma z czym dyskutowac", a osiem celow przepadlo przez to
 # w calosci. Cisza jest teraz dopuszczona w pieciu wyliczonych przypadkach
 # (`prompts/komentarz.md`), a nie jako domyslna odpowiedz.
-KOMENTARZE_DZIENNIE = (15, 23)
+# ZEJSCIE Z 15-23 NA OKOLO OSIEM — decyzja wlasciciela z 2 wrzesnia 2026,
+# wykonana 3 wrzesnia po tym, jak doba pierwszy raz zamknela sie w normie.
+#
+# Powod jest zmierzony, nie estetyczny. Osiemdziesiat dwa komentarze przez
+# dziewiec dni (25.08-02.09) daly PIEC odpowiedzi; notki w tym samym czasie
+# 0,43 odpowiedzi na sztuke, czyli siedem razy wiecej. Panel Substacka
+# przypisal wszystkie zapisy NOTKOM — komentarz nie pojawil sie jako zrodlo
+# ani razu. Przy 0,059 USD za komentarz osiemnascie dziennie kosztuje 32 USD
+# miesiecznie, osiem kosztuje 14.
+#
+# CZEGO TA LICZBA NIE MOWI: zasiegu komentarzy nie znamy i nie mozna go tu
+# wliczyc. Substack oddaje karty zasiegu dla DZIEWIECIU komentarzy na
+# dziewiecdziesiat jeden — reszta nie jest liczona przez nikogo, wiec „malo
+# wyswietlen" znaczy „nikt nie policzyl", a nie „nikt nie zobaczyl".
+# Ciecie stoi na odpowiedziach i na przypisaniu subskrypcji, bo tylko te dwie
+# rzeczy sa mierzalne.
+#
+# PRZEDZIAL, NIE STALA: rytm ma nie wygladac jak maszyna, wiec dobowy przydzial
+# losuje sie z 7-9 i srednio daje osiem.
+KOMENTARZE_DZIENNIE = (7, 9)
 # ZEROWANE 2026-08-23, PRZYWROCONE 2026-09-01 — BO WNIOSEK BYL FALSZYWY.
 #
 # Stalo tu `(0, 0)` z uzasadnieniem „Substack zdjal Follow ze stron
