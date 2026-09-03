@@ -684,6 +684,31 @@ def reply_to(
     evidence: dict[str, Any],
 ) -> dict[str, Any]:
     """Odpowiedź na komentarz pod własną treścią — do szuflady."""
+    # KOMENTARZ BEZ ANI JEDNEGO SLOWA NIE WYMAGA PYTANIA MODELU.
+    #
+    # Petla nizej prosi o `COMMENT_CANDIDATES` propozycji, zeby model mial
+    # kilka podejsc do znalezienia czegos wartego powiedzenia — i to jest
+    # sluszne, bo doktryna nie uznaje ciszy za wybor. Ale gdy cudzy komentarz
+    # to samo „😂", zadne podejscie nie ma czego znalezc, a my placimy za
+    # kazde. Zmierzone na produkcji 3 wrzesnia 2026: trzy wywolania i trzy
+    # razy ta sama odpowiedz („nie ma pytania ani stanowiska"), 0,0058 USD za
+    # potwierdzenie tego samego wniosku trzykrotnie.
+    #
+    # To NIE jest cisza z wyboru ani zaostrzenie bramki: nie odrzucamy tekstu,
+    # ktory mogl by cos powiedziec. Odrzucamy przypadek, w ktorym po drugiej
+    # stronie nie ma zdania — i mowimy to wprost, zamiast udawac werdykt modelu.
+    tresc_celu = str(comment.get("text") or "")
+    if not re.search(r"[^\W\d_]{2,}", tresc_celu, re.UNICODE):
+        print("  [odpowiedź] cel nie zawiera ani jednego slowa (%s) —"
+              " nie pytam modelu" % (tresc_celu[:20] or "pusty"), flush=True)
+        # KSZTALT ZWROTU TAKI SAM JAK PRZY PELNYM PRZEBIEGU. Wywolujacy siega
+        # po `out["candidates"]`, wiec skrocona sciezka MUSI oddac ten sam
+        # slownik — inaczej oszczednosc trzech wywolan kupiona byla by
+        # wyjatkiem w srodku przebiegu.
+        return {"comment": tresc_celu[:200],
+                "candidates": [{"reply": None, "kind": "",
+                                "reason_if_silent": "no_text",
+                                "brak_tresci": True}]}
     prompt = _prompt(
         "odpowiedz.md",
         cel_slow=config.losowa_dlugosc(),

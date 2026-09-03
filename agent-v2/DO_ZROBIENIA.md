@@ -247,18 +247,7 @@ a każdy linter to zgłosi.
 
 ---
 
-## 16. Trzy wywołania, żeby trzy razy dojść do tego samego
-
-Przebieg 3 września trzykrotnie pytał model o odpowiedź na komentarz będący
-samym emoji „😂" i trzy razy dostał „MILCZY — nie ma na co odpowiadać".
-Koszt: $0,0058 za potwierdzenie tego samego wniosku trzy razy.
-
-**Zrobione, gdy:** pierwsza odmowa z powodem „nie ma treści" kończy próby dla
-tego celu, zamiast wchodzić w pętlę powtórzeń.
-
----
-
-## 17. Jeden fakt starszy niż reguła 90 dni siedzi w banku
+## 16. Jeden fakt starszy niż reguła 90 dni siedzi w banku
 
 Z 18 wolnych faktów jeden ma 95 dni (BIS, 31 maja). Zostanie odrzucony przy
 wyjmowaniu — więc nie zaszkodzi — ale zajmuje miejsce i zawyża licznik
