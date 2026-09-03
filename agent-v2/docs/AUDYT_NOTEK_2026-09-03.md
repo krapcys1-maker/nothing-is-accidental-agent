@@ -137,3 +137,49 @@ klasa problemu zostala naprawiona w KODZIE, a nie w prosbie do modelu.
 (a) otwiera sie hakiem do 4 slow i nie wiaze go w nastepnym zdaniu,
 (b) uzywa terminu spoza jezyka potocznego bez wyjasnienia obok.
 Obie wady sa wykrywalne mechanicznie — dowodem sa pomiary z sekcji 3.
+
+## 6. Rozstrzygniecie: ten sam fakt w dwoch formach, na zywo (4 wrzesnia)
+
+Wlasciciel przepisal recznie notke, ktorej nie rozumial — 158 slow przy
+suficie 64. Zeby sprawdzic, czy to sufit jest przyczyna, a nie model, ten sam
+fakt z banku (DeepSeek Harness v0.1) zostal napisany dwa razy przez ten sam
+model, `claude-opus-5`, tego samego wieczora.
+
+**Forma krotka, 56 slow (dotychczasowa):**
+
+> DeepSeek shipped a framework where the model writes its own code, runs it,
+> and spawns new agents. Open-sourced on August 13, with a paper from Peking
+> University. Tens of thousands of GitHub stars, the bookmark button developers
+> use, inside one day.
+>
+> Nobody has counted how much code in these setups was last edited by a human.
+
+Czytelnik nie dowiaduje sie, **czym jest „agent framework"**. Dostaje nazwe,
+date, liczbe gwiazdek i puente. Wszystko prawdziwe, nic zrozumialego.
+
+**Forma WYJASNIENIE, 178 slow (nowa):**
+
+> An agent framework is the scaffolding around a model. The loop that hands it
+> a task, the list of tools it may call, the files it is allowed to edit, and
+> the rule about whether it may start another copy of itself. In DeepSeek
+> Harness v0.1 all four of those are plugins, and the model can write plugins.
+>
+> The assistant on your phone has the first two and neither of the last. Its
+> tool list was fixed by whoever shipped the app. It can call a calculator. It
+> cannot write one and hand it to itself tomorrow.
+>
+> [...] Pick one agent product you actually use and find out how many of its
+> tools it can add without a human. For most of them the number is zero.
+
+Termin zdefiniowany **czterema zwyklymi rzeczami**, przylozony do telefonu
+czytelnika, zakonczony czyms, co da sie zrobic. Ta sama struktura, ktora
+wlasciciel pokazal recznie.
+
+**Koszt:** 0,1007 USD wobec 0,0768 za sam tekst, plus drozsze sprawdzenie
+faktow (0,0163 wobec 0,0031 — dluzsza notka to wiecej twierdzen do
+sprawdzenia). Razem okolo 0,117 wobec 0,080 USD, czyli **+46% na notke**.
+Przy jednej dlugiej dziennie to okolo 1,1 USD miesiecznie przy suficie 40.
+
+**Co to rozstrzyga:** aforyzm nie byl wyborem stylistycznym modelu. Byl
+osadem po scisnieciu 178 slow do 64. Ten sam model, ten sam fakt, ten sam
+wieczor — zmienil sie wylacznie sufit.
