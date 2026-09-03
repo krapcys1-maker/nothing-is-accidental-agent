@@ -191,6 +191,107 @@ def _suma(karta) -> int:
     return sum(_pozycje(karta).values())
 
 
+def _naglowki(karta) -> dict[str, int]:
+    """`headers` karty -> {tytul z malych liter: liczba}.
+
+    Karty `new_subscribers` i `shareValues` nie maja `items` ani `value` —
+    caly ich wynik siedzi w naglowkach. `_suma` bierze z naglowkow tylko
+    PIERWSZY, wiec dla karty z dwoma („New paid subs", „New free subs")
+    oddawalaby polowe prawdy bez zadnego sladu, ze cos pominela.
+    """
+    wynik: dict[str, int] = {}
+    if not isinstance(karta, dict):
+        return wynik
+    for h in karta.get("headers") or []:
+        if isinstance(h, dict) and isinstance(h.get("title"), str):
+            wynik[h["title"].strip().lower()] = _liczba(h.get("value"))
+    return wynik
+
+
+def _kto_sie_zapisal(karta) -> list[str]:
+    """Imiona ludzi z karty `new_subscribers`, w kolejnosci z API.
+
+    PO CO NAM IMIONA, a nie sama liczba. Konto ma dzis kilkudziesieciu
+    czytelnikow, wiec „ta notka przyniosla dwoch" i „przyniosla TYCH dwoch" to
+    dwie rozne informacje: druga pozwala sprawdzic, czy ten czlowiek zostal,
+    czy odpisal, czy sam pisze o tym samym. Przy tej skali to jest jedyna
+    droga, zeby zobaczyc czytelnika jako czlowieka, a nie jako slupek.
+    """
+    imiona: list[str] = []
+    if not isinstance(karta, dict):
+        return imiona
+    for lista in karta.get("userLists") or []:
+        if not isinstance(lista, dict):
+            continue
+        for u in lista.get("users") or []:
+            if isinstance(u, dict):
+                imie = u.get("name") or u.get("id")
+                if imie:
+                    imiona.append(str(imie)[:60])
+    return imiona
+
+
+def _krzywa(karta) -> dict:
+    """Z `impressions.graphData` — wejscia po 24 i 48 h ORAZ wzorzec konta.
+
+    NAJWAZNIEJSZA KARTA, KTOREJ NIE CZYTALISMY. Panel podaje godzinowy przebieg
+    wyswietlen z pierwszych 48 godzin w DWOCH seriach: „This note" i
+    „Your average". Zmierzone 3 wrzesnia 2026 na 159 pozycjach: krzywa jest przy
+    63 z nich, zawsze z obiema seriami.
+
+    Co to zmienia. Dotad porownanie pozycji miedzy soba wymagalo zgadywania
+    wieku (`po_godzinach` przyjmuje pierwszy pomiar za zero, bo godziny
+    publikacji nie znalismy dla 51 pozycji). Tu godziny sa PODANE, a do tego
+    panel sam mowi, ile mial nasz sredni wpis w tym samym momencie zycia —
+    czyli odpowiada na jedyne pytanie, ktore cos zmienia: czy ta notka byla
+    lepsza od naszej zwyklej, a nie czy miala duzo albo malo.
+
+    Oddajemy LICZBY, nie caly przebieg: pelna seria to kilkadziesiat punktow na
+    pozycje przy kazdym pomiarze, a plik statystyk jest dopisywany co przebieg.
+    """
+    wynik: dict = {}
+    if not isinstance(karta, dict):
+        return wynik
+    graf = karta.get("graphData")
+    if not isinstance(graf, dict):
+        return wynik
+    for seria in graf.get("series") or []:
+        if not isinstance(seria, dict):
+            continue
+        punkty = [(str(x.get("timestamp") or ""), _liczba(x.get("value")))
+                  for x in (seria.get("values") or []) if isinstance(x, dict)]
+        if not punkty:
+            continue
+        punkty.sort()
+        zero = punkty[0][0]
+
+        def _po(godzin: int) -> int:
+            """Ostatnia wartosc mieszczaca sie w oknie. Seria jest narastajaca."""
+            from datetime import datetime as _d
+            try:
+                t0 = _d.fromisoformat(zero.replace("Z", "+00:00"))
+            except ValueError:
+                return 0
+            ostatnia = 0
+            for znacznik, wartosc in punkty:
+                try:
+                    t = _d.fromisoformat(znacznik.replace("Z", "+00:00"))
+                except ValueError:
+                    continue
+                if (t - t0).total_seconds() <= godzin * 3600:
+                    ostatnia = wartosc
+            return ostatnia
+
+        czyja = "nasza" if seria.get("isPrimary") else "wzorzec"
+        wynik["%s_po_24h" % czyja] = _po(24)
+        wynik["%s_po_48h" % czyja] = _po(48)
+    # ILE RAZY LEPIEJ NIZ ZWYKLE. Jedna liczba, ktora da sie sortowac.
+    if wynik.get("wzorzec_po_24h"):
+        wynik["nad_wzorcem_24h"] = round(
+            wynik.get("nasza_po_24h", 0) / wynik["wzorzec_po_24h"], 2)
+    return wynik
+
+
 def z_kart(dane: dict) -> dict:
     """Odpowiedz `/api/v1/note_stats/c-{ID}` -> plaski rekord o stalych kluczach.
 
@@ -247,6 +348,26 @@ def z_kart(dane: dict) -> dict:
         # Tytul spoza tabeli nie ma wlasnego pola i to jest cala kara: siedzi
         # dalej w `interakcje`, wiec suma sie zgadza, a nowy rodzaj interakcji
         # zobaczymy w pliku, zamiast dowiedziec sie o nim z wyjatku.
+
+    # TRZY KARTY, KTORYCH NIE CZYTALISMY — dopisane 3 wrzesnia 2026 po audycie
+    # segmentu statystyk. Panel oddawal je od zawsze.
+    #
+    # `new_subscribers` to bylo najdrozsze przeoczenie: karta niesie liczbe
+    # nowych subskrybentow przypisanych DO TEJ POZYCJI, razem z imionami.
+    # Zmierzone na 159 pozycjach: piec zapisow przy czterech pozycjach
+    # (2 przy notce 323761132, po jednym przy 322556153, 322757850 i odpowiedzi
+    # 320809275) — dokladnie te same liczby, ktore osobno podaje panel zrodel
+    # ruchu. Do tego dnia raport twierdzil, ze notki nie przynosza nikogo, bo
+    # czytal pole `subskrypcje`, ktorego dla notki nie ma.
+    _ns = karty.get("new_subscribers")
+    _n_naglowki = _naglowki(_ns)
+    rekord["zapisy_darmowe"] = _n_naglowki.get("new free subs", 0)
+    rekord["zapisy_platne"] = _n_naglowki.get("new paid subs", 0)
+    rekord["kto_sie_zapisal"] = _kto_sie_zapisal(_ns)
+    # `shareValues` — udostepnienia. Artykul mial to pole od dawna, notka nie.
+    rekord["udostepnienia"] = _naglowki(karty.get("shareValues")).get("shares", 0)
+    # Krzywa z pierwszych 48 h razem z wzorcem konta.
+    rekord.update(_krzywa(karty.get("impressions")))
 
     zmierzone = dane.get("lastUpdatedAt") if isinstance(dane, dict) else None
     rekord["zmierzone"] = zmierzone if isinstance(zmierzone, str) else ""
@@ -475,7 +596,20 @@ def po_godzinach(rodzaj: str | None = None, godzin: float = 24.0) -> dict:
             bez_czasu += 1
             continue
         z_czasem.sort(key=lambda kv: kv[0])
+        # ZERO Z PRAWDZIWEJ GODZINY PUBLIKACJI, GDY JA ZNAMY — poprawione
+        # 3 wrzesnia 2026. Docstring wyzej mowi, ze zerem jest pierwszy pomiar,
+        # bo godziny wystawienia nie znalismy. Zmierzone tego dnia: pole
+        # "wystawione" MA 115 pozycji z 166 (55 notek, 50 komentarzy,
+        # 7 artykulow, 3 odpowiedzi) — dla nich przyblizenie bylo zbedne.
+        #
+        # Warunek "nie pozniej niz pierwszy pomiar" jest zabezpieczeniem, nie
+        # ozdoba: gdyby data wystawienia byla pozniejsza od pomiaru (zla strefa,
+        # przestawiony zegar), okno wyszlo by ujemne i pozycja zniknelaby z
+        # porownania bez sladu.
         zero = z_czasem[0][0]
+        _wyst = _czas({"kiedy": str(lista[0].get("wystawione") or "")})
+        if _wyst is not None and _wyst <= zero:
+            zero = _wyst
         w_oknie = [r for c, r in z_czasem
                    if (c - zero).total_seconds() <= godzin * 3600.0]
         rozpietosc = (z_czasem[-1][0] - zero).total_seconds() / 3600.0

@@ -188,6 +188,101 @@ def wzrost_konta() -> None:
         print("   To pierwszy zapis — przyrostu nie ma jeszcze z czego policzyc.")
 
 
+def kto_przyszedl() -> None:
+    """Imiennie: kto sie zapisal i z ktorej pozycji.
+
+    Karta `new_subscribers` panelu notki niesie to od zawsze i do 3 wrzesnia
+    2026 nikt jej nie czytal. Raport twierdzil wtedy, ze notki nie przynosza
+    nikogo — bo czytal pole `subskrypcje`, ktorego dla notki nie ma wcale.
+
+    PO CO IMIONA, a nie sama liczba. Konto ma kilkudziesieciu czytelnikow.
+    Przy tej skali „ta notka przyniosla dwoch" i „przyniosla TYCH dwoch" to
+    dwie rozne informacje: druga pozwala sprawdzic, czy ten czlowiek zostal,
+    czy odpisal, czy sam pisze o tym samym — czyli zobaczyc czytelnika jako
+    czlowieka, a nie jako slupek.
+    """
+    poz = statystyki.najnowsze_per_pozycja()
+    z_zapisami = [p for p in poz.values()
+                  if p.get("zapisy_darmowe") or p.get("zapisy_platne")
+                  or p.get("kto_sie_zapisal")]
+    print()
+    print("=" * 96)
+    print("KTO SIE ZAPISAL I Z CZEGO  (karta `new_subscribers`, imiennie)")
+    print("=" * 96)
+    # BRAK POLA TO NIE ZERO. Pola pojawiaja sie od pierwszego pomiaru po
+    # 3 wrzesnia 2026; starsze pozycje ich nie maja i nie wolno tego czytac
+    # jako „nikt sie nie zapisal".
+    zmierzone = [p for p in poz.values() if "zapisy_darmowe" in p]
+    if not zmierzone:
+        print("  Zadna pozycja nie ma jeszcze tego pomiaru — karta jest czytana")
+        print("  od 3 wrzesnia 2026, wiec pojawi sie po najblizszym przebiegu.")
+        print("  To NIE znaczy zero zapisow.")
+        return
+    print("  pozycji z tym pomiarem: %d z %d" % (len(zmierzone), len(poz)))
+    if not z_zapisami:
+        print("  Zadna zmierzona pozycja nie przyniosla zapisu.")
+        return
+    suma_f = sum(int(p.get("zapisy_darmowe") or 0) for p in z_zapisami)
+    suma_p = sum(int(p.get("zapisy_platne") or 0) for p in z_zapisami)
+    print("  zapisow razem: %d darmowych, %d platnych" % (suma_f, suma_p))
+    print()
+    for p in sorted(z_zapisami,
+                    key=lambda r: -(int(r.get("zapisy_darmowe") or 0)
+                                    + int(r.get("zapisy_platne") or 0))):
+        print("  %-10s %-11s  %d free / %d paid   %s"
+              % (p.get("rodzaj", "?"), p.get("id", "?"),
+                 int(p.get("zapisy_darmowe") or 0),
+                 int(p.get("zapisy_platne") or 0),
+                 _skrot(p.get("tekst", ""), 44)))
+        kto = p.get("kto_sie_zapisal") or []
+        if kto:
+            print("       kto: %s" % ", ".join(str(x) for x in kto[:8]))
+
+
+def lepsze_od_sredniej() -> None:
+    """Ktora pozycja pobila NASZA WLASNA srednia — panel podaje wzorzec sam.
+
+    `impressions.graphData` niesie dwie serie: „This note" i „Your average".
+    Do 3 wrzesnia 2026 czytalismy z tej karty tylko liczbe zbiorcza, wiec
+    porownanie pozycji miedzy soba wymagalo zgadywania wieku — a panel przez
+    caly czas podawal, ile mial nasz SREDNI wpis w tym samym momencie zycia.
+    To jest jedyne porownanie, ktore cos zmienia: nie „duzo czy malo", tylko
+    „lepiej czy gorzej niz zwykle robimy".
+    """
+    poz = statystyki.najnowsze_per_pozycja()
+    maja = [p for p in poz.values() if p.get("nad_wzorcem_24h")]
+    print()
+    print("=" * 96)
+    print("CO BYLO LEPSZE OD NASZEJ WLASNEJ SREDNIEJ  (pierwsze 24 h)")
+    print("=" * 96)
+    if not maja:
+        print("  Zadna pozycja nie ma jeszcze krzywej z panelu — czytana od")
+        print("  3 wrzesnia 2026. Panel oddaje ja dla czesci pozycji (zmierzone:")
+        print("  63 z 159), wiec brak tu nie znaczy slabego wyniku.")
+        return
+    lepsze = [p for p in maja if float(p.get("nad_wzorcem_24h") or 0) >= 1]
+    print("  pozycji z krzywa: %d | powyzej wlasnej sredniej: %d"
+          % (len(maja), len(lepsze)))
+    print()
+    print("  %-10s %-11s %8s %8s %7s  %s"
+          % ("RODZAJ", "NUMER", "NASZE24", "WZOR24", "RAZY", "TRESC"))
+    print("  " + "-" * 82)
+    for p in sorted(maja, key=lambda r: -float(r.get("nad_wzorcem_24h") or 0)):
+        print("  %-10s %-11s %8s %8s %7s  %s"
+              % (p.get("rodzaj", "?"), p.get("id", "?"),
+                 p.get("nasza_po_24h", "—"), p.get("wzorzec_po_24h", "—"),
+                 p.get("nad_wzorcem_24h"), _skrot(p.get("tekst", ""), 40)))
+    # UDOSTEPNIENIA — druga rzecz, ktorej notka dotad nie miala.
+    udost = [p for p in poz.values() if int(p.get("udostepnienia") or 0) > 0]
+    if udost:
+        print()
+        print("  UDOSTEPNIENIA (karta `shareValues`):")
+        for p in sorted(udost, key=lambda r: -int(r.get("udostepnienia") or 0)):
+            print("     %2s x  %-10s %-11s %s"
+                  % (p.get("udostepnienia"), p.get("rodzaj", "?"),
+                     p.get("id", "?"), _skrot(p.get("tekst", ""), 40)))
+
+
 def koszt_wobec_wyniku() -> None:
     """Ile kosztuje jedna pozycja i co za to przychodzi — w jednej tabeli.
 
@@ -464,6 +559,8 @@ def main() -> int:
         for nazwa, ile in sorted(powierzchnie.items(), key=lambda x: -x[1]):
             print("   %-16s %s" % (nazwa, ile))
 
+    kto_przyszedl()
+    lepsze_od_sredniej()
     koszt_wobec_wyniku()
     zrodla_zapisow()
     dwie_epoki(najnowsze)

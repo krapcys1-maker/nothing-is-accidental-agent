@@ -87,7 +87,17 @@ PROBKA = {
 KLUCZE = {"wyswietlenia", "powierzchnie", "odbiorcy", "interakcje",
           "interakcje_razem", "polubienia", "odpowiedzi", "restacki",
           "subskrypcje", "obserwacje", "klikniecia_w_link", "zmierzone",
-          "wystawione", "ma_karty_zasiegu"}
+          "wystawione", "ma_karty_zasiegu",
+          # DOPISANE 3 wrzesnia 2026 po audycie segmentu statystyk. Panel
+          # oddawal te karty od zawsze, a `z_kart` ich nie czytal:
+          #   `new_subscribers` -> ile osob i KTO sie zapisal z tej pozycji
+          #   `shareValues`     -> udostepnienia (artykul mial, notka nie)
+          # Pola z krzywej (`nasza_po_24h` i dalej) NIE sa tu wymieniane
+          # celowo: panel oddaje ja tylko dla czesci pozycji (63 z 159), wiec
+          # ich brak jest informacja, a nie brakiem pomiaru — i dlatego nie
+          # naleza do stalego kompletu.
+          "zapisy_darmowe", "zapisy_platne", "kto_sie_zapisal",
+          "udostepnienia"}
 
 
 def _w_pustym_katalogu(funkcja):

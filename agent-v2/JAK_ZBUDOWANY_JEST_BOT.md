@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **23 plików**, 28 774 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **23 plików**, 29 005 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -113,8 +113,8 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 > w głównej ścieżce artykułu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
-się testować bez przeglądarki i bez pieniędzy**. 126 zestawów
-testów, 3502 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+się testować bez przeglądarki i bez pieniędzy**. 127 zestawów
+testów, 3518 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -590,7 +590,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `statystyki.py` — co przyniosła każda pozycja: wejścia, reakcje, subskrypcje
 
-575 wierszy, 11 funkcji na poziomie modułu, 0 klas
+709 wierszy, 14 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -598,6 +598,9 @@ wiec nie da sie go rozjechac z kodem.
 | `_karty(dane)` *(wewn.)* | `cards` -> {cardId: karta}. Odporne na `cards` = None i wpisy bez id. |
 | `_pozycje(karta)` *(wewn.)* | `items` listCarda -> {tytul: liczba}, w kolejnosci z API. |
 | `_suma(karta)` *(wewn.)* | Liczba zbiorcza z karty: `value`, `count`, `total`, naglowek, suma pozycji. |
+| `_naglowki(karta)` *(wewn.)* | `headers` karty -> {tytul z malych liter: liczba}. |
+| `_kto_sie_zapisal(karta)` *(wewn.)* | Imiona ludzi z karty `new_subscribers`, w kolejnosci z API. |
+| `_krzywa(karta)` *(wewn.)* | Z `impressions.graphData` — wejscia po 24 i 48 h ORAZ wzorzec konta. |
 | `z_kart(dane)` | Odpowiedz `/api/v1/note_stats/c-{ID}` -> plaski rekord o stalych kluczach. |
 | `_plik()` *(wewn.)* | Sciezka liczona przy KAZDYM wywolaniu, nie raz przy imporcie. |
 | `zapisz(rodzaj, identyfikator, rekord, tekst)` | Dopisuje JEDEN pomiar. Nigdy nie przerywa dzialania agenta. |
@@ -622,7 +625,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `raport_statystyk.py` — te same dane w tabeli dla człowieka
 
-475 wierszy, 8 funkcji na poziomie modułu, 0 klas
+572 wierszy, 10 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -630,6 +633,8 @@ wiec nie da sie go rozjechac z kodem.
 | `_mediana(liczby)` *(wewn.)* | — |
 | `dwie_epoki(najnowsze)` | Epoka AI osobno, epoka ukrytych systemow osobno. |
 | `wzrost_konta()` | Ilu nas czyta i czy tego przybywa. |
+| `kto_przyszedl()` | Imiennie: kto sie zapisal i z ktorej pozycji. |
+| `lepsze_od_sredniej()` | Ktora pozycja pobila NASZA WLASNA srednia — panel podaje wzorzec sam. |
 | `koszt_wobec_wyniku()` | Ile kosztuje jedna pozycja i co za to przychodzi — w jednej tabeli. |
 | `_pozycje_w_okresie(od, do_)` *(wewn.)* | Ile pozycji kazdego rodzaju powstalo miedzy tymi datami (dziennik). |
 | `zrodla_zapisow()` | SKAD NAPRAWDE przyszli ludzie — wlasne przypisanie Substacka. |
