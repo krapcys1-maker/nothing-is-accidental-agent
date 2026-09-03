@@ -432,6 +432,62 @@ def najnowsze_per_pozycja(rodzaj: str | None = None) -> dict:
     return najnowsze
 
 
+def po_godzinach(rodzaj: str | None = None, godzin: float = 24.0) -> dict:
+    """Stan kazdej pozycji po TYLE SAMO czasu od pierwszego pomiaru.
+
+    PO CO. `najnowsze_per_pozycja` oddaje OSTATNI pomiar, wiec notka sprzed
+    tygodnia i notka sprzed trzech godzin stoja w jednej tabeli i sa
+    porownywane wprost. Zmierzone 3 wrzesnia 2026: czolowa notka miala 426
+    wyswietlen, mediana 27 — ale czesc tej roznicy to po prostu WIEK, a nie
+    jakosc. Bez wspolnej miary czasu nie da sie odpowiedziec na zadne z pytan,
+    ktore naprawde padaja: ktory pisarz jest lepszy, ktora forma dziala, czy
+    zmiana czegokolwiek pomogla.
+
+    ZERO OD PIERWSZEGO POMIARU, NIE OD PUBLIKACJI. Pomiar nie zapisuje godziny
+    wystawienia, a dziennik i statystyki to dwa osobne pliki — sklejanie ich po
+    numerze dokladalo by blad, ktorego nie umiemy zmierzyc. Statystyki zbieraja
+    sie w kazdym przebiegu, a przebiegow jest piec na dobe, wiec pierwszy pomiar
+    pada najwyzej kilka godzin po publikacji. To przesuniecie jest TAKIE SAMO
+    dla wszystkich pozycji, wiec porownanie miedzy nimi zostaje uczciwe — a
+    liczba nie udaje, ze zna godzine publikacji.
+
+    Bierzemy OSTATNI pomiar mieszczacy sie w oknie. Pozycje, ktore okna nie
+    dozyly, sa pomijane i policzone osobno — pominiecie w ciszy zamienialo by
+    „za mloda, zeby ocenic" w „slaba".
+    """
+    from datetime import datetime as _dt
+
+    wszystkie = wczytaj(rodzaj)
+    per: dict[str, list[dict]] = {}
+    for r in wszystkie:
+        per.setdefault(str(r.get("id")), []).append(r)
+
+    def _czas(r):
+        try:
+            return _dt.fromisoformat(str(r.get("kiedy") or ""))
+        except Exception:
+            return None
+
+    dojrzale, za_mlode, bez_czasu = {}, 0, 0
+    for nid, lista in per.items():
+        z_czasem = [(c, r) for r in lista if (c := _czas(r)) is not None]
+        if not z_czasem:
+            bez_czasu += 1
+            continue
+        z_czasem.sort(key=lambda kv: kv[0])
+        zero = z_czasem[0][0]
+        w_oknie = [r for c, r in z_czasem
+                   if (c - zero).total_seconds() <= godzin * 3600.0]
+        rozpietosc = (z_czasem[-1][0] - zero).total_seconds() / 3600.0
+        if rozpietosc < godzin:
+            za_mlode += 1
+            continue
+        dojrzale[nid] = w_oknie[-1] if w_oknie else z_czasem[0][1]
+
+    return {"godzin": godzin, "pozycje": dojrzale,
+            "za_mlode": za_mlode, "bez_czasu": bez_czasu}
+
+
 def podsumowanie(rodzaj: str | None = None) -> dict:
     """Sumy i srednie PO POZYCJACH, nie po pomiarach.
 
