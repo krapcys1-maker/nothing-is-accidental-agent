@@ -153,6 +153,16 @@
 {{"title": "<the published headline>", "subtitle": "<one line>", "body": "<the article, plain text with blank lines between paragraphs>", "numbers_used": ["<each figure you wrote, exactly as written>"], "limits_paragraph_present": true|false}}
 ```
 
+#### `powtorka.md` (26 wierszy)
+
+**Pola wejściowe:** `kandydaci`, `nowy`
+
+**Kontrakt wyjścia:**
+
+```json
+{{"powtorka_nr": <number of the bank fact it repeats, or 0 if none>, "powod": "<one short sentence>"}}
+```
+
 #### `recenzent.md` (59 wierszy)
 
 **Pola wejściowe:** `body`, `card_json`

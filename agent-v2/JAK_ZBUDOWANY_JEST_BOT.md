@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **23 plików**, 28 056 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **23 plików**, 28 176 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -113,8 +113,8 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 > w głównej ścieżce artykułu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
-się testować bez przeglądarki i bez pieniędzy**. 122 zestawów
-testów, 3423 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+się testować bez przeglądarki i bez pieniędzy**. 123 zestawów
+testów, 3437 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -176,7 +176,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-7231 wierszy, 131 funkcji na poziomie modułu, 0 klas
+7340 wierszy, 133 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -300,7 +300,9 @@ wiec nie da sie go rozjechac z kodem.
 | `_stale_sygnaly(topics, pola)` *(wewn.)* | Ktore z pol mialy TE SAMA wartosc u WSZYSTKICH kandydatow. |
 | `_precedens_ok(p)` *(wewn.)* | Czy ten wpis to naprawde precedens, a nie wypelniacz. |
 | `_wspolna_kotwica(a, b)` *(wewn.)* | Czy oba zdania mowia o tej samej NAZWIE albo tej samej LICZBIE. |
-| `dopisz_kandydatow(kandydaci)` | Przepuszcza kandydatow przez bramke i dokłada do indeksu. |
+| `_dzieli_temat(a, b)` *(wewn.)* | Czy oba zdania mowia o tym samym bohaterze — SZEROKO, na potrzeby pytania. |
+| `_powtorka_wg_modelu(nowy, z_banku, conn, run_id)` *(wewn.)* | Czy `nowy` powtarza ktoras z pozycji `z_banku`. (numer albo 0, powod). |
+| `dopisz_kandydatow(kandydaci, conn, run_id)` | Przepuszcza kandydatow przez bramke i dokłada do indeksu. |
 | `wez_kandydatow(ile)` | Wyjmuje kandydatow gotowych do pisania i ZNACZY ich jako uzytych. |
 | `co_zadzialalo(ile)` | NASZE wlasne notki z ZMIERZONYM odbiorem — material dla sedziego banku. |
 | `posortuj_bank(conn, run_id, ile)` | Ustawia bank pomyslow od najmocniejszego i wyrzuca slabe. |
@@ -552,7 +554,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-2767 wierszy, 26 funkcji na poziomie modułu, 0 klas
+2778 wierszy, 26 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -11247,6 +11249,41 @@ for it is worse than the fault it was meant to fix.
 ## The evidence card
 
 {card_json}
+````
+
+---
+
+#### `prompts/powtorka.md`
+
+**26 wierszy.** Pola wejsciowe: `kandydaci`, `nowy`
+
+````markdown
+Below is a NEW fact proposed for the topic bank, and a short list of facts
+ALREADY in the bank that mention at least one of the same names or numbers.
+
+Decide one thing only: is the new fact THE SAME STORY as one of them?
+
+THE SAME STORY means a reader who saw the bank fact would learn nothing new
+from the new one: same event, same launch, same measurement, same ruling —
+even if the wording, the framing or the quoted number differs.
+
+A DIFFERENT STORY shares a subject but carries a fact the other does not.
+Two facts about one company, one model or one chip are DIFFERENT if each
+would stand alone as its own item: a launch and a benchmark result, a price
+and an architecture, a court filing and the ruling that followed it.
+
+Be strict about the first and generous about the second. Killing a genuinely
+new fact costs us material we paid to find; letting a restatement through
+means the account says the same thing twice in one day.
+
+NEW FACT:
+{nowy}
+
+ALREADY IN THE BANK:
+{kandydaci}
+
+Answer with JSON only, no other text:
+{{"powtorka_nr": <number of the bank fact it repeats, or 0 if none>, "powod": "<one short sentence>"}}
 ````
 
 ---

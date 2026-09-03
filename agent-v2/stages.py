@@ -1687,7 +1687,7 @@ def znajdz_ciekawostki(
     # indeks na tygodnie, a odrzuceni zostaja odrzuceni NA STALE, zamiast
     # wracac przy kazdym przebiegu.
     try:
-        dopisz_kandydatow(fakty)
+        dopisz_kandydatow(fakty, conn=conn, run_id=run_id)
     except Exception as exc:
         print(f"  [indeks] nie zapisalem ({type(exc).__name__})", flush=True)
 
@@ -6466,7 +6466,98 @@ def _wspolna_kotwica(a: str, b: str) -> bool:
     return bool(kotwice(a) & kotwice(b))
 
 
-def dopisz_kandydatow(kandydaci: list[dict[str, Any]]) -> dict[str, int]:
+# NAZWY, KTORE NIE SA NAZWAMI. Wielka litera na poczatku zdania jest gramatyka,
+# nie imieniem — ale zdanie o firmie CZESTO zaczyna sie od jej nazwy, wiec
+# pominiecie pierwszego slowa gubi wlasnie tego bohatera, o ktorego chodzi.
+# Zamiast pomijac pozycje, pomijamy SLOWA, ktore zaczynaja zdanie z gramatyki.
+POCZATKI_ZDAN = frozenset("""
+the this that these those there their then they and but for with when what
+why how its it a an in on at of to by as if or not new two three four five
+six seven eight nine ten during after before while since about from over
+under between across because although however documented according
+""".split())
+
+
+def _dzieli_temat(a: str, b: str) -> bool:
+    """Czy oba zdania mowia o tym samym bohaterze — SZEROKO, na potrzeby pytania.
+
+    Osobna funkcja obok `_wspolna_kotwica`, a nie jej poprawka, bo obie sluza
+    czemu innemu i maja przeciwne koszty pomylki:
+
+      * `_wspolna_kotwica` decyduje SAMODZIELNIE o wyrzuceniu faktu i jej progi
+        sa dobrane pomiarem na prawdziwym banku. Poszerzenie ich kasowaloby
+        material bez niczyjej zgody;
+      * ta funkcja decyduje tylko, KOGO POKAZAC MODELOWI. Nadmiar kosztuje
+        ulamek centa za pytanie, a niedomiar kosztuje notke o tym samym, co
+        wczoraj — wiec tutaj oplaca sie byc hojnym.
+
+    Zmierzone 3 wrzesnia 2026: przy waskiej kotwicy para o Breeze TTS 2 nie
+    dzielila NICZEGO, bo jedno zdanie zaczyna sie od slowa „Breeze" (pomijane
+    jako poczatek zdania), a „TTS" ma trzy znaki (pomijane jako za krotkie).
+    Straznik nigdy nie zostalby o nia zapytany.
+    """
+    import re as _re
+
+    def bohaterowie(t: str) -> set[str]:
+        nazwy = set()
+        for slowo in (t or "").split():
+            czyste = slowo.strip(".,;:()'\"—–")
+            if czyste[:1].isupper() and len(czyste) >= 3:
+                male = czyste.lower()
+                if male not in POCZATKI_ZDAN:
+                    nazwy.add(male.rstrip("'s"))
+        liczby = {x for x in _re.findall(r"\d[\d.,]*", t or "") if len(x) >= 2}
+        return nazwy | liczby
+
+    return bool(bohaterowie(a) & bohaterowie(b))
+
+
+POWTORKA_SYSTEM = (
+    "You compare two statements of fact and decide whether they describe the "
+    "same event. You never rewrite either statement. Return only valid JSON."
+)
+
+
+def _powtorka_wg_modelu(
+    nowy: str,
+    z_banku: list[str],
+    conn: sqlite3.Connection | None,
+    run_id: int | None,
+) -> tuple[int, str]:
+    """Czy `nowy` powtarza ktoras z pozycji `z_banku`. (numer albo 0, powod).
+
+    DRUGI PRZEBIEG, NIE PIERWSZY. Filtr slowny jest darmowy i lapie warianty
+    przepisane leniwie; ten jest platny i lapie przepisane starannie. Model
+    dostaje WYLACZNIE pozycje dzielace z kandydatem nazwe albo liczbe, wiec
+    pytanie ma dwa-trzy zdania odniesienia, a nie caly bank.
+
+    ZAWODZI NA TAK, NIE NA NIE. Gdy wywolanie sie nie uda, fakt wchodzi do
+    banku. Doktryna mowi, ze lepiej niech wyjdzie cos wadliwego niz nic —
+    a przepuszczona powtorka kosztuje jedna notke, podczas gdy odrzucony
+    material kosztuje cale wyszukiwanie i nie da sie go odzyskac.
+    """
+    if not z_banku or conn is None:
+        return 0, ""
+    lista = "\n".join("%d. %s" % (i, t[:400])
+                       for i, t in enumerate(z_banku, 1))
+    try:
+        raw = llm.call("powtorka", POWTORKA_SYSTEM,
+                       _prompt("powtorka.md", nowy=nowy[:600], kandydaci=lista),
+                       conn=conn, run_id=run_id)
+        dane = llm.parse_json(raw)
+        nr = int(dane.get("powtorka_nr") or 0)
+        if not 1 <= nr <= len(z_banku):
+            return 0, ""
+        return nr, str(dane.get("powod") or "")[:200]
+    except Exception as exc:
+        print("  [indeks] straznik powtorek nie odpowiedzial (%s) — przepuszczam"
+              % type(exc).__name__, flush=True)
+        return 0, ""
+
+
+def dopisz_kandydatow(kandydaci: list[dict[str, Any]],
+        conn: sqlite3.Connection | None = None,
+        run_id: int | None = None,) -> dict[str, int]:
     """Przepuszcza kandydatow przez bramke i dokłada do indeksu.
 
     ODRZUCENI TEZ SA ZAPISYWANI, z powodem. Bez tego ten sam martwy pomysl
@@ -6493,7 +6584,8 @@ def dopisz_kandydatow(kandydaci: list[dict[str, Any]]) -> dict[str, int]:
     # „OpenAI" i „Broadcom", a dwa o Jane Street — „Anthropic" i „100".
     PODOBIENSTWO = {"min_wspolnych": 4, "prog": 0.35}
     fakty_w_banku = [str(k.get("fact") or "") for k in indeks]
-    licznik = {"przyjete": 0, "odrzucone": 0, "znane": 0, "podobne": 0}
+    licznik = {"przyjete": 0, "odrzucone": 0, "znane": 0, "podobne": 0,
+               "powtorka_llm": 0}
     for k in kandydaci or []:
         klucz = _klucz_faktu(str(k.get("fact") or ""))
         if not klucz or klucz in znane:
@@ -6507,6 +6599,23 @@ def dopisz_kandydatow(kandydaci: list[dict[str, Any]]) -> dict[str, int]:
             licznik["podobne"] += 1
             print("  [indeks] to samo innymi slowami — pomijam: %s" % tresc[:70],
                   flush=True)
+            continue
+        # DRUGI PRZEBIEG: to samo pytanie, zadane modelowi. Filtr wyzej liczy
+        # WSPOLNE SLOWA, a starannie przepisane zdanie ich nie ma — zmierzone
+        # na produkcji 3 wrzesnia 2026, gdy z 22 wolnych faktow cztery pary
+        # opisywaly to samo wydarzenie (DeepSeek Harness z 13 sierpnia,
+        # licencja Breeze TTS 2, 35x przy H3 Max, uklad Jalapeno), a filtr
+        # slowny nie zglosil ani jednej. Pytamy TYLKO o pozycje dzielace
+        # nazwe albo liczbe, wiec przy osmiu kandydatach to zero do trzech
+        # tanich wywolan, a nie osiem porownan z calym bankiem.
+        wspolne_kotwice = [f for f in fakty_w_banku
+                           if _dzieli_temat(tresc, f)][:6]
+        nr_powtorki, powod_llm = _powtorka_wg_modelu(
+            tresc, wspolne_kotwice, conn, run_id)
+        if nr_powtorki:
+            licznik["powtorka_llm"] += 1
+            print("  [indeks] model widzi powtorke (%s) — pomijam: %s"
+                  % (powod_llm[:60], tresc[:60]), flush=True)
             continue
         fakty_w_banku.append(tresc)
         ok, powod = bramka_kandydata(k)

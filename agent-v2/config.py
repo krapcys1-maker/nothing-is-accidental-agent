@@ -153,6 +153,15 @@ MODEL_FOR = {
     #    codziennie bez nadzoru.
     "discovery": DEEPSEEK_PRO,
     "classify": DEEPSEEK,  # mechaniczne, wysokowolumenowe
+    # DRUGI PRZEBIEG ODSIEWU BANKU, po filtrze slownym. Filtr slowny liczy
+    # wspolne slowa; przepisane zdanie ich nie ma. Zmierzone na produkcji
+    # 3 wrzesnia 2026: z 22 wolnych faktow CZTERY PARY byly tym samym
+    # wydarzeniem opowiedzianym inaczej — ten sam DeepSeek Harness z 13
+    # sierpnia, ta sama licencja Breeze TTS 2, ta sama liczba 35x przy H3
+    # Max, ten sam uklad Jalapeno. Model dostaje tylko te pozycje banku,
+    # ktore dziela z kandydatem NAZWE albo LICZBE, wiec pytanie jest krotkie
+    # i zadawane rzadko. Najtanszy model, bo to rozstrzygniecie tak/nie.
+    "powtorka": DEEPSEEK,
     "synthesis": DEEPSEEK_PRO,
     # TO JEST PRODUKT. Fable 5 po porównaniu A/B na identycznej karcie: krótszy
     # i bliższy celu długości (1127 wobec 1204 słów), ale przede wszystkim
@@ -856,6 +865,8 @@ MAX_TOKENS = {
     "classify": _tokens_for(
         CLASSIFY_MAX_EXCERPTS * CLASSIFY_MAX_EXCERPT_CHARS + 2000
     ),
+    # Odpowiedz to jedna liczba i jedno zdanie uzasadnienia.
+    "powtorka": _tokens_for(400),
     # karta: twierdzenia z cytatami, liczby, sprzeczności, granice
     "synthesis": _tokens_for(
         CARD_MAX_CONFIRMED * (CARD_MAX_CLAIM_CHARS + CLASSIFY_MAX_EXCERPT_CHARS)
