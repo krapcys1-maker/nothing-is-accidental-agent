@@ -3814,6 +3814,16 @@ def notki_dnia(
     # Wolamy PRZED wzieciem materialu i tylko wtedy, gdy jest co sortowac.
     # Awaria sedziego nie moze zabrac dnia: bank nieposortowany jest gorszy
     # od posortowanego, ale duzo lepszy od braku notek.
+    # PAROWANIE IDZIE PRZED RANKINGIEM, i kolejnosc nie jest dowolna: sedzia
+    # ma ustawiac RONZE historie, a nie sortowac warianty jednej. Gdy parowanie
+    # pojdzie pozniej, ranking najpierw wyda pieniadze na uporzadkowanie
+    # duplikatow — i tak wlasnie 4 wrzesnia 2026 dwa fakty o cenniku Gemini
+    # 3.8 Flash stanely na miejscach 1 i 2.
+    try:
+        sparuj_bank(conn, run_id)
+    except Exception as exc:
+        print("  [parowanie] nie przeszlo (%s) — bank bez scalen"
+              % type(exc).__name__, flush=True)
     try:
         posortuj_bank(conn, run_id)
     except Exception as exc:
@@ -7816,6 +7826,101 @@ def co_zadzialalo(ile: int = 6) -> str:
 BANK_SYSTEM = (
     "You rank candidate facts for a publication about artificial intelligence. "
     "You return an order, never a score. Return only valid JSON."
+)
+
+
+# NAJWYZEJ TYLE POZYCJI WOLNO SCALIC W JEDNYM PRZEBIEGU.
+#
+# Nie oszczednosc, tylko oslona przed jedna zla odpowiedzia. Parowanie USUWA
+# material z puli, a pula jest platna: przy dwudziestu faktach zle grupowanie
+# moglo by zabrac wiekszosc banku w jednym wywolaniu i nikt by nie zdazyl tego
+# zobaczyc. Trzy na przebieg wystarcza — pary powstaja po jednej, dwie na dobe.
+MAKS_SCALEN_NA_PRZEBIEG = 3
+
+
+def sparuj_bank(conn: sqlite3.Connection, run_id: int | None = None) -> dict[str, int]:
+    """Scala fakty, ktore sa TA SAMA historia. Jedyne pytanie o ZBIOR, nie o pozycje.
+
+    PO CO. Kazde inne sprawdzenie w tym potoku patrzy na fakt osobno: swiezosc,
+    straznik powtorek, ranking banku. Nikt nie pyta o zbior — i to jest zrodlo
+    plaskosci, ktora wlasciciel zglasza od sierpnia. Zmierzone: 31 sierpnia
+    2026 wyszly TRZY notki o GLM-5.3-Flash jednego dnia (wskazniki powtorzen,
+    chinskie uklady, cena — trzy rozne ustalenia, jeden model w kanale),
+    a 4 wrzesnia dwa najwyzej ocenione fakty w banku dotyczyly cennika Gemini
+    3.8 Flash. Pozostale zabezpieczenia dzialaja dopiero PRZY WYBORZE NOTKI,
+    czyli za pozno: bank jest juz wtedy zapchany wariantami jednej historii.
+
+    MODEL GRUPUJE, KOD USUWA. Model oddaje same identyfikatory; sprawdzenie,
+    czy istnieja i czy nie usuwaja polowy banku, robi kod.
+
+    NIC NIE GINIE. Scalona pozycja dostaje status `odrzucony` z powodem, a jej
+    tresc ladu je na fakcie, ktory zostaje — w polu `scalone_z`. Fakt byl
+    oplacony i ma byc widoczny w indeksie, nie skasowany.
+    """
+    indeks = wczytaj_indeks()
+    wolni = [k for k in indeks
+             if k.get("status") == "nowy"
+             and str(k.get("kiedy") or "")[:10] >= config.DATA_PRZESTAWIENIA
+             and not _po_terminie(k)]
+    if len(wolni) < 3:
+        return {"grup": 0, "scalone": 0}
+
+    pozycje = "\n".join(
+        "%d. %s" % (i, str(k.get("fact") or "")[:300])
+        for i, k in enumerate(wolni))
+    try:
+        raw = llm.call("parowanie", PAROWANIE_SYSTEM,
+                       _prompt("parowanie.md", pozycje=pozycje),
+                       conn=conn, run_id=run_id)
+        grupy = (llm.parse_json(raw) or {}).get("grupy") or []
+    except Exception as exc:
+        print("  [parowanie] nie wyszlo (%s) — bank bez zmian"
+              % type(exc).__name__, flush=True)
+        return {"grup": 0, "scalone": 0}
+
+    scalonych = 0
+    grup = 0
+    for g in grupy:
+        if scalonych >= MAKS_SCALEN_NA_PRZEBIEG:
+            print("  [parowanie] limit %d scalen na przebieg — reszta zostaje"
+                  % MAKS_SCALEN_NA_PRZEBIEG, flush=True)
+            break
+        if not isinstance(g, dict):
+            continue
+        try:
+            zostaje = wolni[int(g.get("zostaje"))]
+        except (TypeError, ValueError, IndexError):
+            continue
+        idy = [i for i in (g.get("scalone") or [])
+               if isinstance(i, int) and 0 <= i < len(wolni)]
+        do_scalenia = [wolni[i] for i in idy if wolni[i] is not zostaje]
+        if not do_scalenia:
+            continue
+        grup += 1
+        print("  [parowanie] TA SAMA HISTORIA: %s"
+              % str(g.get("dlaczego") or "")[:96], flush=True)
+        print("      zostaje: %s" % str(zostaje.get("fact"))[:88], flush=True)
+        zostaje.setdefault("scalone_z", [])
+        for k in do_scalenia:
+            if scalonych >= MAKS_SCALEN_NA_PRZEBIEG:
+                break
+            print("      scalony: %s" % str(k.get("fact"))[:88], flush=True)
+            zostaje["scalone_z"].append(str(k.get("fact") or "")[:300])
+            k["status"] = "odrzucony"
+            k["powod"] = ("parowanie: ta sama historia co %s"
+                          % str(zostaje.get("fact") or "")[:110])
+            scalonych += 1
+    if scalonych:
+        _zapisz_indeks(indeks)
+    print("  [parowanie] grup: %d, scalonych pozycji: %d, zostaje wolnych: %d"
+          % (grup, scalonych, len(wolni) - scalonych), flush=True)
+    return {"grup": grup, "scalone": scalonych}
+
+
+PAROWANIE_SYSTEM = (
+    "You group facts that tell the same story, so that a reader is never shown "
+    "one event twice. You return only valid JSON. Grouping wrongly destroys "
+    "material somebody paid for, so when in doubt you do not group."
 )
 
 

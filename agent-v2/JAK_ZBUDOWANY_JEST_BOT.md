@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **24 plików**, 30 458 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **24 plików**, 30 579 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -113,8 +113,8 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 > w głównej ścieżce artykułu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
-się testować bez przeglądarki i bez pieniędzy**. 129 zestawów
-testów, 3620 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+się testować bez przeglądarki i bez pieniędzy**. 130 zestawów
+testów, 3646 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -177,7 +177,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-8299 wierszy, 144 funkcji na poziomie modułu, 0 klas
+8404 wierszy, 145 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -317,6 +317,7 @@ wiec nie da sie go rozjechac z kodem.
 | `dopisz_kandydatow(kandydaci, conn, run_id)` | Przepuszcza kandydatow przez bramke i dokłada do indeksu. |
 | `wez_kandydatow(ile)` | Wyjmuje kandydatow gotowych do pisania i ZNACZY ich jako uzytych. |
 | `co_zadzialalo(ile)` | NASZE wlasne notki z ZMIERZONYM odbiorem — material dla sedziego banku. |
+| `sparuj_bank(conn, run_id)` | Scala fakty, ktore sa TA SAMA historia. Jedyne pytanie o ZBIOR, nie o pozycje. |
 | `posortuj_bank(conn, run_id, ile)` | Ustawia bank pomyslow od najmocniejszego i wyrzuca slabe. |
 | `_termin_waznosci(dni)` *(wewn.)* | Kiedy ta kandydatura przestaje byc tematem. Data z godzina, w UTC. |
 | `_po_terminie(k)` *(wewn.)* | Czy kandydatura jest juz po swoim terminie przydatnosci. |
@@ -567,7 +568,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-2970 wierszy, 27 funkcji na poziomie modułu, 0 klas
+2986 wierszy, 27 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -10927,6 +10928,82 @@ Author of the comment: {commenter}
 ## Your own side of the exchange
 
 {evidence}
+````
+
+---
+
+#### `prompts/parowanie.md`
+
+**67 wierszy.** Pola wejsciowe: `pozycje`
+
+````markdown
+You are looking at the idea bank of a publication about AI. Every item below is
+a fact somebody already checked and paid for. Your job is one question and one
+question only:
+
+**Which of these are the SAME STORY?**
+
+Not the same subject. Not the same company. Not the same model family. The same
+story — the same event, the same document, the same announcement, the same
+measurement.
+
+## Why this is being asked
+
+Every other check in this system looks at one fact at a time. Nobody asks about
+the set. The cost of that is measured and specific:
+
+* On 31 August 2026 three notes about GLM-5.3-Flash went out on the same day —
+  one about retry rates, one about Chinese chips, one about price. Each was a
+  different finding. The reader did not see three findings. The reader saw a
+  feed full of one model.
+* On 4 September 2026 the two highest-ranked items in this bank were both about
+  Gemini 3.8 Flash pricing.
+
+A reader scrolling a column sees the repetition before they read a word. That
+is the flatness this question exists to prevent.
+
+## What counts as the same story
+
+Group two items when a reader who saw both notes would say "you already told me
+this":
+
+* the same launch, the same day, the same product;
+* the same document — the same system card, the same filing, the same paper;
+* the same number seen from two sides (a price cut and the new price);
+* one item is the other plus detail.
+
+## What does NOT count, and this is where you will be tempted
+
+* **Same company, different event.** Anthropic's pricing and Anthropic's safety
+  card are two stories.
+* **Same model, different mechanism.** A model being cheap and that model being
+  unavailable in one country are two stories.
+* **Same field.** Two chip stories from two vendors are two stories.
+* **Same week.** Time is not a link.
+
+When you are unsure, DO NOT group. A wrongly split pair costs one repeated
+note. A wrongly merged pair destroys a fact nobody will look at again.
+
+## The strongest of a group
+
+For each group, say which item should survive as `zostaje`: the one that names
+the most checkable thing — a number with its conditions, a document with a
+date. Prefer the item a stranger could verify fastest. The others become
+`scalone` and leave the pool.
+
+## The items
+
+{pozycje}
+
+## Output
+
+Return only valid JSON, no other text:
+
+{{"grupy": [{{"zostaje": <id>, "scalone": [<id>, ...], "dlaczego": "<one clause: what makes these the same story>"}}]}}
+
+Return `{{"grupy": []}}` when nothing is the same story. That is a normal
+answer and most days it is the right one — this bank is filtered before you
+see it. An empty answer costs nothing; a wrong group costs a paid fact.
 ````
 
 ---

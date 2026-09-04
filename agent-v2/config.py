@@ -162,6 +162,19 @@ MODEL_FOR = {
     # ktore dziela z kandydatem NAZWE albo LICZBE, wiec pytanie jest krotkie
     # i zadawane rzadko. Najtanszy model, bo to rozstrzygniecie tak/nie.
     "powtorka": DEEPSEEK,
+    # PAROWANIE — JEDYNE PYTANIE O ZBIOR, NIE O POZYCJE.
+    #
+    # Wszystko inne w tym potoku patrzy na fakt osobno: bramka swiezosci,
+    # straznik powtorek, ranking banku. Dlatego 4 wrzesnia 2026 na miejscach
+    # 1 i 2 w banku stanely DWA fakty o cenniku Gemini 3.8 Flash, a 31 sierpnia
+    # wyszly TRZY notki o GLM-5.3-Flash jednego dnia. Zabezpieczenia dzialaja
+    # dopiero przy wyborze notki — czyli za pozno, bo bank jest juz zapchany
+    # wariantami jednej historii.
+    #
+    # Pytanie brzmi „ktore z tych sa TA SAMA historia", zadawane raz na
+    # uzupelnienie banku, na samych tresciach faktow. Najtanszy model, bo to
+    # grupowanie, nie pisanie.
+    "parowanie": DEEPSEEK,
     "synthesis": DEEPSEEK_PRO,
     # TO JEST PRODUKT. Fable 5 po porównaniu A/B na identycznej karcie: krótszy
     # i bliższy celu długości (1127 wobec 1204 słów), ale przede wszystkim
@@ -867,6 +880,9 @@ MAX_TOKENS = {
     ),
     # Odpowiedz to jedna liczba i jedno zdanie uzasadnienia.
     "powtorka": _tokens_for(400),
+    # Parowanie oddaje same identyfikatory i jedno zdanie uzasadnienia na
+    # grupe — krotko, ale przy dwudziestu faktach grup moze byc kilka.
+    "parowanie": 8000,
     # karta: twierdzenia z cytatami, liczby, sprzeczności, granice
     "synthesis": _tokens_for(
         CARD_MAX_CONFIRMED * (CARD_MAX_CLAIM_CHARS + CLASSIFY_MAX_EXCERPT_CHARS)
