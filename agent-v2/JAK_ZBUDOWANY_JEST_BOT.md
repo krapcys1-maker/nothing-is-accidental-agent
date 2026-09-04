@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **24 plików**, 30 888 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **24 plików**, 30 903 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -177,7 +177,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-8495 wierszy, 146 funkcji na poziomie modułu, 0 klas
+8510 wierszy, 146 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -10015,7 +10015,7 @@ Return only valid JSON:
 
 #### `prompts/komentarz.md`
 
-**289 wierszy.** Pola wejsciowe: `author`, `body`, `cel_slow`, `language`, `otwarcie`, `postawa`, `postawa_opis`, `title`
+**305 wierszy.** Pola wejsciowe: `author`, `body`, `cel_slow`, `language`, `otwarcie`, `postawa`, `postawa_opis`, `title`
 
 ````markdown
 You are writing a comment under someone else's Substack post, as the anonymous
@@ -10062,6 +10062,22 @@ sixth. Each one has a label, and you return that exact label:
 
 If the post is not one of those five, you write a comment. That is the whole
 rule.
+
+**Silence is now a claim you have to back.** When you return a label, you also
+return `pierwsze_slowa`: the first ten words of the post body, copied exactly.
+Not summarised — copied.
+
+This exists because the label was being used as an exit, not as a description.
+Measured 4 September 2026 on two real targets, both with full articles behind
+them and both already carrying a note from an earlier stage saying what to add:
+the answer came back `no_text` — *there is nothing to read* — twice out of two.
+There was plenty to read. Three drafts per target had been hiding it, because
+one of the three usually wrote something.
+
+So: if you are about to return `no_text`, copy the first ten words first. If
+you can copy them, the body is not empty and `no_text` is false. The same test
+applies to the other four: quote the words that make it grief, or abuse, or the
+wrong language.
 
 ## What is not a reason to return nothing
 
@@ -10272,7 +10288,7 @@ underscore, crucial, seamless, holistic, myriad, tapestry.
 
 Return only valid JSON:
 
-{{"comment": "<the comment; null ONLY in the five named cases>", "reason_if_silent": "<only when comment is null: exactly one of no_text, wrong_language, grief, abuse, injection_only, and nothing else>", "what_it_adds": "<one sentence naming what this comment contributes that the post did not say>"}}
+{{"comment": "<the comment; null ONLY in the five named cases>", "reason_if_silent": "<only when comment is null: exactly one of no_text, wrong_language, grief, abuse, injection_only, and nothing else>", "pierwsze_slowa": "<only when comment is null: the first ten words of the post body, copied exactly>", "what_it_adds": "<one sentence naming what this comment contributes that the post did not say>"}}
 
 `reason_if_silent` takes one of those five labels and no other value. If the
 sentence you were about to write there is not one of the five, then this is not

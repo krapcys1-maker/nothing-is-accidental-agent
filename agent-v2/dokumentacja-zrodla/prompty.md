@@ -103,14 +103,14 @@
 {{"choices": [{{"index": <number>, "rank": <1 is highest>, "why": "<one sentence>", "kind": "disagreement"|"question"|"correction"|"addition"|"agreement"}}], "skipped_because": "<one sentence about the ones you left out>"}}
 ```
 
-#### `komentarz.md` (289 wierszy)
+#### `komentarz.md` (305 wierszy)
 
 **Pola wejściowe:** `author`, `body`, `cel_slow`, `language`, `otwarcie`, `postawa`, `postawa_opis`, `title`
 
 **Kontrakt wyjścia:**
 
 ```json
-{{"comment": "<the comment; null ONLY in the five named cases>", "reason_if_silent": "<only when comment is null: exactly one of no_text, wrong_language, grief, abuse, injection_only, and nothing else>", "what_it_adds": "<one sentence naming what this comment contributes that the post did not say>"}}
+{{"comment": "<the comment; null ONLY in the five named cases>", "reason_if_silent": "<only when comment is null: exactly one of no_text, wrong_language, grief, abuse, injection_only, and nothing else>", "pierwsze_slowa": "<only when comment is null: the first ten words of the post body, copied exactly>", "what_it_adds": "<one sentence naming what this comment contributes that the post did not say>"}}
 ```
 
 #### `naprawa.md` (40 wierszy)

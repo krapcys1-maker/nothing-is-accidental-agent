@@ -4917,6 +4917,21 @@ def comment_on(
         # wymyslonym wyjsciem, najczesciej „to aforyzm".
         powod = str(data.get("reason_if_silent", "") or "")
         etykieta = powod if powod in POWODY_CISZY else "POZA LISTA: %s" % powod[:60]
+        # DOWOD NA MILCZENIE, NIE SAMA ETYKIETA.
+        #
+        # `no_text` znaczy „nie ma czego czytac". ZMIERZONE 4 wrzesnia 2026 na
+        # dwoch prawdziwych celach — oba z pelnymi artykulami i oba z gotowym
+        # zapisem, co dopisac — model oddal `no_text` dwa razy na dwa. Trzech
+        # kandydatow to maskowalo, bo jeden z trzech zwykle cos napisal; po
+        # zejsciu do jednego kandydata cel przepada.
+        #
+        # Prompt kaze teraz przy milczeniu przepisac PIERWSZE DZIESIEC SLOW
+        # tresci. Jesli sa — `no_text` jest falszem i widac to w dzienniku
+        # jednym grepem, zamiast po tygodniu w statystykach.
+        _slowa = str(data.get("pierwsze_slowa", "") or "").strip()
+        if not text and powod == "no_text" and _slowa:
+            etykieta = ("no_text ZAPRZECZONE WLASNYM CYTATEM: %r"
+                        % _slowa[:70])
         print(
             f"  [komentarz {i + 1}/{postawa}] "
             + (f"{words} słów — {data.get('what_it_adds', '')[:70]}"
