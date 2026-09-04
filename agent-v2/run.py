@@ -1382,6 +1382,32 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
                         n["promocja_url"],
                         (gotowe[0].get("note") or "").strip())
                 rytm_stanu["notka"] = True
+            else:
+                # PRZEBIEG NA SUCHO MA POKAZAC, CO NAPISAL.
+                #
+                # Bez tego `else` gotowa notka nie trafiala NIGDZIE: blok
+                # publikacji jest pomijany, a `notki_dnia` wypisuje tylko
+                # pierwsze 78 znakow przy pomiarze dlugosci. Przebieg bez
+                # --wyslij produkowal wiec teksty, ktorych nikt nie widzial —
+                # czyli tryb do ogladania nie pokazywal niczego do ogladania.
+                # Znalezione 4 wrzesnia 2026 przy pierwszym uzyciu
+                # --poza-oknem, ktore powstalo wlasnie po to, zeby te teksty
+                # zobaczyc.
+                _t = gotowe[0]["note"].strip()
+                print("  --- NA SUCHO, NIE WYSTAWIAM ---", flush=True)
+                print("  typ=%s forma=%s slow=%s pisarz=%s"
+                      % (n.get("type"), n.get("forma"),
+                         gotowe[0].get("words_actual"),
+                         gotowe[0].get("model", "")), flush=True)
+                for _w in _t.splitlines():
+                    print("  | %s" % _w, flush=True)
+                for _etykieta, _co in (
+                        ("otwiera sporem", gotowe[0].get("otwarcie_sporem")),
+                        ("hak bez zaczepu", gotowe[0].get("hak_bez_zaczepu")),
+                        ("terminy bez tlumaczenia",
+                         ", ".join(gotowe[0].get("zargon") or []))):
+                    print("  ^ %-24s %s" % (_etykieta, _co or "czysto"),
+                          flush=True)
             zrobione["notki"] += 1
 
     # --- 3. komentarze u innych ----------------------------------------------
