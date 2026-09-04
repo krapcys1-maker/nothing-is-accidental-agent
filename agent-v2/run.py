@@ -1026,7 +1026,7 @@ def czy_juz_subskrybujemy(host: str, zamkniete: set[str],
     return bool(uchwyt and uchwyt in zamkniete)
 
 
-def dzien(conn, run_id: int, wyslij: bool) -> int:
+def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
     """Jeden dzień pracy konta: notki, komentarze, odpowiedzi, polubienia.
 
     Rutyna, której do tej pory nie było — każda zdolność działała osobno, a nic
@@ -1143,7 +1143,14 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
     # ludzkie, a odpowiedz gospodarza nie moze czekac do rana. Nie wychodza za to
     # NOWE tresci, ktore konkuruja o miejsce w kanale.
     wolno, powod = config.pora_na_publikacje()
-    print(f"   okno publikacji: {'TAK' if wolno else 'NIE'} — {powod}", flush=True)
+    if poza_oknem and not wolno:
+        # GLOSNO, bo to jest odstepstwo od reguly, a nie jej brak.
+        print("   okno publikacji: POMINIETE recznie (--poza-oknem) — %s"
+              % powod, flush=True)
+        wolno = True
+    else:
+        print(f"   okno publikacji: {'TAK' if wolno else 'NIE'} — {powod}",
+              flush=True)
     if not wolno:
         # OKNO WYCISZA NOTKI, NIE KOMENTARZE — poprawka z 31 sierpnia 2026.
         #
@@ -2309,6 +2316,20 @@ def main() -> int:
                         help="rutyna dnia: notki, komentarze, odpowiedzi, polubienia")
     parser.add_argument("--wyslij", action="store_true",
                         help="NAPRAWDĘ wystaw treści (domyślnie tylko pokazuje)")
+    # OKNO POMIJANE NA JEDEN PRZEBIEG — do OGLADANIA, nie do publikowania.
+    #
+    # Poza oknem `dzien()` ustawia `na_teraz["notki"] = 0`, wiec przebieg nie
+    # pisze ANI JEDNEJ notki — takze bez `--wyslij`. Zeby zobaczyc, co system
+    # dzis napisze, trzeba bylo czekac do 10:00 UTC albo grzebac w stalej
+    # `OKNO_PUBLIKACJI_ET` i pamietac o cofnieciu. Jedno i drugie jest gorsze
+    # od przelacznika.
+    #
+    # OKNO ZOSTAJE REGULA. Ten przelacznik jest dla czlowieka przy klawiaturze
+    # i nie ma go w `nia-agent.service` — timer chodzi jak dotad, wiec notki
+    # produkcyjne dalej wychodza wylacznie w godzinach czytelnikow.
+    parser.add_argument("--poza-oknem", action="store_true",
+                        help="pomiń okno publikacji na TEN przebieg — do "
+                             "oglądania notek poza godzinami czytelników")
     args = parser.parse_args()
     # Musi stac PO parse_args (inaczej `args` jeszcze nie istnieje) i PRZED
     # pierwszym dotknieciem bazy — zeby kopia testowa odpadala, zanim
@@ -2327,7 +2348,7 @@ def main() -> int:
         # liczyl ten przebieg jako odbyty i chcial wcisnac cala reszte w jeden
         # nastepny. Przerwany przebieg ma byc widoczny jako przerwany.
         try:
-            wynik = dzien(conn, run_id, args.wyslij)
+            wynik = dzien(conn, run_id, args.wyslij, args.poza_oknem)
         except BaseException as exc:
             db.finish_run(conn, run_id, "FAILED", "dzien",
                           f"{type(exc).__name__}: {exc}"[:500])

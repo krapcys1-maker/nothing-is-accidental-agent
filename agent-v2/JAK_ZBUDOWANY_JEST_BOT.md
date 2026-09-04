@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **24 plików**, 30 379 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **24 plików**, 30 400 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -143,7 +143,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-2919 wierszy, 27 funkcji na poziomie modułu, 1 klas
+2940 wierszy, 27 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -169,7 +169,7 @@ wiec nie da sie go rozjechac z kodem.
 | `powod_pustej_puli(rachunek)` | Zdanie do dziennika, gdy po odsianiu nie zostal nikt. |
 | `kogo_juz_subskrybujemy()` | Uchwyty, na ktore subskrypcja NIE MA JUZ CO wysylac. Z dziennika, bez sieci. |
 | `czy_juz_subskrybujemy(host, zamkniete, pamiec)` | Czy ten HOST wskazuje konto, na ktore nie ma juz po co wchodzic. |
-| `dzien(conn, run_id, wyslij)` | Jeden dzień pracy konta: notki, komentarze, odpowiedzi, polubienia. |
+| `dzien(conn, run_id, wyslij, poza_oknem)` | Jeden dzień pracy konta: notki, komentarze, odpowiedzi, polubienia. |
 | `_sygnal_ma_zostawic_slad()` *(wewn.)* | Zamienia SIGTERM na wyjatek, zeby przebieg zdazyl sie zapisac. |
 | `main()` | — |
 | `_done(conn, run_id, stage)` *(wewn.)* | — |

@@ -320,7 +320,11 @@ oryg_dzien, oryg_connect, oryg_argv = run.dzien, db.connect, sys.argv
 oryg_summary = run._summary
 
 
-def wybuchowy(conn, run_id, wyslij):
+# Argument `poza_oknem` dodany 4 wrzesnia 2026 razem z przelacznikiem
+# --poza-oknem. Atrapa musi przyjmowac tyle samo argumentow co prawdziwy
+# `dzien`, inaczej test wywala sie na sygnaturze zamiast sprawdzac to, po co
+# powstal.
+def wybuchowy(conn, run_id, wyslij, poza_oknem=False):
     raise KeyError("notki")
 
 
@@ -348,7 +352,7 @@ try:
             wiersze and "KeyError" in (wiersze[-1][1] or ""),
             wiersze[-1][1] if wiersze else "")
 
-    def spokojny(conn, run_id, wyslij):
+    def spokojny(conn, run_id, wyslij, poza_oknem=False):
         return 0
 
     run.dzien = spokojny
