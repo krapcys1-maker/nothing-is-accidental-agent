@@ -1819,7 +1819,7 @@ Return only:
 
 #### `prompts/notka.md`
 
-**383 wierszy.** Pola wejsciowe: `evidence`, `form_brief`, `language`, `max_words`, `min_words`, `note_form`, `note_type`, `ostatnie_otwarcia_json`, `type_brief`
+**401 wierszy.** Pola wejsciowe: `evidence`, `form_brief`, `language`, `max_words`, `min_words`, `note_form`, `note_type`, `ostatnie_otwarcia_json`, `type_brief`
 
 ````markdown
 Write a Substack Note for the anonymous editorial brand Nothing Is Accidental —
@@ -1906,6 +1906,24 @@ who already follows the story; it strands everyone else.
 Lead with the thing that happened, in the plainest sentence you can write.
 The reversal, the broken assumption, the consequence — those come next, and
 they land harder once the reader knows what you are talking about.
+
+### Never point at a study the reader has not seen
+
+A note published on 4 September 2026 opened: "Watercolour paintings from THIS
+EXPERIMENT are JavaScript programs." Which experiment? Nothing had introduced
+one. The first sentence pointed at something that, for the reader, did not
+exist.
+
+The evidence card names an experiment because you were handed the source. The
+reader was not. Words like "this experiment", "the study", "that benchmark",
+"the run" in your opening are references to a thing only you can see.
+
+Name the thing instead. "Hugging Face trained a model to paint" costs the same
+number of words as "paintings from this experiment" and leaves nothing hanging.
+
+POINTING AT THE READER'S OWN WORLD IS THE OPPOSITE AND IT IS GOOD: "That
+ChatGPT subscription sitting on your card statement", "That model answering you
+in the EU". Those work because the reader can turn and look at the thing.
 
 ### Never open by contradicting something the reader has not heard
 

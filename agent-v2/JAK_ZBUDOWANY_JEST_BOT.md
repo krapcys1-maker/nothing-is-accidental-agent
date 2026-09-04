@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **24 plików**, 30 633 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **24 plików**, 30 686 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -114,7 +114,7 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
 się testować bez przeglądarki i bez pieniędzy**. 130 zestawów
-testów, 3646 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+testów, 3655 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -177,7 +177,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-8432 wierszy, 145 funkcji na poziomie modułu, 0 klas
+8481 wierszy, 146 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -242,6 +242,7 @@ wiec nie da sie go rozjechac z kodem.
 | `otwiera_sporem(tekst)` | Zdanie, ktorym notka wchodzi w spor nieznany czytelnikowi. Puste, gdy go nie ma. |
 | `terminy_insiderskie(tekst)` | Slowa, przy ktorych zwykly czytelnik sie zatrzymuje. Bez powtorzen. |
 | `hak_bez_zaczepu(tekst)` | Otwarcie jednym slowem, ktorego nastepne zdanie nie wiaze. Puste, gdy wiaze. |
+| `odeslanie_donikad(tekst)` | Odeslanie w PIERWSZYM zdaniu do badania, ktorego czytelnik nie widzial. |
 | `za_duzo_zargonu(tekst)` | Terminy insiderskie, gdy jest ich wiecej, niz notka udzwignie. Inaczej pusto. |
 | `note(conn, run_id, note_type, evidence, link, note_form, etap)` | Jedna notka danego typu i danej FORMY — do szuflady. |
 | `_pola_ksztaltu(ksztalt, pomin)` *(wewn.)* | Nazwy pol z kontraktu na odpowiedz, bez klucza opakowujacego. |
@@ -734,7 +735,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `przeglad_dnia.py` — caly lancuch jednego dnia bez wolania modelu: szukanie, bank z katami, powody odrzucen, notki
 
-233 wierszy, 6 funkcji na poziomie modułu, 0 klas
+237 wierszy, 6 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -10360,7 +10361,7 @@ Return only:
 
 #### `prompts/notka.md`
 
-**383 wierszy.** Pola wejsciowe: `evidence`, `form_brief`, `language`, `max_words`, `min_words`, `note_form`, `note_type`, `ostatnie_otwarcia_json`, `type_brief`
+**401 wierszy.** Pola wejsciowe: `evidence`, `form_brief`, `language`, `max_words`, `min_words`, `note_form`, `note_type`, `ostatnie_otwarcia_json`, `type_brief`
 
 ````markdown
 Write a Substack Note for the anonymous editorial brand Nothing Is Accidental —
@@ -10447,6 +10448,24 @@ who already follows the story; it strands everyone else.
 Lead with the thing that happened, in the plainest sentence you can write.
 The reversal, the broken assumption, the consequence — those come next, and
 they land harder once the reader knows what you are talking about.
+
+### Never point at a study the reader has not seen
+
+A note published on 4 September 2026 opened: "Watercolour paintings from THIS
+EXPERIMENT are JavaScript programs." Which experiment? Nothing had introduced
+one. The first sentence pointed at something that, for the reader, did not
+exist.
+
+The evidence card names an experiment because you were handed the source. The
+reader was not. Words like "this experiment", "the study", "that benchmark",
+"the run" in your opening are references to a thing only you can see.
+
+Name the thing instead. "Hugging Face trained a model to paint" costs the same
+number of words as "paintings from this experiment" and leaves nothing hanging.
+
+POINTING AT THE READER'S OWN WORLD IS THE OPPOSITE AND IT IS GOOD: "That
+ChatGPT subscription sitting on your card statement", "That model answering you
+in the EU". Those work because the reader can turn and look at the thing.
 
 ### Never open by contradicting something the reader has not heard
 

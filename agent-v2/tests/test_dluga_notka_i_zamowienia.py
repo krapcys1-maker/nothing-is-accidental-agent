@@ -509,5 +509,48 @@ sprawdz("sam hak bez dalszego ciagu nie jest wada",
         stages.hak_bez_zaczepu("Zero.") == "")
 
 print()
+print("=== 17. ODESLANIE DO BADANIA, KTOREGO CZYTELNIK NIE WIDZIAL ===")
+# Notka wystawiona 4 wrzesnia 2026 o 12:32 otwiera sie slowami „Watercolour
+# paintings from THIS EXPERIMENT are JavaScript programs". Z jakiego
+# eksperymentu? Nic go nie wprowadzilo. Wlasciciel przyslal ta notke bez
+# komentarza — to samo, co poprzednim razem.
+sprawdz("lapie notke z 12:32",
+        stages.odeslanie_donikad(
+            "Watercolour paintings from this experiment are JavaScript "
+            "programs. The picture appears when the code runs.")
+        == "this experiment")
+sprawdz("lapie takze #16 (the run that passes a flaky task)",
+        bool(stages.odeslanie_donikad(
+            "On GLM-5.3 Flash, the run that passes a flaky task is the longer "
+            "one only 46% of the time.")))
+
+# WSKAZYWANIE NA SWIAT CZYTELNIKA JEST DOBRE I MA ZOSTAC.
+for t in ("That ChatGPT subscription sitting on your card statement is partly "
+          "Microsoft's cloud bill.",
+          "That model answering you in the EU owes the public a summary of "
+          "what it trained on.",
+          "One police van at a festival checked nearly 28,000 faces against a "
+          "wanted list."):
+    sprawdz("KONTRDOWOD, przepuszcza: %s" % t[:40],
+            not stages.odeslanie_donikad(t), stages.odeslanie_donikad(t))
+
+sprawdz("KONTRDOWOD: rzeczownik wprowadzony wczesniej w tym samym zdaniu",
+        not stages.odeslanie_donikad(
+            "Insilico ran a trial of 320 patients, and that trial was the "
+            "first of its kind."))
+sprawdz("KONTRDOWOD: dalej w tekscie odeslanie jest w porzadku",
+        not stages.odeslanie_donikad(
+            "Hugging Face trained a model to paint. The experiment used 178 "
+            "hand-rated pictures."))
+sprawdz("pusty tekst nie wywraca", stages.odeslanie_donikad("") == "")
+sprawdz("None tez nie", stages.odeslanie_donikad(None) == "")
+
+_tresc_nt3 = pathlib.Path("agent-v2/prompts/notka.md").read_text(encoding="utf-8")
+sprawdz("prompt notki zakazuje tego wprost",
+        "Never point at a study the reader has not seen" in _tresc_nt3)
+sprawdz("i mowi, ze wskazanie na swiat czytelnika JEST dobre",
+        "POINTING AT THE READER'S OWN WORLD" in _tresc_nt3)
+
+print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))
 sys.exit(1 if oblane else 0)

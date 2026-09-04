@@ -2809,6 +2809,50 @@ def hak_bez_zaczepu(tekst: str) -> str:
     return hak[:60]
 
 
+# ODESLANIE DO CUDZEGO BADANIA, KTOREGO CZYTELNIK NIE WIDZIAL.
+#
+# Notka wystawiona 4 wrzesnia 2026 o 12:32 zaczyna sie od slow „Watercolour
+# paintings from THIS EXPERIMENT are JavaScript programs". Z jakiego
+# eksperymentu? Czytelnik nigdy o zadnym nie uslyszal — pierwsze zdanie
+# odsyla do czegos, czego nie ma. Wlasciciel przyslal te notke bez komentarza,
+# co znaczylo dokladnie to samo, co poprzednim razem.
+#
+# TO NIE JEST ZAKAZ WSKAZYWANIA. „That ChatGPT subscription sitting on your
+# card statement" i „That model answering you in the EU" sa dobre i maja
+# zostac: wskazuja na cos, co czytelnik MA. Wada polega na wskazaniu na
+# CUDZE BADANIE — eksperyment, prace, probe, przebieg — czyli na rzecz
+# widoczna tylko dla kogos, kto czytal zrodlo.
+#
+# ZMIERZONE na 34 opublikowanych notkach plus dzisiejszej: strzela przy
+# dwoch, i obie sa tymi, ktore przy recznym czytaniu okazaly sie zle —
+# dzisiejsza oraz #16 („the run that passes a flaky task"), gesta od zargonu.
+# Trzy dobre notki ze wskazaniem na swiat czytelnika przechodza czysto.
+CUDZE_BADANIE = re.compile(
+    r"\b(this|that|these|those|the)\s+"
+    r"(experiment|study|paper|trial|test|benchmark|dataset|survey|review|"
+    r"run|batch|sample)\b", re.I)
+
+
+def odeslanie_donikad(tekst: str) -> str:
+    """Odeslanie w PIERWSZYM zdaniu do badania, ktorego czytelnik nie widzial.
+
+    Tylko pierwsze zdanie: dalej w tekscie „the experiment" ma juz do czego
+    wracac, bo notka zdazyla je wprowadzic. Wada polega na tym, ze stoi na
+    wejsciu, zanim cokolwiek zostalo nazwane.
+    """
+    t = re.sub(r"https?://\S+", " ", str(tekst or "")).strip()
+    zdania = re.split(r"(?<=[.!?])\s+", " ".join(t.split()))
+    if not zdania:
+        return ""
+    pierwsze = zdania[0]
+    for m in CUDZE_BADANIE.finditer(pierwsze):
+        # Rzeczownik wprowadzony WCZESNIEJ w tym samym zdaniu jest w porzadku:
+        # „a trial of 320 patients; that trial..." niczego nie zawiesza.
+        if m.group(2).lower() not in pierwsze[:m.start()].lower():
+            return m.group(0)
+    return ""
+
+
 def za_duzo_zargonu(tekst: str) -> list[str]:
     """Terminy insiderskie, gdy jest ich wiecej, niz notka udzwignie. Inaczej pusto.
 
@@ -2975,6 +3019,11 @@ def note(
             print("    UWAGA: otwiera hakiem %r, ktorego nastepne zdanie nie"
                   " wiaze — czytelnik dostaje liczbe bez rzeczownika" % _hak,
                   flush=True)
+        _donikad = odeslanie_donikad(text)
+        data["odeslanie_donikad"] = _donikad
+        if _donikad:
+            print("    UWAGA: pierwsze zdanie odsyla do %r — czytelnik nie"
+                  " widzial tego badania" % _donikad, flush=True)
         _zargon = za_duzo_zargonu(text)
         data["zargon"] = _zargon
         if _zargon:

@@ -201,6 +201,10 @@ def main() -> None:
             if hak:
                 uwagi.append("otwiera hakiem %r, ktorego nastepne zdanie nie"
                              " wiaze" % hak)
+            don = stages.odeslanie_donikad(tekst)
+            if don:
+                uwagi.append("pierwsze zdanie odsyla do %r — czytelnik nie"
+                             " widzial tego badania" % don)
             zarg = stages.za_duzo_zargonu(tekst)
             if zarg:
                 uwagi.append("%d terminow bez tlumaczenia: %s"
