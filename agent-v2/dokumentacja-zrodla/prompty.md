@@ -3,7 +3,7 @@
 
 **Pola wejściowe:** *(brak)*
 
-#### `bank.md` (166 wierszy)
+#### `bank.md` (182 wierszy)
 
 **Pola wejściowe:** `co_zadzialalo`, `kandydaci`
 
@@ -143,7 +143,7 @@
 {{"reply": "<the reply, or null>", "reason_if_silent": "<one sentence, only when reply is null>", "kind": "answer"|"correction_accepted"|"disagreement"|"built_on"}}
 ```
 
-#### `parowanie.md` (67 wierszy)
+#### `parowanie.md` (83 wierszy)
 
 **Pola wejściowe:** `pozycje`
 

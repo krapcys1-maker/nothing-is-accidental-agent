@@ -56,6 +56,22 @@ date. Prefer the item a stranger could verify fastest. The others become
 
 {pozycje}
 
+## The language of your answer
+
+**Write every field in English.** Not the language of this file, not the
+language of the codebase around it — English, because these fields are read by
+the writer that produces the notes, and this publication writes in English.
+
+`dlaczego` is the record of why two paid facts were collapsed into one. It is
+read later by a person deciding whether this stage can be trusted, and it sits
+next to English fact text in the same file.
+
+THIS IS NOT HYPOTHETICAL. On 4 September 2026 this stage returned 33 angles,
+33 writer instructions and 23 ranking justifications, and EVERY ONE of them was
+in Polish — the whole batch, no English at all. Nothing in the prompt had asked
+for a language, so nothing held the answer in place. The stages that do say it
+(`notka.md`, `komentarz.md`, `odpowiedz.md`) have never drifted.
+
 ## Output
 
 Return only valid JSON, no other text:

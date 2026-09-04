@@ -79,7 +79,7 @@ pokazuje się **niezależnie** od tego ustawienia — u Jonathana widać naraz
 
 #### `prompts/bank.md`
 
-**166 wierszy.** Pola wejsciowe: `co_zadzialalo`, `kandydaci`
+**182 wierszy.** Pola wejsciowe: `co_zadzialalo`, `kandydaci`
 
 ````markdown
 Rank these candidate facts against each other, strongest first, and say which
@@ -232,6 +232,22 @@ Where an angle needs something we do not have — a comparison table, a
 side-by-side with the previous version, the vendor's own eval page — say so in
 `czego_brakuje` for that angle. That is not a complaint; it is the next search
 we should run.
+
+## The language of your answer
+
+**Write every field in English.** Not the language of this file, not the
+language of the codebase around it — English, because these fields are read by
+the writer that produces the notes, and this publication writes in English.
+
+`kat` is a direct instruction handed to that writer. `lamie` becomes the belief
+the note has to break. A field in another language arrives at the writer as a
+foreign order and either leaks into a published note or gets ignored.
+
+THIS IS NOT HYPOTHETICAL. On 4 September 2026 this stage returned 33 angles,
+33 writer instructions and 23 ranking justifications, and EVERY ONE of them was
+in Polish — the whole batch, no English at all. Nothing in the prompt had asked
+for a language, so nothing held the answer in place. The stages that do say it
+(`notka.md`, `komentarz.md`, `odpowiedz.md`) have never drifted.
 
 ## Output
 
@@ -2393,7 +2409,7 @@ Author of the comment: {commenter}
 
 #### `prompts/parowanie.md`
 
-**67 wierszy.** Pola wejsciowe: `pozycje`
+**83 wierszy.** Pola wejsciowe: `pozycje`
 
 ````markdown
 You are looking at the idea bank of a publication about AI. Every item below is
@@ -2453,6 +2469,22 @@ date. Prefer the item a stranger could verify fastest. The others become
 ## The items
 
 {pozycje}
+
+## The language of your answer
+
+**Write every field in English.** Not the language of this file, not the
+language of the codebase around it — English, because these fields are read by
+the writer that produces the notes, and this publication writes in English.
+
+`dlaczego` is the record of why two paid facts were collapsed into one. It is
+read later by a person deciding whether this stage can be trusted, and it sits
+next to English fact text in the same file.
+
+THIS IS NOT HYPOTHETICAL. On 4 September 2026 this stage returned 33 angles,
+33 writer instructions and 23 ranking justifications, and EVERY ONE of them was
+in Polish — the whole batch, no English at all. Nothing in the prompt had asked
+for a language, so nothing held the answer in place. The stages that do say it
+(`notka.md`, `komentarz.md`, `odpowiedz.md`) have never drifted.
 
 ## Output
 
