@@ -42,9 +42,12 @@ def sprawdz(nazwa, warunek, szczegol=""):
 
 import config  # noqa: E402
 
-_kat = tempfile.mkdtemp(prefix="nia-slot-")
-config.DATA_DIR = pathlib.Path(_kat)
-config.DB_PATH = pathlib.Path(_kat) / "agent.db"
+# KATALOG DANYCH PRZESTAWIA `uzyj_katalogu_danych`, NIE PRZYPISANIE.
+# `DB_PATH` i kilkanascie innych stalych liczy sie RAZ, przy imporcie, z
+# `DATA_DIR` — samo podstawienie `config.DATA_DIR` ich nie rusza i test
+# siegalby do produkcyjnej bazy. Pilnuje tego `test_komplet_sciezek.py`,
+# ktory oblal, gdy napisalem to na piechote.
+config.uzyj_katalogu_danych(tempfile.mkdtemp(prefix="nia-slot-"))
 
 import db   # noqa: E402
 import run  # noqa: E402
