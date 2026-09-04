@@ -423,9 +423,18 @@ def ile_przebiegow_zostalo(conn) -> int:
 
     dzis = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     try:
+        # TYLKO PRZEBIEGI PRODUKCYJNE. Przebieg sprawdzajacy (bez `--wyslij`)
+        # nie wystawia niczego, wiec nie zajal slotu publikacyjnego — a licząc
+        # go, dzielilismy dzienna norme przez przebiegi, ktore nie mialy prawa
+        # nic wydac. 4 wrzesnia 2026 trzy sprawdzenia zabraly trzy z pieciu
+        # slotow i dzien skonczyl sie na dwoch notkach z dziesieciu.
+        #
+        # Stara regula „przebieg PRZERWANY liczy sie tak samo" ZOSTAJE bez
+        # zmian i dotyczy przebiegow produkcyjnych: tam czas naprawde uplynal.
         (zamkniete,) = conn.execute(
             "SELECT COUNT(*) FROM runs WHERE stage = 'dzien'"
             " AND finished_at IS NOT NULL"
+            " AND COALESCE(tryb, 'produkcja') = 'produkcja'"
             " AND (started_at LIKE ? OR finished_at LIKE ?)",
             (f"{dzis}%", f"{dzis}%")).fetchone()
     except Exception:
@@ -2363,7 +2372,23 @@ def main() -> int:
     odmow_publikacji_z_kopii(args.wyslij)
 
     conn = db.connect()
-    run_id = db.start_run(conn)
+    # PRZEBIEG BEZ --wyslij TO TEST, I MA SIE TAK ZAPISAC.
+    #
+    # Kolumna `runs.tryb` istniala od dawna i `run.py` jej nie ustawial, wiec
+    # KAZDY przebieg szedl jako „produkcja" — takze taki, ktory niczego nie
+    # publikuje. Dwa skutki, oba zmierzone 4 wrzesnia 2026, gdy sprawdzalem
+    # zmiany na sucho:
+    #
+    #   * `ile_przebiegow_zostalo` liczy zamkniete przebiegi doby i dzieli
+    #     przez nie dzienna norme. Trzy przebiegi sprawdzajace zabraly trzy
+    #     z pieciu slotow publikacyjnych — dzien skonczyl sie na dwoch notkach
+    #     z dziesieciu zaplanowanych, i NIE byla to wina bramek;
+    #   * audyt kosztow rozdziela wydatki po tym samym polu, wiec 1,2 USD
+    #     wydane na sprawdzanie liczylo sie do produkcyjnego sufitu dnia.
+    #
+    # Sprawdzenie ma byc darmowe w obu ksiegach: nie zabiera slotu i nie
+    # obciaza budzetu tresci.
+    run_id = db.start_run(conn, tryb="produkcja" if args.wyslij else "test")
     stage = "start"
 
     print(f"== przebieg {run_id} ==", flush=True)
