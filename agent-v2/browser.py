@@ -4158,6 +4158,91 @@ def wystaw_odpowiedz(note_id: int, tekst: str, wyslij: bool = False,
     return wynik
 
 
+def zdejmij_plakietke_ai(page, id_notki: str) -> bool:
+    """Wylacza wykrywanie AI przy jednej notce. Sciezka z interfejsu Substacka.
+
+        ... przy notce  ->  Skanuj w poszukiwaniu tekstu AI
+        ... w nakladce  ->  Wylacz wykrywanie
+
+    POZYCJE TRAFIANE PO NAPISIE, nie po selektorze: Substack zmienia atrybuty
+    czesciej niz etykiety. Interfejs bywa po polsku i po angielsku, wiec kazdy
+    krok ma oba warianty.
+
+    KLIKAMY W POZYCJE MENU, NIE W JEGO POJEMNIK. Pierwsza wersja dopasowywala
+    napis w dowolnym elemencie — trafila w `div` obejmujacy cale menu (jego
+    tekst zawiera „Disable detection"), klikniecie poszlo w tlo, nic sie nie
+    zmienilo, a skrypt zameldowal sukces. Stad `[role=menuitem]` i limit
+    dlugosci napisu.
+
+    SPRAWDZAMY WYNIK, NIE MELDUJEMY GO. Po udanym wylaczeniu menu oferuje
+    „Re-enable AI detection" — i to jest jedyny dowod, ze cokolwiek zaszlo.
+    """
+    def _t(el):
+        try:
+            return " ".join((el.inner_text() or "").split())
+        except Exception:
+            return ""
+
+    def _klik(warianty, tylko_pozycje=False):
+        sel = ("[role=menuitem]" if tylko_pozycje
+               else "[role=menuitem], button, div[tabindex], li, a")
+        for el in page.query_selector_all(sel):
+            t = _t(el).lower()
+            if not t or len(t) > (40 if tylko_pozycje else 80):
+                continue
+            if any(w in t for w in warianty):
+                try:
+                    el.click(timeout=4000)
+                    return True
+                except Exception:
+                    continue
+        return False
+
+    page.goto("https://substack.com/note/c-%s" % id_notki, timeout=45000)
+    page.wait_for_timeout(4000)
+    for el in page.query_selector_all("div"):
+        if 200 < len(_t(el)) < 3000:
+            try:
+                el.hover(timeout=2000)
+            except Exception:
+                pass
+            break
+    page.wait_for_timeout(600)
+
+    for el in page.query_selector_all('[aria-label="More options"]'):
+        try:
+            el.click(timeout=3500)
+            page.wait_for_timeout(1200)
+            break
+        except Exception:
+            continue
+    if not _klik(["skanuj w poszukiwaniu", "scan for ai"]):
+        print("  (plakietka AI: nie ma pozycji skanowania — pomijam)", flush=True)
+        return False
+    page.wait_for_timeout(4000)
+
+    for el in [e for e in page.query_selector_all("button, [role=button]")
+               if not _t(e)][-4:]:
+        try:
+            el.click(timeout=2500)
+            page.wait_for_timeout(1000)
+            if any(w in page.inner_text("body").lower()
+                   for w in ("disable detection", "wylacz wykrywanie",
+                             "wyłącz wykrywanie")):
+                break
+        except Exception:
+            continue
+
+    if not _klik(["disable detection", "wylacz wykrywanie", "wyłącz wykrywanie"],
+                 tylko_pozycje=True):
+        print("  (plakietka AI: nie ma czego wylaczac — za krotki tekst albo"
+              " juz wylaczone)", flush=True)
+        return False
+    page.wait_for_timeout(2500)
+    print("  plakietka AI zdjeta z notki %s" % id_notki, flush=True)
+    return True
+
+
 def wystaw_notke(tekst: str, wyslij: bool = False, typ: str = "",
                  forma: str = "", model: str = "",
                  fakt_ranga: int | None = None) -> dict[str, Any]:
@@ -4260,6 +4345,30 @@ def wystaw_notke(tekst: str, wyslij: bool = False, typ: str = "",
                          tekst=tekst[:2000], id=wynik["id"],
                          typ=typ, forma=forma, model=model,
                          fakt_ranga=fakt_ranga)
+            # WYKRYWANIE AI — KROK PO PUBLIKACJI, ODDZIELONY OD NIEJ.
+            #
+            # Substack pokazuje przy dluzszych notkach plakietke Pangramu
+            # („W pelni wspomagany przez AI tekst, AI 100%") i daje autorowi
+            # przelacznik, zeby ja zdjac. Wlasciciel poprosil o uzycie tego
+            # przelacznika 4 wrzesnia 2026; to legalna funkcja platformy,
+            # sterowana wylacznie przez autora.
+            #
+            # STOI TU, A NIE W SRODKU PUBLIKOWANIA, I NIGDY NIE RZUCA. Notka
+            # jest juz wystawiona i zapisana w dzienniku; chodzenie po cudzym
+            # menu jest z natury kruche (przycisk „...” pokazuje sie dopiero po
+            # najechaniu myszą) i jego awaria nie moze cofnac ani zabrudzic
+            # tego, co juz poszlo w swiat.
+            #
+            # KROTKIE NOTKI POMIJAMY. Pangram odpowiada przy nich „Za malo
+            # tekstu" i w menu nie ma czego klikac, wiec caly przemarsz bylby
+            # praca na darmo. Prog jest z obserwacji, nie z dokumentacji —
+            # gdy zobaczymy oflagowana notke krotsza, zejdziemy nizej.
+            if wynik.get("wyslane") and wynik.get("id") and len(tekst) >= 500:
+                try:
+                    zdejmij_plakietke_ai(page, str(wynik["id"]))
+                except Exception as exc:
+                    print("  (plakietki AI nie zdjalem: %s — notka i tak"
+                          " wisi)" % type(exc).__name__, flush=True)
         elif not wyslij:
             print("  (nie wysyłam — tryb sprawdzenia)", flush=True)
     except Exception as exc:

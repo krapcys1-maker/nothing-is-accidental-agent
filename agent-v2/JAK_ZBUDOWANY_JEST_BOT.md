@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **24 plików**, 30 758 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **24 plików**, 30 867 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -330,7 +330,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `browser.py` — cała styczność z Substackiem; nie woła modelu
 
-5146 wierszy, 96 funkcji na poziomie modułu, 0 klas
+5255 wierszy, 97 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -415,6 +415,7 @@ wiec nie da sie go rozjechac z kodem.
 | `_watek_z_paginacja(page, nid, stron)` *(wewn.)* | Caly watek notki — ze WSZYSTKICH stron, nie tylko z pierwszej. |
 | `potwierdz_odpowiedz(page, note_id, tekst)` | Pyta Substacka, czy nasza odpowiedź naprawdę jest w wątku — i KTORA. |
 | `wystaw_odpowiedz(note_id, tekst, wyslij, kontekst, rodzaj)` | Odpowiada w watku — pod nasza notka albo w cudzej dyskusji. |
+| `zdejmij_plakietke_ai(page, id_notki)` | Wylacza wykrywanie AI przy jednej notce. Sciezka z interfejsu Substacka. |
 | `wystaw_notke(tekst, wyslij, typ, forma, model, fakt_ranga)` | Wystawia notkę. Domyślnie WYPEŁNIA i NIE WYSYŁA. |
 | `zapamietaj_platny_host(host, prawo)` | Host, ktory wprost mowi, ze komentowac moga tylko placacy. |
 | `hosty_tylko_dla_placacych()` | Hosty, gdzie komentowac moga tylko placacy — do odsiania PRZED ocena. |
