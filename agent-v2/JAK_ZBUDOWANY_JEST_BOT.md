@@ -10015,7 +10015,7 @@ Return only valid JSON:
 
 #### `prompts/komentarz.md`
 
-**305 wierszy.** Pola wejsciowe: `author`, `body`, `cel_slow`, `language`, `otwarcie`, `postawa`, `postawa_opis`, `title`
+**311 wierszy.** Pola wejsciowe: `author`, `body`, `cel_slow`, `language`, `otwarcie`, `postawa`, `postawa_opis`, `title`
 
 ````markdown
 You are writing a comment under someone else's Substack post, as the anonymous
@@ -10067,12 +10067,18 @@ rule.
 return `pierwsze_slowa`: the first ten words of the post body, copied exactly.
 Not summarised — copied.
 
-This exists because the label was being used as an exit, not as a description.
-Measured 4 September 2026 on two real targets, both with full articles behind
-them and both already carrying a note from an earlier stage saying what to add:
-the answer came back `no_text` — *there is nothing to read* — twice out of two.
-There was plenty to read. Three drafts per target had been hiding it, because
-one of the three usually wrote something.
+This exists because of the measurement below: 60 empty answers out of 588, and
+not one of them from the list. The label was being used as an exit rather than
+as a description.
+
+A NOTE ON HOW NOT TO READ THIS RULE, because the first version of this
+paragraph got it wrong. On 4 September 2026 two targets came back `no_text`
+and it looked like proof of exactly that abuse — until it turned out the
+harness feeding those targets was passing the feed entry (title and blurb) and
+not the fetched page text. The answer was correct; the test was broken. With
+the page text supplied, the same stage wrote a comment for both targets on the
+first attempt. So: `no_text` is sometimes true, and the first thing to check
+when you see it is whether the body actually arrived.
 
 So: if you are about to return `no_text`, copy the first ten words first. If
 you can copy them, the body is not empty and `no_text` is false. The same test
