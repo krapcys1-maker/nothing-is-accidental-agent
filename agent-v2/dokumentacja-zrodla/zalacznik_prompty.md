@@ -79,7 +79,7 @@ pokazuje się **niezależnie** od tego ustawienia — u Jonathana widać naraz
 
 #### `prompts/bank.md`
 
-**182 wierszy.** Pola wejsciowe: `co_zadzialalo`, `kandydaci`
+**197 wierszy.** Pola wejsciowe: `co_zadzialalo`, `kandydaci`
 
 ````markdown
 Rank these candidate facts against each other, strongest first, and say which
@@ -231,7 +231,22 @@ looked, and the record must show what you looked at.
 Where an angle needs something we do not have — a comparison table, a
 side-by-side with the previous version, the vendor's own eval page — say so in
 `czego_brakuje` for that angle. That is not a complaint; it is the next search
-we should run.
+we should run, and it is fetched for you before the next batch.
+
+**`czego_brakuje` is never blank.** Every angle gets one of two answers:
+
+* the missing material, named specifically enough to search for — not "more
+  detail" but "the vendor's per-watt table" or "the filing date and case
+  number";
+* the single word `MAMY`, meaning the evidence card already holds everything
+  this angle needs.
+
+An empty string is a failed answer, and here is why the rule had to be written
+this way. Until 4 September 2026 the field said "empty when we already have
+enough", so blank was allowed — and therefore cheapest. Three consecutive runs
+over almost the same bank filled it 21 times, then 13, then ZERO. Nothing about
+the material changed between them. A field that may be skipped will be skipped,
+and the searches nobody ordered are the ones nobody runs.
 
 ## The language of your answer
 
@@ -255,7 +270,7 @@ Return only valid JSON. `kolejnosc` lists every id exactly once, strongest
 first. Do not omit any id and do not invent one.
 
 {{"kolejnosc": [<id>, <id>, ...],
-  "oceny": [{{"id": <id>, "wyrzuc": true|false, "kod_wyrzucenia": "NOT_AI"|"NOTHING_TO_CHECK"|"NO_MECHANISM"|"", "powod_wyrzucenia": "<one clause saying why that code applies, empty when keeping>", "na_artykul": true|false, "dlaczego_mocny": "<one clause — what would make a stranger stop>", "podobne_do": "<which side of the measured evidence this resembles, and in what respect — one clause; empty if neither>", "drugi_kat": "<the second angle you considered: 'wzięty' if it is in `katy`, otherwise the belief it would have broken and why that is the same belief as the first>", "katy": [{{"kat": "<what to lead with — one clause to the writer>", "lamie": "<the belief this one angle breaks — different for every angle>", "czego_brakuje": "<what we would have to find to write it, empty when we already have enough>"}}]}}]}}
+  "oceny": [{{"id": <id>, "wyrzuc": true|false, "kod_wyrzucenia": "NOT_AI"|"NOTHING_TO_CHECK"|"NO_MECHANISM"|"", "powod_wyrzucenia": "<one clause saying why that code applies, empty when keeping>", "na_artykul": true|false, "dlaczego_mocny": "<one clause — what would make a stranger stop>", "podobne_do": "<which side of the measured evidence this resembles, and in what respect — one clause; empty if neither>", "drugi_kat": "<the second angle you considered: 'wzięty' if it is in `katy`, otherwise the belief it would have broken and why that is the same belief as the first>", "katy": [{{"kat": "<what to lead with — one clause to the writer>", "lamie": "<the belief this one angle breaks — different for every angle>", "czego_brakuje": "<the missing material named specifically enough to search for, or the single word MAMY when the evidence card already has everything — never blank>"}}]}}]}}
 
 `kod_wyrzucenia` must be one of the three codes whenever `wyrzuc` is true, and
 empty otherwise. A deletion with any other value is refused and the candidate is

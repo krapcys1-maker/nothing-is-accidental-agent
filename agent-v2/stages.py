@@ -8092,9 +8092,26 @@ def posortuj_bank(conn: sqlite3.Connection, run_id: int | None = None,
             # w calym banku.
             if not tresc_kata or not lamie:
                 continue
+            # `MAMY` ZNACZY „NIC NIE BRAKUJE" i musi zostac zamienione na pustke
+            # TUTAJ, bo `zamowienia_z_banku` bierze kazda niepusta wartosc jako
+            # zamowienie na wyszukiwanie. Bez tego szukacz dostawalby polecenie
+            # „znajdz MAMY".
+            #
+            # Slowo istnieje, bo pustka byla dozwolona i przez to najtansza:
+            # trzy kolejne przebiegi nad prawie tym samym bankiem wypelnily to
+            # pole 21 razy, potem 13, potem ZERO. Teraz model musi wybrac —
+            # nazwac brak albo napisac, ze materialu nie brakuje.
+            _brak = str(_kat.get("czego_brakuje") or "").strip()
+            # ODPOWIEDZ ZAPISUJEMY OSOBNO OD ZAMOWIENIA. Po normalizacji „MAMY"
+            # i pustka wygladaja tak samo, a to sa DWIE ROZNE rzeczy: pierwsza
+            # znaczy „materialu nie brakuje", druga „model pominal pytanie".
+            # Bez tego rozroznienia zero zamowien wyglada jak dobra wiadomosc.
+            _odpowiedzial = bool(_brak)
+            if _brak.upper().strip(".") == "MAMY":
+                _brak = ""
             katy.append({"kat": tresc_kata[:200], "lamie": lamie[:200],
-                         "czego_brakuje": str(_kat.get("czego_brakuje")
-                                              or "").strip()[:200],
+                         "czego_brakuje": _brak[:200],
+                         "brak_odpowiedzi": not _odpowiedzial,
                          "uzyty": False})
         k["katy"] = katy
         # DRUGI KAT — SLAD PO WYMUSZONYM WYBORZE, nie ozdoba.
@@ -8133,6 +8150,17 @@ def posortuj_bank(conn: sqlite3.Connection, run_id: int | None = None,
             _ile = len(_k.get("katy") or [])
             _rozklad[_ile] = _rozklad.get(_ile, 0) + 1
         _szukal = sum(1 for _k in wolni if _k.get("drugi_kat"))
+        # PUSTE POLE MELDUJEMY OSOBNO. Po wymuszeniu wyboru `czego_brakuje`
+        # ma byc albo brakiem, albo slowem MAMY — pustka znaczy, ze model
+        # pominal pytanie, i to jest inna informacja niz „materialu nie
+        # brakuje". Bez tego rozroznienia wracamy do stanu, w ktorym zero
+        # zamowien wyglada jak dobra wiadomosc.
+        _pustych = sum(1 for _k in wolni for _x in (_k.get("katy") or [])
+                       if _x.get("brak_odpowiedzi"))
+        if _pustych:
+            print("  [bank] UWAGA: %d katow bez odpowiedzi o brakujacy material"
+                  " — to nie znaczy 'niczego nie brakuje', tylko ze model"
+                  " pominal pytanie" % _pustych, flush=True)
         print("  [bank] katy: %d przy %d faktach, rozklad %s;"
               " %d wymaga doszukania materialu; drugi kat rozwazony przy %d/%d"
               % (_katow, _z_katami,
