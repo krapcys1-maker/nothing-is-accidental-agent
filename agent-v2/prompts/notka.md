@@ -70,11 +70,20 @@ what a benchmark score means before a number from one lands.
    already has. Not with a verdict, not with a claim nobody showed them, and
    never with "this experiment", "the study", "that benchmark" or "the run" —
    the reader has seen none of them. Name the thing instead.
-2. **Every name, number, benchmark, price or method gets half a sentence
-   saying what it is** and what a number there means — or it comes out.
-   "GitHub, the site where programmers share code" costs five words and saves
-   the reader. If you cannot give that handhold inside the length, the number
-   is the wrong number and there is a better one in the evidence.
+2. **Explain the thing the note turns on. Cut everything else — do not explain
+   it.** A term the note depends on gets half a sentence in ordinary words. A
+   term that is merely *present* gets deleted, and deleting is the cheaper fix.
+
+   This went wrong the first day the rule existed. A note about an AI agent
+   that writes and runs its own code spent two of its sentences explaining
+   GitHub and what a "star" is. Both explanations were correct and both were
+   about the wrong subject: the note was about the agent, not about the website
+   it was published on. The right move was to drop the star count entirely and
+   spend those words on what "the model writes its own code" means for someone
+   who will never read code.
+
+   So, before you explain anything, ask what this note is *about*. Explain that.
+   If a name, number or platform is not that, it is scenery — take it out.
 3. **Say what it means only after the reader knows what you are talking
    about.** Meaning first and event second is the order that strands everybody
    who does not already follow the story.
