@@ -50,6 +50,11 @@ PRZED = {str(p): odcisk(p) for p in PILNOWANE}
 
 # Teksty realne co do ksztaltu: pierwszy to zmyslone przezycie, drugi to
 # powolanie na badanie, ktorego nikt nie nazwal, trzeci jest czysty.
+# TEN TEST OCENIA TRZECH KANDYDATOW, wiec sam sobie ich zamawia. Produkcyjne
+# `COMMENT_CANDIDATES` zeszlo 4 wrzesnia 2026 do jednego i test oblal na
+# brakujacym kluczu — a sprawdza on OCENE kandydatow, nie ich liczbe.
+config.COMMENT_CANDIDATES = 3
+
 PRZEZYCIE = ("I asked three people about this and none of them could name the "
              "company that runs the model they use every day. The label says "
              "the assistant, the invoice says somebody else entirely, and the "

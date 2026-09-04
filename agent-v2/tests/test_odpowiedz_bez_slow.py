@@ -121,8 +121,12 @@ try:
     # Kontrdowod liczbowy, odtwarzany a nie przepisany: tyle wywolan poszlo by
     # przy starym zachowaniu na tych samych siedmiu przypadkach.
     stare = len(BEZ_SLOW) * config.COMMENT_CANDIDATES
+    # PROG WZGLEDNY, NIE STALY. Stalo tu `stare >= 14`, czyli zaklad, ze
+    # `COMMENT_CANDIDATES` wynosi co najmniej 2. Gdy 4 wrzesnia 2026 zeszlo
+    # do jednego, test oblal — mimo ze oszczednosc jest dokladnie taka sama
+    # jak byla: kazdy pominiety cel to CALE podejscie, ktore nie rusza.
     sprawdz("stare zachowanie kosztowaloby %d wywolan zamiast 0" % stare,
-            stare >= 14, stare)
+            stare >= len(BEZ_SLOW), stare)
 finally:
     stages.llm.call = _stare_call
 

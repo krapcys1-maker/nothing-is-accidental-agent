@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **24 plików**, 30 867 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **24 plików**, 30 888 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -570,7 +570,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-2999 wierszy, 27 funkcji na poziomie modułu, 0 klas
+3020 wierszy, 27 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -12968,7 +12968,7 @@ wartosc i komentarz stojacy bezposrednio nad definicja.
 | `TWIERDZI_O_TERAZ` | `( "now", "currently", "today", "these days",` | Slowa, po ktorych poznajemy, ze zdanie twierdzi cos o STANIE SWIATA TERAZ, a nie opowiada o zdarzeniu z wlasna data. Tylko takie zdania podl |
 | `ZNIKA` | `( "deprecat", "retired", "retirement", "suns` | Slowa, ktore mowia, ze rzecz jest W TRAKCIE ZNIKANIA. Publikacja o AI nie ma po co opisywac czegos, co za osiem tygodni przestanie istniec — |
 | `WZORZEC_WERSJI` | `r"\b(gpt|claude|gemini|llama|mistral|qwen|gr` | NAZWA PRODUKTU Z NUMEREM WERSJI. Wlasciciel: „nie ma mi pisac o GPT 5.0, jak jest juz 5.5". Zdanie, ktore nazywa konkretna wersje, starzeje  |
-| `COMMENT_CANDIDATES` | `3` | — |
+| `COMMENT_CANDIDATES` | `1` | JEDEN KANDYDAT, NIE TRZY — decyzja wlasciciela z 4 wrzesnia 2026 („trzeba przykrocic, zadnych wywolan, niech pisze z tego co wie"). ZMIERZON |
 | `DLUGOSCI_WYPOWIEDZI` | `( (12, 3), # jedno zdanie, najczestsze u lud` | DLUGOSC KOMENTARZA I ODPOWIEDZI losowana osobno za kazdym razem. Sam prompt tego nie zalatwi: proszony o roznorodnosc model i tak osiada w w |
 | `POSTAWY_KOMENTARZA` | `{ "CIEKAWOSC": (7, ( "Say what genuinely cau` | SPOSOB OTWARCIA, losowany tak samo jak dlugosc i z tego samego powodu. Zmierzone na naszych wlasnych komentarzach: SIEDEM Z DZIEWIECIU zaczy |
 | `OTWARCIA` | `( "Start with the mechanism itself, no pream` | — |

@@ -1207,7 +1207,28 @@ WZORZEC_WERSJI = (
     r"|\bo[0-9]+(\s*-?\s*(mini|pro|preview))?\b"
     r"|\b(sonnet|opus|haiku|turbo|flash|lite)[\s\-]?v?[0-9]+(\.[0-9]+)?[a-z]?\b"
 )
-COMMENT_CANDIDATES = 3
+# JEDEN KANDYDAT, NIE TRZY — decyzja wlasciciela z 4 wrzesnia 2026
+# („trzeba przykrocic, zadnych wywolan, niech pisze z tego co wie").
+#
+# ZMIERZONE tego dnia: na 145 opublikowanych komentarzy poszlo 771 wywolan,
+# czyli 5,3 na jeden opublikowany. Trzy propozycje na kazde podejscie, a okolo
+# 44% podejsc nie konczy sie niczym publikowalnym, bo model dostaje cudzy tekst,
+# do ktorego nie ma co dodac, i slusznie milczy.
+#
+# TO SAMO ZROBIONO JUZ PRZY NOTKACH i tam jest to opisane jako najwieksza
+# pojedyncza oszczednosc w calym systemie: `NOTE_CANDIDATES` zeszlo z pieciu
+# do jednego, bo dodatkowe warianty tego samego zdania niczego nie dokladaly,
+# a placilismy za nie i za ich sprawdzenie. Przy komentarzach nikt tego nie
+# powtorzyl przez trzy tygodnie.
+#
+# CZEGO TO NIE RUSZA: wyszukiwanie w komentarzu ZOSTAJE wlaczone. Komentarze
+# cytuja konkrety („In July 2020 Google said its Career Certificates would be
+# treated as equivalent to a four-year degree"), a pisanie ich z pamieci modelu
+# to dokladnie ten rodzaj zmyslania, przed ktorym broni cala reszta potoku.
+# Ciecie dotyczy liczby PODEJSC, nie dostepu do zrodel.
+#
+# Zostawiamy pokretlo: gdyby jakosc spadla, wystarczy wrocic do 2 albo 3.
+COMMENT_CANDIDATES = 1
 
 # DLUGOSC KOMENTARZA I ODPOWIEDZI losowana osobno za kazdym razem.
 # Sam prompt tego nie zalatwi: proszony o roznorodnosc model i tak osiada
