@@ -123,7 +123,9 @@ def posty_z_kanalu(ile: int = 25) -> list[dict[str, Any]]:
             # nasz artykul o jajkach za wart skomentowania — agent
             # komentowalby sam siebie.
             adres = x.get("canonical_url") or ""
-            if config.SUBSTACK_HANDLE in adres:
+            _uchwyt = ((x.get("publication") or {}).get("subdomain") or "")
+            if (str(_uchwyt).lower() == config.SUBSTACK_HANDLE.lower()
+                    or config.SUBSTACK_HANDLE in adres):
                 continue
             kandydat = {
                 "tytul": (x.get("title") or "")[:120],
@@ -278,7 +280,25 @@ def szukaj_nowych(ile: int = 20) -> list[dict]:
                 else:
                     continue
 
-                if config.SUBSTACK_HANDLE in (kandydat["url"] or ""):
+                # NAJPIERW UCHWYT, DOPIERO POTEM ADRES — i to nie jest
+                # ostroznosc, tylko dziura, przez ktora agent mogl komentowac
+                # WLASNA notke.
+                #
+                # Adres notki ma postac `substack.com/note/c-<id>` i NIE NIESIE
+                # uchwytu w ogole, wiec warunek na adresie byl falszywy dla
+                # kazdej notki — takze naszej. Publicznie wyglada to jak bot
+                # rozmawiajacy sam ze soba. Uchwyt autora lezal w tej samej
+                # strukturze, jedna linie wyzej (`"uchwyt": kom.get("handle")`),
+                # i nikt go nie pytal.
+                #
+                # UCHWYT POROWNUJEMY DOKLADNIE, nie podciagiem. Podciag wycina
+                # CUDZE publikacje: uchwyt „art" odrzucilby smartinvestor,
+                # „news" odrzucilby thenewsletter. Nasz uchwyt jest dlugi, wiec
+                # dzis by nie zaszkodzil — ale to wlasnosc naszej nazwy, nie
+                # kodu, a nazwa moze sie zmienic.
+                if (str(kandydat.get("uchwyt") or "").lower()
+                        == config.SUBSTACK_HANDLE.lower()
+                        or config.SUBSTACK_HANDLE in (kandydat["url"] or "")):
                     odrzucone["nasze"] += 1
                     continue
                 if _za_swiezy(kandydat,

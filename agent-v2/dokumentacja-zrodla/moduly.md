@@ -356,7 +356,7 @@
 
 ### `kanal.py` — pamięć o cudzych publikacjach
 
-304 wierszy, 10 funkcji na poziomie modułu, 0 klas
+324 wierszy, 10 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
