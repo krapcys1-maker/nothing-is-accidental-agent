@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **24 plików**, 30 355 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **24 plików**, 30 379 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -177,7 +177,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-8217 wierszy, 144 funkcji na poziomie modułu, 0 klas
+8241 wierszy, 144 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -8619,7 +8619,7 @@ pokazuje się **niezależnie** od tego ustawienia — u Jonathana widać naraz
 
 #### `prompts/bank.md`
 
-**150 wierszy.** Pola wejsciowe: `co_zadzialalo`, `kandydaci`
+**166 wierszy.** Pola wejsciowe: `co_zadzialalo`, `kandydaci`
 
 ````markdown
 Rank these candidate facts against each other, strongest first, and say which
@@ -8748,9 +8748,25 @@ The test is strict and it is the same test as everywhere on this account: each
 angle must break a DIFFERENT belief. If two angles would puncture the same
 assumption, that is one angle written twice — return one.
 
-For each candidate return `katy`: between one and three angles. Give one when
-one is honest. An angle is a short instruction to the writer, not a headline:
-say what to lead with and which belief it breaks.
+For each candidate return `katy`. An angle is a short instruction to the
+writer, not a headline: say what to lead with and which belief it breaks.
+
+**Work this as a forced choice, not a free option.** Asked for "one to three"
+you will return one every time — measured on 4 September 2026, sixteen
+candidates in one batch, one angle each, sixteen times out of sixteen. That is
+not judgement, it is the cheapest answer.
+
+So for every candidate, before you write `katy`, find the SECOND angle and say
+what happens to it in `drugi_kat`:
+
+* if the second angle breaks a genuinely different belief, it goes into `katy`
+  alongside the first, and `drugi_kat` says "wzięty";
+* if it would break the same belief in other words, `drugi_kat` names that
+  belief and says why the two collapse into one.
+
+An empty or missing `drugi_kat` is a failed answer for that candidate. You may
+still end with one angle — most facts honestly carry one — but you must have
+looked, and the record must show what you looked at.
 
 Where an angle needs something we do not have — a comparison table, a
 side-by-side with the previous version, the vendor's own eval page — say so in
@@ -8763,7 +8779,7 @@ Return only valid JSON. `kolejnosc` lists every id exactly once, strongest
 first. Do not omit any id and do not invent one.
 
 {{"kolejnosc": [<id>, <id>, ...],
-  "oceny": [{{"id": <id>, "wyrzuc": true|false, "kod_wyrzucenia": "NOT_AI"|"NOTHING_TO_CHECK"|"NO_MECHANISM"|"", "powod_wyrzucenia": "<one clause saying why that code applies, empty when keeping>", "na_artykul": true|false, "dlaczego_mocny": "<one clause — what would make a stranger stop>", "podobne_do": "<which side of the measured evidence this resembles, and in what respect — one clause; empty if neither>", "katy": [{{"kat": "<what to lead with — one clause to the writer>", "lamie": "<the belief this one angle breaks — different for every angle>", "czego_brakuje": "<what we would have to find to write it, empty when we already have enough>"}}]}}]}}
+  "oceny": [{{"id": <id>, "wyrzuc": true|false, "kod_wyrzucenia": "NOT_AI"|"NOTHING_TO_CHECK"|"NO_MECHANISM"|"", "powod_wyrzucenia": "<one clause saying why that code applies, empty when keeping>", "na_artykul": true|false, "dlaczego_mocny": "<one clause — what would make a stranger stop>", "podobne_do": "<which side of the measured evidence this resembles, and in what respect — one clause; empty if neither>", "drugi_kat": "<the second angle you considered: 'wzięty' if it is in `katy`, otherwise the belief it would have broken and why that is the same belief as the first>", "katy": [{{"kat": "<what to lead with — one clause to the writer>", "lamie": "<the belief this one angle breaks — different for every angle>", "czego_brakuje": "<what we would have to find to write it, empty when we already have enough>"}}]}}]}}
 
 `kod_wyrzucenia` must be one of the three codes whenever `wyrzuc` is true, and
 empty otherwise. A deletion with any other value is refused and the candidate is

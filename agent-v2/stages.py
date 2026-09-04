@@ -7934,6 +7934,19 @@ def posortuj_bank(conn: sqlite3.Connection, run_id: int | None = None,
                                               or "").strip()[:200],
                          "uzyty": False})
         k["katy"] = katy
+        # DRUGI KAT — SLAD PO WYMUSZONYM WYBORZE, nie ozdoba.
+        #
+        # ZMIERZONE 4 wrzesnia 2026 na zywym banku: przy poleceniu „od jednego
+        # do trzech katow, daj jeden gdy jeden jest uczciwy" model oddal
+        # DOKLADNIE JEDEN kat przy KAZDYM z szesnastu faktow. Nie srednio
+        # jeden — po jednym, szesnascie razy na szesnascie. To nie jest ocena,
+        # to najtansza odpowiedz, i ta sama degeneracja do stalej, ktora ten
+        # potok zna z samoocen (pewnosc zawsze 1.0, watki zawsze 6).
+        #
+        # Prompt kaze teraz ZNALEZC drugi kat i powiedziec, co sie z nim stalo.
+        # Pole trzymamy przy fakcie, zeby po tygodniu dalo sie sprawdzic, czy
+        # model naprawde szuka, czy tylko wpisuje cokolwiek.
+        k["drugi_kat"] = str(o.get("drugi_kat") or "").strip()[:200]
         # ZIELONE SWIATLO ZAPALA KOD, NIE MODEL. Pierwszy w kolejnosci
         # idzie do publikacji jako pierwszy — tak juz dziala
         # `wez_kandydatow`, ktore bierze po randze. Pole istnieje po to,
@@ -7949,9 +7962,20 @@ def posortuj_bank(conn: sqlite3.Connection, run_id: int | None = None,
     _braki = sum(1 for k in wolni for _k in (k.get("katy") or [])
                  if _k.get("czego_brakuje"))
     if _katow:
-        print("  [bank] katy: %d propozycji przy %d faktach (srednio %.1f na"
-              " fakt); %d wymaga doszukania materialu"
-              % (_katow, _z_katami, _katow / max(1, _z_katami), _braki),
+        # ROZKLAD, NIE SREDNIA. „Srednio 1,0 na fakt" wyglada tak samo, gdy
+        # szesnascie faktow dostaje po jednym kacie i gdy osiem dostaje po dwa,
+        # a osiem po zadnym — a to sa dwa zupelnie rozne stany banku.
+        _rozklad: dict[int, int] = {}
+        for _k in wolni:
+            _ile = len(_k.get("katy") or [])
+            _rozklad[_ile] = _rozklad.get(_ile, 0) + 1
+        _szukal = sum(1 for _k in wolni if _k.get("drugi_kat"))
+        print("  [bank] katy: %d przy %d faktach, rozklad %s;"
+              " %d wymaga doszukania materialu; drugi kat rozwazony przy %d/%d"
+              % (_katow, _z_katami,
+                 ", ".join("%dx po %d" % (v, kk)
+                           for kk, v in sorted(_rozklad.items())),
+                 _braki, _szukal, len(wolni)),
               flush=True)
     if scietych:
         # GLOSNO. Sufit, ktory tnie po cichu, wyglada jak ocena modelu.
