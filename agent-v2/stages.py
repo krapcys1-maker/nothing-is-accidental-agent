@@ -7354,7 +7354,65 @@ def dopisz_kandydatow(kandydaci: list[dict[str, Any]],
     print("  [indeks] przyjete %d, odrzucone %d, juz znane %d — w indeksie %d"
           % (licznik["przyjete"], licznik["odrzucone"], licznik["znane"],
              sum(1 for k in indeks if k.get("status") == "nowy")), flush=True)
+
+    # NA CZYM STOJA PRZYJETE FAKTY — POMIAR, NIE BRAMKA.
+    #
+    # `ciekawostki.md` od dawna prosi: „Prefer the primary document — a filing,
+    # a standard, a regulation, a court record, a company's own statement —
+    # over an article describing one". ZMIERZONE 4 wrzesnia 2026 na
+    # produkcyjnym banku: przed dolozeniem zrodel pierwotnych 7 faktow na 74
+    # (9%) mialo adres dokumentu pierwotnego, po dolozeniu 8 na 20 (40%).
+    # Poprawa czterokrotna — i wciaz szescdziesiat procent na przedrukach.
+    #
+    # Gorsze od samej proporcji: przy czesci faktow ORYGINAL LEZY W TYM SAMYM
+    # REKORDZIE jako dokument kontrolny. Fakt o Gemini 3.8 Flash linkuje
+    # `orcarouter.ai`, a jego dokument kontrolny to `blog.google`. Czytelnik
+    # dostaje przedruk, choc zrodlo mamy.
+    #
+    # Nie przestawiam tego automatycznie: `control_url` znaczy „drugi dokument,
+    # pozniejszy, ktory potwierdza albo unieważnia" i podmiana zatarlaby te
+    # role. Liczymy i wypisujemy, zeby dalo sie zobaczyc, czy prosba w
+    # promptcie cokolwiek daje — bo dotad nie dawala.
+    if licznik["przyjete"]:
+        import re as _re
+        _swieze = [k for k in indeks
+                   if str(k.get("kiedy") or "")[:10] == db.now()[:10]]
+
+        def _host(u: Any) -> str:
+            m = _re.match(r"https?://([^/]+)", str(u or ""))
+            return m.group(1).replace("www.", "").lower() if m else ""
+
+        _pierwotne = 0
+        _oryginal_obok = []
+        for k in _swieze:
+            zr, kon = _host(k.get("url")), _host(k.get("control_url"))
+            if any(p in zr for p in DOMENY_PIERWOTNE):
+                _pierwotne += 1
+            elif zr and any(p in kon for p in DOMENY_PIERWOTNE):
+                _oryginal_obok.append((zr, kon))
+        print("  [indeks] na dokumencie pierwotnym stoi %d z %d dzisiejszych"
+              % (_pierwotne, len(_swieze)), flush=True)
+        for zr, kon in _oryginal_obok[:3]:
+            print("      przedruk %s, a oryginal (%s) mamy w dokumencie"
+                  " kontrolnym" % (zr, kon), flush=True)
     return licznik
+
+
+# DOMENY, KTORE NIOSA DOKUMENT, A NIE OPOWIESC O NIM.
+#
+# Lista jest KROTKA i celowo niepelna: ma rozpoznawac oczywiste oryginaly
+# (strona laboratorium, repozytorium, rejestr, uczelnia, urzad), a nie
+# recenzowac calego internetu. Fakt spoza listy nie jest gorszy — jest tylko
+# nieodrozniony, i tak ma zostac, bo inaczej lista zaczela by dzialac jak
+# bramka, ktora nikt nie zmierzyl.
+DOMENY_PIERWOTNE = (
+    "openai.com", "blog.google", "deepmind.google", "anthropic.com",
+    "claude.com", "huggingface.co", "github.com", "arxiv.org",
+    "papers.cool", "alphaxiv.org", "fal.ai", "skild.ai", "epochai",
+    "epoch.ai", "metr.org", "nist.gov", "europa.eu", "federalregister.gov",
+    "sec.gov", "courtlistener.com", "eia.gov", "status.claude.com",
+    "status.openai.com", ".edu", ".gov", ".ac.",
+)
 
 
 def wez_kandydatow(ile: int = 1) -> list[dict[str, Any]]:
