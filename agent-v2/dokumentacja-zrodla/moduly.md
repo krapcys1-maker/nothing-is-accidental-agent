@@ -427,7 +427,7 @@
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-2986 wierszy, 27 funkcji na poziomie modułu, 0 klas
+2999 wierszy, 27 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|

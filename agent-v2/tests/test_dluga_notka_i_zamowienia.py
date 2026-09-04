@@ -7,9 +7,11 @@ suficie 64. Rozklad jego wersji: 28 slow na definicje terminu zwyklymi slowami,
 65 na przylozenie jej do czytelnika, 24 na wersje porzadna, 35 na zalecenie.
 W 64 slowa miesci sie DOKLADNIE JEDEN z tych czterech blokow, wiec model
 zostawia teze i wycina wyjasnienie. Sufit podniesiony NIE dla wszystkich, tylko
-dla jednej formy — reszta zostaje na 33-64, bo zaangazowanie mierzone publicznie
-faworyzuje krotkie, a my nie mamy wlasnego pomiaru (na 34 notkach reakcje byly
-plaskie: 3,2 przy otwarciu konkretnym, 3,0 przy abstrakcyjnym).
+dla jednej formy. Zwykle okno tez zostalo pozniej rozszerzone (33-120, decyzja
+wlasciciela z 4 wrzesnia: „chce zeby notki mialy sens"), bo prog 64 pochodzil
+z CUDZYCH analiz zaangazowania, a na naszych 34 notkach zaangazowanie nie
+odroznia notki dobrej od belkotu — 3,2 przy otwarciu konkretnym, 3,0 przy
+abstrakcyjnym, 3,1 bez ani jednej liczby.
 
 DLACZEGO ZAMOWIENIA. `posortuj_bank` prosi model o katy i o `czego_brakuje`
 przy kazdym. Pole bylo zapisywane i liczone w logu, a czytane przez nikogo —
@@ -55,7 +57,7 @@ sprawdz("i NIE miescila sie w zwyklym — to jest cala przyczyna zmiany",
 print()
 print("=== 2. KONTRDOWOD: POZOSTALE FORMY ZOSTAJA KROTKIE ===")
 for forma in ("PROSTA", "SCENA", "LICZBA", "ZACZEP_I_KONKRET"):
-    sprawdz("%s nadal 33-64" % forma,
+    sprawdz("%s zostaje w zwyklym oknie" % forma,
             config.zakres_slow(forma) == (config.NOTE_MIN_WORDS,
                                           config.NOTE_MAX_WORDS),
             config.zakres_slow(forma))
@@ -244,13 +246,11 @@ print()
 print("=== 10. REGULA STOI TEZ W PROMPCIE NOTKI ===")
 _tresc_nt = pathlib.Path("agent-v2/prompts/notka.md").read_text(encoding="utf-8")
 sprawdz("prompt zakazuje tego otwarcia wprost",
-        "Never open by contradicting something the reader has not heard"
-        in _tresc_nt)
+        "Do not walk into an argument the reader was not part of" in _tresc_nt)
 sprawdz("i podaje OBIE winne notki jako przyklad",
-        "Shelved genius" in _tresc_nt and "I keep hearing" in _tresc_nt)
+        "I keep hearing that" in _tresc_nt and "Everyone says" in _tresc_nt)
 sprawdz("i mowi, czym zastapic — przekonaniem czytelnika o SOBIE",
-        "as something they" in _tresc_nt.lower()
-        or "the reader's OWN" in _tresc_nt)
+        "recognises in *themselves*" in _tresc_nt)
 
 print()
 print("=== 11. JEDEN FAKT ODDAJE KILKA NOTEK PRZEZ KATY ===")
@@ -547,9 +547,9 @@ sprawdz("None tez nie", stages.odeslanie_donikad(None) == "")
 
 _tresc_nt3 = pathlib.Path("agent-v2/prompts/notka.md").read_text(encoding="utf-8")
 sprawdz("prompt notki zakazuje tego wprost",
-        "Never point at a study the reader has not seen" in _tresc_nt3)
+        "this experiment" in _tresc_nt3 and "the reader has seen none of them" in _tresc_nt3)
 sprawdz("i mowi, ze wskazanie na swiat czytelnika JEST dobre",
-        "POINTING AT THE READER'S OWN WORLD" in _tresc_nt3)
+        "already in the reader's own life" in _tresc_nt3)
 
 print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))

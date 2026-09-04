@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **24 plików**, 30 745 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **24 plików**, 30 758 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -569,7 +569,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-2986 wierszy, 27 funkcji na poziomie modułu, 0 klas
+2999 wierszy, 27 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -10361,409 +10361,154 @@ Return only:
 
 #### `prompts/notka.md`
 
-**401 wierszy.** Pola wejsciowe: `evidence`, `form_brief`, `language`, `max_words`, `min_words`, `note_form`, `note_type`, `ostatnie_otwarcia_json`, `type_brief`
+**145 wierszy.** Pola wejsciowe: `evidence`, `form_brief`, `language`, `max_words`, `min_words`, `note_form`, `note_type`, `ostatnie_otwarcia_json`, `type_brief`
 
 ````markdown
-Write a Substack Note for the anonymous editorial brand Nothing Is Accidental —
-a publication about artificial intelligence: what these systems actually do, how
-they are built, and who decides what they are allowed to do.
+Write one Substack Note for Nothing Is Accidental, an anonymous publication
+about artificial intelligence: what these systems actually do, how they are
+built, and who decides what they are allowed to do.
 
 Write in {language}.
 
-## What a note is
+# THE ASSIGNMENT
 
-Somebody is holding a phone, moving fast, and has already decided not to care.
-You get one sentence to change that, and the sentence has to be **true and
-specific** — because the only thing that survives at this size is a fact with an
-edge on it. Cleverness without a fact is a smell everyone downstream recognises.
-
-The move is the same as the long pieces: **make the hard thing easy.** Say
-plainly what actually happens, in words the reader already has. A reader who
-finishes feeling they understood something will forward it; one who finishes
-feeling talked past will not, however accurate you were.
-
-**This is a publication about AI, not about how disappointing AI is.** Most
-notes here report something real and interesting and make it make sense. Some
-report that a claim did not survive its own record — that is one option among
-several, taken when the evidence hands it to you, never the reflex. A feed of
-nothing but debunkings is as monotonous as a feed of nothing but announcements,
-and it teaches the reader less.
-
-## The reader, and the test you fail by forgetting them
-
-They are interested in AI. They do not work on the system you are describing and
-never will. **A note that only lands for someone who has opened this codebase is
-a failed note**, no matter how correct.
-
-So before writing, answer in one sentence: *why would this person say it out
-loud to somebody else?* If the answer is "because it is an accurate detail about
-a tool", stop. Find the thing the detail is evidence **of** — the assumption it
-breaks, the thing everyone is quietly trusting, the gap between what a number is
-called and what it counts. **That is the note.** The system name, the file, the
-config count are how you prove it, and at this length you can usually afford to
-prove it with exactly one number.
-
-**Identifiers are expensive.** Model version names, benchmark names, index
-names and pricing units each cost the reader a beat of attention, and you have
-about three. Spend them on the idea, not on provenance. One name, one number,
-one consequence is a note; four names and five numbers is a changelog entry.
-
-### Every named measure gets half a sentence of plain words
-
-This is the rule this account has been breaking. Measured on 32 published
-notes: the sentences are short (ten words on average) and most carry no jargon
-at all — and they are still unreadable to a stranger, because they name things
-without saying what they are.
-
-A real one we published:
-
-> Cheap models are supposed to be worse models. Pay a tenth, get less.
-> GLM-5.3-Flash charges $0.15 per million input tokens and still scores 57 on
-> the Artificial Analysis Intelligence Index.
-
-Nothing there is hard English. But the reader does not know what a million
-input tokens costs anybody, what that index is, or whether 57 is good. Three
-unanswered questions in two sentences, and they are gone.
-
-So: **the first time a note names a benchmark, an index, a pricing unit or a
-model variant, it says in half a sentence what that thing measures and what a
-number there means.** Not a definition — a handhold:
-
-- "57 on an index that averages a dozen public tests, where the leaders sit
-  around 70"
-- "$0.15 per million words of input, about a hundredth of what the flagship
-  charges for the same work"
-- "the Flash version, the cut-down one meant to be cheap and quick"
-
-If you cannot give the handhold inside the length, **the number is the wrong
-number** and there is a better one in the evidence.
-
-### Say what happened before you say what it means
-
-The same 32 notes almost all open with the meaning and arrive at the event
-afterwards — "Cheap models are supposed to be worse models" before anyone has
-been told that a cheap model just scored well. That order works for a reader
-who already follows the story; it strands everyone else.
-
-Lead with the thing that happened, in the plainest sentence you can write.
-The reversal, the broken assumption, the consequence — those come next, and
-they land harder once the reader knows what you are talking about.
-
-### Never point at a study the reader has not seen
-
-A note published on 4 September 2026 opened: "Watercolour paintings from THIS
-EXPERIMENT are JavaScript programs." Which experiment? Nothing had introduced
-one. The first sentence pointed at something that, for the reader, did not
-exist.
-
-The evidence card names an experiment because you were handed the source. The
-reader was not. Words like "this experiment", "the study", "that benchmark",
-"the run" in your opening are references to a thing only you can see.
-
-Name the thing instead. "Hugging Face trained a model to paint" costs the same
-number of words as "paintings from this experiment" and leaves nothing hanging.
-
-POINTING AT THE READER'S OWN WORLD IS THE OPPOSITE AND IT IS GOOD: "That
-ChatGPT subscription sitting on your card statement", "That model answering you
-in the EU". Those work because the reader can turn and look at the thing.
-
-### Never open by contradicting something the reader has not heard
-
-This is the single defect that made the owner read a published note three
-times and still not know what it was about. Two live examples, both ours:
-
-> Shelved genius is the most flattering story this industry tells about itself.
-
-> Trying it yourself is also a benchmark. Sample size one, run once, never
-> written down. I keep hearing that public tests are useless...
-
-Both walk into the middle of an argument and expect the reader to already
-have a side. "Shelved genius" is not a phrase anyone knows. Nobody scrolling
-has been hearing that public tests are useless. The reader is handed a verdict
-on a claim they were never shown, and the note reads as an answer with the
-question missing.
-
-The move is banned in every form. Concretely, do not open with any of:
-"I keep hearing that...", "Everyone says...", "The standard line is...",
-"X is the most flattering story...", "It is fashionable to argue...", or any
-sentence whose first job is to disagree.
-
-The permitted version of the same idea names the belief as the reader's OWN,
-in words they would use about their own behaviour — "Asking a chatbot to check
-its own draft feels like free proofreading" works, because the reader has done
-exactly that. The test: would a stranger recognise this as something they
-themselves think, without being told anyone thinks it?
-
-## Length is the hard constraint
-
-**{min_words} to {max_words} words. Count them.**
-
-This is measured, not stylistic: notes of 33–64 words get the highest engagement,
-and notes of 65–256 words fall off sharply. The instinct to write a paragraph
-lands squarely in the dead zone. If your idea will not fit in {max_words} words,
-it is not a note.
-
-## The note type you are writing now: {note_type}
+**Type — {note_type}**
 
 {type_brief}
 
-## The shape it has to take: {note_form}
+**Shape — {note_form}**
 
 {form_brief}
 
-The type decides what you say. The shape decides what it looks like on a screen,
-and that is a separate decision. Follow both.
+**Length: {min_words} to {max_words} words.**
 
-## Shape is not decoration
+Inside that range, write what the idea needs and not one word more. A short
+note is not a better note — it is only shorter. If a reader would have to guess
+at something, spend the words and explain it; if a sentence is there to sound
+finished, cut it. **Being understood beats being brief.** A note nobody can
+follow has failed even at thirty words.
 
-A note is read on a phone, in a feed, by a thumb that is already moving. A solid
-block of text is one grey rectangle among fifty and gets skipped before a single
-word is read.
-
-- **Break the lines.** Unless the shape above says otherwise, a note is two or
-  three blocks separated by a blank line, not one paragraph.
-- **Vary the sentence length inside them.** A long sentence, then a short one.
-  Every sentence the same length is the flattest rhythm there is.
-- **The first line has to survive alone, and it must carry the revelation
-  itself — not the run-up to it.** In the feed the note is cut after a line or
-  two with a "more" link, so roughly the first ten words are the whole pitch.
-  A note built the natural way — context first, surprise second — puts the one
-  interesting thing below the fold, where nobody meets it.
-
-  Wrong: *Traffic engineers use a formula to set signal timing.* (setup)
-  Right: *A downhill approach makes the yellow light longer.* (the thing itself)
-
-  Test before you write the second line: if a stranger read only your first
-  sentence and nothing else, would they have learned the surprising thing? If
-  they would only have learned that a surprising thing is coming, rewrite it.
-- **Do not start with the definite article** when another word will carry the
-  line. Openings that all begin the same way make a profile look automated even
-  when every note is different.
-
-- **These are the words our last notes opened with. Do not open with any of
-  them:**
-
-  {ostatnie_otwarcia_json}
-
-  This matters more than it looks. Four of our first twelve notes began with
-  "The" — every note was different and the profile still read as automated,
-  because a reader scanning a column of posts sees the left edge before they
-  see anything else. You are the only one who can fix that, because you are the
-  one choosing the first word.
-
-## What every note must do
-
-**Break a belief the reader is carrying.** Not "tell them something they did
-not know" — nearly everything qualifies for that and it is why so many notes
-land as trivia and get scrolled past.
-
-Before writing, say to yourself in one plain sentence what the reader wrongly
-believes: *most people assume the assistant remembers the conversation it is
-having*, *most people assume a refusal means something dangerous was detected*.
-If you cannot write that sentence, this material is trivia and the note will not
-travel, however unusual the fact is.
-
-The reason is not taste. Curiosity is a response to a gap somebody recognises
-in their own knowledge, and a gap only exists where there was a belief. A reader
-with no opinion about a thing feels no pull. A reader who is confidently wrong
-feels it the instant you say so. The publication learned this the expensive way:
-an article about a symbol most people had never consciously noticed was dull
-despite good sources, and was deleted.
-
-The belief does not have to appear in the note as a sentence. It has to be the
-thing the note breaks.
-
-**State the thing.** Do not withhold the point to make someone click — a note
-that teases and delivers nothing is the fastest way to be scrolled past. The
-reader should walk away knowing something true, and want the rest anyway.
-
-Measured, not opinion: notes that convert readers into subscribers are specific
-and concrete. Notes that are motivational or abstract collect likes and convert
-nobody. Comments and restacks carry far more reach than likes, so a note that
-gives someone something to argue with beats a note that everyone nods at.
-
-## Whether it opens a conversation
-
-This publication wants argument. A note that leaves a reader with something to
-disagree with has done more than a note that closes cleanly.
-
-So you **may** end on a genuinely open question — one you do not know the answer
-to and neither does anybody else, because the measurement does not exist yet.
-What is forbidden is the fake one: the question whose answer you just gave, the
-rhetorical shrug, "makes you wonder, doesn't it?", anything that reads as a bid
-for replies. A real open question names **what nobody has counted**. A fake one
-invites people to have feelings.
-
-## The big question, and the one place it is allowed to stand
-
-The section above is about the question you END on, and it stands exactly as
-written. This one is about a different device that happens to share its
-punctuation, so read them together rather than against each other.
-
-A note **may open with a big question** — whether the model reasons or
-imitates reasoning, whether memory would make it something else, whether it
-knows when it is being tested — **on one condition: the second half of the
-note answers it, using a specific piece of evidence from the card.** The
-question names the stake. The evidence settles it before the reader leaves.
-That is "State the thing" with the thing asked out loud first, not a loophole
-around it.
-
-The two questions are opposites and both are allowed:
-
-- The one you close on has no answer. Nobody has counted it yet, and that is
-  its entire content.
-- The one you open with has an answer, you are holding it, and you give it in
-  the next two lines. Left hanging at the top it becomes the rhetorical shrug
-  that is banned everywhere else in this brief, and it is the worse failure of
-  the two, because the reader was promised something and then not paid.
-
-Nothing here loosens the ban on the fake question: no "makes you wonder,
-doesn't it?", no question whose answer is a feeling, nothing asked to collect
-replies. The test is mechanical. Cover the second half of your own note. If
-the first line is still doing work, it was a hook. If it has turned into a
-poll, delete it.
-
-**This is a permission and never an instruction, and the reason is measured
-twice.** Notes carrying a question mark convert 35 percent fewer subscribers,
-so the device costs something every time it is used and has to pay for itself
-in that note. And four of our first twelve notes opened with the word "The":
-every note was different, the profile still read as automated, because a
-scanning reader meets the left edge before they meet a single sentence. A
-column of question marks would be that same failure, louder and faster,
-because a question mark is a more recognisable shape than an article. So: if
-the evidence answers a question people actually ask, ask it. If it does not,
-open with the thing itself and say nothing about questions at all.
-
-Where the shape brief above rules on where a question may sit, the shape wins.
-
-## The failure modes of a note
-
-1. **A fact with a bow on it.** The fact is real and the last clause tells the
-   reader how to feel. Delete the last clause; that is usually the whole fix.
-2. **A thesis with no thing.** An opinion at note length is a tweet, and there
-   are enough of those.
-3. **Borrowed drama.** "Nobody is talking about this", "this changes
-   everything", "quietly". If the fact needs that scaffolding, it is not
-   carrying the note.
-4. **A summary of something longer.** A note that reads as an abstract of an
-   article is an advertisement. It must stand alone for someone who will never
-   click.
-
-## Hard rules
-
-- **Every fact must come from the evidence below.** No figure, date, name or
-  claim from your own memory. If it is not in the evidence, it does not go in.
-- **No personal experience.** You have not stood anywhere or seen anything.
-- **No question as an opener** unless the answer is in the note itself, which
-  is the case "The big question" above sets out and the only one. Do not ask
-  for engagement — earn it by saying something worth answering.
-- **No "here's the thing", no "most people don't realise", no "in today's world".**
-- **No hashtags, no emoji, no call to action, no "read more", no self-promotion.**
-- Avoid the vocabulary that marks machine text: delve, leverage, synergy,
-  optimise, streamline, empower, innovative, groundbreaking, transformative.
-
-# How not to read as a machine
-
-## Punctuation: this is the strongest tell in short text
-
-**No em dashes. No semicolons.** Not "few" — none, unless a quotation contains
-one. Machine text is full of them and comment-writers almost never use either.
-Where you would reach for an em dash, use a full stop and start a new sentence.
-
-Use the marks people actually use: full stops, commas, question marks. An
-occasional ellipsis is fine. Do not balance every sentence with a colon.
-
-## Length
-
-A note has a fixed contract of {min_words}-{max_words} words and that stays.
-The variation rule below applies to replies and comments, not here.
-
-## Openers and closers
-
-Start mid-thought, with the substance. Never open with an acknowledgement:
-"Great point", "That's a fair question", "Interesting piece", "I'd like to add".
-
-End on the point. No summary, no "overall", no bow, and no closing question
-tacked on to invite engagement. This is the same rule as "Whether it opens a
-conversation" above, seen from the other side: the question that is banned is
-the one asked to collect replies. A question nobody can answer because the
-measurement does not exist is not that question, and it is allowed.
-
-## Hedging
-
-Hedge at most once, and only where you are actually unsure. "I could be wrong",
-"in my opinion", "it depends" repeated through a short comment reads as
-something with no stake in the answer.
-
-## Register
-
-Take a position. Where the honest reaction is blunt, be blunt. A comment section
-where every reply is unfailingly warm and balanced reads as automated even when
-each reply is well written.
-
-Saying "I don't know" or "that part I'm not sure about" is allowed and is more
-human than answering everything.
-
-## Banned vocabulary
-
-delve, moreover, furthermore, in conclusion, overall, a testament to, it's
-important to note, landscape, navigate (figurative), leverage, foster, robust,
-underscore, crucial, seamless, holistic, myriad, tapestry.
-
-## Output
-
-Return only valid JSON:
-
-{{"note": "<the note>", "words": <integer>, "fact_used": "<the single fact from the evidence this rests on>", "source_url": "<the url that fact came from>"}}
-
-## If your fact carries `control_verdict` MODIFIES or ENDS, say what became of it
-
-**Writing about the past is entirely allowed.** A contract signed in 2021, a
-study from 2023, a law passed in 2018 — all fine, and often the best material.
-The rule is not about age. It is that a note resting on an old fact has to tell
-the reader **what the thing is now**, and that sentence sits in `control_fact`.
-
-- `MODIFIES` — still broadly true, but conditioned. Carry the qualifier in the
-  same breath as the claim. "Zero permissions" becomes "no advance licence for
-  the training step, if six conditions hold". Eight words, and the note gets
-  more interesting, because the conditions are where the argument actually is.
-- `ENDS` — the arrangement is over. Say so, in the note. "Those were the rates
-  in 2021; the contract was cancelled eight months early and the vendor left
-  the business entirely." That is not a retraction of your note, it is the end
-  of the story, and a story with an ending beats a snapshot.
-
-Past tense is not enough on its own. "Workers were paid under two dollars an
-hour" is true and still leaves a reader in August 2026 believing it describes
-something running. The ending has to be visible.
-
-A note that states the headline and drops what became of it is worse than one
-that never ran, because it reads as checked.
-
-## The evidence
+## The evidence — everything you say comes from here, nothing from memory
 
 {evidence}
 
 **If the evidence carries `kat_wziety`, that is your assignment, not a
 suggestion.** It holds two fields. `kat` says what to lead with. `lamie` is the
-belief this note has to break — and it is the reason the field exists: the same
-fact may be written more than once, each time against a DIFFERENT wrong belief,
-and a second note that breaks the first one's belief again is a duplicate no
-matter how differently it is worded.
+belief this note has to break — and that is why the field exists: the same fact
+may be written more than once, each time against a DIFFERENT wrong belief, and
+a second note that breaks the first one's belief again is a duplicate no matter
+how differently it is worded.
 
 So write to that belief and no other. Everything else in the evidence is
 background you may draw on, but the note is about this one angle. If `lamie`
 names something the evidence cannot actually support, say the smaller true
 thing rather than stretching the fact to fit the assignment.
 
-**If the evidence carries `already_said_in_earlier_notes`, those sentences are
-spent.** They went out in the feed on earlier days, to the same people. Do not
-restate them, do not paraphrase them, and do not lean on the same figure or the
-same named body. An article carries more than one fact; find the one that has
-not been used yet. If everything worth saying has already been said, say so by
-writing about a smaller detail rather than by repeating the headline one.
+# WHO IS READING, AND HOW YOU SOUND
 
-A reader who sees the same sentence twice in three days does not think the
-account is consistent. They think it is a machine working through a backlog.
+Two people read this note. One works with these systems every day. The other
+has used a chatbot, reads the news, and has never opened a model card in their
+life. **Write so the second one follows every sentence and the first one still
+learns something.** That is possible far more often than it looks, and it is
+the whole job.
+
+So: **write like a person explaining something interesting to a friend over
+coffee** — not like a paper, not like a press release, not like a lecture.
+Plain sentences. Ordinary words. The tone of somebody who finds this genuinely
+interesting and wants you to get it, not somebody proving they understand it.
+
+Two ways to fail, and both have happened here:
+
+- **Sounding stiff.** Formal register, throat-clearing, sentences arranged to
+  seem authoritative. If a sentence would sound absurd said out loud to a
+  friend, rewrite it.
+- **Sounding like a specialist forum.** Piling up names and terms because they
+  are precise. Precision that nobody can read is not precision.
+
+**You do not have to explain everything** — that would be its own kind of
+tedium, and the reader is not stupid. You have to explain *the thing this note
+turns on*. Nobody needs a definition of "chatbot". Everybody needs to be told
+what a benchmark score means before a number from one lands.
+
+# THE FIVE RULES
+
+1. **Open with the thing that happened**, named plainly, in words a stranger
+   already has. Not with a verdict, not with a claim nobody showed them, and
+   never with "this experiment", "the study", "that benchmark" or "the run" —
+   the reader has seen none of them. Name the thing instead.
+2. **Every name, number, benchmark, price or method gets half a sentence
+   saying what it is** and what a number there means — or it comes out.
+   "GitHub, the site where programmers share code" costs five words and saves
+   the reader. If you cannot give that handhold inside the length, the number
+   is the wrong number and there is a better one in the evidence.
+3. **Say what it means only after the reader knows what you are talking
+   about.** Meaning first and event second is the order that strands everybody
+   who does not already follow the story.
+4. **Close with something already in the reader's own life** they can look at,
+   count or compare today: the answer an assistant gave them this week, the app
+   that updated itself, the price on their own statement. Sending them to read
+   a policy or open a model card is homework, and nobody does homework from a
+   feed.
+5. **Invent nothing.** Every fact, number, date and name is in the evidence
+   above. You have no personal experience and must not write as if you had one.
+
+# THE TELLS — each of these cost us a published note
+
+Short list, and every line is here because it went out in the feed and failed.
+
+- **Do not walk into an argument the reader was not part of.** Banned openings:
+  "I keep hearing that…", "Everyone says…", "The standard line is…", "X is the
+  most flattering story this industry tells…". The owner read one of these
+  three times and still could not say what it was about. If the belief is worth
+  naming, name it as something the reader recognises in *themselves* — "Asking
+  a chatbot to check its own draft feels like free proofreading" works, because
+  they have done exactly that.
+- **A one-word hook must be bound by the next sentence.** A note opening
+  "Zero." and never saying zero *of what* hands the reader a number with no
+  noun. "Zero. That's how many permissions you need in Japan…" is the fix.
+- **Do not state what a thing is not, then correct it.** "X, not Y", "It isn't
+  A. It's B." ran in 16 of 30 consecutive notes and became the account's tic.
+  Say what the thing is.
+- **A closing question is allowed only when it is real.** No "makes you wonder,
+  doesn't it?", nothing asked to collect replies. Notes carrying a question
+  mark convert 35 percent fewer subscribers, so a question has to earn its
+  place. Where the shape brief above rules on questions, the shape wins.
+- **Punctuation is the strongest tell at this length.** No em-dash pile-ups, no
+  semicolon chains, no rhetorical triads. Ordinary sentences, varied length.
+- **Do not open with the same word as the notes just before.** Four of our
+  first twelve notes opened with the definite article "The". Every note was
+  different and the profile still read as automated, because a scanning reader
+  meets the **left edge** of the column before they meet a single sentence.
+  Do not open with any of these — they are what we have just used:
+  {ostatnie_otwarcia_json}
+
+# SHAPE ON THE PAGE
+
+A note is read on a phone, in a feed, by a thumb already moving. A solid block
+of text is one grey rectangle among fifty and gets skipped before a word is
+read.
+
+**Break the lines.** Unless the shape brief says otherwise, a note is two or
+three blocks separated by a blank line, not one paragraph. Vary sentence
+length inside them: a long one, then a short one.
+
+# IF THIS NOTE PROMOTES ONE OF OUR ARTICLES
+
+If the evidence carries `already_said_in_earlier_notes`, those sentences are
+spent. They went out in the feed on earlier days, to the same people. Do not
+restate them, do not paraphrase them, and do not lean on the same figure or the
+same turn of phrase. An article gets several notes over several days, and a
+reader who sees the same point twice is watching somebody
+**working through a backlog**, not reading a publication.
+
+Take a different true thing from the same article. If the strongest point is
+spent, the second strongest is still worth more than a rewording of the first.
+
+# OUTPUT
+
+Return only valid JSON:
+
+{{"note": "<the note>", "words": <integer>, "fact_used": "<the single fact from the evidence this rests on>", "source_url": "<the url that fact came from>"}}
 ````
 
 ---
@@ -13198,8 +12943,8 @@ wartosc i komentarz stojacy bezposrednio nad definicja.
 | `THINKING_HEADROOM_TOKENS` | `28000` | Myślenie na Opusie 5 jest domyślnie włączone, liczy się jak tokeny wyjściowe i NIE jest częścią kontraktu — więc sufit wyliczony z samego ko |
 | `EFFORT` | `{ "scout": "medium", "discovery": "medium", ` | Głębokość myślenia. Jawnie, bo domyślne `high` na Opusie 5 potrafi podwoić rachunek za wyjście bez pytania. TO JEST POKRETLO WYLACZNIE DLA M |
 | `MAX_TOKENS` | `{ # 6 tematow: tytul, pytanie, ZLAMANE PRZEK` | — |
-| `NOTE_MIN_WORDS` | `33` | --- notki i komentarze ------------------------------------------------------ Zmierzone na publicznych analizach Substacka: 33-64 słowa dają |
-| `NOTE_MAX_WORDS` | `64` | — |
+| `NOTE_MIN_WORDS` | `33` | --- notki i komentarze ------------------------------------------------------ SUFIT PODNIESIONY 4 wrzesnia 2026 DECYZJA WLASCICIELA: „chce z |
+| `NOTE_MAX_WORDS` | `120` | — |
 | `NOTE_MIN_WORDS_DLUGA` | `120` | DLUGA NOTKA — OKNO OSOBNE, BO SUFIT 64 SLOW MA ZMIERZONY KOSZT. Sufit wyzej optymalizuje ZAANGAZOWANIE i ma zrodlo. Nie optymalizuje ZROZUMI |
 | `NOTE_MAX_WORDS_DLUGA` | `200` | — |
 | `FORMY_DLUGIE` | `{"WYJASNIENIE"}` | Formy pisane w dlugim oknie. Zbior, nie pojedyncza nazwa, zeby dolozenie drugiej dlugiej formy nie wymagalo dotykania `zakres_slow`. |

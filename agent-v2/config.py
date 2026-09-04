@@ -918,11 +918,24 @@ MAX_TOKENS = {
 }
 
 # --- notki i komentarze ------------------------------------------------------
-# Zmierzone na publicznych analizach Substacka: 33-64 słowa dają najwyższe
-# zaangażowanie (449 średnich reakcji), 65-256 słów wyraźnie spada. Środek jest
-# najgorszy, a to właśnie tam ląduje instynkt "napiszę akapit".
+# SUFIT PODNIESIONY 4 wrzesnia 2026 DECYZJA WLASCICIELA: „chce zeby notki mialy
+# sens, te ktore teraz dajemy nie maja sensu". Stalo tu 64 i to okno pochodzilo
+# z CUDZYCH analiz zaangazowania Substacka (33-64 slowa = 449 srednich reakcji,
+# 65-256 wyraznie mniej).
+#
+# DLACZEGO USTEPUJE. Tamten pomiar jest o zaangazowaniu, nie o zrozumialosci,
+# a na NASZYCH danych zaangazowanie nie odroznia notki dobrej od belkotu —
+# zmierzone 3 wrzesnia na 34 notkach od przestawienia konta: otwarcie konkretne
+# 3,2 reakcji, abstrakcyjne 3,0, bez ani jednej liczby 3,1. Plasko. Trzymalismy
+# wiec prog, ktory u nas niczego nie mierzy, i wyrzucalismy przez niego gotowe
+# notki: 4 wrzesnia w porownaniu promptow najlepsza z osmiu wersji przepadla,
+# bo miala 65 slow zamiast 64.
+#
+# 120 nie jest nowym celem, tylko miejscem, w ktorym notka przestaje byc notka.
+# Prompt mowi wprost: krotka notka nie jest lepsza, jest tylko krotsza — pisz
+# tyle, ile potrzebuje mysl, i ani slowa wiecej.
 NOTE_MIN_WORDS = 33
-NOTE_MAX_WORDS = 64
+NOTE_MAX_WORDS = 120
 
 # DLUGA NOTKA — OKNO OSOBNE, BO SUFIT 64 SLOW MA ZMIERZONY KOSZT.
 #

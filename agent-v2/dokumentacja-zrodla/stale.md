@@ -91,8 +91,8 @@
 | `THINKING_HEADROOM_TOKENS` | `28000` | Myślenie na Opusie 5 jest domyślnie włączone, liczy się jak tokeny wyjściowe i NIE jest częścią kontraktu — więc sufit wyliczony z samego ko |
 | `EFFORT` | `{ "scout": "medium", "discovery": "medium", ` | Głębokość myślenia. Jawnie, bo domyślne `high` na Opusie 5 potrafi podwoić rachunek za wyjście bez pytania. TO JEST POKRETLO WYLACZNIE DLA M |
 | `MAX_TOKENS` | `{ # 6 tematow: tytul, pytanie, ZLAMANE PRZEK` | — |
-| `NOTE_MIN_WORDS` | `33` | --- notki i komentarze ------------------------------------------------------ Zmierzone na publicznych analizach Substacka: 33-64 słowa dają |
-| `NOTE_MAX_WORDS` | `64` | — |
+| `NOTE_MIN_WORDS` | `33` | --- notki i komentarze ------------------------------------------------------ SUFIT PODNIESIONY 4 wrzesnia 2026 DECYZJA WLASCICIELA: „chce z |
+| `NOTE_MAX_WORDS` | `120` | — |
 | `NOTE_MIN_WORDS_DLUGA` | `120` | DLUGA NOTKA — OKNO OSOBNE, BO SUFIT 64 SLOW MA ZMIERZONY KOSZT. Sufit wyzej optymalizuje ZAANGAZOWANIE i ma zrodlo. Nie optymalizuje ZROZUMI |
 | `NOTE_MAX_WORDS_DLUGA` | `200` | — |
 | `FORMY_DLUGIE` | `{"WYJASNIENIE"}` | Formy pisane w dlugim oknie. Zbior, nie pojedyncza nazwa, zeby dolozenie drugiej dlugiej formy nie wymagalo dotykania `zakres_slow`. |
