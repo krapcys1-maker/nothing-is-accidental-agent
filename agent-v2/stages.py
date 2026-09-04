@@ -3040,11 +3040,25 @@ def note(
             data["czysty"] = czysty
             if not czysty:
                 data["odrzucony"] = powod
-        if text and link:
+        if text and link and link not in text:
             # Adres dokłada KOD, nie model. Model potrafi przekręcić URL, a zły
             # link pod notką promującą artykuł to notka wyrzucona do kosza.
             # Doklejamy po pomiarze długości, żeby adres nie liczył się jako słowa.
+            #
+            # `link not in text` — DOPISANE 4 wrzesnia 2026 po tym, jak notka
+            # wystawiona o 14:47 poszla w swiat z adresem artykulu DWA RAZY:
+            # raz napisanym przez model (karta dowodowa niesie ten adres), raz
+            # doklejonym tutaj. Widoczne na profilu, nie w logu — dziennik
+            # pokazywal to samo, ale nikt do niego nie zaglada oczami
+            # czytelnika.
+            #
+            # Warunek jest po stronie DOKLEJANIA, nie wycinania z tekstu
+            # modelu: gdy model poda adres sam, jego wersja zostaje, bo
+            # `bez_wstrzykniecia` juz ja przepuscilo jako nasz wlasny adres.
             data["note"] = text = f"{text}\n\n{link}"
+        elif text and link:
+            print("    (adres artykulu byl juz w tekscie — nie doklejam"
+                  " drugi raz)", flush=True)
         candidates.append(data)
 
     # WERYFIKACJA LENIWA. Sprawdzamy po kolei i konczymy na pierwszym, ktory
