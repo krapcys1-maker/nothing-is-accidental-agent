@@ -56,6 +56,7 @@
 | `PONOWIENIA` | `2` | Sufit na JEDEN przebieg. Działa ZAWSZE, także przy AGENT_V2_NO_LIMIT=1. „Bez limitu na budowę" miało znaczyć „nie blokuj eksperymentów", a n |
 | `PONOWIENIE_ODSTEP_S` | `8` | — |
 | `RUN_LIMIT_USD` | `1.60` | — |
+| `RUN_LIMIT_ARTYKUL_USD` | `2.20` | OSOBNY SUFIT DLA TORU ARTYKULU — jedna liczba byla za ciasna dla artykulu i za luzna dla notek. ZMIERZONE NA PRODUKCJI: przebieg artykulu 10 |
 | `TOPIC_COUNT` | `6` | --- skaut i różnorodność ---------------------------------------------------- |
 | `DIVERSITY_LOOKBACK` | `5` | — |
 | `DISCOVERY_MAX_RESULTS` | `10` | --- dyskoveria -------------------------------------------------------------- 10, nie 6. Odsiew przy pobieraniu jest brutalny: martwe adresy |

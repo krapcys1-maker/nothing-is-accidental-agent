@@ -2512,7 +2512,10 @@ def main() -> int:
         return wynik
     print(
         f"   baza: {config.DB_PATH}   "
+        # OBIE LICZBY, bo `main()` obsluguje oba tory. Po rozdzieleniu sufitow
+        # sam `RUN_LIMIT_USD` klamalby na przebiegu artykulu.
         f"sufit przebiegu: {config.RUN_LIMIT_USD} USD"
+        f" (artykul: {config.RUN_LIMIT_ARTYKUL_USD})"
         f"{'   TANIO (DeepSeek)' if config.CHEAP_MODE else ''}"
         f"{'   DRY_RUN' if config.DRY_RUN else ''}",
         flush=True,
@@ -2529,9 +2532,13 @@ def main() -> int:
 
         _m = _dt.now(_tz.utc).strftime("%Y-%m")
         _zostalo = config.sufit_miesieczny() - db.spent_usd(conn, _m)
-        if _zostalo < config.RUN_LIMIT_USD:
+        # SUFIT TORU ARTYKULU, nie ten od notek. Ta kontrola pyta „czy starczy
+        # na CALY artykul" — wiec musi pytac o te sama liczbe, ktora go potem
+        # zatrzyma. Po rozdzieleniu sufitow zostala tu stara i mowilaby o
+        # 1,60 USD, podczas gdy zatrzymanie nastapiloby dopiero przy 2,20.
+        if _zostalo < config.RUN_LIMIT_ARTYKUL_USD:
             print(f"   MIESIAC NA WYCZERPANIU: zostalo ${_zostalo:.2f}, a caly "
-                  f"artykul to do ${config.RUN_LIMIT_USD}. Nie zaczynam — "
+                  f"artykul to do ${config.RUN_LIMIT_ARTYKUL_USD}. Nie zaczynam — "
                   f"lepiej nie napisac nic niz zaplacic za polowe.", flush=True)
             return _done(conn, run_id, "budzet")
 

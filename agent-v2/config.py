@@ -613,6 +613,23 @@ PONOWIENIE_ODSTEP_S = 8
 
 RUN_LIMIT_USD = 1.60
 
+# OSOBNY SUFIT DLA TORU ARTYKULU — jedna liczba byla za ciasna dla artykulu
+# i za luzna dla notek.
+#
+# ZMIERZONE NA PRODUKCJI: przebieg artykulu 106 kosztowal 1,394 USD, a przebieg
+# 77 — 1,5918 USD. Przy suficie 1,60 ten drugi minal sie z nim o OSIEM
+# TYSIECZNYCH dolara. `config` opisuje koszt artykulu jako 1,4-2,1 USD, wiec
+# gorna polowa tego pasma NIE MIESCI SIE pod sufitem wcale.
+#
+# Co sie dzieje po przekroczeniu: `llm.py` podnosi `BudgetExceeded`, a przebieg
+# ginie PO pisaniu, ktore samo kosztuje 0,76 USD — na recenzji, formie albo
+# sprawdzeniu faktow. Tekst laduje w `artykuly-przerwane/` i nie wychodzi.
+# Czyli placimy najdrozsza czesc i zostajemy bez artykulu na tydzien.
+#
+# 2,20 to gorna granica zapisanego pasma plus zapas. Nie wiecej: przy suficie
+# miesiecznym 40 USD od pazdziernika cztery artykuly po 2,20 to juz 22% miesiaca.
+RUN_LIMIT_ARTYKUL_USD = 2.20
+
 # =============================================================================
 # KONTRAKTY — ile czego prosimy. Sufity tokenów liczą się z tych liczb niżej.
 # =============================================================================

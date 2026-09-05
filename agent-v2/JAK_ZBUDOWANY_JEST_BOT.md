@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **25 plików**, 32 670 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **25 plików**, 32 705 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -113,8 +113,8 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 > w głównej ścieżce artykułu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
-się testować bez przeglądarki i bez pieniędzy**. 154 zestawów
-testów, 4042 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+się testować bez przeglądarki i bez pieniędzy**. 155 zestawów
+testów, 4064 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -143,7 +143,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-3093 wierszy, 27 funkcji na poziomie modułu, 1 klas
+3100 wierszy, 27 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -442,7 +442,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `llm.py` — JEDYNA warstwa dostępu do modeli i liczenia kosztu
 
-816 wierszy, 15 funkcji na poziomie modułu, 3 klas
+827 wierszy, 15 funkcji na poziomie modułu, 3 klas
 
 | funkcja | co robi |
 |---|---|
@@ -578,7 +578,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-3172 wierszy, 29 funkcji na poziomie modułu, 0 klas
+3189 wierszy, 29 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -6606,15 +6606,26 @@ def _preflight(purpose: str, conn: sqlite3.Connection, run_id: int | None) -> No
         raise PreflightFailed(f"brak sufitu tokenów dla etapu {purpose!r}")
 
     # Sufit na jeden przebieg obowiązuje ZAWSZE, także w trybie bez limitu.
+    #
+    # DWA TORY, DWA SUFITY. Jedna liczba dla notek i artykułu była za ciasna
+    # dla drugiego i za luźna dla pierwszych: zmierzony przebieg artykułu 77
+    # kosztował 1,5918 USD przy suficie 1,60, czyli minął się z nim o osiem
+    # tysięcznych — a przekroczenie zabija artykuł PO zapłaceniu 0,76 USD za
+    # samo pisanie. Patrz `config.RUN_LIMIT_ARTYKUL_USD`.
     if run_id is not None:
         row = conn.execute(
-            "SELECT COALESCE(SUM(cost_usd), 0) AS s FROM calls WHERE run_id = ?",
-            (run_id,),
+            "SELECT COALESCE(SUM(cost_usd), 0) AS s,"
+            " (SELECT stage FROM runs WHERE id = ?) AS stage"
+            " FROM calls WHERE run_id = ?",
+            (run_id, run_id),
         ).fetchone()
-        if float(row["s"]) >= config.RUN_LIMIT_USD:
+        _etap = str(row["stage"] or "")
+        _sufit = (config.RUN_LIMIT_ARTYKUL_USD if "artykul" in _etap
+                  else config.RUN_LIMIT_USD)
+        if float(row["s"]) >= _sufit:
             raise BudgetExceeded(
                 f"przebieg wydał już ${float(row['s']):.4f} przy suficie "
-                f"${config.RUN_LIMIT_USD} — zatrzymuję przed etapem {purpose!r}"
+                f"${_sufit} — zatrzymuję przed etapem {purpose!r}"
             )
 
     if config.NO_LIMIT:
@@ -13045,6 +13056,7 @@ wartosc i komentarz stojacy bezposrednio nad definicja.
 | `PONOWIENIA` | `2` | Sufit na JEDEN przebieg. Działa ZAWSZE, także przy AGENT_V2_NO_LIMIT=1. „Bez limitu na budowę" miało znaczyć „nie blokuj eksperymentów", a n |
 | `PONOWIENIE_ODSTEP_S` | `8` | — |
 | `RUN_LIMIT_USD` | `1.60` | — |
+| `RUN_LIMIT_ARTYKUL_USD` | `2.20` | OSOBNY SUFIT DLA TORU ARTYKULU — jedna liczba byla za ciasna dla artykulu i za luzna dla notek. ZMIERZONE NA PRODUKCJI: przebieg artykulu 10 |
 | `TOPIC_COUNT` | `6` | --- skaut i różnorodność ---------------------------------------------------- |
 | `DIVERSITY_LOOKBACK` | `5` | — |
 | `DISCOVERY_MAX_RESULTS` | `10` | --- dyskoveria -------------------------------------------------------------- 10, nie 6. Odsiew przy pobieraniu jest brutalny: martwe adresy |

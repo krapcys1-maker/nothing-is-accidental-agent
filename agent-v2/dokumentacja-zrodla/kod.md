@@ -265,15 +265,26 @@ def _preflight(purpose: str, conn: sqlite3.Connection, run_id: int | None) -> No
         raise PreflightFailed(f"brak sufitu tokenów dla etapu {purpose!r}")
 
     # Sufit na jeden przebieg obowiązuje ZAWSZE, także w trybie bez limitu.
+    #
+    # DWA TORY, DWA SUFITY. Jedna liczba dla notek i artykułu była za ciasna
+    # dla drugiego i za luźna dla pierwszych: zmierzony przebieg artykułu 77
+    # kosztował 1,5918 USD przy suficie 1,60, czyli minął się z nim o osiem
+    # tysięcznych — a przekroczenie zabija artykuł PO zapłaceniu 0,76 USD za
+    # samo pisanie. Patrz `config.RUN_LIMIT_ARTYKUL_USD`.
     if run_id is not None:
         row = conn.execute(
-            "SELECT COALESCE(SUM(cost_usd), 0) AS s FROM calls WHERE run_id = ?",
-            (run_id,),
+            "SELECT COALESCE(SUM(cost_usd), 0) AS s,"
+            " (SELECT stage FROM runs WHERE id = ?) AS stage"
+            " FROM calls WHERE run_id = ?",
+            (run_id, run_id),
         ).fetchone()
-        if float(row["s"]) >= config.RUN_LIMIT_USD:
+        _etap = str(row["stage"] or "")
+        _sufit = (config.RUN_LIMIT_ARTYKUL_USD if "artykul" in _etap
+                  else config.RUN_LIMIT_USD)
+        if float(row["s"]) >= _sufit:
             raise BudgetExceeded(
                 f"przebieg wydał już ${float(row['s']):.4f} przy suficie "
-                f"${config.RUN_LIMIT_USD} — zatrzymuję przed etapem {purpose!r}"
+                f"${_sufit} — zatrzymuję przed etapem {purpose!r}"
             )
 
     if config.NO_LIMIT:

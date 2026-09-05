@@ -186,11 +186,22 @@ sprawdz("sufit dzienny brany z TAMTEGO dnia, nie z dzisiaj",
 # NIE ZACZYNAJ TEGO, CZEGO NIE SKONCZYSZ — ta sama zasada co przy przerwach.
 sprawdz("artykul nie startuje, gdy miesiac nie udzwignie calego",
         "MIESIAC NA WYCZERPANIU" in run_src)
-sprawdz("i porownuje sie z kosztem CALEGO przebiegu, nie jednego wywolania",
-        "config.RUN_LIMIT_USD" in run_src.split("MIESIAC NA WYCZERPANIU")[0][-700:])
+# SUFIT TORU ARTYKULU, nie ten od notek — od 5 wrzesnia 2026 sa dwa. Kontrola
+# „czy starczy na caly artykul" musi pytac o te sama liczbe, ktora go potem
+# zatrzyma, inaczej mowi o 1,60 przy zatrzymaniu na 2,20.
+sprawdz("i porownuje sie z kosztem CALEGO przebiegu artykulu",
+        "config.RUN_LIMIT_ARTYKUL_USD"
+        in run_src.split("MIESIAC NA WYCZERPANIU")[0][-700:])
 sprawdz("limity sa uporzadkowane: przebieg < doba < miesiac",
         config.RUN_LIMIT_USD < config.DAILY_LIMIT_USD < config.MONTHLY_LIMIT_USD,
         (config.RUN_LIMIT_USD, config.DAILY_LIMIT_USD, config.MONTHLY_LIMIT_USD))
+# Ten sam porzadek musi obowiazywac drugi sufit. Sufit przebiegu wyzszy od
+# dobowego znaczylby, ze doba nie udzwignie ani jednego pelnego artykulu.
+sprawdz("sufit artykulu tez miesci sie pod dobowym",
+        config.RUN_LIMIT_ARTYKUL_USD < config.DAILY_LIMIT_USD,
+        (config.RUN_LIMIT_ARTYKUL_USD, config.DAILY_LIMIT_USD))
+sprawdz("i jest wyzszy od sufitu notek, bo po to powstal",
+        config.RUN_LIMIT_ARTYKUL_USD > config.RUN_LIMIT_USD)
 # KONTRDOWOD: doba musi udzwignac co najmniej jeden caly artykul, inaczej
 # artykul nie powstalby NIGDY, a agent milczalby o przyczynie.
 sprawdz("doba udzwignie caly artykul",
