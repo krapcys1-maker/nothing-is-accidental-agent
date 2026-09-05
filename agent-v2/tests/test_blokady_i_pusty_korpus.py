@@ -249,6 +249,13 @@ sprawdz("kazde zrodlo ma adres http",
         all(str(a).startswith("http") for a in _kk.ZRODLA.values()))
 sprawdz("zadne zrodlo nie powtarza adresu",
         len(set(_kk.ZRODLA.values())) == len(_kk.ZRODLA))
+# NAZWY NIE MOGA SIE ZDERZAC MIEDZY ZBIORAMI. Korpus grupuje po nazwie, a
+# przerwa i zapas tresci sa kluczowane nazwa — wiec „MLST" jako kanal YouTube
+# i „MLST" jako feed podcastu bylyby nierozroznialne w logu, w polu
+# `kanal_zrodlowy` przy fakcie i w pliku przerw. Zlapane na zywo 5 wrzesnia
+# 2026 zaraz po dolozeniu feedow tworcow: kolidowaly „MLST" i „Dr Waku".
+_kolizje = set(_kk.ZRODLA) & set(_kk.KANALY)
+sprawdz("nazwa zrodla nie powtarza nazwy kanalu", not _kolizje, _kolizje)
 
 print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))

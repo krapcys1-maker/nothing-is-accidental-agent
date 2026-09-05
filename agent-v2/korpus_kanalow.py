@@ -141,13 +141,16 @@ ZRODLA = {
     # Dwarkesh i MLST oddaja DOKLADNIE te sama tresc, co ich kanaly: nagranie
     # idzie na YouTube i do feedu podcastu rownolegle.
     "Dwarkesh":        "https://www.dwarkesh.com/feed",
-    "MLST":            "https://anchor.fm/s/1e4a0eac/podcast/rss",
+    # NAZWA Z DOPISKIEM, bo „MLST" istnieje juz w KANALY. Korpus grupuje po
+    # nazwie zrodla, wiec dwa rozne feedy pod jedna nazwa byly by nierozroznialne
+    # w logu i w polu `kanal_zrodlowy` przy fakcie.
+    "MLST podcast":    "https://anchor.fm/s/1e4a0eac/podcast/rss",
     # Biuletyn i strona autora — ten sam czlowiek, tresc pokrewna, nie
     # identyczna z filmami. Nazwa feedu inna niz nazwa kanalu i to jest w
     # porzadku: „Forward Future" to biuletyn Matthew Bermana, a strona
     # Károly'ego Zsolnai-Fehéra to zaplecze Two Minute Papers.
     "Forward Future":  "https://matthewberman.substack.com/feed",
-    "Dr Waku":         "https://drwaku.substack.com/feed",
+    "Dr Waku pisany":  "https://drwaku.substack.com/feed",
     "Zsolnai-Fehér":   "https://users.cg.tuwien.ac.at/zsolnai/feed/",
     # ODRZUCONE PRZY TEJ SAMEJ PROBIE, i warto zapisac dlaczego:
     #   * `aiexplained.substack.com` — HTTP 200, osiem wpisow, TYTUL FEEDU
@@ -498,6 +501,10 @@ ZAPAS_WAZNY_S = 1800
 # trafia trzy porazki z rzedu w polowie przypadkow i szedlby na przerwe bez
 # powodu. Piec porazek to juz 33%, a przerwa szescio-, nie dwudziestoczterogodzinna,
 # bo tresc i tak trzyma `ZAPAS_TRESCI_GODZIN`.
+class _Pomijam(Exception):
+    """Tresc mamy z zapasu — sieci nie dotykamy. Sterowanie, nie awaria."""
+
+
 PORAZEK_DO_PRZERWY = 5
 PRZERWA_GODZIN = 6
 
@@ -629,10 +636,20 @@ def korpus_kanalow(ile: int = 30) -> list[dict[str, Any]]:
     with httpx.Client(timeout=config.FETCH_TIMEOUT_S, follow_redirects=True,
                       headers={"User-Agent": config.FETCH_USER_AGENT}) as c:
         for nazwa, cid in KANALY.items():
-            if nazwa in _odpoczywa:
-                continue
+            # KANAL NA PRZERWIE NIE JEST PYTANY — ale jego zapas i tak
+            # czytamy. Zapas nie kosztuje zadnego zapytania, wiec przerwa ma
+            # oszczedzac pukanie, a nie wyrzucac tresc, ktora juz mamy.
             xml = ""
+            if nazwa in _odpoczywa:
+                xml = _tresc_z_zapasu(nazwa)
+                if xml:
+                    print("  [kanaly] %s: na przerwie, biore z zapasu" % nazwa,
+                          flush=True)
+                else:
+                    continue
             try:
+                if xml:
+                    raise _Pomijam()
                 r = c.get(RSS, params={"channel_id": cid})
                 if r.status_code == 200:
                     xml = r.text
@@ -641,6 +658,8 @@ def korpus_kanalow(ile: int = 30) -> list[dict[str, Any]]:
                     print("  [kanaly] %s: HTTP %s" % (nazwa, r.status_code),
                           flush=True)
                     _zapisz_porazke(nazwa)
+            except _Pomijam:
+                pass
             except Exception as exc:
                 print("  [kanaly] %s: %s" % (nazwa, type(exc).__name__), flush=True)
                 _zapisz_porazke(nazwa)

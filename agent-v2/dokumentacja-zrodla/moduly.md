@@ -515,7 +515,7 @@
 
 ### `korpus_kanalow.py` — o czym mówi się w tym tygodniu — zaczyn tematów, nigdy źródło
 
-732 wierszy, 19 funkcji na poziomie modułu, 0 klas
+751 wierszy, 19 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
