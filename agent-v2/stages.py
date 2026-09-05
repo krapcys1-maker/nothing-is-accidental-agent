@@ -2136,7 +2136,43 @@ def znajdz_ciekawostki(
     # poprawki z 1 wrzesnia. Utrata premiery jest drozsza.
     if nowe_wyd:
         _zapamietaj_wydarzenia(nowe_wyd, znane_wyd, fakty)
-    return fakty
+
+    # ZAPORA PRZECIW WSTRZYKNIECIU OBOWIAZUJE TAKZE SWIEZY MATERIAL.
+    #
+    # `dopisz_kandydatow` puszcza kandydatow przez `bramka_kandydata` i zapisuje
+    # odrzuconych ze statusem — ale ta funkcja oddawala WOLAJACEMU cala liste,
+    # niezaleznie od wyniku. Fakt odrzucony przy wejsciu do banku szedl wiec
+    # dzis prosto do pisarza, a ten sam fakt odczytany jutro z banku bylby
+    # odsiany. Materiał miał dwie różne drogi do tekstu.
+    #
+    # ZMIERZONE NA PRODUKCJI (126 pozycji indeksu, 37 odrzuconych): sama bramka
+    # wejsciowa odrzucila TRZY, i DWA z tych trzech to zapora — „slad cudzego
+    # polecenia: 'system prompt'" oraz „wzmianka @ w tresci". To jest cudzy
+    # tekst probujacy pisac przez nasze konto i on nie ma prawa dojsc do
+    # pisarza ani na jeden przebieg.
+    #
+    # CELOWO TYLKO ZAPORA, NIE CALA BRAMKA. Reszta kryteriow jest dzis ZA
+    # OSTRA i wiem to z pomiaru: wyjasnienie mechanizmu bez mitu odpada jako
+    # „brak przekonania do zlamania", a opis ograniczenia fizycznego odpada za
+    # slowo „Nobody" w polu `decision`. Odsianie wszystkiego, co bramka
+    # odrzuca, wycieloby dzis dobry material — wiec najpierw kryteria, potem
+    # uszczelnienie. Zapora nie ma z tym nic wspolnego: ona nie ocenia
+    # jakosci, tylko broni konta przed cudzym poleceniem.
+    _czyste = []
+    for _f in fakty:
+        _ok, _powod = bez_wstrzykniecia(
+            "%s %s %s" % (str(_f.get("wrong_belief") or "").strip(),
+                          str(_f.get("actually") or "").strip(),
+                          _f.get("fact", "")))
+        if _ok:
+            _czyste.append(_f)
+        else:
+            print("  [zapora] fakt NIE idzie do pisarza (%s): %s"
+                  % (_powod[:44], str(_f.get("fact") or "")[:56]), flush=True)
+    if len(_czyste) != len(fakty):
+        print("  [zapora] odsiane przed pisarzem: %d z %d"
+              % (len(fakty) - len(_czyste), len(fakty)), flush=True)
+    return _czyste
 
 
 _KUPLET_NEGACJA = re.compile(
