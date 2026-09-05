@@ -310,6 +310,13 @@ def wybierz_fakt(conn, run_id, ile: int = 8) -> dict:
     print("  [temat] pamiec: %d artykulow + %d notek"
           % (len(wczesniej) - len(notki), len(notki)), flush=True)
 
+    # NAJPIERW ODSIEW KOLIZJI, POTEM ZNACZNIK ARTYKULOWY.
+    #
+    # Kolejnosc jest tu istotna i zostaje taka, jaka byla: powtorzony temat
+    # dyskwalifikuje kandydata bezwarunkowo, bo dla czytelnika notka i artykul
+    # o tym samym to po prostu dwa razy to samo. Znacznik rozstrzyga dopiero
+    # w tym, co kolizji nie ma.
+    bez_kolizji = []
     for f in fakty:
         opis = "%s %s" % (f.get("domain") or "", f.get("fact") or "")
         kolizja = next((w for w in wczesniej if w and stages._o_tym_samym(
@@ -320,14 +327,46 @@ def wybierz_fakt(conn, run_id, ile: int = 8) -> dict:
             print("          zderza sie z: %s"
                   % " ".join(str(kolizja).split())[:80], flush=True)
             continue
-        # RESZTA WRACA DO PULI. Bierzemy osiem, uzywamy jednego — a
-        # `wez_kandydatow` oznaczylo jako zuzyte wszystkie osiem. Bez tego
-        # kazdy przebieg artykulu palil siedem oplaconych kandydatur.
-        stages.zwroc_kandydatow([x for x in fakty if x is not f])
-        return f
-    print("  [temat] wszystko koliduje — biore pierwszy", flush=True)
-    stages.zwroc_kandydatow(fakty[1:])
-    return fakty[0]
+        bez_kolizji.append(f)
+
+    # OCENA ARTYKULOWOSCI WRESZCIE COS ROZSTRZYGA.
+    #
+    # `posortuj_bank` placi model za ocene, ktory fakt UNIESIE dluga forme,
+    # zapisuje to jako `na_artykul` i ogranicza udzial takich pozycji do
+    # `BANK_UDZIAL_ARTYKULOW`. `wybierz_fakt` tego pola NIE CZYTALO ANI RAZU:
+    # bralo pierwszy niekolidujacy w kolejnosci z banku.
+    #
+    # Zmierzone na zywym banku 5 wrzesnia 2026: 19 wolnych pozycji, z tego
+    # 3 oznaczone, i wszystkie trzy stoja na czele rankingu — wiec DZIS wybor
+    # trafial w oznaczona przez korelacje, nie przez decyzje. Ugryzloby to
+    # dopiero wtedy, gdy czolowe kandydatury zderza sie z pamiecia: sciezka
+    # schodzi wtedy nizej i pisze artykul z materialu, ktory bank uznal za
+    # za chudy na dluga forme.
+    #
+    # BRAK OZNACZONEGO NIE ZATRZYMUJE ARTYKULU. Tydzien bez tekstu jest gorszy
+    # niz tekst z materialu nieoznaczonego — znacznik jest preferencja, nie
+    # bramka. Ale musi byc widoczny w logu, zeby dalo sie to pozniej policzyc.
+    def _wybierz(pula: list) -> dict:
+        oznaczony = next((x for x in pula if x.get("na_artykul")), None)
+        if oznaczony is not None:
+            print("  [temat] biore oznaczony na artykul (%d z %d w puli)"
+                  % (sum(1 for x in pula if x.get("na_artykul")), len(pula)),
+                  flush=True)
+            return oznaczony
+        print("  [temat] zaden kandydat nie jest oznaczony na artykul —"
+              " biore pierwszy z %d" % len(pula), flush=True)
+        return pula[0]
+
+    if bez_kolizji:
+        wybrany = _wybierz(bez_kolizji)
+    else:
+        print("  [temat] wszystko koliduje — biore pierwszy", flush=True)
+        wybrany = _wybierz(fakty)
+    # RESZTA WRACA DO PULI. Bierzemy osiem, uzywamy jednego — a
+    # `wez_kandydatow` oznaczylo jako zuzyte wszystkie osiem. Bez tego
+    # kazdy przebieg artykulu palil siedem oplaconych kandydatur.
+    stages.zwroc_kandydatow([x for x in fakty if x is not wybrany])
+    return wybrany
 
 
 @stages._na_kanal("artykul")
