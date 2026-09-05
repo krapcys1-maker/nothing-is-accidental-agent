@@ -5372,6 +5372,55 @@ CLASSIFY_SYSTEM = (
 )
 
 
+# ZNAKI, KTORE PRZY KOPIOWANIU ZMIENIAJA KSZTALT, A NIE ZNACZENIE.
+# Apostrof prosty i typograficzny, cudzyslowy, myslniki i wielokropek — model
+# przepisuje je raz tak, raz inaczej, a to nie jest przeklamanie cytatu.
+# TEGO SAMEGO NIE ROBIMY Z NICZYM INNYM: zadnych liczb, jednostek, przeczen
+# ani wielkosci liter. Cytat rozni sie o „nie" to inny cytat.
+_ZNAKI_ROWNOWAZNE = {
+    "’": "'", "‘": "'", "ʼ": "'", "´": "'",
+    "“": '"', "”": '"', "„": '"', "«": '"', "»": '"',
+    "–": "-", "—": "-", "−": "-", "‐": "-", " ": " ",
+}
+
+
+def _do_porownania(tekst: str) -> str:
+    """Postac do porownania cytatu z dokumentem. Minimalna i celowo taka."""
+    for zly, dobry in _ZNAKI_ROWNOWAZNE.items():
+        tekst = tekst.replace(zly, dobry)
+    return " ".join(tekst.split())
+
+
+def cytat_jest_w_dokumencie(cytat: str, tekst: str) -> bool:
+    """Czy ten fragment NAPRAWDE stoi w tym dokumencie.
+
+    CO SIE DZIALO (R8 z audytu researchu, potwierdzone na naszym kodzie).
+    `classify` przyjmowal kazdy niepusty napis z pola `excerpts`. Prompt bardzo
+    dokladnie opisuje obowiazek DOSLOWNEGO kopiowania — i to jest prosba, nie
+    bramka. Odtworzenie audytu: dokument mowil „The only documented number is
+    12", model oddal „A study found 97 percent effectiveness", a kod zachowal
+    to jako dowod klasy PRIMARY. Cytat istnial dlatego, ze model powiedzial,
+    ze go skopiowal.
+
+    To jest ta sama rodzina, co „prosba w prompcie nie jest bramka" — z ta
+    roznica, ze tutaj skutkiem jest wymyslony dowod w karcie, na ktorej stoi
+    caly artykul.
+
+    CO WYROWNUJEMY, A CZEGO NIE. Bialy znak i znaki typograficzne (apostrof,
+    cudzyslow, myslnik) — bo model przepisuje je raz tak, raz inaczej i to nie
+    jest przeklamanie. NIE ruszamy liczb, jednostek, przeczen ani wielkosci
+    liter: „12" wobec „97" i „is" wobec „is not" MAJA sie roznic.
+
+    CZEGO TO NIE DOWODZI. Ze twierdzenie jest prawdziwe — tylko ze zdanie
+    naprawde stoi w dokumencie, ktory pobralismy. Prawdziwosc calego
+    twierdzenia zostaje robota syntezy i bramki faktow.
+    """
+    c = _do_porownania(str(cytat or ""))
+    if not c:
+        return False
+    return c in _do_porownania(str(tekst or ""))
+
+
 @_na_kanal("artykul")
 def classify(
     conn: sqlite3.Connection, run_id: int, question: str, corpus: list[dict[str, Any]]
@@ -5405,6 +5454,19 @@ def classify(
         relevance = float(data.get("relevance", 0) or 0)
         klass = data.get("class", "ODPAD")
         excerpts = [e for e in data.get("excerpts", []) if isinstance(e, str) and e.strip()]
+        # CYTAT MA BYC W DOKUMENCIE — patrz `cytat_jest_w_dokumencie`.
+        #
+        # Do 5 wrzesnia 2026 przechodzil kazdy niepusty napis. Prompt zada
+        # doslownego kopiowania, ale prosba nie jest bramka: wymyslony fragment
+        # wchodzil do karty jako dowod klasy PRIMARY i stawal sie podstawa
+        # artykulu. Zglaszamy GLOSNO, bo cichy odsiew wygladalby jak slabe
+        # zrodlo, a to jest co innego — to jest zmyslony cytat.
+        _przed = len(excerpts)
+        excerpts = [e for e in excerpts if cytat_jest_w_dokumencie(e, text)]
+        if len(excerpts) != _przed:
+            print("  [klasyfikacja] %s: %d z %d fragmentow NIE MA w dokumencie"
+                  " — odrzucone" % (source.get("host"), _przed - len(excerpts),
+                                    _przed), flush=True)
         print(
             f"  [klasyfikacja] {klass:11} trafność={relevance:.2f} "
             f"fragmentów={len(excerpts):2}  liczb={len(data.get('numbers', [])):2}  "
