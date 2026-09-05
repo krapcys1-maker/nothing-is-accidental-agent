@@ -35,7 +35,7 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-8510 wierszy, 146 funkcji na poziomie modułu, 0 klas
+8574 wierszy, 146 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -515,7 +515,7 @@
 
 ### `korpus_kanalow.py` — o czym mówi się w tym tygodniu — zaczyn tematów, nigdy źródło
 
-492 wierszy, 9 funkcji na poziomie modułu, 0 klas
+600 wierszy, 15 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -527,7 +527,25 @@
 | `_rdzen(temat)` *(wewn.)* | Slowa nosne tytulu — do porownywania, czy dwa kanaly mowia o tym samym. |
 | `_numer_wersji(slowo)` *(wewn.)* | Czy token wyglada na numer wydania: ma cyfre i nie jest rokiem. |
 | `wielkie_wydarzenia(korpus, min_kanalow, min_wspolnych, swiezosc_dni, min_kanalow_premiery)` | Rzeczy, o ktorych mowi NARAZ kilka roznych kanalow. |
+| `_plik_przerw()` *(wewn.)* | — |
+| `_wczytaj_przerwy()` *(wewn.)* | — |
+| `_zapisz_przerwy(dane)` *(wewn.)* | — |
+| `_kanaly_na_przerwie()` *(wewn.)* | — |
+| `_zapisz_porazke(nazwa)` *(wewn.)* | — |
+| `_zapisz_sukces(nazwa)` *(wewn.)* | Kanal, ktory oddal material, zaczyna liczenie od zera. |
 | `korpus_kanalow(ile)` | — |
+
+### `tresc_zrodel.py` — treść źródeł z korpusu pobrana za darmo — spiżarnia przed zakupami
+
+155 wierszy, 5 funkcji na poziomie modułu, 0 klas
+
+| funkcja | co robi |
+|---|---|
+| `_na_tekst(surowy)` *(wewn.)* | HTML na czysty tekst. Prymitywnie i celowo. |
+| `_warto(tekst)` *(wewn.)* | Czy z tej strony jest co czytac. |
+| `tresci_zrodel(wpisy, ile, znakow)` | Pobiera tresc pierwszych `ile` nadajacych sie wpisow korpusu. |
+| `blok_do_promptu(wpisy, ile)` | Tresci zrodel gotowe do wklejenia w prompt skauta. |
+| `wyczysc_zapas()` | Do testow — zapas procesowy nie moze przeciekac miedzy przypadkami. |
 
 ### `aktualne_modele.py` — jakie modele istnieją DZIŚ; pytane na żywo, nie z pamięci
 

@@ -145,5 +145,73 @@ sprawdz("i nadal minimum pierwotnych",
         config.MIN_PRIMARY_SOURCES >= 1, config.MIN_PRIMARY_SOURCES)
 
 print()
+print("=== KANAL, KTORY NIE ODPOWIADA, IDZIE NA PRZERWE ===")
+# ZMIERZONE 5 wrzesnia 2026: 12 z 13 kanalow YouTube oddaje 404 albo 500.
+# To nie sa zle identyfikatory — ten sam adres ByCloud oddal 15 filmow
+# kilkanascie minut wczesniej. YouTube blokuje ten serwer.
+#
+# Bez przerwy pukamy tam 12 razy na przebieg i 60 razy dziennie po nic, a
+# powtarzane pukanie do serwisu, ktory nas odrzucil, blokade poglebia.
+# PRZERWA TO UZNANIE ODMOWY, NIE JEJ OMIJANIE — po dobie probujemy raz
+# jeszcze, bo blokady bywaja czasowe.
+import pathlib as _pl        # noqa: E402
+import tempfile as _tf       # noqa: E402
+
+import korpus_kanalow as _kk   # noqa: E402
+
+# KATALOG DANYCH NA BOK. Pierwsza wersja tej sekcji zapisala
+# `kanaly_na_przerwie.json` do PRAWDZIWEGO `data/` — czyli test o odpornosci
+# korpusu sam przestawil produkcyjny stan. `uzyj_katalogu_danych` to jedyna
+# usankcjonowana droga; pilnuje jej `test_komplet_sciezek`.
+_ZDJECIE = config.uzyj_katalogu_danych(_pl.Path(_tf.mkdtemp()))
+
+_kk._zapisz_przerwy({})
+sprawdz("na starcie nikt nie odpoczywa", _kk._kanaly_na_przerwie() == set())
+
+for _ in range(_kk.PORAZEK_DO_PRZERWY - 1):
+    _kk._zapisz_porazke("Kanal Testowy")
+sprawdz("dwie porazki to jeszcze nie przerwa",
+        "Kanal Testowy" not in _kk._kanaly_na_przerwie(),
+        _kk._kanaly_na_przerwie())
+
+_kk._zapisz_porazke("Kanal Testowy")
+sprawdz("trzecia porazka wysyla na przerwe",
+        "Kanal Testowy" in _kk._kanaly_na_przerwie(),
+        _kk._kanaly_na_przerwie())
+
+# KAPRYSNY TO NIE MARTWY. Bez zerowania licznika pojedyncze potkniecia z
+# roznych dni sumowalyby sie do przerwy przy kanale, ktory dziala.
+_kk._zapisz_przerwy({})
+_kk._zapisz_porazke("Kaprysny")
+_kk._zapisz_porazke("Kaprysny")
+_kk._zapisz_sukces("Kaprysny")
+_kk._zapisz_porazke("Kaprysny")
+_kk._zapisz_porazke("Kaprysny")
+sprawdz("sukces zeruje licznik porazek",
+        "Kaprysny" not in _kk._kanaly_na_przerwie(),
+        _kk._kanaly_na_przerwie())
+
+# PRZERWA MA KONIEC. Blokada bywa czasowa i kanal ma dostac druga szanse.
+from datetime import datetime as _dt, timedelta as _td, timezone as _tz
+_kk._zapisz_przerwy({"Stary": {"porazki": 0, "do_kiedy":
+                     (_dt.now(_tz.utc) - _td(hours=1)).isoformat()}})
+sprawdz("przerwa, ktorej termin minal, juz nie obowiazuje",
+        "Stary" not in _kk._kanaly_na_przerwie(), _kk._kanaly_na_przerwie())
+sprawdz("a przerwa jest dobowa, nie wieczna",
+        _kk.PRZERWA_GODZIN == 24, _kk.PRZERWA_GODZIN)
+_kk._zapisz_przerwy({})
+
+print()
+print("=== ZRODLA PIERWOTNE SA PRAWDZIWA SPIZARNIA ===")
+# Skaut placi za szukanie tylko przy pustej spizarni, wiec liczba zrodel to
+# pozycja kosztowa. 5 wrzesnia 2026: 7 -> 18.
+sprawdz("zrodel pierwotnych jest wiecej niz kanalow YouTube",
+        len(_kk.ZRODLA) > len(_kk.KANALY), (len(_kk.ZRODLA), len(_kk.KANALY)))
+sprawdz("kazde zrodlo ma adres http",
+        all(str(a).startswith("http") for a in _kk.ZRODLA.values()))
+sprawdz("zadne zrodlo nie powtarza adresu",
+        len(set(_kk.ZRODLA.values())) == len(_kk.ZRODLA))
+
+print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))
 sys.exit(1 if oblane else 0)

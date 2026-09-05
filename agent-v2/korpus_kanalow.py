@@ -101,6 +101,34 @@ ZRODLA = {
     "Awarie Claude": "https://status.claude.com/history.rss",
     "Komisja UE":    "https://digital-strategy.ec.europa.eu/en/rss.xml",
     "Epoch AI":      "https://epochai.substack.com/feed",
+    # DOLOZONE 5 WRZESNIA 2026 — ZEBY SKAUT NIE MUSIAL DOKUPYWAC.
+    #
+    # Powod jest kosztowy, nie kolekcjonerski. Skaut placi za szukanie tylko
+    # wtedy, gdy spizarnia jest pusta (patrz `tresc_zrodel`), a spizarnia
+    # miala 72 tematy, z czego 15 z YouTube'a i 57 stad. Kazde zrodlo dolozone
+    # tutaj to tematy, ktorych nie trzeba doszukiwac za 16,9 rundy wyszukiwania.
+    #
+    # Wszystkie sprawdzone na zywo tego dnia: HTTP 200, niepusta lista wpisow
+    # i TYTUL FEEDU zgodny z nazwa — bo sam kod 200 nic nie dowodzi.
+    # Odrzucone przy tej samej probie: Anthropic i Meta AI (404), arXiv cs.AI
+    # i Stanford HAI (200 i zero wpisow), NIST (dziala, ale „NIST News" to
+    # calosc instytutu — metrologia i pozar w laboratorium obok AI).
+    "Google Research": "https://research.google/blog/rss/",
+    "Microsoft Res":   "https://www.microsoft.com/en-us/research/feed/",
+    "PyTorch":         "https://pytorch.org/blog/feed.xml",
+    "Ollama":          "https://github.com/ollama/ollama/releases.atom",
+    "llama.cpp":       "https://github.com/ggml-org/llama.cpp/releases.atom",
+    "Together AI":     "https://www.together.ai/blog/rss.xml",
+    "Awarie OpenAI":   "https://status.openai.com/history.rss",
+    # WYPADKI I SZKODY — material, ktorego zaden blog producenta nie da.
+    "Wpadki AI":       "https://incidentdatabase.ai/rss.xml",
+    # ZA MARTWY YOUTUBE. Kanaly mialy oddawac sygnal „o czym mowi sie teraz";
+    # 12 z 13 nie oddaje nic (patrz KANALY), a te trzy feedy pelnia dokladnie
+    # te role i odpowiadaja niezawodnie. To komentarz, nie zrodlo pierwotne —
+    # ale rola „co jest zywe" nigdy nie byla rola zrodla.
+    "Simon Willison":  "https://simonwillison.net/atom/everything/",
+    "Import AI":       "https://importai.substack.com/feed",
+    "Transformer":     "https://www.transformernews.ai/feed",
 }
 
 # ILE NAJNOWSZYCH BIERZEMY Z JEDNEGO ZRODLA. YouTube oddaje 15 i tyle wystarcza;
@@ -413,6 +441,75 @@ _ZAPAS: dict[str, Any] = {"kiedy": 0.0, "wpisy": None}
 ZAPAS_WAZNY_S = 1800
 
 
+# KANAL, KTORY NIE ODPOWIADA, IDZIE NA PRZERWE — grzecznie, nie sprytnie.
+#
+# Zmierzone 5 wrzesnia 2026: 12 z 13 kanalow YouTube oddaje 404 albo 500. Nie
+# sa to zle identyfikatory — ten sam adres ByCloud oddal 15 filmow kilkanascie
+# minut wczesniej, a strona `@uchwytu` oddaje 200 i sciane bez identyfikatora.
+# YouTube po prostu blokuje ten serwer, jak wiekszosc adresow w serwerowni.
+#
+# Bez przerwy walimy tam 12 razy na przebieg i 60 razy dziennie po nic — a
+# powtarzane pukanie do serwisu, ktory nas odrzucil, blokade tylko poglebia.
+# NIE OBCHODZIMY BLOKADY I NIE BEDZIEMY: przerwa to jest uznanie odmowy, nie
+# jej omijanie. Po dobie probujemy raz jeszcze, bo blokady bywaja czasowe.
+PORAZEK_DO_PRZERWY = 3
+PRZERWA_GODZIN = 24
+
+
+def _plik_przerw():
+    import config
+    return config.DATA_DIR / "kanaly_na_przerwie.json"
+
+
+def _wczytaj_przerwy() -> dict[str, Any]:
+    import json
+    try:
+        return json.loads(_plik_przerw().read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def _zapisz_przerwy(dane: dict[str, Any]) -> None:
+    import json
+    try:
+        _plik_przerw().write_text(json.dumps(dane, ensure_ascii=False, indent=1),
+                                  encoding="utf-8")
+    except Exception:
+        pass
+
+
+def _kanaly_na_przerwie() -> set[str]:
+    from datetime import datetime, timezone
+    teraz = datetime.now(timezone.utc).isoformat()
+    return {n for n, w in _wczytaj_przerwy().items()
+            if str((w or {}).get("do_kiedy") or "") > teraz}
+
+
+def _zapisz_porazke(nazwa: str) -> None:
+    from datetime import datetime, timedelta, timezone
+    dane = _wczytaj_przerwy()
+    w = dane.get(nazwa) or {}
+    w["porazki"] = int(w.get("porazki") or 0) + 1
+    if w["porazki"] >= PORAZEK_DO_PRZERWY:
+        w["do_kiedy"] = (datetime.now(timezone.utc)
+                         + timedelta(hours=PRZERWA_GODZIN)).isoformat()
+        w["porazki"] = 0
+    dane[nazwa] = w
+    _zapisz_przerwy(dane)
+
+
+def _zapisz_sukces(nazwa: str) -> None:
+    """Kanal, ktory oddal material, zaczyna liczenie od zera.
+
+    Bez tego pojedyncze potkniecia z roznych dni sumowalyby sie do przerwy przy
+    kanale, ktory dziala — a przerwa ma dotyczyc martwych, nie kapryśnych.
+    """
+    dane = _wczytaj_przerwy()
+    if nazwa in dane:
+        dane.pop(nazwa)
+        _zapisz_przerwy(dane)
+
+
 def korpus_kanalow(ile: int = 30) -> list[dict[str, Any]]:
     import time
 
@@ -428,18 +525,29 @@ def korpus_kanalow(ile: int = 30) -> list[dict[str, Any]]:
         return list(_ZAPAS["wpisy"])[:ile]
 
     wpisy: list[tuple[str, Any]] = []
+    _odpoczywa = _kanaly_na_przerwie()
+    if _odpoczywa:
+        print("  [kanaly] na przerwie po powtarzajacych sie bledach: %s"
+              % ", ".join(sorted(_odpoczywa)), flush=True)
     with httpx.Client(timeout=config.FETCH_TIMEOUT_S, follow_redirects=True,
                       headers={"User-Agent": config.FETCH_USER_AGENT}) as c:
         for nazwa, cid in KANALY.items():
+            if nazwa in _odpoczywa:
+                continue
             try:
                 r = c.get(RSS, params={"channel_id": cid})
                 if r.status_code != 200:
                     print("  [kanaly] %s: HTTP %s" % (nazwa, r.status_code), flush=True)
+                    _zapisz_porazke(nazwa)
                     continue
+                ile_przed = len(wpisy)
                 for e in ET.fromstring(r.content).findall("a:entry", NS):
                     wpisy.append((nazwa, e))
+                if len(wpisy) > ile_przed:
+                    _zapisz_sukces(nazwa)
             except Exception as exc:
                 print("  [kanaly] %s: %s" % (nazwa, type(exc).__name__), flush=True)
+                _zapisz_porazke(nazwa)
         from datetime import datetime, timedelta, timezone
         prog_wieku = (datetime.now(timezone.utc)
                       - timedelta(days=config.MAKS_WIEK_ZRODLA_DNI)

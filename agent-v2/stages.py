@@ -1793,9 +1793,44 @@ def znajdz_ciekawostki(
             + zuzyte[-config.CURIOSITY_MEMORY:]))
                or "(nothing yet — this is the first batch)"),
     )
+    # NAJPIERW SPIZARNIA, DOPIERO POTEM ZAKUPY — ta sama zasada, ktora sciezka
+    # artykulu stosuje od 30 sierpnia, wreszcie takze tutaj.
+    #
+    # DLACZEGO. Skaut dostawal z korpusu same TYTULY i zdanie „nigdy jako
+    # zrodla" — wiec kazdy fakt z liczba musial doszukac sam. Zmierzone
+    # 29 sierpnia - 4 wrzesnia 2026: 34 wywolania, 568 wyszukiwan (16,9 na
+    # wywolanie), 11,25 mln tokenow wejscia, 3,48 USD — 15% calego rachunku.
+    # A 60 z 62 przyniesionych faktow (97%) bylo ZAKOTWICZONYCH w naszym
+    # wlasnym korpusie: ich temat juz u nas lezal, pobrany za darmo.
+    #
+    # Tytul faktycznie nie jest zrodlem. Ale adres OBOK tytulu prowadzi do
+    # tekstu, ktory zrodlem jest, a pobranie go kosztuje jedno zapytanie HTTP.
+    # Placimy wiec za szukanie dopiero wtedy, gdy spizarnia jest pusta.
+    _tresc = ""
     try:
-        raw = llm.call("curiosity", CURIOSITY_SYSTEM, prompt,
-                       conn=conn, run_id=run_id, web_search=True)
+        import tresc_zrodel as _tz
+        _tresc = _tz.blok_do_promptu(korpus_kanalow.korpus_kanalow(30))
+    except Exception as exc:
+        print("  [ciekawostki] nie pobralem tresci zrodel (%s)"
+              % type(exc).__name__, flush=True)
+    _prompt_z_trescia = prompt + (
+        ("\n\n# SOURCE TEXT WE ALREADY HOLD\n\n"
+         "Below is the full text of sources our own feeds pulled today, "
+         "fetched directly. Unlike the headline list above, THIS IS SOURCE "
+         "MATERIAL: quote figures, dates and named decisions straight out of "
+         "it and cite the `Source:` URL printed with each block.\n\n"
+         "Work these first. Only if a domain below is not covered by any of "
+         "this text should you say so in the fact's `note` field.\n\n"
+         + _tresc) if _tresc else "")
+    _szukaj = not _tresc
+    if _tresc:
+        print("  [ciekawostki] spizarnia: tresc %d zrodel — pisze BEZ platnego"
+              " szukania" % _tresc.count("### "), flush=True)
+    else:
+        print("  [ciekawostki] spizarnia pusta — place za szukanie", flush=True)
+    try:
+        raw = llm.call("curiosity", CURIOSITY_SYSTEM, _prompt_z_trescia,
+                       conn=conn, run_id=run_id, web_search=_szukaj)
         try:
             fakty = llm.parse_json(raw).get("facts") or []
         except Exception:
@@ -1821,6 +1856,35 @@ def znajdz_ciekawostki(
             _zapamietaj_wydarzenia(nowe_wyd, znane_wyd, 0)
         return []
     fakty = [f for f in fakty if f.get("fact") and f.get("url")]
+
+    # SPIZARNIA MOGLA NIE WYSTARCZYC — WTEDY DOKUPUJEMY.
+    #
+    # Bez tej galezi oszczednosc bylaby pozorna: dzien, w ktorym zrodla nie
+    # opisaly nic nadajacego sie na notke, konczylby sie pusta partia, a pusta
+    # partia to dzien bez notek. Taniej ma znaczyc taniej, nie mniej.
+    #
+    # PROG NA POLOWIE ZAMOWIENIA, nie na zerze. Jeden fakt z osmiu to nie jest
+    # „spizarnia zadziala"; to spizarnia, ktora oddala resztki, a partia i tak
+    # bedzie za chuda, zeby przebieg mial z czego wybierac.
+    if _tresc and len(fakty) < max(2, ile // 2):
+        print("  [ciekawostki] spizarnia dala tylko %d z %d — dokupuje"
+              " szukaniem" % (len(fakty), ile), flush=True)
+        try:
+            raw2 = llm.call("curiosity", CURIOSITY_SYSTEM, prompt,
+                            conn=conn, run_id=run_id, web_search=True)
+            dodatkowe = llm.parse_json(raw2).get("facts") or []
+            dodatkowe = [f for f in dodatkowe if f.get("fact") and f.get("url")]
+            # Dokupione dokladamy do tego, co juz mamy — tamto bylo darmowe
+            # i nie ma powodu go wyrzucac. Powtorki odsieje siatka nizej.
+            _mam = {_klucz_faktu(str(f.get("fact") or "")) for f in fakty}
+            fakty = fakty + [f for f in dodatkowe
+                             if _klucz_faktu(str(f.get("fact"))) not in _mam]
+            print("  [ciekawostki] po dokupieniu: %d faktow" % len(fakty),
+                  flush=True)
+        except Exception as exc:
+            print("  [ciekawostki] dokupienie nie wyszlo (%s) — ide z tym,"
+                  " co dala spizarnia" % type(exc).__name__, flush=True)
+
     # Druga siatka na powtórki: model bywa głuchy na własną listę zakazów, a to
     # samo szukanie codziennie oddaje te same słynne fakty. Odsiewamy w kodzie.
     znane = {_klucz_faktu(t) for t in zuzyte}

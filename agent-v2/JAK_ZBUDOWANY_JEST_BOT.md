@@ -49,14 +49,14 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **24 plików**, 30 942 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **25 plików**, 31 269 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
 | jedno polecenie uruchamiające | `python agent-v2/run.py` | dotrzymane |
 | pełna autonomia, zero pytań | brak interaktywnych promptów | dotrzymane |
 
-**WADA — 24 plików zamiast dziesięciu.** Najbliższe usunięciu:
+**WADA — 25 plików zamiast dziesięciu.** Najbliższe usunięciu:
 `style.py` (127 wierszy, wołany tylko z `stages.py`) i
 `kopia_subskrybentow.py` (203 wierszy, narzędzie ręczne poza
 przebiegiem). Scalenie któregokolwiek przywraca zgodność z mandatem.
@@ -113,8 +113,8 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 > w głównej ścieżce artykułu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
-się testować bez przeglądarki i bez pieniędzy**. 132 zestawów
-testów, 3684 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+się testować bez przeglądarki i bez pieniędzy**. 133 zestawów
+testów, 3716 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -177,7 +177,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-8510 wierszy, 146 funkcji na poziomie modułu, 0 klas
+8574 wierszy, 146 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -657,7 +657,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `korpus_kanalow.py` — o czym mówi się w tym tygodniu — zaczyn tematów, nigdy źródło
 
-492 wierszy, 9 funkcji na poziomie modułu, 0 klas
+600 wierszy, 15 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -669,7 +669,25 @@ wiec nie da sie go rozjechac z kodem.
 | `_rdzen(temat)` *(wewn.)* | Slowa nosne tytulu — do porownywania, czy dwa kanaly mowia o tym samym. |
 | `_numer_wersji(slowo)` *(wewn.)* | Czy token wyglada na numer wydania: ma cyfre i nie jest rokiem. |
 | `wielkie_wydarzenia(korpus, min_kanalow, min_wspolnych, swiezosc_dni, min_kanalow_premiery)` | Rzeczy, o ktorych mowi NARAZ kilka roznych kanalow. |
+| `_plik_przerw()` *(wewn.)* | — |
+| `_wczytaj_przerwy()` *(wewn.)* | — |
+| `_zapisz_przerwy(dane)` *(wewn.)* | — |
+| `_kanaly_na_przerwie()` *(wewn.)* | — |
+| `_zapisz_porazke(nazwa)` *(wewn.)* | — |
+| `_zapisz_sukces(nazwa)` *(wewn.)* | Kanal, ktory oddal material, zaczyna liczenie od zera. |
 | `korpus_kanalow(ile)` | — |
+
+### `tresc_zrodel.py` — treść źródeł z korpusu pobrana za darmo — spiżarnia przed zakupami
+
+155 wierszy, 5 funkcji na poziomie modułu, 0 klas
+
+| funkcja | co robi |
+|---|---|
+| `_na_tekst(surowy)` *(wewn.)* | HTML na czysty tekst. Prymitywnie i celowo. |
+| `_warto(tekst)` *(wewn.)* | Czy z tej strony jest co czytac. |
+| `tresci_zrodel(wpisy, ile, znakow)` | Pobiera tresc pierwszych `ile` nadajacych sie wpisow korpusu. |
+| `blok_do_promptu(wpisy, ile)` | Tresci zrodel gotowe do wklejenia w prompt skauta. |
+| `wyczysc_zapas()` | Do testow — zapas procesowy nie moze przeciekac miedzy przypadkami. |
 
 ### `aktualne_modele.py` — jakie modele istnieją DZIŚ; pytane na żywo, nie z pamięci
 
