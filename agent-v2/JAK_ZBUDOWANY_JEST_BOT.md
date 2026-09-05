@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **25 plików**, 32 311 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **25 plików**, 32 375 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -113,8 +113,8 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 > w głównej ścieżce artykułu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
-się testować bez przeglądarki i bez pieniędzy**. 145 zestawów
-testów, 3913 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+się testować bez przeglądarki i bez pieniędzy**. 146 zestawów
+testów, 3923 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -177,7 +177,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-9133 wierszy, 152 funkcji na poziomie modułu, 0 klas
+9197 wierszy, 152 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -6795,6 +6795,7 @@ def discovery(
         )
     real_hosts = {_host(u) for u in real_urls}
     kept: list[dict[str, Any]] = []
+    _widziane: set[str] = set()
     spoza = 0
     for source in sources:
         url = source.get("url", "")
@@ -6834,7 +6835,32 @@ def discovery(
                   f"rozstrzygnie pobranie ({spoza}/{MAKS_SPOZA_WYSZUKIWANIA})",
                   flush=True)
         source["host"] = host
+        # TEN SAM ADRES DWA RAZY TO JEDNO ZRODLO. Kazdy duplikat kosztuje
+        # osobne pobranie i osobne wywolanie klasyfikatora, a wnosi zero.
+        _kanon = url.split("#")[0].rstrip("/")
+        if _kanon in _widziane:
+            print("  [dyskoveria] pomijam powtorzony adres: %s" % url[:70],
+                  flush=True)
+            continue
+        _widziane.add(_kanon)
         kept.append(source)
+
+    # SUFIT EGZEKWOWANY KODEM, NIE PROSBA W PROMPCIE.
+    #
+    # `DISCOVERY_MAX_RESULTS` idzie do promptu jako „{max_results} is a ceiling"
+    # i na tym sie konczylo: kod przyjmowal tyle zrodel, ile model oddal, bez
+    # odsiewu powtorek i bez sufitu. Kazde zrodlo ponad limit to osobne
+    # pobranie i osobne wywolanie klasyfikatora.
+    #
+    # ZMIERZONE NA PRODUKCJI PRZED ZMIANA (8 przebiegow artykulu): od 4 do 10
+    # zrodel, ZERO powtorzonych adresow — czyli model dotad limitu przestrzegal.
+    # To wada utajona, nie zywa; egzekwujemy ja, bo prosba w prompcie nie jest
+    # bramka, a jeden przebieg z dwudziestoma adresami kosztowalby dwadziescia
+    # pobran, zanim ktokolwiek by to zauwazyl.
+    if len(kept) > config.DISCOVERY_MAX_RESULTS:
+        print("  [dyskoveria] %d zrodel przy suficie %d — biore pierwsze"
+              % (len(kept), config.DISCOVERY_MAX_RESULTS), flush=True)
+        kept = kept[: config.DISCOVERY_MAX_RESULTS]
 
     print(
         f"  [dyskoveria] {len(real_urls)} wyników wyszukiwania -> "
@@ -7445,6 +7471,22 @@ def bramka_kandydata(k: dict[str, Any]) -> tuple[bool, str]:
     # gdyby mu zaprzeczyc. Ten sam werdykt trzy razy niezaleznie: ta bramka,
     # bramka warto_pisac i wlasciciel, ktory usunal artykul o symbolu
     # na kosmetykach — bo nikt nie ma o tym symbolu zadnego zdania.
+    # ZMIERZONE 5 wrzesnia 2026, po zarzucie z zewnetrznego audytu banku, ze ta
+    # regula wycina wyjasnienia mechanizmu. Na produkcyjnym indeksie (126
+    # pozycji):
+    #     odrzucen za brak mitu:                          0
+    #     pozycji z wpisanym przekonaniem:              126
+    #     zaczynajacych sie formulka „most people…":      0 (0%)
+    # Przyklady tego, co model naprawde wpisuje: „OpenAI beat Nvidia by
+    # building a bigger, faster general-purpose GPU", „A model that cheap and
+    # that fast must be small". To sa przekonania, ktorych czytelnik BRONILBY,
+    # a nie wypelniacz — czyli dokladnie to, o co ta bramka prosi.
+    #
+    # NIE MA TEZ KONFLIKTU Z `notka.md`, mimo ze 5 wrzesnia zdjalem stamtad
+    # obowiazek demaskowania. Zdjety zostal obowiazek KSZTALTU („X, not Y"
+    # w kazdej notce); przekonanie zostalo jako os KATA — ten sam fakt daje
+    # kilka notek, kazda przeciw innemu przekonaniu. Bramka pilnuje, ze
+    # material ma ten wymiar; prompt nie kaze go uzywac jako korekty.
     if len(wiara.split()) < MIN_SLOW_POLOWY:
         return False, "brak przekonania do zlamania — to ciekawostka, nie notka"
     if re.search(r"\b(don'?t know|do not know|never heard|are unaware|not aware|"
