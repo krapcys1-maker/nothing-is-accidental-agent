@@ -2928,11 +2928,78 @@ OPIS_LICZBY_PARALELI = {
 }
 
 
-def losowy_ruch_koncowy() -> tuple[str, str]:
-    """Czym konczy sie TEN artykul. Rowne szanse, bez powtarzania formuly."""
+# CZEGO KAZDY FINAL ZADA OD KARTY. Klucz -> nazwa pola, ktore musi byc niepuste.
+#
+# CO SIE DZIALO. `losowy_ruch_koncowy()` nie przyjmowal karty i nie mial jak
+# sprawdzic, czy material uniesie wylosowane zakonczenie. Pisarz dostawal wiec
+# polecenie w rodzaju „nazwij, kto ponosi koszt, a kto jest z niego zwolniony"
+# albo „opisz wersje, ktora mozna bylo zbudowac zamiast tej, i ile kosztowalaby
+# kogo" — przy karcie, ktora zadnej z tych rzeczy nie zawiera. Model albo
+# dopisywal poszkodowanego, albo improwizowal kontrfaktyczny koszt, albo
+# domykal tekst dwa razy: raz merytorycznie, raz zeby spelnic polecenie.
+#
+# Zadanie finalu nie moze wymagac OSOBNEGO RESEARCHU. To jest zamkniecie
+# tekstu, a nie nowa teza na ostatnim metrze.
+#
+# CZEGO TU NIE MA I DLACZEGO. `KTO_NA_TYM_STOI` i `CENA_MECHANIZMU` nie maja
+# w karcie wlasnego pola — „kto ponosi koszt" i „co to kosztuje przy awarii"
+# moga siedziec w dowolnym `confirmed_claims`. Nie zgaduje ich wykrywaczem
+# tresci; zamiast tego stawiam PROG MATERIALU: karta z garscia twierdzen na
+# pewno takiego zakonczenia nie uniesie, a bogata moze.
+WYMOGI_FINALU = {
+    "GDZIE_KONCZY_SIE_ZAPIS": ("not_established", "uncertain_claims"),
+    "GDYBY_INACZEJ": ("parallel_mechanisms",),
+}
+
+# Ile potwierdzonych twierdzen musi miec karta, zeby uniesc final nazywajacy
+# strone albo cene awarii. Polowa `CARD_MIN_CONFIRMED`, bo to sa zakonczenia
+# wymagajace materialu ponad glowny mechanizm.
+FINAL_PROG_TWIERDZEN = max(2, CARD_MIN_CONFIRMED // 2)
+FINALY_NA_PROGU = ("KTO_NA_TYM_STOI", "CENA_MECHANIZMU")
+
+# ZAKONCZENIE MOZE NIE BYC OSOBNYM RUCHEM. Krotki tekst wolno domknac ostatnim
+# wyjasnieniem: wymuszona puenta na 420 slowach to doklejony moral, nie wniosek.
+BEZ_PUENTY = ("BEZ_PUENTY",
+              "End when the argument has reached its useful consequence. That "
+              "final movement may need a paragraph, a sentence, or no separate "
+              "ending at all. Do not add a closing device the article has not "
+              "earned.")
+
+
+def finaly_dostepne(card: dict | None = None) -> list[str]:
+    """Zakonczenia, ktore TA karta uniesie. Bez karty — wszystkie."""
+    if not isinstance(card, dict):
+        return list(RUCH_KONCOWY_MIX)
+    out = []
+    for nazwa in RUCH_KONCOWY_MIX:
+        pola = WYMOGI_FINALU.get(nazwa)
+        if pola and not any(card.get(p) for p in pola):
+            continue
+        if (nazwa in FINALY_NA_PROGU
+                and len(card.get("confirmed_claims") or []) < FINAL_PROG_TWIERDZEN):
+            continue
+        out.append(nazwa)
+    return out
+
+
+def losowy_ruch_koncowy(card: dict | None = None,
+                        glebokosc: str = "RICH") -> tuple[str, str]:
+    """Czym konczy sie TEN artykul — z tego, co material uniesie.
+
+    Rowne szanse w obrebie dostepnych. Bez karty zachowuje sie jak dawniej,
+    zeby wywolania spoza sciezki artykulu nic nie tracily.
+    """
     import random
 
-    nazwa = random.choice(RUCH_KONCOWY_MIX)
+    dostepne = finaly_dostepne(card)
+    # BRAK PUENTY JEST PELNYM WYBOREM przy krotkim tekscie — i jedynym, gdy
+    # karta nie uniesie zadnego z zapisanych zakonczen.
+    if (glebokosc or "").upper() == "THIN" or not dostepne:
+        if BEZ_PUENTY[0] not in dostepne:
+            dostepne = dostepne + [BEZ_PUENTY[0]]
+    nazwa = random.choice(dostepne)
+    if nazwa == BEZ_PUENTY[0]:
+        return BEZ_PUENTY
     return nazwa, RUCHY_KONCOWE[nazwa]
 
 

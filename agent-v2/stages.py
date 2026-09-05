@@ -557,7 +557,17 @@ def write(
     # napisane po naprawie szamponu mialy identyczny szkielet, bo prompt
     # zamawial go doslownie: ten sam drogowskaz, trzy paralele, to samo
     # zamkniecie. Powtarzalna forma zdradza maszyne tak samo jak powtarzana tresc.
-    ruch_nazwa, ruch_opis = config.losowy_ruch_koncowy()
+    # ZAKONCZENIE Z TEGO, CO KARTA UNIESIE — patrz `config.finaly_dostepne`.
+    #
+    # Losowanie nie widzialo karty, wiec pisarz dostawal polecenia w rodzaju
+    # „nazwij, kto ponosi koszt, a kto jest z niego zwolniony" albo „opisz
+    # wersje, ktora mozna bylo zbudowac zamiast tej, i ile kosztowalaby kogo"
+    # — przy materiale, ktory zadnej z tych rzeczy nie zawiera. Model albo
+    # dopisywal poszkodowanego, albo improwizowal kontrfaktyczny koszt, albo
+    # domykal tekst dwa razy: raz merytorycznie, raz zeby wykonac polecenie.
+    #
+    # Final ma zamykac wywod, a nie wnosic teze wymagajaca osobnego researchu.
+    ruch_nazwa, ruch_opis = config.losowy_ruch_koncowy(card, glebokosc)
     ile_paraleli, opis_paraleli = config.losowa_liczba_paraleli(glebokosc)
     print("  [pisanie] glebokosc %s -> cel %s slow (%s-%s)"
           % (glebokosc, dl["cel"], dl["min"], dl["max"]), flush=True)

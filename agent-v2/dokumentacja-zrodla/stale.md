@@ -193,6 +193,10 @@
 | `RUCH_KONCOWY_MIX` | `("DO_SPRAWDZENIA", "KTO_NA_TYM_STOI", "POWRO` | — |
 | `ILE_PARALELI_WAGI` | `{1: 4, 2: 4, 3: 3}` | Ile paraleli w drugim akcie. Trzy wyliczone po kolei czytaja sie jak lista; jedna rozwinieta na dwa akapity czyta sie jak mysl. Chcemy obu,  |
 | `OPIS_LICZBY_PARALELI` | `{ 1: ("ONE parallel, developed properly — tw` | — |
+| `WYMOGI_FINALU` | `{ "GDZIE_KONCZY_SIE_ZAPIS": ("not_establishe` | CZEGO KAZDY FINAL ZADA OD KARTY. Klucz -> nazwa pola, ktore musi byc niepuste. CO SIE DZIALO. `losowy_ruch_koncowy()` nie przyjmowal karty i |
+| `FINAL_PROG_TWIERDZEN` | `max(2, CARD_MIN_CONFIRMED // 2)` | Ile potwierdzonych twierdzen musi miec karta, zeby uniesc final nazywajacy strone albo cene awarii. Polowa `CARD_MIN_CONFIRMED`, bo to sa za |
+| `FINALY_NA_PROGU` | `("KTO_NA_TYM_STOI", "CENA_MECHANIZMU")` | — |
+| `BEZ_PUENTY` | `("BEZ_PUENTY", "End when the argument has re` | ZAKONCZENIE MOZE NIE BYC OSOBNYM RUCHEM. Krotki tekst wolno domknac ostatnim wyjasnieniem: wymuszona puenta na 420 slowach to doklejony mora |
 | `GENERATORY` | `{ "MEASUREMENT": "A number that looks like a` | --- generatory tematow ------------------------------------------------------ Mielismy 52 DZIEDZINY, czyli odpowiedz na pytanie GDZIE szukac |
 | `ILE_GENERATOROW_NA_PRZEBIEG` | `4` | — |
 | `KANDYDATOW_NA_PRZEBIEG` | `25` | Ile kandydatow-jednolinijkowcow zamawiamy, zanim cokolwiek napiszemy. Nadprodukcja jest obowiazkowa: piec notek z piatki pomyslow to mediana |

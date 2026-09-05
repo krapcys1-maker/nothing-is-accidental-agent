@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **25 plików**, 31 880 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **25 plików**, 31 957 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -114,7 +114,7 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
 się testować bez przeglądarki i bez pieniędzy**. 138 zestawów
-testów, 3813 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+testów, 3820 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -177,7 +177,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-8808 wierszy, 148 funkcji na poziomie modułu, 0 klas
+8818 wierszy, 148 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -573,7 +573,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-3105 wierszy, 28 funkcji na poziomie modułu, 0 klas
+3172 wierszy, 29 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -601,7 +601,8 @@ wiec nie da sie go rozjechac z kodem.
 | `_moduly_projektu()` *(wewn.)* | Zaimportowane moduly z `agent-v2/`, bez samych testow. |
 | `uzyj_katalogu_danych(katalog, utworz)` | Przestawia `DATA_DIR` I KOMPLET sciezek z niego policzonych. |
 | `przywroc_katalog_danych(zdjecie)` | Cofa `uzyj_katalogu_danych`. Bez tego nastepny test dziedziczy podmiane. |
-| `losowy_ruch_koncowy()` | Czym konczy sie TEN artykul. Rowne szanse, bez powtarzania formuly. |
+| `finaly_dostepne(card)` | Zakonczenia, ktore TA karta uniesie. Bez karty — wszystkie. |
+| `losowy_ruch_koncowy(card, glebokosc)` | Czym konczy sie TEN artykul — z tego, co material uniesie. |
 | `losowa_liczba_paraleli(glebokosc)` | Ile paraleli w drugim akcie. Krotki artykul nigdy nie bierze trzech. |
 | `losowe_generatory(ile)` | Ktore wzorce w tym przebiegu. Ten sam generator dwa dni z rzedu daje |
 | `co_teraz_w_reku(kiedy)` | Rzeczy, ktorych czytelnik dotyka wlasnie teraz. |
@@ -13104,6 +13105,10 @@ wartosc i komentarz stojacy bezposrednio nad definicja.
 | `RUCH_KONCOWY_MIX` | `("DO_SPRAWDZENIA", "KTO_NA_TYM_STOI", "POWRO` | — |
 | `ILE_PARALELI_WAGI` | `{1: 4, 2: 4, 3: 3}` | Ile paraleli w drugim akcie. Trzy wyliczone po kolei czytaja sie jak lista; jedna rozwinieta na dwa akapity czyta sie jak mysl. Chcemy obu,  |
 | `OPIS_LICZBY_PARALELI` | `{ 1: ("ONE parallel, developed properly — tw` | — |
+| `WYMOGI_FINALU` | `{ "GDZIE_KONCZY_SIE_ZAPIS": ("not_establishe` | CZEGO KAZDY FINAL ZADA OD KARTY. Klucz -> nazwa pola, ktore musi byc niepuste. CO SIE DZIALO. `losowy_ruch_koncowy()` nie przyjmowal karty i |
+| `FINAL_PROG_TWIERDZEN` | `max(2, CARD_MIN_CONFIRMED // 2)` | Ile potwierdzonych twierdzen musi miec karta, zeby uniesc final nazywajacy strone albo cene awarii. Polowa `CARD_MIN_CONFIRMED`, bo to sa za |
+| `FINALY_NA_PROGU` | `("KTO_NA_TYM_STOI", "CENA_MECHANIZMU")` | — |
+| `BEZ_PUENTY` | `("BEZ_PUENTY", "End when the argument has re` | ZAKONCZENIE MOZE NIE BYC OSOBNYM RUCHEM. Krotki tekst wolno domknac ostatnim wyjasnieniem: wymuszona puenta na 420 slowach to doklejony mora |
 | `GENERATORY` | `{ "MEASUREMENT": "A number that looks like a` | --- generatory tematow ------------------------------------------------------ Mielismy 52 DZIEDZINY, czyli odpowiedz na pytanie GDZIE szukac |
 | `ILE_GENERATOROW_NA_PRZEBIEG` | `4` | — |
 | `KANDYDATOW_NA_PRZEBIEG` | `25` | Ile kandydatow-jednolinijkowcow zamawiamy, zanim cokolwiek napiszemy. Nadprodukcja jest obowiazkowa: piec notek z piatki pomyslow to mediana |

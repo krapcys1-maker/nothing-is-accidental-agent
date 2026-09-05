@@ -35,7 +35,7 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-8808 wierszy, 148 funkcji na poziomie modułu, 0 klas
+8818 wierszy, 148 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -431,7 +431,7 @@
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-3105 wierszy, 28 funkcji na poziomie modułu, 0 klas
+3172 wierszy, 29 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -459,7 +459,8 @@
 | `_moduly_projektu()` *(wewn.)* | Zaimportowane moduly z `agent-v2/`, bez samych testow. |
 | `uzyj_katalogu_danych(katalog, utworz)` | Przestawia `DATA_DIR` I KOMPLET sciezek z niego policzonych. |
 | `przywroc_katalog_danych(zdjecie)` | Cofa `uzyj_katalogu_danych`. Bez tego nastepny test dziedziczy podmiane. |
-| `losowy_ruch_koncowy()` | Czym konczy sie TEN artykul. Rowne szanse, bez powtarzania formuly. |
+| `finaly_dostepne(card)` | Zakonczenia, ktore TA karta uniesie. Bez karty — wszystkie. |
+| `losowy_ruch_koncowy(card, glebokosc)` | Czym konczy sie TEN artykul — z tego, co material uniesie. |
 | `losowa_liczba_paraleli(glebokosc)` | Ile paraleli w drugim akcie. Krotki artykul nigdy nie bierze trzech. |
 | `losowe_generatory(ile)` | Ktore wzorce w tym przebiegu. Ten sam generator dwa dni z rzedu daje |
 | `co_teraz_w_reku(kiedy)` | Rzeczy, ktorych czytelnik dotyka wlasnie teraz. |

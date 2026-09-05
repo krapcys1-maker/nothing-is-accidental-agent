@@ -138,5 +138,49 @@ sprawdz("i rotuje po LISCIE WYKONALNYCH, nie po pelnej z pomijaniem",
         "_mozliwe[(_dryf + od + i) % len(_mozliwe)]" in _zr)
 
 print()
+print("=== 6. FINAL ARTYKULU TEZ MUSI BYC WYKONALNY ===")
+# TA SAMA RODZINA CO WYZEJ: zlecenie nie moze zadac tego, czego material nie
+# zawiera. `losowy_ruch_koncowy()` nie przyjmowal karty, wiec pisarz dostawal
+# „nazwij, kto ponosi koszt, a kto jest z niego zwolniony" albo „opisz wersje,
+# ktora mozna bylo zbudowac zamiast tej, i ile kosztowalaby kogo" — przy
+# karcie, ktora zadnej z tych rzeczy nie ma. Model dopisywal poszkodowanego
+# albo improwizowal kontrfaktyczny koszt na ostatnim metrze.
+_chuda = {"confirmed_claims": [{"id": 1}]}
+_bogata = {"confirmed_claims": [{"id": i} for i in range(6)],
+           "not_established": ["czego zapis nie rozstrzyga"],
+           "parallel_mechanisms": [{"domain": "inna branza"}]}
+
+_d_chuda = config.finaly_dostepne(_chuda)
+_d_bogata = config.finaly_dostepne(_bogata)
+sprawdz("final o granicy zapisu wymaga pola z lukami",
+        "GDZIE_KONCZY_SIE_ZAPIS" not in _d_chuda
+        and "GDZIE_KONCZY_SIE_ZAPIS" in _d_bogata, _d_chuda)
+sprawdz("final z alternatywnym projektem wymaga paraleli",
+        "GDYBY_INACZEJ" not in _d_chuda and "GDYBY_INACZEJ" in _d_bogata,
+        _d_chuda)
+sprawdz("finaly niezalezne od karty sa dostepne zawsze",
+        {"DO_SPRAWDZENIA", "POWROT_DO_ZACZEPU"} <= set(_d_chuda), _d_chuda)
+
+# BRAK PUENTY JEST PELNYM WYBOREM przy krotkim tekscie. Wymuszone zamkniecie
+# na 420 slowach to doklejony moral, nie wniosek.
+_thin = {config.losowy_ruch_koncowy(_chuda, "THIN")[0] for _ in range(300)}
+sprawdz("THIN moze skonczyc sie bez osobnej puenty",
+        "BEZ_PUENTY" in _thin, sorted(_thin))
+_rich = {config.losowy_ruch_koncowy(_bogata, "RICH")[0] for _ in range(300)}
+sprawdz("a bogaty RICH ma pelny wybor zapisanych zakonczen",
+        set(config.RUCH_KONCOWY_MIX) <= _rich, sorted(_rich))
+
+# BEZ KARTY ZACHOWUJE SIE JAK DAWNIEJ — wywolania spoza sciezki artykulu nic
+# nie traca.
+sprawdz("bez karty dostepne sa wszystkie zapisane finaly",
+        set(config.finaly_dostepne(None)) == set(config.RUCH_KONCOWY_MIX))
+
+# KOD NAPRAWDE PODAJE KARTE. Sam parametr nic nie znaczy, jesli wolajacy
+# go nie uzywa.
+_st = pathlib.Path("agent-v2/stages.py").read_text(encoding="utf-8")
+sprawdz("stages.write podaje karte do losowania finalu",
+        "config.losowy_ruch_koncowy(card, glebokosc)" in _st)
+
+print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))
 sys.exit(1 if oblane else 0)
