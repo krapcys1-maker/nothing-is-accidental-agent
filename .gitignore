@@ -122,6 +122,21 @@ agent-v2/data/
 id_rsa*
 id_ed25519*
 
+# WYJATEK NA TESTY — dopisany 5 wrzesnia 2026. Siatka wyzej zostaje szeroka,
+# ale zjadala takze `agent-v2/tests/test_klucz_przed_wywolaniem.py`: test
+# pilnujacy, zeby brak klucza zatrzymywal etap PRZED platnym wywolaniem.
+# Plik lezal u mnie na dysku i NIGDY nie trafil ani do repozytorium, ani na
+# serwer — lokalny zestaw mial 151 pozycji, repozytorium 150, a `git status`
+# o plikach ignorowanych milczy, wiec nikt tego nie widzial. Wyszlo dopiero
+# z licznika testow w zywej dokumentacji, ktory rozjechal sie miedzy maszynami.
+#
+# Ten sam ksztalt, co regula czyszczaca naglowki, ktora zjadala numer wersji:
+# wzorzec szerszy, niz mial byc, i cisza zamiast bledu.
+#
+# Wyjatek jest waski celowo: tylko `test_*.py` i tylko w katalogu testow.
+# Zaden plik z sekretami nie ma prawa tak sie nazywac ani tam lezec.
+!agent-v2/tests/test_*klucz*.py
+
 # KATALOG ROBOCZY AGENTA. Wszystko, co agent tworzy na boku — skrypty
 # pomiarowe, kopie, wyniki prob — ma powstawac TUTAJ, wewnatrz projektu.
 #
