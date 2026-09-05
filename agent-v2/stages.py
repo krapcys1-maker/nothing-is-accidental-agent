@@ -193,7 +193,7 @@ def recent_angles(conn: sqlite3.Connection, limit: int = config.DIVERSITY_LOOKBA
 
 
 def tematy_do_porownania(conn: sqlite3.Connection,
-                         limit: int = config.DIVERSITY_LOOKBACK) -> list[str]:
+                         limit: int | None = None) -> list[str]:
     """Poprzednie artykuly w postaci NADAJACEJ SIE DO POROWNANIA.
 
     Rozne od `recent_angles`, ktore oddaje same tytuly do promptu skauta.
@@ -209,10 +209,31 @@ def tematy_do_porownania(conn: sqlite3.Connection,
     instytucji, liczby i rzeczowniki tematu, czyli dokladnie to, na czym
     rozmyta miara pracuje.
     """
+    # WSZYSTKIE ARTYKULY, NIE PIEC OSTATNICH — zmiana z 5 wrzesnia 2026 (Q11).
+    #
+    # Domyslnym limitem byl `DIVERSITY_LOOKBACK` (5). Przy jednym artykule na
+    # tydzien to okno PIECIU TYGODNI: szosty wstecz przestawal istniec dla
+    # kodu, choc skaut widzi wszystkie tytuly z `promocja.json`.
+    #
+    # ZMIERZONE NA PRODUKCJI: 15 artykulow w bazie, z czego 10 NIEWIDOCZNYCH
+    # dla strazy powtorek. Wsrod widocznych stoja przy tym dwa kolejne
+    # „The Guardrails Were Off on Purpose" i „The Guardrails Were Off Because
+    # That Was the Test" — czyli okno jest za male nawet na to, co obejmuje.
+    #
+    # CENA JEST ZNIKOMA. Tabela rosnie o wiersz TYGODNIOWO, a porownanie bierze
+    # 1200 znakow tresci na artykul. Sto artykulow to 120 tysiecy znakow
+    # czytane raz na przebieg artykulu, czyli raz na tydzien.
+    #
+    # `limit` zostaje w sygnaturze dla testow, ktore chca waskiego okna.
     try:
-        rows = conn.execute(
-            "SELECT topic, title, body FROM articles "
-            "ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
+        if limit is None:
+            rows = conn.execute(
+                "SELECT topic, title, body FROM articles "
+                "ORDER BY id DESC").fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT topic, title, body FROM articles "
+                "ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
     except Exception:
         return []
     wynik = []
