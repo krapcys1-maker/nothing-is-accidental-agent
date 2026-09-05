@@ -4245,7 +4245,8 @@ def zdejmij_plakietke_ai(page, id_notki: str) -> bool:
 
 def wystaw_notke(tekst: str, wyslij: bool = False, typ: str = "",
                  forma: str = "", model: str = "",
-                 fakt_ranga: int | None = None) -> dict[str, Any]:
+                 fakt_ranga: int | None = None,
+                 fakt_klucz: str = "") -> dict[str, Any]:
     """Wystawia notkę. Domyślnie WYPEŁNIA i NIE WYSYŁA.
 
     `wyslij=False` to nie ostrożność dla samej ostrożności: notki nie da się
@@ -4344,7 +4345,14 @@ def wystaw_notke(tekst: str, wyslij: bool = False, typ: str = "",
             dopisz_wynik("notka", wynik, slow=len(tekst.split()),
                          tekst=tekst[:2000], id=wynik["id"],
                          typ=typ, forma=forma, model=model,
-                         fakt_ranga=fakt_ranga)
+                         fakt_ranga=fakt_ranga,
+                         # ODCISK FAKTU, NA KTORYM NOTKA STOI — zeby dalo sie
+                         # POLICZYC, ktory wpis banku stal sie tekstem.
+                         # Komentarz przy `fakt_ranga` mowi to sam: bez tego
+                         # „trzeba parowac notke z faktem po nakladaniu sie
+                         # slow, co dalo 14 par z 46 notek". Ranga byla
+                         # polowicznym rozwiazaniem — nie identyfikuje wpisu.
+                         fakt_klucz=fakt_klucz)
             # WYKRYWANIE AI — KROK PO PUBLIKACJI, ODDZIELONY OD NIEJ.
             #
             # Substack pokazuje przy dluzszych notkach plakietke Pangramu
@@ -4381,7 +4389,14 @@ def wystaw_notke(tekst: str, wyslij: bool = False, typ: str = "",
             dopisz_wynik("notka", wynik, slow=len(tekst.split()),
                          tekst=tekst[:2000], id=wynik.get("id", ""),
                          typ=typ, forma=forma, model=model,
-                         fakt_ranga=fakt_ranga)
+                         fakt_ranga=fakt_ranga,
+                         # ODCISK FAKTU, NA KTORYM NOTKA STOI — zeby dalo sie
+                         # POLICZYC, ktory wpis banku stal sie tekstem.
+                         # Komentarz przy `fakt_ranga` mowi to sam: bez tego
+                         # „trzeba parowac notke z faktem po nakladaniu sie
+                         # slow, co dalo 14 par z 46 notek". Ranga byla
+                         # polowicznym rozwiazaniem — nie identyfikuje wpisu.
+                         fakt_klucz=fakt_klucz)
         page.close()
         browser.close()
         p.stop()

@@ -8972,7 +8972,7 @@ def bank_pelny() -> bool:
     return ile >= config.BANK_MAKS_WOLNYCH
 
 
-def oznacz_uzyty(fakt: Any) -> int:
+def oznacz_uzyty(fakt: Any, id_notki: Any = None) -> int:
     """Znaczy w indeksie fakt, ktory NAPRAWDE wyszedl w swiat.
 
     DWIE KSIEGOWOSCI, KTORE SIE NIE WIDZIALY (Q1 z przegladu zewnetrznego,
@@ -9005,6 +9005,20 @@ def oznacz_uzyty(fakt: Any) -> int:
         if _klucz_faktu(str(k.get("fact") or "")) == klucz:
             k["status"] = "uzyty"
             k["wydany"] = db.now()
+            # NUMER NOTKI, KTORA Z NIEGO POWSTALA — druga polowa powiazania.
+            #
+            # Dziennik dostaje `fakt_klucz`, indeks dostaje numer notki. Dopiero
+            # obie strony razem pozwalaja zapytac „ktory wpis banku stal sie
+            # tekstem" bez parowania po nakladaniu sie slow.
+            #
+            # PO CO. 5 wrzesnia 2026 probowalem policzyc, ile faktow spalono
+            # bez publikacji. Porownanie statusu z `zuzyte_fakty.json` dalo 46
+            # z 62 (74%), ale sprawdzenie tresci w wydanych notkach odnalazlo
+            # 24 z tych 46 — czyli one WYSZLY, tylko odhaczenie ich nie
+            # dopasowalo. Pomiar byl nierzetelny w obie strony, a wniosek
+            # z niego bylby falszywy.
+            if id_notki:
+                k["wydany_jako"] = str(id_notki)
             ile += 1
     if ile:
         _zapisz_indeks(indeks)

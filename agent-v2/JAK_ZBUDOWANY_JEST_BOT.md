@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **25 plików**, 32 375 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **25 plików**, 32 413 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -113,8 +113,8 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 > w głównej ścieżce artykułu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
-się testować bez przeglądarki i bez pieniędzy**. 146 zestawów
-testów, 3923 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+się testować bez przeglądarki i bez pieniędzy**. 147 zestawów
+testów, 3936 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -143,7 +143,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-3033 wierszy, 27 funkcji na poziomie modułu, 1 klas
+3042 wierszy, 27 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -177,7 +177,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-9197 wierszy, 152 funkcji na poziomie modułu, 0 klas
+9211 wierszy, 152 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -328,7 +328,7 @@ wiec nie da sie go rozjechac z kodem.
 | `_termin_waznosci(dni)` *(wewn.)* | Kiedy ta kandydatura przestaje byc tematem. Data z godzina, w UTC. |
 | `_po_terminie(k)` *(wewn.)* | Czy kandydatura jest juz po swoim terminie przydatnosci. |
 | `bank_pelny()` | Czy zapas wystarczy, zeby NIE placic za nowe szukanie. |
-| `oznacz_uzyty(fakt)` | Znaczy w indeksie fakt, ktory NAPRAWDE wyszedl w swiat. |
+| `oznacz_uzyty(fakt, id_notki)` | Znaczy w indeksie fakt, ktory NAPRAWDE wyszedl w swiat. |
 | `zwroc_kandydatow(kandydaci)` | Oddaje do puli kandydatow, ktorych ostatecznie NIE uzyto. |
 | `stan_indeksu()` | Ile mamy zapasu i ile odsialismy — do wypisania przy starcie. |
 | `korpus_fedreg(ile_dokumentow, ile_gestych)` | Preambuly przepisow, w ktorych regulator ODPOWIADA na zastrzezenia. |
@@ -336,7 +336,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `browser.py` — cała styczność z Substackiem; nie woła modelu
 
-5301 wierszy, 98 funkcji na poziomie modułu, 0 klas
+5316 wierszy, 98 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -422,7 +422,7 @@ wiec nie da sie go rozjechac z kodem.
 | `potwierdz_odpowiedz(page, note_id, tekst)` | Pyta Substacka, czy nasza odpowiedź naprawdę jest w wątku — i KTORA. |
 | `wystaw_odpowiedz(note_id, tekst, wyslij, kontekst, rodzaj)` | Odpowiada w watku — pod nasza notka albo w cudzej dyskusji. |
 | `zdejmij_plakietke_ai(page, id_notki)` | Wylacza wykrywanie AI przy jednej notce. Sciezka z interfejsu Substacka. |
-| `wystaw_notke(tekst, wyslij, typ, forma, model, fakt_ranga)` | Wystawia notkę. Domyślnie WYPEŁNIA i NIE WYSYŁA. |
+| `wystaw_notke(tekst, wyslij, typ, forma, model, fakt_ranga, fakt_klucz)` | Wystawia notkę. Domyślnie WYPEŁNIA i NIE WYSYŁA. |
 | `zapamietaj_platny_host(host, prawo)` | Host, ktory wprost mowi, ze komentowac moga tylko placacy. |
 | `hosty_tylko_dla_placacych()` | Hosty, gdzie komentowac moga tylko placacy — do odsiania PRZED ocena. |
 | `zapomnij_platny_host(host)` | Udany komentarz kasuje host z listy — wydawca mogl zmienic ustawienia. |

@@ -227,8 +227,10 @@ sprawdz("i sam napis dziala tak samo jak slownik",
 # KOD PUBLIKUJACY NAPRAWDE TO WOLA. Sama funkcja nic nie znaczy, jesli
 # `run.py` jej nie uzywa — to ta sama rodzina wad, co martwy wpis EFFORT.
 _run = pathlib.Path("agent-v2/run.py").read_text(encoding="utf-8")
+# Od 5 wrzesnia 2026 idzie tam takze NUMER NOTKI — druga polowa powiazania
+# miedzy bankiem a dziennikiem.
 sprawdz("run.py odhacza fakt w indeksie po publikacji",
-        "stages.oznacz_uzyty(n[\"fakt\"])" in _run)
+        'stages.oznacz_uzyty(n["fakt"], wynik.get("id"))' in _run)
 sprawdz("i robi to obok zapisz_zuzyte, nie zamiast",
         "stages.zapisz_zuzyte([n[\"fakt\"]])" in _run)
 

@@ -357,7 +357,10 @@ def swiat_dnia(slad, st):
         # ktora bank nadal faktowi, zeby dalo sie policzyc, czy ta ocena
         # cokolwiek przewiduje. Atrapa musi ja przyjac, inaczej wywolanie
         # wywala sie i test mierzy wlasna niezgodnosc zamiast zachowania.
-        wystaw_notke=lambda tekst, wyslij=False, typ="", forma="", model="", fakt_ranga=None: (
+        # `fakt_klucz` dolozony 5 wrzesnia 2026: dziennik notki niesie odcisk
+        # faktu, zeby dalo sie policzyc, ktory wpis banku stal sie tekstem.
+        wystaw_notke=lambda tekst, wyslij=False, typ="", forma="", model="",
+        fakt_ranga=None, fakt_klucz="": (
             slad.notki.append({"tekst": tekst, "wyslij": wyslij,
                                "typ": typ, "forma": forma, "model": model})
             or {"wyslane": True, "blad": None}),
@@ -414,6 +417,15 @@ def swiat_dnia(slad, st):
                                   "restacki": 0, "follow": 0, "subskrypcje": 0},
         notki_dnia=notki_dnia,
         zapisz_zuzyte=lambda co: None,
+        # DOLOZONE 5 wrzesnia 2026 razem z powiazaniem bank-dziennik.
+        # `run.py` liczy teraz odcisk faktu do dziennika i odhacza wpis
+        # w indeksie numerem notki. Atrapa musi miec te funkcje, inaczej blok
+        # notek rzuca, `blok()` to polyka i test pokazuje pusta liste —
+        # wygladajac, jakby badal budzet.
+        _klucz_faktu=lambda t: str(t or "")[:40],
+        tekst_faktu=lambda x: (x.get("fact") if isinstance(x, dict)
+                               else str(x or "")),
+        oznacz_uzyty=lambda fakt, id_notki=None: 0,
         odhacz_promocje=lambda url, tekst="": None,
         zakwestionuj_promocje=lambda url, powod: None,
         wybierz_cele=lambda conn, run_id, lista: list(lista),

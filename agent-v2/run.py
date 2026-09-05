@@ -1375,7 +1375,16 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
                                              # trzeba parowac notke z faktem po
                                              # nakladaniu sie slow, co dalo 14
                                              # par z 46 notek.
-                                             fakt_ranga=n.get("fakt_ranga"))
+                                             fakt_ranga=n.get("fakt_ranga"),
+                                             # ODCISK FAKTU — patrz
+                                             # `stages.oznacz_uzyty`. Zapisany
+                                             # po OBU stronach, zeby dalo sie
+                                             # policzyc, ktory wpis banku stal
+                                             # sie tekstem, bez parowania po
+                                             # nakladaniu sie slow.
+                                             fakt_klucz=stages._klucz_faktu(
+                                                 stages.tekst_faktu(
+                                                     n.get("fakt"))))
                 # Fakt odhaczamy DOPIERO po potwierdzonej publikacji. Wczesniej
                 # znikal juz przy znalezieniu, wiec przepadal takze wtedy, gdy
                 # notka nie poszla albo gdy przebieg byl tylko sprawdzeniem.
@@ -1386,7 +1395,7 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
                     # `wez_kandydatow` NIE CZYTA. Bez tej linii opublikowany
                     # fakt zostawal w indeksie jako „nowy" i mogl wyjsc drugi
                     # raz nastepnego dnia.
-                    stages.oznacz_uzyty(n["fakt"])
+                    stages.oznacz_uzyty(n["fakt"], wynik.get("id"))
                 # Dzien promocji artykulu tez odhaczamy dopiero po publikacji —
                 # inaczej artykul dostawal mniej niz piec notek promujacych,
                 # a nikt by tego nie zauwazyl.
