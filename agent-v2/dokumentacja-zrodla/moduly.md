@@ -35,7 +35,7 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-9211 wierszy, 152 funkcji na poziomie modułu, 0 klas
+9281 wierszy, 152 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -116,7 +116,7 @@
 | `odhacz_promocje(url, tekst)` | Odnotowuje, ze artykul dostal dzis swoja notke promujaca — I CO W NIEJ BYLO. |
 | `_slowa(tekst)` *(wewn.)* | Znaczace slowa tekstu, obciete do rdzenia. |
 | `_zderzenie(x, y, min_wspolnych, prog)` *(wewn.)* | To samo pytanie co `_o_tym_samym`, ale na GOTOWYCH rdzeniach. |
-| `nazwy_wlasne(tekst)` | Nazwy wlasne i identyfikatory z tekstu, sprowadzone do jednej postaci. |
+| `nazwy_wlasne(tekst, z_niepewnymi)` | Nazwy wlasne i identyfikatory z tekstu, sprowadzone do jednej postaci. |
 | `wspolna_nazwa(a, b, korpus, maks_czestosc)` | Nazwa wlasna, ktora wystepuje w OBU tekstach i jest rzadka w korpusie. |
 | `_o_tym_samym(a, b, min_wspolnych, prog)` *(wewn.)* | Czy dwa teksty mowia o tej samej rzeczy. |
 | `teksty_ostatnich_notek(ile)` | Tresci ostatnich notek — do porownania po NAZWACH WLASNYCH. |

@@ -34,8 +34,23 @@ BEZ PYTESTA, bez sieci, bez platnych wywolan. Uruchamiac z korzenia repo.
 """
 import pathlib
 import sys
+import tempfile
 
 sys.path.insert(0, "agent-v2")
+import config  # noqa: E402
+
+# ODCIECIE OD PRODUKCJI — dopisane 5 wrzesnia 2026, bo tego brakowalo.
+#
+# `wybierz_material` liczy rzadkosc nazw w `opublikowane_teksty()`, czyli w
+# ZYWYM korpusie notek. Bez przestawienia katalogu danych ten test dawal inny
+# wynik na kazdej maszynie: na Windows (pusty katalog) przechodzil, na serwerze
+# (80 opublikowanych notek) sekcja 7 padala. Test, ktorego werdykt zalezy od
+# tego, co bot zdazyl napisac, nie jest testem.
+#
+# To wlasnie ta rozbieznosc doprowadzila do dwoch prawdziwych usterek w samej
+# zaporze — patrz `test_zapora_nazw_nie_slabnie.py`.
+config.uzyj_katalogu_danych(pathlib.Path(tempfile.mkdtemp()))
+
 import stages  # noqa: E402
 
 zdane = oblane = 0
@@ -106,8 +121,17 @@ sprawdz("`GPT-5` na poczatku zdania nadal jest nazwa",
 print()
 print("=== 5. RZADKOSC LICZONA W KORPUSIE ===")
 # Nazwa, ktora pada w polowie naszych notek („OpenAI"), nie odroznia niczego.
-korpus = ["OpenAI said this. " * 2, "OpenAI said that.", "OpenAI again.",
-          "Something about Jalapeno chips."]
+#
+# KORPUS MA 40 TEKSTOW, A NIE CZTERY — poprawione 5 wrzesnia 2026. Przy
+# czterech tekstach „nazwa w trzech z nich" nie znaczy „nazwa jest wszedzie",
+# tylko „opisalismy to trzy razy", czyli DOKLADNIE to, przed czym ta zapora
+# stoi. Kod nie zwalnia juz niczego przy korpusie ponizej dwudziestu tekstow,
+# bo tam czestosc nie odroznia jednego od drugiego. Zeby wiec sprawdzic regule
+# „czesta nazwa nie blokuje", trzeba jej dac korpus, w ktorym slowo „czesta"
+# cokolwiek znaczy.
+korpus = (["OpenAI said this. OpenAI said that."] * 20
+          + ["A note about %d other things entirely." % i for i in range(19)]
+          + ["Something about Jalapeno chips."])
 sprawdz("czesta nazwa nie blokuje",
         not stages.wspolna_nazwa("OpenAI raised prices", "OpenAI hired someone",
                                  korpus))
@@ -116,15 +140,19 @@ sprawdz("rzadka nazwa blokuje",
                              "Nvidia lost to Jalapeno on watts", korpus)
         == "jalapeno")
 
-# OGRANICZENIE, KTORE PRZYJMUJEMY SWIADOMIE. Nazwa stojaca WYLACZNIE na
-# poczatku zdania przepada — „Jalapeno beat the GB200" nie odda `jalapeno`.
-# To cena za odsianie „Cheap", „Three", „Same" i kazdego innego pierwszego
-# slowa. Przy notce na 50-60 slow nazwa pada zwykle takze w srodku zdania,
-# a falszywe trafienie kosztuje notke: przy realizacji normy 63% to nie
-# jest darmowe. Test zapisuje to jako ZNANE, nie udaje, ze nie istnieje.
-sprawdz("nazwa tylko na poczatku zdania przepada (znane ograniczenie)",
-        not stages.wspolna_nazwa("The Jalapeno chip is inference-only",
-                                 "Jalapeno beat the GB200", korpus))
+# TO OGRANICZENIE ZNIKNELO — 5 wrzesnia 2026. Stalo tu: „nazwa stojaca
+# WYLACZNIE na poczatku zdania przepada, to cena za odsianie Cheap/Three/Same".
+# Cena okazala sie niepotrzebna. `nazwy_wlasne` odklada teraz wyraz z poczatku
+# zdania do OSOBNEGO worka zamiast go wyrzucac, a `wspolna_nazwa` przyjmuje go,
+# gdy DRUGI tekst uzywa go poza poczatkiem zdania. „Jalapeno beat the GB200"
+# spotyka wiec „The Jalapeno chip", a „Cheap tricks" nadal nie spotyka
+# „Cheap models" — bo `cheap` nie stoi w srodku zdania z wielkiej litery
+# w zadnym z nich. Patrz `test_zapora_nazw_nie_slabnie.py`.
+sprawdz("nazwa stojaca na poczatku zdania JUZ NIE przepada",
+        stages.wspolna_nazwa("The Jalapeno chip is inference-only",
+                             "Jalapeno beat the GB200", korpus) == "jalapeno",
+        stages.wspolna_nazwa("The Jalapeno chip is inference-only",
+                             "Jalapeno beat the GB200", korpus))
 sprawdz("bez korpusu wystarczy sama wspolna nazwa",
         stages.wspolna_nazwa("OpenAI raised prices", "OpenAI hired someone")
         == "openai")

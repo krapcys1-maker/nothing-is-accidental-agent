@@ -3715,7 +3715,7 @@ december monday tuesday wednesday thursday friday saturday sunday
 """.split())
 
 
-def nazwy_wlasne(tekst: str) -> set[str]:
+def nazwy_wlasne(tekst: str, z_niepewnymi: bool = False):
     """Nazwy wlasne i identyfikatory z tekstu, sprowadzone do jednej postaci.
 
     MYSLNIK I SPACJA TO TA SAMA NAZWA. Zmierzone 31 sierpnia na trzech notkach
@@ -3731,9 +3731,19 @@ def nazwy_wlasne(tekst: str) -> set[str]:
     # zaczynajace sie tym samym slowem wygladaly na blizniaki. Pierwszy wyraz
     # po kropce liczy sie tylko wtedy, gdy ma cyfre albo wielka litere
     # w srodku — „GPT-5" tak, „Cheap" nie.
+    # `.end()`, NIE `.start()`. Dopasowanie `[.!?]\s+` zaczyna sie na KROPCE,
+    # a slowo stoi dopiero za spacja — wiec `m.start()` dawal pozycje kropki
+    # i warunek nie trafial w nic poza samym poczatkiem tekstu. Regula opisana
+    # dwa akapity wyzej dzialala tylko dla PIERWSZEGO wyrazu calej notki.
+    #
+    # ZMIERZONE NA KORPUSIE 80 OPUBLIKOWANYCH NOTEK: do nazw wlasnych wchodzily
+    # `that` (15 razy), `same` (9), `when` (6), `what` (5), `nothing` (4),
+    # `nobody`, `under`, `difference`. To nie sa nazwy niczego — to wyrazy
+    # rozpoczynajace zdanie.
     tekst = str(tekst or "")
-    po_kropce = {m.start() for m in re.finditer(r"(?:^|[.!?]\s+)", tekst)}
+    po_kropce = {m.end() for m in re.finditer(r"(?:^|[.!?]\s+)", tekst)}
     wynik = set()
+    niepewne = set()
     for m in re.finditer(r"[A-Za-z][A-Za-z0-9'’.-]*", tekst):
         w = m.group(0)
         rdzen = w.strip(".-'’").lower()
@@ -3754,16 +3764,28 @@ def nazwy_wlasne(tekst: str) -> set[str]:
             continue
         wewnetrzna_wielka = any(c.isupper() for c in w[1:])
         ma_cyfre = any(c.isdigit() for c in w)
-        if m.start() in po_kropce and not (ma_cyfre or wewnetrzna_wielka):
-            continue
         if not ((w[:1].isupper() and len(w) > 3) or ma_cyfre):
             continue
+        # WYRAZ Z POCZATKU ZDANIA IDZIE DO OSOBNEGO WORKA, A NIE DO KOSZA.
+        #
+        # Odrzucanie go wprost zalatwialo `Cheap`, ale zabieralo tez `Jalapeno`
+        # w zdaniu „Jalapeno ships in March" — prawdziwa nazwa gubila sie tylko
+        # dlatego, ze stala po kropce. Przy zaporze przed trzema notkami o
+        # jednym modelu to jest falszywy negatyw dokladnie tam, gdzie boli:
+        # notki czesto ZACZYNAJA zdanie nazwa firmy albo modelu.
+        #
+        # `wspolna_nazwa` przyjmuje taki wyraz, gdy DRUGI tekst uzywa go poza
+        # poczatkiem zdania. „The Jalapeno chip" + „Jalapeno ships" spotykaja
+        # sie; „Cheap models" + „Cheap tricks" nie, bo `cheap` nigdzie nie stoi
+        # w srodku zdania z wielkiej litery.
+        niepewna = (m.start() in po_kropce
+                    and not (ma_cyfre or wewnetrzna_wielka))
         # Myslnik i kropka znikaja, zeby `glm-5.3-flash` i `glm 5.3 flash`
         # byly tym samym. Same cyfry odpadaja — „2026" nie jest nazwa.
         plaska = "".join(c for c in rdzen if c not in ".-")
         if not plaska or plaska.isdigit():
             continue
-        wynik.add(plaska)
+        (niepewne if niepewna else wynik).add(plaska)
         # I JESZCZE RDZEN DO OSTATNIEJ CYFRY. Bez tego `GLM-5.3-Flash`
         # (jeden token) nie spotyka sie z `GLM-5.3 Flash` (dwa tokeny) —
         # a to byly dwie z trzech notek o tym samym modelu, wystawione
@@ -3773,11 +3795,11 @@ def nazwy_wlasne(tekst: str) -> set[str]:
             trzon = plaska[:cyfry[-1] + 1]
             if len(trzon) >= 4 and not trzon.isdigit():
                 wynik.add(trzon)
-    return wynik
+    return (wynik, niepewne) if z_niepewnymi else wynik
 
 
 def wspolna_nazwa(a: str, b: str, korpus: list[str] | None = None,
-                  maks_czestosc: int = 2) -> str:
+                  maks_czestosc: int | None = None) -> str:
     """Nazwa wlasna, ktora wystepuje w OBU tekstach i jest rzadka w korpusie.
 
     DRUGI SYGNAL BLIZNIACTWA, obok liczby wspolnych slow. Powstal 31 sierpnia,
@@ -3796,11 +3818,59 @@ def wspolna_nazwa(a: str, b: str, korpus: list[str] | None = None,
     Bez korpusu wymagamy samej wspolnej nazwy: wywolujacy decyduje, czy ma
     czym mierzyc czestosc.
     """
-    wspolne = nazwy_wlasne(a) & nazwy_wlasne(b)
+    pewne_a, niepewne_a = nazwy_wlasne(a, z_niepewnymi=True)
+    pewne_b, niepewne_b = nazwy_wlasne(b, z_niepewnymi=True)
+    # Wyraz z poczatku zdania liczy sie jako nazwa TYLKO wtedy, gdy drugi tekst
+    # uzywa go poza poczatkiem zdania — patrz `nazwy_wlasne`. Dzieki temu
+    # „Jalapeno ships in March" spotyka „The Jalapeno chip", a „Cheap tricks"
+    # nie spotyka „Cheap models".
+    wspolne = ((pewne_a & pewne_b)
+               | (niepewne_a & pewne_b) | (pewne_a & niepewne_b))
     if not wspolne:
         return ""
     if korpus is None:
         return sorted(wspolne)[0]
+    # PROG LICZONY Z KORPUSU, NIE WPISANY NA STALE — i to jest naprawa
+    # usterki, ktora rozbrajala te zapore dokladnie tam, gdzie byla potrzebna.
+    #
+    # Prog stal na 2. Przy korpusie 80 notek nazwa w TRZECH tekstach (3,75%)
+    # uchodzila juz za „czesta" i przestawala blokowac. Skutek zmierzony na
+    # zywym korpusie: `glm53` — nazwa, DLA KTOREJ TA FUNKCJA POWSTALA po trzech
+    # notkach o GLM-5.3-Flash jednego dnia — miala dokladnie 3 wystapienia
+    # i juz nie blokowala. Te same trzy notki, ktore kazaly napisac zapore,
+    # przekroczyly jej prog i ja wylaczyly.
+    #
+    # Im wiecej piszemy o czyms, tym slabiej zapora przed tym chronila.
+    # Odwrotnie, niz mial byc jej sens.
+    #
+    # Docstring mowi „nazwa, ktora pada w POLOWIE naszych notek". To jest
+    # udzial, a nie sztuki, wiec prog idzie za rozmiarem korpusu.
+    #
+    # DWIE LICZBY WZIETE Z POMIARU, NIE Z GLOWY. Na zywym korpusie 80 notek
+    # `openai` ma 8 wystapien (10%) i ma byc WOLNE, a `glm53` ma 3 (3,75%)
+    # i ma BLOKOWAC. Ciecie musi wiec lezec miedzy 3,75% a 10% — stad jedna
+    # dwudziesta, czyli 4 przy tym korpusie.
+    #
+    # PODLOGA 4, A NIE 2. Przy 2 zapora slabla na malym korpusie: 3 notki
+    # o GLM przy 20 opublikowanych to 15% i prog wypadal na 2, wiec czwarta
+    # notka o GLM przechodzila. Ponizej pieciu wystapien nie da sie odroznic
+    # „nazwa jest wszedzie" od „napisalismy o tym trzy razy" — a zatrzymanie
+    # trzeciej i czwartej notki o jednym modelu to CALY sens tej funkcji.
+    #
+    # PONIZEJ 20 TEKSTOW NIE ZWALNIAMY NICZEGO. Przy takim korpusie kazda
+    # wspolna nazwa jest jego duzym ulamkiem, wiec „czestosc" nie odroznia
+    # nazwy wszechobecnej od tematu, ktory po prostu opisalismy dwa razy —
+    # a `wybierz_material` wpada tu wlasnie z korpusem jednoelementowym, gdy
+    # nie ma jeszcze opublikowanych notek. Blokujemy wtedy zachowawczo: to
+    # kosztuje jednego kandydata z dwudziestu w puli, a przepuszczenie kosztuje
+    # druga notke o tym samym w jednym dniu.
+    if maks_czestosc is None:
+        if len(korpus) < 20:
+            # Prog powyzej najwiekszej mozliwej czestosci: zadna nazwa nie
+            # przekroczy go, wiec zadna nie zostanie zwolniona.
+            maks_czestosc = len(korpus) + 1
+        else:
+            maks_czestosc = max(4, len(korpus) // 20)
     czestosc: dict[str, int] = {}
     for tekst in korpus:
         for nazwa in nazwy_wlasne(tekst):
