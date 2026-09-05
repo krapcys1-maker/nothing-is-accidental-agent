@@ -230,8 +230,11 @@ class AtrapaStages:
         return [{"url": "https://example.org/%d" % i, "text": "tresc"}
                 for i in range(4)]
 
+    # Rozpoznawalny material, a nie `[]`: dzieki temu sekcja 9 sprawdza, ze do
+    # zapisu dotarlo TO, co oddal `classify`, a nie ze cokolwiek jest niepuste.
     def classify(self, conn, run_id, pytanie, corpus):
-        return []
+        return [{"url": "https://klasyfikacja.example/a", "publisher": "K",
+                 "excerpts": ["x" * 80], "numbers": ["7 sztuk"]}]
 
     def synthesis(self, conn, run_id, pytanie, evidence):
         import copy
@@ -631,6 +634,10 @@ FAKT_Z_PULI = {
 }
 
 
+# Ostatni `evidence` podany do `_napisz_i_zapisz` — patrz sekcja o banku.
+ZLAPANY_MATERIAL: list = []
+
+
 def przebieg_do_karty(brief, karta=None, fakt=None):
     """Puszcza `_przebieg` do konca researchu i lapie karte dla pisarza."""
     import copy
@@ -649,8 +656,13 @@ def przebieg_do_karty(brief, karta=None, fakt=None):
     azp.wybierz_fakt = lambda conn, run_id: dict(_rekord)
     azp.temat_z_faktu = lambda conn, run_id, f: dict(brief)
 
-    def lap(conn, run_id, b, c):
+    # `*a` zamiast wyliczonych argumentow: atrapa ma przezyc dolozenie
+    # kolejnego parametru do `_napisz_i_zapisz`, a nie wywalic sie TypeError-em
+    # w srodku cudzej sekcji. Tak wlasnie padl ten test, gdy funkcja dostala
+    # `evidence` — usterka byla w atrapie, nie w kodzie.
+    def lap(conn, run_id, b, c, *a):
         zlapane["brief"], zlapane["card"] = b, c
+        ZLAPANY_MATERIAL[:] = [a[0] if a else None]
         return 0
 
     azp._napisz_i_zapisz = lap
@@ -850,6 +862,19 @@ print()
 print("--- 5f. kontrdowody do samego doklejania ---")
 # KONTRDOWOD 1: bez URL-a nie doklejamy nic. Twierdzenie bez zrodla w karcie
 # byloby zaproszeniem dla pisarza do napisania zdania, ktorego nikt nie obroni.
+print()
+print("=== 9. OPLACONY MATERIAL DOCIERA DO ZAPISU, NIE GINIE ===")
+# Siedem artykulow z rzedu (9-15) zapisalo sie BEZ `unused_evidence`, bo
+# `_napisz_i_zapisz` nie dostawalo `evidence` — bank fragmentow stanal na 299
+# wpisach 25 sierpnia. Usterka byla w SYGNATURZE, wiec pilnuje jej tam, gdzie
+# przechodzi cala sciezka artykulu, a nie tylko w tescie od banku.
+przebieg_do_karty(BRIEF)
+sprawdz("_napisz_i_zapisz dostalo material",
+        ZLAPANY_MATERIAL and ZLAPANY_MATERIAL[0] is not None, ZLAPANY_MATERIAL)
+sprawdz("i jest to DOKLADNIE to, co oddal classify",
+        [z.get("url") for z in (ZLAPANY_MATERIAL[0] or [])]
+        == ["https://klasyfikacja.example/a"], ZLAPANY_MATERIAL[0])
+
 karta = przebieg_do_karty(dict(BRIEF, zrodlo_faktu=""))
 sprawdz("KONTRDOWOD: bez zrodla fakt nie wchodzi do karty",
         len(karta.get("confirmed_claims") or []) == 1,

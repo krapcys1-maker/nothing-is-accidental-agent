@@ -824,7 +824,7 @@ def _przebieg(conn, run_id: int) -> int:
     # bez wyjatku, bez ostrzezenia, z opłaconym researchem za 0,40 USD i pustym
     # katalogiem. Zlapane zywym przebiegiem 30 sierpnia, nie testem: zaden test
     # nie wolal `main()`, wiec nieosiagalny kod nie mial jak sie ujawnic.
-    return _napisz_i_zapisz(conn, run_id, brief, card)
+    return _napisz_i_zapisz(conn, run_id, brief, card, evidence)
 
 
 # GDZIE LADUJE URATOWANY TEKST — I DLACZEGO NIE W `ARTICLES_DIR`.
@@ -1169,7 +1169,7 @@ def _ratuj_tekst(run_id, brief, card, draft, etap: str, exc,
           % STATUS_URATOWANY, flush=True)
 
 
-def _napisz_i_zapisz(conn, run_id, brief, card) -> int:
+def _napisz_i_zapisz(conn, run_id, brief, card, evidence=None) -> int:
     """Od bramki „warto pisac" do zapisu i grafiki.
 
     Wydzielone, zeby `--z-karty` mogl tu wejsc z zatwierdzona karta bez
@@ -1402,6 +1402,36 @@ def _napisz_i_zapisz(conn, run_id, brief, card) -> int:
 
     # `blocked_by` to NAPIS, nie lista — sqlite nie przyjmie listy i caly
     # artykul przepada po zaplaceniu za niego. Zdarzylo sie raz, 25 sierpnia.
+    # BANK FRAGMENTOW ZASILANY TUTAJ, A NIE TYLKO W `run.py`.
+    #
+    # ZMIERZONE NA PRODUKCJI, NIE ZGADNIETE: artykuly 1-8 (18-25 sierpnia)
+    # zostawily 299 ocytowanych fragmentow. Artykuly 9-15 (25 sierpnia -
+    # 1 wrzesnia) zostawily ZERO — kazdy z 7-8 zrodlami w karcie. Siedem
+    # artykulow z rzedu wyrzucilo caly oplacony material.
+    #
+    # Przyczyna byla w sygnaturze, nie w logice: `run.py` (linia ~2931) ustawia
+    # `card["unused_evidence"]` przed `stages.save`, a ta funkcja nigdy nie
+    # dostawala `evidence`, wiec nie miala z czego. Czytelnik
+    # (`stages.bank_fragmentow`) dzialal caly czas i czytal pustke.
+    #
+    # `--z-karty` nie podaje `evidence` i NIE POWINIEN: karta wczytana z dysku
+    # niesie juz to, co niosla przy zapisie, a dopisanie pola z niczego
+    # skasowaloby je. Brak argumentu = nie ruszam pola.
+    #
+    # `.get` zamiast `[...]` swiadomie: to ostatnie linie przed zapisem
+    # OPLACONEGO juz artykulu. `run.py` indeksuje wprost i dotad uchodzilo,
+    # ale tutaj wyjatek kosztowalby caly tekst — dokladnie jak `blocked_by`
+    # podane lista 25 sierpnia.
+    if evidence:
+        card["unused_evidence"] = [
+            {"url": z.get("url", ""), "publisher": z.get("publisher"),
+             "excerpts": z.get("excerpts") or [],
+             "numbers": z.get("numbers") or []}
+            for z in evidence if isinstance(z, dict)
+        ]
+        print("  bank fragmentow: %d zrodel odlozonych na dni bez artykulu"
+              % len(card["unused_evidence"]), flush=True)
+
     sciezka = stages.save(conn, run_id, brief, card, draft, status,
                           blokada or "", notatki)
     print()

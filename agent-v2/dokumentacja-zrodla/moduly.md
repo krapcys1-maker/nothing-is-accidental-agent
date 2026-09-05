@@ -573,7 +573,7 @@
 
 ### `artykul_z_puli.py` — artykuł bierze temat z tej samej puli, co notki
 
-1496 wierszy, 14 funkcji na poziomie modułu, 0 klas
+1526 wierszy, 14 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -590,7 +590,7 @@
 | `_ramka(powod, brak, katalog)` *(wewn.)* | Ostrzezenie, ktore idzie na POCZATEK `.md`, a nie tylko obok niego. |
 | `_zrodla(card)` *(wewn.)* | Sekcja `## Sources` — bez pytania bazy o nazwy zrodel. |
 | `_ratuj_tekst(run_id, brief, card, draft, etap, exc, raport)` *(wewn.)* | Gotowy tekst na dysk, gdy budzet albo wylacznik przerywa PO pisaniu. |
-| `_napisz_i_zapisz(conn, run_id, brief, card)` *(wewn.)* | Od bramki „warto pisac" do zapisu i grafiki. |
+| `_napisz_i_zapisz(conn, run_id, brief, card, evidence)` *(wewn.)* | Od bramki „warto pisac" do zapisu i grafiki. |
 
 ### `norma.py` — licznik produkcji: ile agent wystawil wobec normy dziennej
 
