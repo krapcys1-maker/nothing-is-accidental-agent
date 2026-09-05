@@ -628,14 +628,43 @@ def _przebieg(conn, run_id: int) -> int:
     print()
     print("-- pobieranie --", flush=True)
     corpus = stages.fetch(conn, run_id, sources)
-    # Druga runda, gdy material chudy — tak samo jak w run.py.
-    if len([c for c in corpus if c.get("text")]) < 4:
+    # DRUGA RUNDA — TERAZ NAPRAWDE TAK SAMO JAK W `run.py`.
+    #
+    # Komentarz mowil „tak samo jak w run.py" i BYL NIEPRAWDA. `run.py` (linia
+    # ~2582) odpala druga runde przy DWOCH warunkach: chudy korpus ALBO za malo
+    # zrodel pierwotnych — i przy tym drugim wola dyskoverie z
+    # `tylko_pierwotne=True`. Tutaj stal sam warunek na sztuki.
+    #
+    # Roznica nie jest kosmetyczna i `run.py` ma ja opisana z pomiaru: korpus
+    # bywa PELNY i jednoczesnie bezwartosciowy — przebieg z dziewiecioma
+    # pobranymi zrodlami, z czego JEDNO pierwotne. Dziewiec to duzo wiecej niz
+    # prog czterech, wiec druga runda nie odpalala sie nigdy, a pisarz dostawal
+    # dziewiec tekstow O dokumencie i ani jednego dokumentu. Wtorkowy artykul
+    # chodzi wlasnie ta sciezka.
+    #
+    # NA NASZEJ PRODUKCJI TO JESZCZE NIE UDERZYLO: trzy zapisane przebiegi
+    # artykulu maja 4, 4 i 10 zrodel pierwotnych, czyli powyzej progu. To jest
+    # naprawa RYZYKA, nie zaobserwowanej szkody — i tyle jest warta.
+    #
+    # Prog z `config`, a nie wpisana czworka: dwa miejsca liczace to samo z
+    # dwoch roznych liczb rozjezdzaja sie po pierwszej zmianie.
+    _z_trescia = [c for c in corpus if c.get("text")]
+    _pierwotnych = sum(1 for c in _z_trescia if c.get("class") == "PRIMARY")
+    _za_chudo = len(_z_trescia) < config.MIN_ZRODEL_DO_PISANIA
+    _bez_rekordow = _pierwotnych < config.MIN_PRIMARY_SOURCES
+    if _za_chudo or _bez_rekordow:
         print()
-        print("-- za chudo — druga runda --", flush=True)
-        juz = {c.get("url") for c in corpus}
+        print("-- druga runda: zrodel %d/%d, pierwotnych %d/%d --"
+              % (len(_z_trescia), config.MIN_ZRODEL_DO_PISANIA,
+                 _pierwotnych, config.MIN_PRIMARY_SOURCES), flush=True)
+        # Odsiew po HOSCIE, nie po URL — tak jak w `run.py`. Po samym URL-u ten
+        # sam serwis wchodzil drugi raz pod innym adresem i druga runda oddawala
+        # to, co juz bylo.
+        juz = {c.get("host") or c.get("url", "") for c in corpus}
         dodatkowe = [s for s in stages.discovery(conn, run_id,
-                                                 pytanie_do_researchu, recent)
-                     if s.get("url") not in juz]
+                                                 pytanie_do_researchu, recent,
+                                                 tylko_pierwotne=_bez_rekordow)
+                     if (s.get("host") or s.get("url", "")) not in juz]
         if dodatkowe:
             corpus = corpus + stages.fetch(conn, run_id, dodatkowe)
 

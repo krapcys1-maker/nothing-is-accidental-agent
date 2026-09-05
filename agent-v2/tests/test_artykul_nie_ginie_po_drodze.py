@@ -223,8 +223,17 @@ class AtrapaStages:
         return len(kandydaci)
 
     # --- research (uzywane tylko w sekcji 5) --------------------------------
-    def discovery(self, conn, run_id, pytanie, recent):
-        return [{"url": "https://example.org/a"}]
+    # `**k` zamiast wyliczonych argumentow — z tego samego powodu, co przy
+    # `lap` nizej: atrapa ma przezyc dolozenie parametru, a nie wywalic sie
+    # TypeError-em w cudzej sekcji. Tak padl ten test po naprawie M6.
+    #
+    # Przy okazji ZAPISUJE, o co druga runda poprosila. Atrapa `fetch` oddaje
+    # cztery zrodla BEZ `class`, czyli dokladnie sytuacje, dla ktorej M6
+    # istnieje: korpus pelny i bezwartosciowy. Druga runda ma wtedy zazadac
+    # samych rekordow.
+    def discovery(self, conn, run_id, pytanie, recent, **k):
+        DYSKOVERIE.append(k)
+        return [{"url": "https://example.org/a", "host": "example.org"}]
 
     def fetch(self, conn, run_id, sources):
         return [{"url": "https://example.org/%d" % i, "text": "tresc"}
@@ -636,6 +645,8 @@ FAKT_Z_PULI = {
 
 # Ostatni `evidence` podany do `_napisz_i_zapisz` — patrz sekcja o banku.
 ZLAPANY_MATERIAL: list = []
+# Argumenty nazwane kazdego wywolania `discovery` — patrz sekcja 10.
+DYSKOVERIE: list = []
 
 
 def przebieg_do_karty(brief, karta=None, fakt=None):
@@ -874,6 +885,20 @@ sprawdz("_napisz_i_zapisz dostalo material",
 sprawdz("i jest to DOKLADNIE to, co oddal classify",
         [z.get("url") for z in (ZLAPANY_MATERIAL[0] or [])]
         == ["https://klasyfikacja.example/a"], ZLAPANY_MATERIAL[0])
+
+print()
+print("=== 10. KORPUS PELNY I BEZWARTOSCIOWY WOLA O REKORDY (M6) ===")
+# Atrapa `fetch` oddaje cztery zrodla z trescia i BEZ ani jednego `PRIMARY`.
+# Warunek liczacy same sztuki widzi „cztery, czyli dosc" i nie robi nic —
+# a pisarz dostaje cztery teksty O dokumencie i ani jednego dokumentu.
+DYSKOVERIE.clear()
+przebieg_do_karty(BRIEF)
+sprawdz("druga runda w ogole odpalila", len(DYSKOVERIE) >= 2, len(DYSKOVERIE))
+sprawdz("pierwsza runda pyta szeroko",
+        DYSKOVERIE and not DYSKOVERIE[0].get("tylko_pierwotne"), DYSKOVERIE[:1])
+sprawdz("druga zada SAMYCH zrodel pierwotnych",
+        len(DYSKOVERIE) >= 2 and DYSKOVERIE[1].get("tylko_pierwotne") is True,
+        DYSKOVERIE[1:2])
 
 karta = przebieg_do_karty(dict(BRIEF, zrodlo_faktu=""))
 sprawdz("KONTRDOWOD: bez zrodla fakt nie wchodzi do karty",

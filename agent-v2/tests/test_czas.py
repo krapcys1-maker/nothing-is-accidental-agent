@@ -128,7 +128,12 @@ podstawka.write_text(
     "config.uzyj_katalogu_danych(pathlib.Path(%r))\n" % str(kat) +
     "oryg = db.connect\n"
     "db.connect = lambda path=None: oryg(pathlib.Path(%r))\n" % str(baza) +
-    "run.dzien = lambda conn, run_id, wyslij: time.sleep(600)\n"
+    # `*a` — atrapa ma przezyc dolozenie argumentu do `dzien`. Nie przezyla:
+    # `--poza-oknem` (commit 8c6ce11) dolozylo czwarty, a ta linia zostala
+    # z trzema. Test mierzyl wtedy TypeError zamiast reakcji na SIGTERM, ale
+    # zdawal 20 z 21 asercji — wiec wygladal na „znana porazke windowsowa"
+    # i przez to nie byl czytany.
+    "run.dzien = lambda conn, run_id, *a: time.sleep(600)\n"
     "run._summary = lambda *a, **k: None\n"
     "sys.argv = ['run.py', '--dzien']\n"
     "sys.exit(run.main())\n", encoding="utf-8")

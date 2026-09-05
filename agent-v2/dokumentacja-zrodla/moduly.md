@@ -573,7 +573,7 @@
 
 ### `artykul_z_puli.py` — artykuł bierze temat z tej samej puli, co notki
 
-1526 wierszy, 14 funkcji na poziomie modułu, 0 klas
+1555 wierszy, 14 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
