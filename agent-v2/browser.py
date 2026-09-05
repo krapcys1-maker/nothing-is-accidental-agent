@@ -4477,6 +4477,52 @@ def zapomnij_platny_host(host: str) -> None:
 PAMIEC_MARTWYCH_HOSTOW_DNI = 14
 
 
+def adresy_gdzie_juz_komentowalismy() -> set[str]:
+    """Adresy wpisow, pod ktorymi nasz komentarz JUZ stoi — do odsiania PRZED ocena.
+
+    TRZECIE SITO TEJ SAMEJ RODZINY, po platnych hostach i hostach bez wejscia.
+    Wszystkie trzy odpowiadaja na to samo pytanie: czy warto placic za ocene
+    celu, o ktorym z wlasnego dziennika juz wiemy, ze nic z niego nie bedzie.
+
+    CO SIE DZIALO. `juz_sie_odezwalismy` bylo pytane dopiero w
+    `wystaw_komentarz`, czyli PO ocenie celu, PO napisaniu komentarza i PO
+    sprawdzeniu faktow — a wiec po trzech platnych wywolaniach. Zewnetrzna
+    analiza segmentu komentarzy (5 wrzesnia 2026) zmierzyla 15 takich celow:
+    napisanych, sprawdzonych i porzuconych na progu, bo pod tym adresem juz
+    staliśmy. Drugi komentarz pod tym samym tekstem to podpis bota, wiec
+    porzucenie jest sluszne — tylko za pozno.
+
+    Ta odpowiedz jest DARMOWA: dziennik zapisuje adres kazdego udanego
+    komentarza od poczatku i wystarczy go przeczytac. Sprawdzenie w
+    przegladarce zostaje jako druga siatka, bo dziennik nie wie o komentarzach
+    wystawionych recznie przez wlasciciela.
+
+    `gdzie_komentowalismy.json` tego nie zalatwia: trzyma PUBLIKACJE (host),
+    nie adres wpisu, i sluzy do rozstawiania komentarzy w czasie, a nie do
+    pytania „czy juz tu bylem".
+    """
+    import json as _json
+    out: set[str] = set()
+    try:
+        with DZIENNIK.open(encoding="utf-8", errors="replace") as f:
+            for linia in f:
+                linia = linia.strip()
+                if not linia or '"komentarz"' not in linia:
+                    continue
+                try:
+                    w = _json.loads(linia)
+                except ValueError:
+                    continue
+                if w.get("rodzaj") != "komentarz" or not w.get("udane"):
+                    continue
+                url = str(w.get("gdzie") or "").strip()
+                if url:
+                    out.add(url.split("?")[0].rstrip("/"))
+    except Exception:
+        return set()
+    return out
+
+
 def hosty_gdzie_komentarz_nie_wchodzi(min_prob: int = 2,
                                       dni: int = PAMIEC_MARTWYCH_HOSTOW_DNI) -> set[str]:
     """Hosty, gdzie w ostatnich `dni` dniach probowalismy >=2 razy i ANI RAZ

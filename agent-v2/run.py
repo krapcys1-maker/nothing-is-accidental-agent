@@ -1433,6 +1433,21 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
     # sobie miec nie moga: tylko ten blok wie, ze chodzi o artykuly.
     @stages._na_kanal("komentarz@artykul")
     def komentarze() -> None:
+        # PRZYDZIAL ZERO ZNACZY: NIE ZACZYNAJ.
+        #
+        # `na_teraz["komentarze"]` bylo czytane dopiero PO `wybierz_cele` —
+        # w petli dobierania i przy `cele[:na_teraz["komentarze"]]`. Przy
+        # przydziale zero przebieg budowal pule, uruchamial przegladarke,
+        # placil za OCENE CELOW i konczyl na pustym wycinku, nie piszac ani
+        # slowa. Zewnetrzna analiza segmentu komentarzy (5 wrzesnia 2026)
+        # zmierzyla cztery takie przebiegi.
+        #
+        # `wybierz_cele` to 0,5326 USD tygodnia, wiec to nie jest grosz — ale
+        # wazniejsze, ze przebieg wygladal w logu na pracujacy.
+        if na_teraz["komentarze"] <= 0:
+            print("  przydzial komentarzy na ten przebieg: 0 — nie oceniam"
+                  " celow", flush=True)
+            return
         # NOWE KONTA NAJPIERW. Kanal czytelnika pokazuje wylacznie to, co juz
         # znamy — jedenascie publikacji, ktore same z siebie nikogo nowego nie
         # przyprowadza. Wyszukiwarka Substacka oddaje ludzi spoza kregu, i to
@@ -1509,6 +1524,27 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
                 print("  [cele] odsiane hosty bez wejscia komentarza: %d z %d"
                       " (%s)" % (przed - len(unikalne), przed,
                                  ", ".join(wyciete[:6])), flush=True)
+
+        # I TRZECIE SITO: ADRESY, POD KTORYMI JUZ STOIMY.
+        #
+        # `juz_sie_odezwalismy` bylo pytane dopiero w `wystaw_komentarz`, czyli
+        # PO ocenie celu, PO napisaniu komentarza i PO sprawdzeniu faktow — trzy
+        # platne wywolania na tekst, ktory i tak nie wyjdzie. Zewnetrzna analiza
+        # segmentu komentarzy (5 wrzesnia 2026) zmierzyla 15 takich celow.
+        #
+        # Odpowiedz jest darmowa: dziennik zapisuje adres kazdego udanego
+        # komentarza od poczatku. Sprawdzenie w przegladarce ZOSTAJE jako druga
+        # siatka — dziennik nie wie o komentarzach wystawionych recznie przez
+        # wlasciciela, a drugi komentarz pod tym samym tekstem to podpis bota.
+        stali = browser.adresy_gdzie_juz_komentowalismy()
+        if stali:
+            przed = len(unikalne)
+            unikalne = [x for x in unikalne
+                        if str(x.get("url", "")).split("?")[0].rstrip("/")
+                        not in stali]
+            if przed != len(unikalne):
+                print("  [cele] odsiane adresy, pod ktorymi juz stoimy: %d z %d"
+                      % (przed - len(unikalne), przed), flush=True)
 
         cele = stages.wybierz_cele(conn, run_id, unikalne)
 

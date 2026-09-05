@@ -172,6 +172,11 @@ def swiat(slad, martwe_hosty, czekajace=()):
         komentarze_pod_artykulami=lambda: [],
         odpowiedzi_na_nasze_komentarze=lambda: [],
         hosty_tylko_dla_placacych=lambda: set(),
+        # TRZECIE SITO TEJ SAMEJ RODZINY, dolozone 5 wrzesnia 2026:
+        # adresy, pod ktorymi juz stoimy, odsiewane PRZED platna
+        # ocena celu. Atrapa oddaje pusty zbior, czyli „nic nie
+        # odsiewaj" — badamy tu co innego.
+        adresy_gdzie_juz_komentowalismy=lambda: set(),
         hosty_gdzie_komentarz_nie_wchodzi=lambda: set(martwe_hosty),
         mozna_komentowac=lambda url: True,
         read_pages=lambda urls: [{"url": u, "title": "t", "text": "tresc"}
@@ -235,6 +240,12 @@ def swiat(slad, martwe_hosty, czekajace=()):
         wybierz_do_odpowiedzi=lambda conn, run_id, lista: list(lista),
         reply_to=lambda conn, run_id, co, ctx: {
             "candidates": [{"reply": "Krotka odpowiedz na zarzut."}]},
+        # BLOK „zalegly artykul" CHODZI W KAZDYM PRZEBIEGU i pyta o to stages.
+        # Wczesniej wyjatek z tej atrapy byl polykany przez `blok()`, wiec test
+        # przechodzil, nie badajac tego bloku wcale. Odsloniete 5 wrzesnia 2026
+        # przy dokladaniu trzeciego sita: `komentarze()` zaczely konczyc sie
+        # wczesniej i przebieg dochodzil dalej.
+        niewystawiony_artykul=lambda: None,
     )
 
     kat = pathlib.Path(tempfile.mkdtemp())

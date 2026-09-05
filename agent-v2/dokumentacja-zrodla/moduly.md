@@ -1,7 +1,7 @@
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-2997 wierszy, 27 funkcji na poziomie modułu, 1 klas
+3033 wierszy, 27 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -190,7 +190,7 @@
 
 ### `browser.py` — cała styczność z Substackiem; nie woła modelu
 
-5255 wierszy, 97 funkcji na poziomie modułu, 0 klas
+5301 wierszy, 98 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -280,6 +280,7 @@
 | `zapamietaj_platny_host(host, prawo)` | Host, ktory wprost mowi, ze komentowac moga tylko placacy. |
 | `hosty_tylko_dla_placacych()` | Hosty, gdzie komentowac moga tylko placacy — do odsiania PRZED ocena. |
 | `zapomnij_platny_host(host)` | Udany komentarz kasuje host z listy — wydawca mogl zmienic ustawienia. |
+| `adresy_gdzie_juz_komentowalismy()` | Adresy wpisow, pod ktorymi nasz komentarz JUZ stoi — do odsiania PRZED ocena. |
 | `hosty_gdzie_komentarz_nie_wchodzi(min_prob, dni)` | Hosty, gdzie w ostatnich `dni` dniach probowalismy >=2 razy i ANI RAZ |
 | `mozna_komentowac(url)` | Czy pod tym tekstem wolno nam w ogóle napisać. |
 | `uchwyt_publikacji(host)` | Nazwa konta do obserwowania — z hosta albo, gdy trzeba, z API. |

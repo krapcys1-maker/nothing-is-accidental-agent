@@ -339,6 +339,9 @@ def swiat_dnia(slad, st):
         odpowiedzi_na_nasze_komentarze=lambda: [],
         hosty_tylko_dla_placacych=lambda: set(),
         hosty_gdzie_komentarz_nie_wchodzi=lambda: set(),
+        # TRZECIE SITO TEJ SAMEJ RODZINY (5 wrzesnia 2026): adresy, pod
+        # ktorymi juz stoimy, odsiewane PRZED platna ocena celu.
+        adresy_gdzie_juz_komentowalismy=lambda: set(),
         mozna_komentowac=lambda url: True,
         read_pages=lambda urls: [{"url": u, "title": "Kto podpisuje wyjatek",
                                   "text": "tresc cudzego posta"} for u in urls],
@@ -439,6 +442,13 @@ def dzien(wersja, pada_na, fabryka):
         rn.config = Konfig(KAT)
         rn.ile_przebiegow_zostalo = lambda conn: 1
         rn.zmiesci_sie = lambda rodzaj, ile, udzial=1.0: ile
+        # PRZYDZIAL KOMENTARZY MUSI BYC NIEZEROWY. Od 5 wrzesnia 2026
+        # `komentarze()` konczy sie na wejsciu, gdy przydzial wynosi zero
+        # — wczesniej budowal pule i placil za OCENE CELOW, po czym nie
+        # pisal ani slowa (zmierzone: cztery takie przebiegi). Ten test
+        # bada zachowanie przy pustym BUDZECIE, a nie przy zerowym
+        # przydziale, wiec przydzial ustawiamy wprost.
+        rn.zmiesci_sie = lambda rodzaj, ile, udzial=1.0: max(int(ile), 2)
         # `potrzeba_s > 0` pyta wylacznie ozdobna zwloka przed pierwsza notka
         # (`config.ZWLOKA_PRZED_NOTKAMI`, do ~34 minut `time.sleep`). Produkcja
         # ja pomija, gdy sie nie miesci w czasie — my mowimy, ze nigdy sie nie

@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **25 plików**, 31 718 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **25 plików**, 31 800 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -113,8 +113,8 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 > w głównej ścieżce artykułu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
-się testować bez przeglądarki i bez pieniędzy**. 136 zestawów
-testów, 3784 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+się testować bez przeglądarki i bez pieniędzy**. 137 zestawów
+testów, 3799 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -143,7 +143,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-2997 wierszy, 27 funkcji na poziomie modułu, 1 klas
+3033 wierszy, 27 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -332,7 +332,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `browser.py` — cała styczność z Substackiem; nie woła modelu
 
-5255 wierszy, 97 funkcji na poziomie modułu, 0 klas
+5301 wierszy, 98 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -422,6 +422,7 @@ wiec nie da sie go rozjechac z kodem.
 | `zapamietaj_platny_host(host, prawo)` | Host, ktory wprost mowi, ze komentowac moga tylko placacy. |
 | `hosty_tylko_dla_placacych()` | Hosty, gdzie komentowac moga tylko placacy — do odsiania PRZED ocena. |
 | `zapomnij_platny_host(host)` | Udany komentarz kasuje host z listy — wydawca mogl zmienic ustawienia. |
+| `adresy_gdzie_juz_komentowalismy()` | Adresy wpisow, pod ktorymi nasz komentarz JUZ stoi — do odsiania PRZED ocena. |
 | `hosty_gdzie_komentarz_nie_wchodzi(min_prob, dni)` | Hosty, gdzie w ostatnich `dni` dniach probowalismy >=2 razy i ANI RAZ |
 | `mozna_komentowac(url)` | Czy pod tym tekstem wolno nam w ogóle napisać. |
 | `uchwyt_publikacji(host)` | Nazwa konta do obserwowania — z hosta albo, gdy trzeba, z API. |

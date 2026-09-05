@@ -621,6 +621,11 @@ def _swiat():
         komentarze_pod_artykulami=lambda: [],
         odpowiedzi_na_nasze_komentarze=lambda: [],
         hosty_tylko_dla_placacych=lambda: set(),
+        # TRZECIE SITO TEJ SAMEJ RODZINY, dolozone 5 wrzesnia 2026:
+        # adresy, pod ktorymi juz stoimy, odsiewane PRZED platna
+        # ocena celu. Atrapa oddaje pusty zbior, czyli „nic nie
+        # odsiewaj" — badamy tu co innego.
+        adresy_gdzie_juz_komentowalismy=lambda: set(),
         hosty_gdzie_komentarz_nie_wchodzi=lambda: set(),
         mozna_komentowac=lambda url: True,
         read_pages=lambda urls: [{"url": u, "title": "t", "text": "tresc"}
