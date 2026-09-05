@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **25 plików**, 32 152 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **25 plików**, 32 191 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -113,8 +113,8 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 > w głównej ścieżce artykułu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
-się testować bez przeglądarki i bez pieniędzy**. 142 zestawów
-testów, 3879 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+się testować bez przeglądarki i bez pieniędzy**. 143 zestawów
+testów, 3889 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -177,7 +177,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-8974 wierszy, 151 funkcji na poziomie modułu, 0 klas
+9013 wierszy, 151 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -7384,12 +7384,34 @@ def bramka_kandydata(k: dict[str, Any]) -> tuple[bool, str]:
     if len(decyzja.split()) < 6:
         return False, ("mechanizm wskazany gestem, nie opisany: %r"
                        % decyzja[:60])
-    # I jawne przyznanie, ze mechanizmu nie ma. Dluga wersja „nikogo tu nie ma"
-    # przeszlaby przez sam prog dlugosci.
-    if re.search(r"\b(nobody|no one|nothing|not decided by anyone|"
-                 r"nikt|nie zdecydowal)\b", decyzja, re.I):
-        return False, ("nikt tego nie sprawil — to zjawisko, nie mechanizm: %r"
-                       % decyzja[:60])
+    # ZAPRZECZENIE NIE JEST TU JUZ POWODEM ODRZUCENIA — i to jest poprawka
+    # z 5 wrzesnia 2026, zrobiona na dowodzie z produkcji.
+    #
+    # Stala tu regula odrzucajaca `decision` zawierajaca „nobody", „no one",
+    # „nothing", „nikt". Zadzialala w calej historii DOKLADNIE RAZ i byl to
+    # falszywy alarm, ktory kosztowal mocny fakt na zawsze:
+    #
+    #   fakt:     OpenAI agents used ordinary public wikis as a message board
+    #             during a web-research benchmark, May-June 2026
+    #   decision: „No one designed a wiki-message-board behaviour; it emerged
+    #             from agents that had web access, and OpenAI shut the activity
+    #             down around 22 June."
+    #
+    # To JEST mechanizm — emergencja u agentow z dostepem do sieci — i do tego
+    # nazwana decyzja z data. Odrzucenie jest OSTATECZNE, a poprawione wersje
+    # tego samego faktu sa od tej pory pomijane jako powtorka odrzuconego.
+    # Jeden falszywy alarm zamknal wiec temat na stale.
+    #
+    # Komentarz przy progu dlugosci mowi to zreszta wprost, na podstawie
+    # wczesniejszego pomiaru: lista slow kluczowych probowana DWA RAZY i ani
+    # razu nie rozdzielila mechanizmu od gestu. Dolozylem ja mimo to, na
+    # przeczucie „dluga wersja »nikogo tu nie ma« przejdzie przez prog" —
+    # przypadku, ktorego nie zaobserwowano ANI RAZU.
+    #
+    # LUKA JEST ZAMKNIETA GDZIE INDZIEJ, przy sedzim banku: kod nie wetuje juz
+    # werdyktu NO_MECHANISM, gdy `decision` zawiera zaprzeczenie. Przy takim
+    # zdaniu sama dlugosc nie rozstrzyga, wiec ocene oddajemy modelowi zamiast
+    # rozstrzygac ja slowem kluczowym.
     # WYMOG ROKU ZNIESIONY 30 sierpnia 2026, po dwoch nieudanych probach
     # zwezenia go — i to jest lekcja o metodzie, nie o tej jednej regule.
     #

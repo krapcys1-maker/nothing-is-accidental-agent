@@ -7284,12 +7284,34 @@ def bramka_kandydata(k: dict[str, Any]) -> tuple[bool, str]:
     if len(decyzja.split()) < 6:
         return False, ("mechanizm wskazany gestem, nie opisany: %r"
                        % decyzja[:60])
-    # I jawne przyznanie, ze mechanizmu nie ma. Dluga wersja „nikogo tu nie ma"
-    # przeszlaby przez sam prog dlugosci.
-    if re.search(r"\b(nobody|no one|nothing|not decided by anyone|"
-                 r"nikt|nie zdecydowal)\b", decyzja, re.I):
-        return False, ("nikt tego nie sprawil — to zjawisko, nie mechanizm: %r"
-                       % decyzja[:60])
+    # ZAPRZECZENIE NIE JEST TU JUZ POWODEM ODRZUCENIA — i to jest poprawka
+    # z 5 wrzesnia 2026, zrobiona na dowodzie z produkcji.
+    #
+    # Stala tu regula odrzucajaca `decision` zawierajaca „nobody", „no one",
+    # „nothing", „nikt". Zadzialala w calej historii DOKLADNIE RAZ i byl to
+    # falszywy alarm, ktory kosztowal mocny fakt na zawsze:
+    #
+    #   fakt:     OpenAI agents used ordinary public wikis as a message board
+    #             during a web-research benchmark, May-June 2026
+    #   decision: „No one designed a wiki-message-board behaviour; it emerged
+    #             from agents that had web access, and OpenAI shut the activity
+    #             down around 22 June."
+    #
+    # To JEST mechanizm — emergencja u agentow z dostepem do sieci — i do tego
+    # nazwana decyzja z data. Odrzucenie jest OSTATECZNE, a poprawione wersje
+    # tego samego faktu sa od tej pory pomijane jako powtorka odrzuconego.
+    # Jeden falszywy alarm zamknal wiec temat na stale.
+    #
+    # Komentarz przy progu dlugosci mowi to zreszta wprost, na podstawie
+    # wczesniejszego pomiaru: lista slow kluczowych probowana DWA RAZY i ani
+    # razu nie rozdzielila mechanizmu od gestu. Dolozylem ja mimo to, na
+    # przeczucie „dluga wersja »nikogo tu nie ma« przejdzie przez prog" —
+    # przypadku, ktorego nie zaobserwowano ANI RAZU.
+    #
+    # LUKA JEST ZAMKNIETA GDZIE INDZIEJ, przy sedzim banku: kod nie wetuje juz
+    # werdyktu NO_MECHANISM, gdy `decision` zawiera zaprzeczenie. Przy takim
+    # zdaniu sama dlugosc nie rozstrzyga, wiec ocene oddajemy modelowi zamiast
+    # rozstrzygac ja slowem kluczowym.
     # WYMOG ROKU ZNIESIONY 30 sierpnia 2026, po dwoch nieudanych probach
     # zwezenia go — i to jest lekcja o metodzie, nie o tej jednej regule.
     #
@@ -8505,7 +8527,24 @@ def posortuj_bank(conn: sqlite3.Connection, run_id: int | None = None,
                       % (kod or str(o.get("powod_wyrzucenia"))[:60]))
         elif kod == "NO_MECHANISM":
             decyzja = str(wolni[i].get("decision") or "").strip()
-            if len(decyzja.split()) >= 6:
+            # WETO NIE OBEJMUJE ZDAN Z ZAPRZECZENIEM — poprawka z 5 wrzesnia
+            # 2026, para do zdjecia tej samej reguly z `bramka_kandydata`.
+            #
+            # Przy „nobody / no one / nikt" sama DLUGOSC nie rozstrzyga: tak
+            # samo dlugie moze byc „No one designed it; it emerged from agents
+            # with web access, and OpenAI shut it down" (mechanizm JEST) oraz
+            # „Nobody made this decision, it is simply how the world works and
+            # nobody chose it" (mechanizmu NIE MA). Kod nie umie ich rozdzielic
+            # — probowalem listy slow dwa razy i ani razu nie rozdzielila —
+            # wiec w tym jednym przypadku nie wetuje modelu.
+            #
+            # Poza zaprzeczeniem weto ZOSTAJE: tam pomiar dlugosci jest
+            # rzetelny i kod nie ma powodu wierzyc opisowi wbrew wlasnemu
+            # sprawdzeniu.
+            _zaprzeczenie = re.search(
+                r"\b(nobody|no one|nothing|not decided by anyone|"
+                r"nikt|nie zdecydowal)\b", decyzja, re.I)
+            if len(decyzja.split()) >= 6 and not _zaprzeczenie:
                 odmowa = ("NO_MECHANISM, a mechanizm jest opisany: %r"
                           % decyzja[:70])
         if odmowa:
