@@ -8181,7 +8181,12 @@ def posortuj_bank(conn: sqlite3.Connection, run_id: int | None = None,
     # dostaje rangi — a liczona razem z reszta sprawialaby, ze „jest co
     # rankowac" jest prawdziwe zawsze i caly ten warunek nie robilby nic.
     wolni = wolni[:ile]
-    bez_rangi = [k for k in wolni if not k.get("ranga")]
+    # `is None`, NIE FALSZYWOSC. `ranga` liczy sie od ZERA, wiec wpis
+    # najlepszy w partii ma range 0 — a `not 0` jest prawdziwe. Pierwsza
+    # wersja tego warunku uznawala wiec czolowego kandydata za nierankowanego
+    # i wolala sedziego przy KAZDYM przebiegu, czyli nie robila nic.
+    # Zlapane zywym przebiegiem na produkcji, nie odczytem kodu.
+    bez_rangi = [k for k in wolni if k.get("ranga") is None]
     if not bez_rangi:
         print("  [bank] wszystkie %d rozwazanych ma juz range — nie rankuje"
               " ponownie" % len(wolni), flush=True)
@@ -8401,6 +8406,23 @@ def posortuj_bank(conn: sqlite3.Connection, run_id: int | None = None,
                            for kk, v in sorted(_rozklad.items())),
                  _braki, _szukal, len(wolni)),
               flush=True)
+    # KAZDY ROZWAZANY WYCHODZI Z RANGA — inaczej ten przebieg nie jest
+    # domkniety. Model potrafi oddac kolejnosc KROTSZA niz partia (zmierzone na
+    # zywo: 11 pozycji na 12 wyslanych). Pominiety wpis zostawal bez rangi na
+    # zawsze i przy nastepnym przebiegu znowu wlaczal ranking — czyli
+    # oszczednosc z tego warunku bylaby zerowa, a wygladalaby na dzialajaca.
+    #
+    # Pominiete ida na KONIEC kolejki, nie na poczatek: model ich nie wybral,
+    # wiec nie ma powodu stawiac ich przed tymi, ktore ocenil.
+    _dol = len(kolejnosc)
+    for k in wolni:
+        if k.get("ranga") is None:
+            k["ranga"] = _dol
+            _dol += 1
+    if _dol > len(kolejnosc):
+        print("  [bank] %d wpisow model pominal w kolejnosci — ida na koniec"
+              % (_dol - len(kolejnosc)), flush=True)
+
     if scietych:
         # GLOSNO. Sufit, ktory tnie po cichu, wyglada jak ocena modelu.
         print("  [bank] znacznik artykulowy: zostawiam %d (sufit %d z %d), "

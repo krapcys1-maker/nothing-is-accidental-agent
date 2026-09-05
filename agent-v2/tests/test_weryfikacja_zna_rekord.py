@@ -157,6 +157,19 @@ try:
             _wolania == [], _wolania)
     sprawdz("i melduje, ze pominal", _w.get("pominiete") == 6, _w)
 
+    # RANGA ZERO TO TEZ RANGA. `ranga` liczy sie od zera, wiec czolowy wpis
+    # partii ma 0 — a `not 0` jest prawdziwe. Pierwsza wersja tego warunku
+    # sprawdzala falszywosc i uznawala najlepszego kandydata za
+    # nierankowanego, wiec wolala sedziego przy KAZDYM przebiegu i nie
+    # oszczedzala niczego. Zlapane zywym przebiegiem, nie odczytem kodu.
+    stages.wczytaj_indeks = lambda: [
+        {"status": "nowy", "kiedy": "2099-01-01", "fact": "f%d" % i,
+         "ranga": i} for i in range(6)]          # <- pierwszy ma range 0
+    _wolania.clear()
+    _w0 = stages.posortuj_bank(None, None)
+    sprawdz("ranga 0 liczy sie jako nadana", _wolania == [], _wolania)
+    sprawdz("i partia jest pominieta", _w0.get("pominiete") == 6, _w0)
+
     # KONTRDOWOD: dolozenie JEDNEGO wpisu bez rangi ma ranking wlaczyc.
     stages.wczytaj_indeks = lambda: [
         {"status": "nowy", "kiedy": "2099-01-01", "fact": "f%d" % i,
@@ -218,6 +231,14 @@ sprawdz("run.py odhacza fakt w indeksie po publikacji",
         "stages.oznacz_uzyty(n[\"fakt\"])" in _run)
 sprawdz("i robi to obok zapisz_zuzyte, nie zamiast",
         "stages.zapisz_zuzyte([n[\"fakt\"]])" in _run)
+
+# KAZDY ROZWAZANY MA WYJSC Z RANGA. Model potrafi oddac kolejnosc KROTSZA niz
+# partia — zmierzone na zywo: 11 pozycji na 12 wyslanych. Pominiety wpis
+# zostawal bez rangi na zawsze i przy nastepnym przebiegu znowu wlaczal
+# ranking, wiec oszczednosc z warunku wyzej bylaby zerowa.
+sprawdz("pominiete przez model dostaja range na koncu kolejki",
+        "_dol = len(kolejnosc)" in _zr_bank
+        and 'k["ranga"] = _dol' in _zr_bank)
 
 print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))
