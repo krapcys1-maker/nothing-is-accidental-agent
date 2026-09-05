@@ -1431,8 +1431,34 @@ def _nowe_wydarzenia(
     return nowe, znane
 
 
+def faktow_o_wydarzeniu(wydarzenie: dict[str, Any],
+                        fakty: list[dict[str, Any]]) -> int:
+    """Ile z tych faktow dotyczy TEGO wydarzenia.
+
+    Porownanie po rdzeniach zdarzenia (`o_czym`) w calej tresci kandydata —
+    fakcie, przekonaniu, sprostowaniu i dziedzinie. Prog to dwa trafienia, a
+    przy zdarzeniu opisanym jednym slowem — jedno.
+
+    Ta sama arytmetyka stala wczesniej WYLACZNIE przy premierze. Wydarzenie
+    inne niz premiera dostawalo `len(fakty)`, czyli liczbe WSZYSTKICH faktow
+    z partii — patrz `_zapamietaj_wydarzenia`.
+    """
+    tok = [str(x).lower() for x in (wydarzenie.get("o_czym") or [])[:4]]
+    if not tok:
+        return 0
+    prog = min(2, len(tok))
+    ile = 0
+    for f in fakty:
+        tresc = " ".join(str(f.get(k) or "") for k in
+                         ("fact", "wrong_belief", "actually", "domain")).lower()
+        if sum(1 for t in tok if t in tresc) >= prog:
+            ile += 1
+    return ile
+
+
 def _zapamietaj_wydarzenia(nowe: list[dict[str, Any]],
-                           znane: dict[str, Any], ile: int) -> None:
+                           znane: dict[str, Any],
+                           fakty: list[dict[str, Any]]) -> None:
     """Zapisuje, ze o tych zdarzeniach material JUZ WROCIL.
 
     `ile` to liczba faktow, ktore weszly do indeksu. Zapisujemy ja razem z
@@ -1446,6 +1472,18 @@ def _zapamietaj_wydarzenia(nowe: list[dict[str, Any]],
     from datetime import datetime, timezone
     dzis = datetime.now(timezone.utc).date().isoformat()
     for w in nowe:
+        # LICZBA OSOBNO DLA KAZDEGO WYDARZENIA — patrz `faktow_o_wydarzeniu`.
+        #
+        # Wczesniej szla tu JEDNA liczba na cala partie i byla to albo
+        # `len(fakty)` (kazde wydarzenie prócz premiery), albo liczba faktow
+        # o PREMIERZE — podstawiana rowniez pod wszystkie pozostale zdarzenia.
+        # Wydarzenie moglo wiec zostac zamkniete materialem na zupelnie inny
+        # temat.
+        #
+        # ZMIERZONE NA PRODUKCJI: `astra,gpt-6` (nie premiera, mowia o nim
+        # cztery kanaly) zapisano 3 wrzesnia 2026 jako obsluzone z `ile: 2`,
+        # gdzie dwojka byla liczba WSZYSTKICH faktow tamtego przebiegu.
+        ile = faktow_o_wydarzeniu(w, fakty or [])
         klucz = _rdzen_wydarzenia(w)
         stary = znane.get(klucz)
         proby = int(stary.get("proby") or 0) if isinstance(stary, dict) else 0
@@ -1941,7 +1979,9 @@ def znajdz_ciekawostki(
         # przy ktorym szukanie pada w kolko, otwieraloby furtke przy kazdym
         # z pieciu przebiegow dziennie — bez konca i bez sladu.
         if nowe_wyd:
-            _zapamietaj_wydarzenia(nowe_wyd, znane_wyd, 0)
+            # PUSTA LISTA, NIE ZERO. Liczba powstaje teraz osobno dla
+            # kazdego wydarzenia; brak faktow to brak faktow.
+            _zapamietaj_wydarzenia(nowe_wyd, znane_wyd, [])
         return []
     fakty = [f for f in fakty if f.get("fact") and f.get("url")]
 
@@ -2050,41 +2090,33 @@ def znajdz_ciekawostki(
     # przegrane na tym, ze regula siedziala w prompcie, a nikt jej nie liczyl.
     # Ta galaz NICZEGO NIE ODRZUCA — nic sie nie wycina — tylko wypisuje pomiar,
     # zeby nastepny przeglad czytal przyrzad zamiast zrodla.
-    # Domyslnie: ile faktow w ogole wrocilo. Gdy w partii jest PREMIERA,
-    # podstawiamy nizej liczbe faktow O NIEJ — bo to ona rozstrzyga, czy
-    # wydarzenie zostalo obsluzone.
-    _ile_o_wydarzeniu = len(fakty)
-    _prem = next((w for w in nowe_wyd if w.get("premiera")), None)
-    if _prem:
-        _tok = [str(x).lower() for x in (_prem.get("o_czym") or [])[:4]]
-        _prog = min(2, len(_tok)) or 1
-        _ile_prem = sum(
-            1 for f in fakty
-            if sum(1 for t in _tok if t in " ".join(
-                str(f.get(k) or "") for k in
-                ("fact", "wrong_belief", "actually", "domain")).lower()) >= _prog)
-        print("  [premiera] %s — faktow o tej premierze: %d z %d (zamowiono 1)"
-              % (", ".join(_tok), _ile_prem, len(fakty)), flush=True)
-        # TA LICZBA IDZIE DO BRAMKI, a nie `len(fakty)` — poprawione
-        # 3 wrzesnia 2026 wieczorem.
-        #
-        # ZMIERZONE, ILE TO KOSZTOWALO. Pamiec wydarzen miala wpis:
-        #     "5.1,fable": {"kiedy": "2026-09-02", "ile": 5, "proby": 0}
-        # czyli premiera Fable 5.1 — modelu, ktorym SAMI piszemy artykuly —
-        # byla uznana za obsluzona piecioma faktami. Te piec faktow bylo o
-        # OpenAI i SpaceX, kontroli eksportu BIS, modelu Astra i Apple Siri.
-        # Ani jedno slowo o Fable. W banku nie ma o nim ANI JEDNEGO faktu,
-        # a na koncie nie wyszla ANI JEDNA notka.
-        #
-        # Przyczyna byla jednym slowem: do `_zapamietaj_wydarzenia` szlo
-        # `len(fakty)`, czyli ile faktow w ogole wrocilo z wyszukiwania.
-        # Kazde niepuste wyszukiwanie zamykalo wiec KAZDE czekajace
-        # wydarzenie, niezaleznie od tego, czego dotyczylo. `_ile_prem` bylo
-        # liczone linijke wyzej i tylko drukowane.
-        #
-        # To ta sama klasa, co „nieudana publikacja ksiegowana jako sukces":
-        # dowod istnial, byl wypisany na ekran i nie zostal uzyty do decyzji.
-        _ile_o_wydarzeniu = _ile_prem
+    # POMIAR DLA KAZDEGO NOWEGO WYDARZENIA, nie tylko dla premiery.
+    #
+    # ZMIERZONE, ILE KOSZTOWALA PIERWSZA WERSJA. Pamiec wydarzen miala wpis:
+    #     "5.1,fable": {"kiedy": "2026-09-02", "ile": 5, "proby": 0}
+    # czyli premiera Fable 5.1 — modelu, ktorym SAMI piszemy artykuly — byla
+    # uznana za obsluzona piecioma faktami. Te piec bylo o OpenAI i SpaceX,
+    # kontroli eksportu BIS, modelu Astra i Apple Siri. Ani jedno slowo o
+    # Fable; w banku nie bylo o nim ANI JEDNEGO faktu, a na koncie ANI JEDNEJ
+    # notki. Przyczyna: do `_zapamietaj_wydarzenia` szlo `len(fakty)`, wiec
+    # kazde niepuste wyszukiwanie zamykalo KAZDE czekajace wydarzenie.
+    #
+    # 3 wrzesnia 2026 poprawilem to WYLACZNIE dla premiery. Pozostale
+    # wydarzenia dalej dostawaly `len(fakty)` — i to zostalo zmierzone na
+    # produkcji 5 wrzesnia: `astra,gpt-6` (nie premiera, mowia o nim cztery
+    # kanaly) zapisano jako obsluzone z `ile: 2`, gdzie dwojka byla liczba
+    # WSZYSTKICH faktow tamtego przebiegu.
+    #
+    # Teraz liczbe wylicza `_zapamietaj_wydarzenia` osobno dla kazdego
+    # zdarzenia. Tutaj zostaje sam POMIAR DO LOGU — bo „ile faktow o tej
+    # premierze" to informacja, ktora wlasciciel czyta, a nie decyzja.
+    for _w in nowe_wyd:
+        _tok = [str(x).lower() for x in (_w.get("o_czym") or [])[:4]]
+        if not _tok:
+            continue
+        print("  [wydarzenie%s] %s — faktow o tym: %d z %d"
+              % (" PREMIERA" if _w.get("premiera") else "", ", ".join(_tok),
+                 faktow_o_wydarzeniu(_w, fakty), len(fakty)), flush=True)
 
     # WSZYSTKO IDZIE DO INDEKSU, nie tylko to, co zuzyjemy dzis. Dotad kazde
     # wyszukiwanie zylo jeden przebieg: $0,05 i 6-20 zapytan produkowalo osiem
@@ -2103,7 +2135,7 @@ def znajdz_ciekawostki(
     # sie stac, to drugie szukanie o tym samym, czyli zachowanie sprzed
     # poprawki z 1 wrzesnia. Utrata premiery jest drozsza.
     if nowe_wyd:
-        _zapamietaj_wydarzenia(nowe_wyd, znane_wyd, _ile_o_wydarzeniu)
+        _zapamietaj_wydarzenia(nowe_wyd, znane_wyd, fakty)
     return fakty
 
 

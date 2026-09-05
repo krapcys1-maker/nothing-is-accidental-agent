@@ -122,7 +122,16 @@ try:
     print("=== 2. TO SAMO WYDARZENIE OTWIERA FURTKE RAZ ===")
     nowe, znane = stages._nowe_wydarzenia([GLM])
     sprawdz("pierwszy raz: zdarzenie jest NOWE", len(nowe) == 1, nowe)
-    stages._zapamietaj_wydarzenia(nowe, znane, 8)  # 8 faktow wrocilo
+    # FAKTY, NIE GOTOWA LICZBA — zmiana z 5 wrzesnia 2026. Wczesniej szla tu
+    # jedna liczba na cala partie i trafiala do KAZDEGO wydarzenia, wiec
+    # material na obcy temat zamykal furtke. Teraz `_zapamietaj_wydarzenia`
+    # liczy osobno dla kazdego zdarzenia, wiec musi dostac fakty.
+    # Ten test bada TERMIN furtki, nie trafnosc materialu — dajemy wiec fakty
+    # NA TEMAT, zeby zdarzenie zostalo naprawde obsluzone.
+    stages._zapamietaj_wydarzenia(nowe, znane, [
+        {"fact": "GLM 5.3 shipped with a longer context window"},
+        {"fact": "The glm 5.3 card lists new evaluation numbers"},
+    ])
     nowe2, _ = stages._nowe_wydarzenia([GLM])
     sprawdz("drugi raz: to samo zdarzenie NIE jest juz nowe",
             nowe2 == [], nowe2)

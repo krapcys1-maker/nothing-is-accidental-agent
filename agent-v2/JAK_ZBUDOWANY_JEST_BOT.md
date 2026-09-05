@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **25 plików**, 32 084 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **25 plików**, 32 116 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -113,8 +113,8 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 > w głównej ścieżce artykułu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
-się testować bez przeglądarki i bez pieniędzy**. 140 zestawów
-testów, 3852 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+się testować bez przeglądarki i bez pieniędzy**. 141 zestawów
+testów, 3867 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -177,7 +177,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-8906 wierszy, 150 funkcji na poziomie modułu, 0 klas
+8938 wierszy, 151 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -217,7 +217,8 @@ wiec nie da sie go rozjechac z kodem.
 | `zaczyn_z_kanalow(ile)` | Tematy, o ktorych mowi sie w tym tygodniu — do promptu, nie do cytowania. |
 | `_rdzen_wydarzenia(w)` *(wewn.)* | Klucz zdarzenia: posortowane slowa rdzenia, zeby ta sama premiera |
 | `_nowe_wydarzenia(wydarzenia)` *(wewn.)* | Ktore z tych zdarzen sa NOWE — czyli nie dobieralismy juz o nich materialu. |
-| `_zapamietaj_wydarzenia(nowe, znane, ile)` *(wewn.)* | Zapisuje, ze o tych zdarzeniach material JUZ WROCIL. |
+| `faktow_o_wydarzeniu(wydarzenie, fakty)` | Ile z tych faktow dotyczy TEGO wydarzenia. |
+| `_zapamietaj_wydarzenia(nowe, znane, fakty)` *(wewn.)* | Zapisuje, ze o tych zdarzeniach material JUZ WROCIL. |
 | `_wolnych_w_banku()` *(wewn.)* | Ile tematow NAPRAWDE da sie dzis wziac do pisania. |
 | `_faktow_dopisanych_dzis()` *(wewn.)* | Ile faktow NAPRAWDE wpadlo dzis do banku. Zdobycz, nie proba. |
 | `_ile_prob_wolno_dzis()` *(wewn.)* | Ile RAZY wolno dzis siegnac po nowy material. |
