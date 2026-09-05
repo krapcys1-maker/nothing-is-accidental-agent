@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **25 plików**, 31 286 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **25 plików**, 31 418 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -114,7 +114,7 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
 się testować bez przeglądarki i bez pieniędzy**. 133 zestawów
-testów, 3719 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+testów, 3724 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -657,7 +657,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `korpus_kanalow.py` — o czym mówi się w tym tygodniu — zaczyn tematów, nigdy źródło
 
-600 wierszy, 15 funkcji na poziomie modułu, 0 klas
+732 wierszy, 19 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -674,6 +674,10 @@ wiec nie da sie go rozjechac z kodem.
 | `_zapisz_przerwy(dane)` *(wewn.)* | — |
 | `_kanaly_na_przerwie()` *(wewn.)* | — |
 | `_zapisz_porazke(nazwa)` *(wewn.)* | — |
+| `_plik_tresci()` *(wewn.)* | — |
+| `_wczytaj_tresci()` *(wewn.)* | — |
+| `_zapamietaj_tresc(nazwa, xml)` *(wewn.)* | Odklada surowa odpowiedz zrodla, zeby przezyla jego zla godzine. |
+| `_tresc_z_zapasu(nazwa)` *(wewn.)* | Ostatnia udana odpowiedz tego zrodla, jesli nie jest starsza niz doba. |
 | `_zapisz_sukces(nazwa)` *(wewn.)* | Kanal, ktory oddal material, zaczyna liczenie od zera. |
 | `korpus_kanalow(ile)` | — |
 

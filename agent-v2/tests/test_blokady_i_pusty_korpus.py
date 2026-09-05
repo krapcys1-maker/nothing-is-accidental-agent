@@ -197,9 +197,47 @@ _kk._zapisz_przerwy({"Stary": {"porazki": 0, "do_kiedy":
                      (_dt.now(_tz.utc) - _td(hours=1)).isoformat()}})
 sprawdz("przerwa, ktorej termin minal, juz nie obowiazuje",
         "Stary" not in _kk._kanaly_na_przerwie(), _kk._kanaly_na_przerwie())
-sprawdz("a przerwa jest dobowa, nie wieczna",
-        _kk.PRZERWA_GODZIN == 24, _kk.PRZERWA_GODZIN)
+sprawdz("a przerwa ma koniec, nie jest wieczna",
+        0 < _kk.PRZERWA_GODZIN <= 24, _kk.PRZERWA_GODZIN)
 _kk._zapisz_przerwy({})
+
+print()
+print("=== TRESC, KTORA RAZ SIE UDALA, PRZEZYWA ZLA GODZINE ZRODLA ===")
+# ZMIERZONE 5 wrzesnia 2026 dwiema probami po piec kanalow: bez przerwy 1/5,
+# z przerwa CZTERECH SEKUND 0/5. Rozkladanie zapytan w czasie NIE POMAGA — to
+# nie jest limit na sekunde. Ten sam kanal w ciagu godziny oddal 429, potem
+# 404, potem 500, a na koncu 200 z poprawnym tytulem: odpowiedz jest losowa,
+# okolo jedno zapytanie na piec przechodzi.
+#
+# Wlasciwa odpowiedz na taka blokade NIE ZWIEKSZA liczby zapytan: pytamy tyle
+# samo razy co wczoraj i po prostu nie wyrzucamy tego, co juz dostalismy.
+_kk._plik_tresci().unlink(missing_ok=True)
+sprawdz("bez zapasu nie ma czego brac",
+        _kk._tresc_z_zapasu("Kanal X") == "")
+
+_kk._zapamietaj_tresc("Kanal X", "<feed>tresc</feed>")
+sprawdz("swiezy zapas wraca w calosci",
+        _kk._tresc_z_zapasu("Kanal X") == "<feed>tresc</feed>",
+        _kk._tresc_z_zapasu("Kanal X")[:40])
+
+# ZAPAS MA TERMIN. Feed sprzed tygodnia opisuje inny swiat i nie moze udawac
+# dzisiejszego korpusu — to ta sama zasada, co odsiew przeterminowanych faktow.
+import json as _js
+from datetime import datetime as _d2, timedelta as _t2, timezone as _z2
+_kk._plik_tresci().write_text(_js.dumps({"Stary": {
+    "kiedy": (_d2.now(_z2.utc) - _t2(hours=_kk.ZAPAS_TRESCI_GODZIN + 1)).isoformat(),
+    "xml": "<feed>stare</feed>"}}), encoding="utf-8")
+sprawdz("zapas starszy niz doba juz nie wraca",
+        _kk._tresc_z_zapasu("Stary") == "", _kk._tresc_z_zapasu("Stary")[:30])
+_kk._plik_tresci().unlink(missing_ok=True)
+
+# PROG DOBRANY DO ZMIERZONEJ NATURY BLOKADY, nie z glowy. Przy szansie jeden
+# do pieciu prog 3 dawalby przerwe polowie dzialajacych kanalow.
+sprawdz("prog porazek nie jest ostrzejszy niz zmierzona szansa",
+        _kk.PORAZEK_DO_PRZERWY >= 5, _kk.PORAZEK_DO_PRZERWY)
+sprawdz("a przerwa jest krotsza niz zapas tresci",
+        _kk.PRZERWA_GODZIN < _kk.ZAPAS_TRESCI_GODZIN,
+        (_kk.PRZERWA_GODZIN, _kk.ZAPAS_TRESCI_GODZIN))
 
 print()
 print("=== ZRODLA PIERWOTNE SA PRAWDZIWA SPIZARNIA ===")

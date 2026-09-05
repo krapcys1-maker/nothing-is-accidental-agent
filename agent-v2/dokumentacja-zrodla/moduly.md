@@ -515,7 +515,7 @@
 
 ### `korpus_kanalow.py` — o czym mówi się w tym tygodniu — zaczyn tematów, nigdy źródło
 
-600 wierszy, 15 funkcji na poziomie modułu, 0 klas
+732 wierszy, 19 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -532,6 +532,10 @@
 | `_zapisz_przerwy(dane)` *(wewn.)* | — |
 | `_kanaly_na_przerwie()` *(wewn.)* | — |
 | `_zapisz_porazke(nazwa)` *(wewn.)* | — |
+| `_plik_tresci()` *(wewn.)* | — |
+| `_wczytaj_tresci()` *(wewn.)* | — |
+| `_zapamietaj_tresc(nazwa, xml)` *(wewn.)* | Odklada surowa odpowiedz zrodla, zeby przezyla jego zla godzine. |
+| `_tresc_z_zapasu(nazwa)` *(wewn.)* | Ostatnia udana odpowiedz tego zrodla, jesli nie jest starsza niz doba. |
 | `_zapisz_sukces(nazwa)` *(wewn.)* | Kanal, ktory oddal material, zaczyna liczenie od zera. |
 | `korpus_kanalow(ile)` | — |
 

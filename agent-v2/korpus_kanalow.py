@@ -129,6 +129,40 @@ ZRODLA = {
     "Simon Willison":  "https://simonwillison.net/atom/everything/",
     "Import AI":       "https://importai.substack.com/feed",
     "Transformer":     "https://www.transformernews.ai/feed",
+    # TWORCY Z YOUTUBE, CZYTANI POZA YOUTUBE'M — dolozone 5 wrzesnia 2026.
+    #
+    # YouTube dlawi ten serwer (patrz KANALY) i nie da sie tego naprawic po
+    # naszej stronie, bo blokada dotyczy TEGO, GDZIE JESTESMY, a nie tego, jak
+    # czesto pytamy. Ale czesc tych kanalow to podcasty i biuletyny, ktore maja
+    # WLASNE feedy — udostepnione przez samych autorow wlasnie po to, zeby
+    # czytaly je maszyny. To nie jest obejscie blokady; to jest wejscie
+    # drzwiami, ktore autor otworzyl.
+    #
+    # Dwarkesh i MLST oddaja DOKLADNIE te sama tresc, co ich kanaly: nagranie
+    # idzie na YouTube i do feedu podcastu rownolegle.
+    "Dwarkesh":        "https://www.dwarkesh.com/feed",
+    "MLST":            "https://anchor.fm/s/1e4a0eac/podcast/rss",
+    # Biuletyn i strona autora — ten sam czlowiek, tresc pokrewna, nie
+    # identyczna z filmami. Nazwa feedu inna niz nazwa kanalu i to jest w
+    # porzadku: „Forward Future" to biuletyn Matthew Bermana, a strona
+    # Károly'ego Zsolnai-Fehéra to zaplecze Two Minute Papers.
+    "Forward Future":  "https://matthewberman.substack.com/feed",
+    "Dr Waku":         "https://drwaku.substack.com/feed",
+    "Zsolnai-Fehér":   "https://users.cg.tuwien.ac.at/zsolnai/feed/",
+    # ODRZUCONE PRZY TEJ SAMEJ PROBIE, i warto zapisac dlaczego:
+    #   * `aiexplained.substack.com` — HTTP 200, osiem wpisow, TYTUL FEEDU
+    #     „Discover_AI". To CUDZY Substack, nie kanal AI Explained. Kontrola
+    #     „czy odpowiada" wciagnelaby go jako nasze zrodlo;
+    #   * `theaigrid.substack.com` — tytul „Andrew Black", zero wpisow;
+    #   * `bycloud.substack.com` — tytul „Cloud | Substack", zero wpisow;
+    #   * `samwitteveen.substack.com` — pasuje, ale JEDEN wpis;
+    #   * ByCloud, Matt Wolfe, Wes Roth, 1littlecoder — feedu poza YouTube
+    #     nie maja wcale.
+    #
+    # DOLOZONE PRZY OKAZJI. Znalezione podczas tej samej proby, ta sama rola
+    # („o czym mowi sie teraz"), oba odpowiadaja niezawodnie.
+    "Latent Space":    "https://www.latent.space/feed",
+    "Interconnects":   "https://www.interconnects.ai/feed",
 }
 
 # ILE NAJNOWSZYCH BIERZEMY Z JEDNEGO ZRODLA. YouTube oddaje 15 i tyle wystarcza;
@@ -452,8 +486,32 @@ ZAPAS_WAZNY_S = 1800
 # powtarzane pukanie do serwisu, ktory nas odrzucil, blokade tylko poglebia.
 # NIE OBCHODZIMY BLOKADY I NIE BEDZIEMY: przerwa to jest uznanie odmowy, nie
 # jej omijanie. Po dobie probujemy raz jeszcze, bo blokady bywaja czasowe.
-PORAZEK_DO_PRZERWY = 3
-PRZERWA_GODZIN = 24
+# PROG I DLUGOSC DOBRANE DO ZMIERZONEJ NATURY BLOKADY, nie z glowy.
+#
+# Sprawdzone 5 wrzesnia 2026 dwiema probami po piec kanalow: bez przerwy 1/5,
+# z przerwa CZTERECH SEKUND 0/5. Rozkladanie zapytan w czasie NIE POMAGA, bo
+# to nie jest limit na sekunde — ten sam kanal w ciagu godziny oddal 429, potem
+# 404, potem 500, a na koncu 200 z poprawnym tytulem. Odpowiedz jest losowa dla
+# kazdego zapytania: mniej wiecej jedno na piec przechodzi.
+#
+# Przy takim rozkladzie prog 3 bylby za ostry — kanal, ktory dziala w 20%,
+# trafia trzy porazki z rzedu w polowie przypadkow i szedlby na przerwe bez
+# powodu. Piec porazek to juz 33%, a przerwa szescio-, nie dwudziestoczterogodzinna,
+# bo tresc i tak trzyma `ZAPAS_TRESCI_GODZIN`.
+PORAZEK_DO_PRZERWY = 5
+PRZERWA_GODZIN = 6
+
+# ILE TRZYMAMY TRESC, KTORA RAZ SIE UDALA.
+#
+# To jest wlasciwa odpowiedz na przerywana blokade — i jedyna, ktora NIE
+# ZWIEKSZA liczby zapytan. Kanal, ktory przeszedl raz, zostaje z nami na dobe;
+# przy pieciu przebiegach dziennie i szansie jeden do pieciu zbieramy wiekszosc
+# kanalow, nie pukajac ani razu wiecej niz dotad.
+#
+# Czego to NIE JEST: obejscia. Nie zmieniamy adresu, nie udajemy przegladarki,
+# nie chodzimy przez posrednika. Pytamy tyle samo razy co wczoraj i po prostu
+# nie wyrzucamy tego, co juz dostalismy.
+ZAPAS_TRESCI_GODZIN = 24
 
 
 def _plik_przerw():
@@ -498,6 +556,45 @@ def _zapisz_porazke(nazwa: str) -> None:
     _zapisz_przerwy(dane)
 
 
+def _plik_tresci():
+    import config
+    return config.DATA_DIR / "korpus_ostatnia_tresc.json"
+
+
+def _wczytaj_tresci() -> dict[str, Any]:
+    import json
+    try:
+        return json.loads(_plik_tresci().read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def _zapamietaj_tresc(nazwa: str, xml: str) -> None:
+    """Odklada surowa odpowiedz zrodla, zeby przezyla jego zla godzine."""
+    import json
+    from datetime import datetime, timezone
+    dane = _wczytaj_tresci()
+    dane[nazwa] = {"kiedy": datetime.now(timezone.utc).isoformat(),
+                   "xml": xml[:400_000]}
+    try:
+        _plik_tresci().write_text(json.dumps(dane, ensure_ascii=False),
+                                  encoding="utf-8")
+    except Exception:
+        pass
+
+
+def _tresc_z_zapasu(nazwa: str) -> str:
+    """Ostatnia udana odpowiedz tego zrodla, jesli nie jest starsza niz doba."""
+    from datetime import datetime, timedelta, timezone
+    w = _wczytaj_tresci().get(nazwa) or {}
+    kiedy = str(w.get("kiedy") or "")
+    if not kiedy:
+        return ""
+    prog = (datetime.now(timezone.utc)
+            - timedelta(hours=ZAPAS_TRESCI_GODZIN)).isoformat()
+    return str(w.get("xml") or "") if kiedy > prog else ""
+
+
 def _zapisz_sukces(nazwa: str) -> None:
     """Kanal, ktory oddal material, zaczyna liczenie od zera.
 
@@ -534,20 +631,38 @@ def korpus_kanalow(ile: int = 30) -> list[dict[str, Any]]:
         for nazwa, cid in KANALY.items():
             if nazwa in _odpoczywa:
                 continue
+            xml = ""
             try:
                 r = c.get(RSS, params={"channel_id": cid})
-                if r.status_code != 200:
-                    print("  [kanaly] %s: HTTP %s" % (nazwa, r.status_code), flush=True)
+                if r.status_code == 200:
+                    xml = r.text
+                    _zapamietaj_tresc(nazwa, xml)
+                else:
+                    print("  [kanaly] %s: HTTP %s" % (nazwa, r.status_code),
+                          flush=True)
                     _zapisz_porazke(nazwa)
-                    continue
+            except Exception as exc:
+                print("  [kanaly] %s: %s" % (nazwa, type(exc).__name__), flush=True)
+                _zapisz_porazke(nazwa)
+            # ZLA GODZINA ZRODLA NIE ZNACZY, ZE NIE MAMY JEGO TRESCI.
+            # Blokada jest przerywana (patrz `ZAPAS_TRESCI_GODZIN`), wiec
+            # siegamy po ostatnia udana odpowiedz zamiast zostawiac dziure.
+            if not xml:
+                xml = _tresc_z_zapasu(nazwa)
+                if xml:
+                    print("  [kanaly] %s: biore z zapasu (ostatnia udana doba)"
+                          % nazwa, flush=True)
+            if not xml:
+                continue
+            try:
                 ile_przed = len(wpisy)
-                for e in ET.fromstring(r.content).findall("a:entry", NS):
+                for e in ET.fromstring(xml.encode("utf-8")).findall("a:entry", NS):
                     wpisy.append((nazwa, e))
                 if len(wpisy) > ile_przed:
                     _zapisz_sukces(nazwa)
             except Exception as exc:
-                print("  [kanaly] %s: %s" % (nazwa, type(exc).__name__), flush=True)
-                _zapisz_porazke(nazwa)
+                print("  [kanaly] %s: nieczytelny feed (%s)"
+                      % (nazwa, type(exc).__name__), flush=True)
         from datetime import datetime, timedelta, timezone
         prog_wieku = (datetime.now(timezone.utc)
                       - timedelta(days=config.MAKS_WIEK_ZRODLA_DNI)
@@ -558,13 +673,30 @@ def korpus_kanalow(ile: int = 30) -> list[dict[str, Any]]:
         # `_pole`. Awaria jednego zrodla nie moze zabrac reszty, wiec kazde
         # ma wlasny `try`, tak jak kanaly.
         for nazwa, adres in ZRODLA.items():
+            # TEN SAM ZAPAS CO PRZY KANALACH. Zrodlo pierwotne tez ma prawo
+            # miec zla godzine, a jego zla godzina nie moze znaczyc dziury w
+            # spizarni — bo pusta spizarnia to platne szukanie.
+            surowy = ""
             try:
                 r = c.get(adres)
-                if r.status_code != 200:
+                if r.status_code == 200:
+                    surowy = r.text
+                    _zapamietaj_tresc("zrodlo:" + nazwa, surowy)
+                else:
                     print("  [zrodla] %s: HTTP %s" % (nazwa, r.status_code),
                           flush=True)
-                    continue
-                korzen = ET.fromstring(r.content)
+            except Exception as exc:
+                print("  [zrodla] %s: %s" % (nazwa, type(exc).__name__),
+                      flush=True)
+            if not surowy:
+                surowy = _tresc_z_zapasu("zrodlo:" + nazwa)
+                if surowy:
+                    print("  [zrodla] %s: biore z zapasu (ostatnia udana doba)"
+                          % nazwa, flush=True)
+            if not surowy:
+                continue
+            try:
+                korzen = ET.fromstring(surowy.encode("utf-8"))
                 poz = korzen.findall(".//a:entry", NS) or korzen.findall(".//item")
                 poz.sort(key=_data_wpisu, reverse=True)
                 # WIEK ODCINAMY JUZ TUTAJ, inaczej niz przy kanalach. YouTube

@@ -30,6 +30,22 @@ import types
 sys.path.insert(0, "agent-v2")
 import korpus_kanalow   # noqa: E402
 
+# KATALOG DANYCH NA BOK. Od 5 wrzesnia 2026 korpus ZAPISUJE stan: kanal po
+# powtarzajacych sie bledach idzie na przerwe, a udana odpowiedz zrodla jest
+# odkladana na dobe. Bez przekierowania ten test pisal do PRODUKCYJNEGO
+# `data/` — i sam sie potem oblewal, bo kanaly, ktore w nim „padly", szly na
+# przerwe i nie byly odpytywane przy nastepnym uruchomieniu.
+#
+# `uzyj_katalogu_danych` to jedyna usankcjonowana droga; pilnuje jej
+# `test_komplet_sciezek`.
+import pathlib as _pl      # noqa: E402
+import tempfile as _tf     # noqa: E402
+
+import config as _cfg      # noqa: E402
+
+_ZDJECIE_DANYCH = _cfg.uzyj_katalogu_danych(_pl.Path(_tf.mkdtemp()))
+
+
 zdane = oblane = 0
 
 
