@@ -1553,6 +1553,36 @@ NOTE_FORMS = {
     ),
 }
 
+# FORMY, KTORYCH DANY TYP NIE MOZE WYKONAC — bo zadaja tego, czego typ zabrania.
+#
+# ZMIERZONE 5 wrzesnia 2026 na rotacji z calego roku: 730 z 1095 przydzialow
+# MYSL (67%, dwa na trzy) dawalo forme wymagajaca faktu, liczby, dokumentu albo
+# nazwanego decydenta — a opis typu MYSL brzmi wprost: „NO EVIDENCE CARD, and
+# therefore NO FACTS: no number, no date, no named company doing a named thing,
+# no study, no percentage".
+#
+# Forma byla losowana z dryfu dnia roku, NIEZALEZNIE od typu, i komentarz przy
+# tym kodzie mowil to wprost: „po osmiu dniach kazda para typ-forma zdazy
+# wystapic". Model dostawal wiec regularnie dwa polecenia, ktorych nie da sie
+# spelnic naraz, i musial ktores zlamac — najczesciej zakaz faktow, bo forma
+# opisuje KSZTALT, ktory widac, a zakaz jest niewidzialny.
+#
+# NIE ROZSZERZAM TEJ LISTY NA PODEJRZENIA. Sa tu wylacznie formy, ktore ZADAJA
+# WPROST rzeczy zakazanej w typie:
+#   LICZBA            „Open with the number itself"
+#   LISTA             „EVERY line must carry a fact"
+#   KONTRAST          „Two facts set against each other"
+#   ODWROCENIE        „the record that contradicts it"
+#   PYTANIE           „Deliver the whole fact first"
+#   ZACZEP_I_KONKRET  „what the arrangement actually is and who decided"
+#
+# MYSLI zostaja SCENA (obserwacja z drugiej osoby, bez dokumentu), PROSTA
+# (jeden akapit) i WYJASNIENIE (rozwiniecie mysli, nie faktu).
+FORMY_NIEMOZLIWE = {
+    "MYSL": frozenset({"LICZBA", "LISTA", "KONTRAST", "ODWROCENIE",
+                       "PYTANIE", "ZACZEP_I_KONKRET"}),
+}
+
 NOTE_FORM_MIX = ("SCENA", "KONTRAST", "ZACZEP_I_KONKRET", "PROSTA", "LISTA",
                  "PYTANIE", "ODWROCENIE", "LICZBA", "WYJASNIENIE")
 

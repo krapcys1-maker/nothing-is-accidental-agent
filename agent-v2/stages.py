@@ -462,13 +462,35 @@ def karta_dla_pisarza(card: dict[str, Any],
     MODEL OBSERWUJE, KOD DECYDUJE. Prosba w promptcie juz raz nie wystarczyla.
     Kod nie oddaje pisarzowi zdania, ktorego pisarz nie ma jak obronic.
     """
+    # OCENA PRZYDATNOSCI SCHODZI Z KARTY ZAWSZE, PRZED KAZDYM WYJSCIEM.
+    #
+    # `ocena_ciekawosci` to caly wynik etapu `warto_pisac`: werdykt, powody
+    # i wskazowka ratunku. Pisarz dostawal to razem z karta dowodowa, a
+    # `pisarz.md` nie odwoluje sie do tego pola ANI RAZU — wiec nie bylo do
+    # niczego uzywane, tylko lezalo w wejsciu.
+    #
+    # Gorzej niz bezuzyteczne: przy werdykcie `ODLOZ` model z zadaniem
+    # „napisz" dostawal obok wyjasnienie, ze material nie daje czytelnikowi
+    # powodu do zainteresowania. To nie jest twierdzenie o swiecie ani
+    # decyzja — to KONKURENCYJNE ZADANIE, ktore zacheca do asekuracji albo do
+    # metakomentarza o slabosci wlasnego materialu.
+    #
+    # MUSI BYC PRZED WCZESNIEJSZYMI WYJSCIAMI. Pierwsza wersja tej poprawki
+    # stala przy koncowym `return` i nie robila nic w dwoch sciezkach z
+    # trzech — dokladnie ta rodzina wad, ktora tropimy: poprawka istnieje
+    # i nie dociera tam, gdzie ma skutek.
+    #
+    # KARTA ZAPISYWANA NA DYSK ZOSTAJE BOGATA. Zmieniamy WIDOK PISARZA, a
+    # ocena ma dalej sterowac formatem PRZED pisaniem.
+    czysta = dict(card)
+    czysta.pop("ocena_ciekawosci", None)
+
     daty = card.get("source_dates")
     if not isinstance(daty, dict) or not str(daty.get("note") or "").strip():
-        return card
+        return czysta
     wiek = wiek_zrodla_w_dniach(daty.get("newest"), teraz=teraz)
     if wiek is None or wiek > config.MAKS_WIEK_ZRODLA_DNI:
-        return card
-    czysta = dict(card)
+        return czysta
     czysta["source_dates"] = dict(daty, note="")
     return czysta
 
@@ -3973,8 +3995,36 @@ def notki_dnia(
     # wystapic, a zaden dzien nie powtarza poprzedniego.
     from datetime import datetime as _dt, timezone as _tz
     _dryf = _dt.now(_tz.utc).timetuple().tm_yday
-    formy = [config.NOTE_FORM_MIX[(_dryf + od + i) % len(config.NOTE_FORM_MIX)]
-             for i in range(len(typy))]
+    # FORMA MUSI BYC WYKONALNA DLA TYPU — patrz `config.FORMY_NIEMOZLIWE`.
+    #
+    # Dryf zostaje: to on daje roznorodnosc i to on ma zostac. Zmienia sie
+    # tylko tyle, ze przy typie, ktory danej formy wykonac NIE MOZE, idziemy
+    # dalej po tej samej rotacji az do pierwszej wykonalnej. Kolejnosc jest
+    # wiec nadal deterministyczna i nadal przesuwa sie z dnia na dzien.
+    #
+    # ZMIERZONE 5 wrzesnia 2026 na rotacji z calego roku: 730 z 1095
+    # przydzialow MYSL (67%) dawalo forme zadajaca faktu, liczby albo
+    # dokumentu — czyli tego, czego opis typu MYSL zabrania wprost. Model
+    # dostawal dwa polecenia nie do pogodzenia i musial ktores zlamac.
+    # ROTUJEMY PO FORMACH WYKONALNYCH, a nie po wszystkich z pomijaniem.
+    #
+    # Pierwsza wersja tej poprawki szla dalej po pelnej rotacji az do formy
+    # wykonalnej — i to dzialalo, ale zbieralo odrzucone na nastepnej dozwolonej.
+    # Przy MYSL wychodzilo WYJASNIENIE w 56% przypadkow, PROSTA w 33%, SCENA
+    # w 11%: pieciu niewykonalnym formom „przypadala" ta jedna, ktora stala za
+    # nimi w kolejce. Zamiast rownowagi powstal nowy szablon, tyle ze inny.
+    #
+    # Rotacja po samej liscie wykonalnych daje rozklad rowny i nadal przesuwa
+    # sie z dnia na dzien.
+    formy = []
+    for i, _typ in enumerate(typy):
+        _zle = config.FORMY_NIEMOZLIWE.get(_typ, frozenset())
+        _mozliwe = [f for f in config.NOTE_FORM_MIX if f not in _zle]
+        # Gdyby ktos kiedys wykluczyl WSZYSTKIE formy dla jakiegos typu,
+        # bierzemy pelna rotacje zamiast wywalac sie na pustej liscie.
+        if not _mozliwe:
+            _mozliwe = list(config.NOTE_FORM_MIX)
+        formy.append(_mozliwe[(_dryf + od + i) % len(_mozliwe)])
 
     # JEDNA notka promujaca dziennie, przez kolejne dni po publikacji artykulu.
     promowany = artykul_do_promocji()

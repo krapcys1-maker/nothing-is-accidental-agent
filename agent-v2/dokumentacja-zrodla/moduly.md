@@ -35,7 +35,7 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-8758 wierszy, 148 funkcji na poziomie modułu, 0 klas
+8808 wierszy, 148 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -431,7 +431,7 @@
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-3075 wierszy, 28 funkcji na poziomie modułu, 0 klas
+3105 wierszy, 28 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|

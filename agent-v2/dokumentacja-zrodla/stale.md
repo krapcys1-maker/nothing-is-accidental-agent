@@ -114,6 +114,7 @@
 | `OTWARCIA` | `( "Start with the mechanism itself, no pream` | — |
 | `COMMENTS_PER_DAY` | `4` | Sufit dzienny. Research mówi, że trzy przemyślane komentarze tygodniowo biją piętnaście uprzejmych; pierwotne 15-20 dziennie było z planu sp |
 | `NOTE_FORMS` | `{ "PROSTA": ( "One tight paragraph. No line ` | Typy notek. W dniu publikacji artykułu lecą notki typu ARTYKUL z linkiem; w pozostałe dni — pozostałe typy, oparte na fragmentach, których a |
+| `FORMY_NIEMOZLIWE` | `{ "MYSL": frozenset({"LICZBA", "LISTA", "KON` | FORMY, KTORYCH DANY TYP NIE MOZE WYKONAC — bo zadaja tego, czego typ zabrania. ZMIERZONE 5 wrzesnia 2026 na rotacji z calego roku: 730 z 109 |
 | `NOTE_FORM_MIX` | `("SCENA", "KONTRAST", "ZACZEP_I_KONKRET", "P` | — |
 | `NOTE_TYPES` | `{ # MYSL — jedyny typ ZWOLNIONY z karty dowo` | — |
 | `PUBLISH_TIMEZONE` | `"America/New_York"` | Strefa czasowa publikacji. Liczy się strefa CZYTELNIKÓW, nie właściciela: konto jest anglojęzyczne, więc publiczność jest głównie amerykańsk |

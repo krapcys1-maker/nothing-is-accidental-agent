@@ -141,11 +141,51 @@ sprawdz("nowa juz nie",
 print()
 print("=== 8. PROG JEST TYM SAMYM, CO W BRAMCE WIEKU ===")
 # Dwie liczby na to samo pytanie rozjezdzaja sie w koncu zawsze.
+# ZAKRES LICZONY DO KONCA FUNKCJI, NIE DO 2600 ZNAKU. Pierwotnie stalo tu
+# okno o stalej dlugosci i pekalo przy kazdym dopisanym komentarzu — 5 wrzesnia
+# 2026 oblalo sie po dolozeniu akapitu o `ocena_ciekawosci`, chociaz stala
+# byla na miejscu. Test, ktory reaguje na dlugosc komentarza zamiast na tresc
+# kodu, myli czujnosc z halasem.
+_od = zrodlo.index("def karta_dla_pisarza")
+_do = zrodlo.find(chr(10) + "def ", _od + 1)
+_cialo = zrodlo[_od:_do if _do > 0 else len(zrodlo)]
 sprawdz("uzywamy MAKS_WIEK_ZRODLA_DNI",
-        "config.MAKS_WIEK_ZRODLA_DNI" in
-        zrodlo[zrodlo.index("def karta_dla_pisarza"):
-               zrodlo.index("def karta_dla_pisarza") + 2600],
+        "config.MAKS_WIEK_ZRODLA_DNI" in _cialo,
         config.MAKS_WIEK_ZRODLA_DNI)
+
+print()
+print("=== OCENA PRZYDATNOSCI NIE IDZIE DO PISARZA ===")
+# `ocena_ciekawosci` to caly wynik etapu `warto_pisac`: werdykt, powody
+# i wskazowka ratunku. Szla do pisarza razem z karta dowodowa, a `pisarz.md`
+# nie odwoluje sie do tego pola ANI RAZU — wiec nie byla do niczego uzywana.
+#
+# Gorzej niz bezuzyteczna: przy werdykcie ODLOZ model z zadaniem „napisz"
+# dostawal obok wyjasnienie, ze material nie daje czytelnikowi powodu do
+# zainteresowania. To konkurencyjne zadanie, ktore zacheca do asekuracji albo
+# do metakomentarza o slabosci wlasnego materialu.
+#
+# TRZY SCIEZKI, BO SA TRZY WYJSCIA Z TEJ FUNKCJI. Pierwsza wersja poprawki
+# stala przy koncowym `return` i nie robila nic w dwoch z nich.
+for _opis, _karta in (
+        ("swieza karta z nota o dacie",
+         {"source_dates": {"newest": "2099-01-01", "note": "uwaga"}}),
+        ("karta bez noty o dacie",
+         {"source_dates": {"newest": "2099-01-01", "note": ""}}),
+        ("karta ze starym zrodlem",
+         {"source_dates": {"newest": "2020-01-01", "note": "uwaga"}}),
+):
+    _k = dict(_karta, ocena_ciekawosci={"werdykt": "ODLOZ",
+                                        "powod": "nie ma tu ciekawosci"},
+              unused_evidence=[{"fragment": "material"}],
+              confirmed_claims=[{"id": 1}])
+    _w = stages.karta_dla_pisarza(_k)
+    sprawdz("%s — ocena NIE dochodzi" % _opis,
+            "ocena_ciekawosci" not in _w, sorted(_w))
+    sprawdz("%s — material zostaje" % _opis,
+            "unused_evidence" in _w and "confirmed_claims" in _w, sorted(_w))
+    # KARTA ZAPISYWANA NA DYSK MA ZOSTAC BOGATA — zmieniamy widok pisarza,
+    # a nie archiwum.
+    sprawdz("%s — oryginal nietkniety" % _opis, "ocena_ciekawosci" in _k)
 
 print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))
