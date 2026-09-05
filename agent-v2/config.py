@@ -837,6 +837,28 @@ THINKING_HEADROOM_TOKENS = 28000
 # przepiecia etapu na Claude. Zeby jednak nie byly cicha ozdoba, `llm.call`
 # mowi RAZ NA PROCES, ktory wpis nie zadzialal i dlaczego.
 EFFORT = {
+    # NOTKI: `medium`, WPISANE SWIADOMIE — bo brak wpisu tez byl decyzja,
+    # tylko nikt jej nie podjal.
+    #
+    # Do 5 wrzesnia 2026 `note` nie bylo na tej liscie, wiec `llm.call` nie
+    # wysylal `output_config` wcale i Opus 5 pracowal na domyslnym ustawieniu
+    # API. Zmierzone z rachunkow 4 wrzesnia: 2177 tokenow wyjscia na notke,
+    # z czego sama notka to okolo 300. Reszta to rozumowanie, rozliczane jak
+    # wyjscie — a wyjscie kosztuje 25 USD/mln wobec 5 USD/mln za wejscie.
+    # To bylo 0,0544 z 0,0915 USD za notke, czyli 59% jej ceny, za myslenie
+    # nad tekstem na 150 slow.
+    #
+    # `naprawa` dostaje to samo, bo to ta sama robota: poprawka notki wraca do
+    # modelu, ktory ja napisal. Rozne pokretla dla pisania i poprawiania tego
+    # samego tekstu znaczylyby, ze druga wersja mysli inaczej niz pierwsza.
+    "note": "medium",
+    "naprawa": "medium",
+    # PONIZEJ: piec wpisow, ktore NIC NIE ROBIA — wszystkie te etapy chodza na
+    # DeepSeeku, ktory tego pokretla nie czyta. Zostaja jako zapis intencji na
+    # wypadek przepiecia etapu na Claude, i `llm.call` mowi raz na proces,
+    # ktory wpis nie zadzialal. Ale to one sprawialy, ze lista wygladala na
+    # zadbana — i dlatego przez tydzien nikt nie zauwazyl, ze jedynego drogiego
+    # etapu na Claude na niej nie ma.
     "scout": "medium",
     "discovery": "medium",
     "synthesis": "high",

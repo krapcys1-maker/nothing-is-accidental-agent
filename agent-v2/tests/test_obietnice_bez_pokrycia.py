@@ -89,6 +89,29 @@ claudowe = [p for p in config.EFFORT
 sprawdz("sa etapy z EFFORT chodzace na DeepSeeku", bool(deepseekowe), deepseekowe)
 sprawdz("i sa chodzace na Claude", bool(claudowe), claudowe)
 
+# LUKA, KTOREJ TEN PLIK NIE PILNOWAL — a opisywal wlasnie ta rodzine usterek.
+#
+# Punkt 1 sprawdzal, czy MARTWE wpisy przyznaja sie do bycia martwymi. Nie
+# sprawdzal rzeczy odwrotnej i drozszej: czy etap, ktory pokretla POSLUCHA,
+# w ogole jakis wpis ma. `note` nie mial go przez caly czas istnienia, wiec
+# `llm.call` nie wysylal `output_config` i Opus 5 chodzil na domyslnym
+# ustawieniu API — nie wybranym przez nikogo.
+#
+# Zmierzone z rachunkow 4 wrzesnia 2026: 2177 tokenow wyjscia na notke przy
+# tresci wartej okolo 300. Rozumowanie liczy sie jak wyjscie, a wyjscie
+# kosztuje 25 USD/mln wobec 5 USD/mln za wejscie — czyli 59% ceny notki.
+#
+# Piec martwych wpisow sprawialo przy tym, ze lista WYGLADALA na zadbana.
+# To wlasnie dlatego brak szostego, jedynego drogiego, nie rzucal sie w oczy.
+brak_wpisu = sorted(p for p, m in config.MODEL_FOR.items()
+                    if m in (config.CLAUDE, config.SONNET, config.FABLE)
+                    and p not in config.EFFORT)
+sprawdz("kazdy etap na Claude ma WPISANY wysilek, nie domyslny",
+        not brak_wpisu, brak_wpisu or "wszystkie maja")
+sprawdz("pisanie notki i jej naprawa mysla tak samo",
+        config.EFFORT.get("note") == config.EFFORT.get("naprawa"),
+        (config.EFFORT.get("note"), config.EFFORT.get("naprawa")))
+
 if deepseekowe:
     wyjscie = _co_wypisze(deepseekowe[0])
     sprawdz("etap deepseekowy DOSTAJE ostrzezenie (naprawde, nie w napisie)",
