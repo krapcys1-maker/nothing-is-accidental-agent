@@ -39,6 +39,20 @@ from datetime import datetime, timedelta, timezone
 
 sys.path.insert(0, "agent-v2")
 import config   # noqa: E402
+
+# ODCIECIE OD PRODUKCJI — dopisane 5 wrzesnia 2026, bo tego brakowalo.
+#
+# Test przestawial `stages.INDEKS_KANDYDATOW` na plik tymczasowy i podmienial
+# `stages.llm.call`, ale `dopisz_kandydatow` siega jeszcze po
+# `opublikowane_teksty()`, czyli po DZIENNIK — a ten szedl z katalogu danych.
+# Na Windows (pusty katalog) test przechodzil; na serwerze (80 wystawionych
+# tresci) darmowy filtr „JUZ O TYM PISALISMY" odrzucal material, zanim badany
+# straznik zdazyl cokolwiek powiedziec, i test padal na czyms, czego nie bada.
+#
+# Drugi taki test tego samego dnia — patrz `test_wspolna_nazwa.py`. Werdykt
+# testu nie moze zalezec od tego, co bot zdazyl napisac.
+config.uzyj_katalogu_danych(pathlib.Path(tempfile.mkdtemp()))
+
 import stages   # noqa: E402
 
 zdane = oblane = 0

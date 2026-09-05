@@ -24,6 +24,16 @@ import pathlib
 import sys
 
 sys.path.insert(0, "agent-v2")
+import config   # noqa: E402
+
+# ODCIECIE OD PRODUKCJI — dopisane 5 wrzesnia 2026. Test siegal po
+# `wez_kandydatow`, ktore czyta katalog danych w srodku, wiec jego
+# wynik zalezal od tego, co bot zdazyl napisac. Dwa takie testy padly
+# tego dnia na serwerze i przechodzily na Windows.
+# Pilnuje tego `test_testy_nie_czytaja_produkcji.py`.
+import tempfile
+config.uzyj_katalogu_danych(pathlib.Path(tempfile.mkdtemp()))
+
 import artykul_z_puli as azp   # noqa: E402
 
 zdane = oblane = 0

@@ -12,6 +12,19 @@ import tempfile
 sys.path.insert(0, "agent-v2")
 import browser  # noqa: E402
 import config   # noqa: E402
+
+# ODCIECIE OD PRODUKCJI NA CALY PLIK — dopisane 5 wrzesnia 2026.
+#
+# Ten test przestawial katalog danych zakresowo (blok `with` nizej,
+# z przywroceniem stanu) i to jest wzorowe — ale dopiero od wiersza
+# ~364. Wczesniej, od wiersza ~239, wolal juz `stages.wybierz_material`,
+# ktore w srodku siega po `opublikowane_teksty()`, czyli po ZYWY
+# dziennik. Tamte asercje czytaly wiec produkcje.
+#
+# Nie ugryzlo nas to tylko dlatego, ze akurat nie byly na to czule.
+# Zakresowe przestawienie nizej zostaje bez zmian — chodzi o to, zeby
+# poczatek pliku nie mial dostepu do niczego prawdziwego.
+config.uzyj_katalogu_danych(pathlib.Path(tempfile.mkdtemp()))
 import norma    # noqa: E402
 import stages   # noqa: E402
 
