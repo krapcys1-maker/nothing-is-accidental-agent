@@ -569,5 +569,37 @@ finally:
     config.przywroc_katalog_danych(_ZDJECIE_SCIEZEK)
     stages.INDEKS_KANDYDATOW = _ORYG_INDEKS
 
+print()
+print("=== NUMER WERSJI NIE JEST SZUMEM — TO JEST WIADOMOSC ===")
+# Klucz faktu bral WYLACZNIE litery, wiec te dwa zdania mialy odcisk
+# identyczny („acme context model released tokens window with"):
+#
+#   Acme released Model 5.1 with a context window of 100000 tokens.
+#   Acme released Model 5.2 with a context window of 200000 tokens.
+#
+# Dla publikacji o premierach modeli to wada w samym srodku tematu: NOWA
+# WERSJA WYGLADALA JAK DUPLIKAT STAREJ i wypadala jako „juz to mielismy".
+# Zgloszone przez zewnetrzny audyt banku, odtworzone na naszym kodzie.
+_k = stages._klucz_faktu
+sprawdz("aktualizacja wersji ma INNY klucz niz poprzednia",
+        _k("Acme released Model 5.1 with a context window of 100000 tokens.")
+        != _k("Acme released Model 5.2 with a context window of 200000 tokens."))
+sprawdz("nazwa z myslnikiem i cyfra tez rozroznia",
+        _k("OpenAI shipped gpt-6 with agentic tool use.")
+        != _k("OpenAI shipped gpt-5 with agentic tool use."))
+
+# PIERWOTNY CEL KLUCZA ZOSTAJE. „Badanie wykazalo 40%" i „badanie wykazalo
+# 41%" to nadal ten sam fakt opowiedziany raz jeszcze, a nie nowe ustalenie —
+# inaczej kazde zaokraglenie wpuszczaloby powtorke do banku.
+sprawdz("gola liczba nadal NIE rozroznia faktow",
+        _k("The study found 40 percent of requests were refused.")
+        == _k("The study found 41 percent of requests were refused."))
+
+# TA SAMA PREMIERA MA MIEC TEN SAM KLUCZ mimo innej kolejnosci slow.
+sprawdz("przestawienie slow nadal daje ten sam klucz",
+        _k("Acme released Model 5.1 today.")
+        == _k("Model 5.1 released Acme today."))
+
+print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))
 sys.exit(1 if oblane else 0)

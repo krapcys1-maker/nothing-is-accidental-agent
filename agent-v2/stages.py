@@ -1193,9 +1193,35 @@ SKLADNIKI_KLUCZA = (
 
 
 def _klucz_faktu(tekst: str) -> str:
-    """Odcisk faktu odporny na przestawienie słów i inną liczbę w tym samym zdaniu."""
+    """Odcisk faktu odporny na przestawienie słów i inną liczbę w tym samym zdaniu.
+
+    ALE NIE NA NUMER WERSJI — i to jest poprawka z 5 wrzesnia 2026.
+
+    Klucz brał wyłącznie litery, więc te dwa zdania miały odcisk identyczny:
+
+        Acme released Model 5.1 with a context window of 100000 tokens.
+        Acme released Model 5.2 with a context window of 200000 tokens.
+
+    obydwa: „acme context model released tokens window with".
+
+    Dla publikacji o premierach modeli to jest wada w samym środku tematu:
+    NOWA WERSJA WYGLĄDA JAK DUPLIKAT STAREJ i wypada jako „już to mieliśmy".
+    Zgłoszone przez zewnętrzny audyt banku i odtworzone na naszym kodzie.
+
+    CO DOKŁADAMY I CZEGO NIE. Wchodzą tokeny o kształcie WERSJI: liczba
+    z kropką (`5.1`) i nazwa z myślnikiem i cyfrą (`gpt-6`, `o3-mini`). NIE
+    wchodzą gołe liczby — bo pierwotny cel tego klucza zostaje: „badanie
+    wykazało 40%" i „badanie wykazało 41%" to nadal ten sam fakt opowiedziany
+    raz jeszcze, a nie nowe ustalenie.
+
+    Świadomy koszt tej granicy: pomiar zapisany z kropką (`40.5%` wobec
+    `41.2%`) rozjedzie się teraz na dwa klucze. Wybieram to, bo mylenie
+    premiery 5.2 z 5.1 kosztuje nas temat, a rozdzielenie dwóch bliskich
+    pomiarów kosztuje jedną powtórkę, którą i tak łapie pamięć notek.
+    """
     slowa = re.findall(r"[a-z]{4,}", tekst.lower())
-    return " ".join(sorted(set(slowa))[:12])
+    wersje = re.findall(r"\d+\.\d+|[a-z]+-\d+(?:\.\d+)?", tekst.lower())
+    return " ".join(sorted(set(slowa))[:12] + sorted(set(wersje))[:4])
 
 
 def tekst_faktu(x: Any) -> str:
