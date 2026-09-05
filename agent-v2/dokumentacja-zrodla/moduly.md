@@ -339,7 +339,7 @@
 
 ### `db.py` — schemat i zapis
 
-360 wierszy, 11 funkcji na poziomie modułu, 1 klas
+377 wierszy, 11 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -349,7 +349,7 @@
 | `connect(path)` | Otwiera bazę i zakłada schemat, jeśli go nie ma. |
 | `_dopisz_brakujace_kolumny(conn)` *(wewn.)* | — |
 | `start_run(conn, stage, tryb)` | Nowy przebieg. `tryb` to „produkcja" albo „test". |
-| `tryb_przebiegu(conn, run_id)` | Tor, do ktorego nalezy przebieg. Bez przebiegu — produkcja. |
+| `tryb_przebiegu(conn, run_id)` | Tor, do ktorego nalezy przebieg. |
 | `finish_run(conn, run_id, status, stage, note)` | Zamyka wiersz przebiegu. `stage=None` znaczy „NIE RUSZAJ nazwy etapu". |
 | `record_call(conn, **fields)` | Zapisuje wywołanie, wstawiając TYLKO te kolumny, które ktoś podał. |
 | `spent_usd(conn, since_prefix, tryb)` | Suma kosztów od znacznika czasu zaczynającego się danym prefiksem. |

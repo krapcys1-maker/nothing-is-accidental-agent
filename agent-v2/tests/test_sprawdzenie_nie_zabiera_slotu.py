@@ -20,6 +20,7 @@ BEZ PYTESTA. Uruchamiac z korzenia repozytorium:
     PYTHONIOENCODING=utf-8 python agent-v2/tests/test_sprawdzenie_nie_zabiera_slotu.py
 Zero wywolan modelu, zero sieci, baza w katalogu tymczasowym.
 """
+import os
 import pathlib
 import sys
 import tempfile
@@ -111,6 +112,45 @@ sprawdz("zapytanie odsiewa tryb inny niz produkcja",
         "COALESCE(tryb, 'produkcja') = 'produkcja'" in zrodlo)
 sprawdz("przebieg bez --wyslij zapisuje sie jako test",
         'tryb="produkcja" if args.wyslij else "test"' in zrodlo)
+
+print()
+print("=== 7. SKRYPT DORAZNY MOZE SIE ZADEKLAROWAC JAKO TESTOWY ===")
+# DRUGA POLOWA TEJ SAMEJ SPRAWY, ZNALEZIONA DZIEN POZNIEJ.
+# Punkt 6 zalatwil przebiegi. Ale doraznych skryptow — porownan promptow,
+# podgladow notki, uruchomien banku — nikt nie liczyl, bo one nie otwieraja
+# przebiegu wcale. `tryb_przebiegu(None)` oddawalo „produkcja", wiec ich
+# koszt wpadal do sufitu konta.
+#
+# ZMIERZONE 4 wrzesnia 2026: 26 moich wywolan bez przebiegu = 1,59 USD,
+# czyli 30% z 5,2495 USD tego dnia. Sufit (5 USD) pekl o 20:47 i trzy
+# ostatnie przebiegi nie zrobily nic. Samo konto wydalo 3,66 USD i
+# zmiescoloby sie z zapasem 1,34 USD.
+_stare = os.environ.get("NIA_TRYB")
+try:
+    os.environ.pop("NIA_TRYB", None)
+    sprawdz("bez deklaracji wywolanie bez przebiegu to nadal produkcja",
+            db.tryb_przebiegu(conn, None) == "produkcja",
+            db.tryb_przebiegu(conn, None))
+    os.environ["NIA_TRYB"] = "test"
+    sprawdz("NIA_TRYB=test zdejmuje je z budzetu konta",
+            db.tryb_przebiegu(conn, None) == "test",
+            db.tryb_przebiegu(conn, None))
+    os.environ["NIA_TRYB"] = "produkcja"
+    sprawdz("kazda inna wartosc zostaje przy produkcji",
+            db.tryb_przebiegu(conn, None) == "produkcja",
+            db.tryb_przebiegu(conn, None))
+    # DEKLARACJA NIE PRZEBIJA PRAWDZIWEGO PRZEBIEGU. Gdyby przebijala,
+    # wystarczyloby zapomniec zmiennej w powloce systemd, zeby cala produkcja
+    # zniknela z sufitu.
+    os.environ["NIA_TRYB"] = "test"
+    _p = db.start_run(conn, stage="dzien", tryb="produkcja")
+    sprawdz("przebieg produkcyjny zostaje produkcja mimo NIA_TRYB=test",
+            db.tryb_przebiegu(conn, _p) == "produkcja",
+            db.tryb_przebiegu(conn, _p))
+finally:
+    os.environ.pop("NIA_TRYB", None)
+    if _stare is not None:
+        os.environ["NIA_TRYB"] = _stare
 
 print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))

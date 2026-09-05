@@ -240,9 +240,26 @@ def start_run(conn: sqlite3.Connection, stage: str = "start",
 
 
 def tryb_przebiegu(conn: sqlite3.Connection, run_id: int | None) -> str:
-    """Tor, do ktorego nalezy przebieg. Bez przebiegu — produkcja."""
+    """Tor, do ktorego nalezy przebieg.
+
+    BEZ PRZEBIEGU — PRODUKCJA, i to jest zabezpieczenie, nie niedopatrzenie:
+    koszt bez wlasciciela ma sie liczyc do sufitu, a nie chowac.
+
+    JEDEN WYJATEK: `NIA_TRYB=test` w srodowisku. Wywolanie spoza przebiegu
+    pochodzi wtedy od czlowieka, ktory swiadomie pracuje nad kodem, a nie od
+    konta.
+
+    PO CO TEN WYJATEK POWSTAL. 4 wrzesnia 2026 sprawdzalem zmiany doraznymi
+    skryptami — porownania promptow, podglady notek, uruchomienia banku. Kazdy
+    z nich wolal model bez `run_id`, wiec 1,59 USD w 26 wywolaniach wpadlo do
+    budzetu produkcyjnego. Sufit dobowy (5 USD) pekl o 20:47 na 5,166 i TRZY
+    OSTATNIE PRZEBIEGI DNIA nie zrobily nic: „limit dzienny toru 'produkcja'
+    wyczerpany". Konto stracilo wieczorne notki przez prace nad koncem.
+    """
+    import os as _os
     if run_id is None:
-        return "produkcja"
+        return ("test" if (_os.environ.get("NIA_TRYB") or "").strip().lower()
+                == "test" else "produkcja")
     try:
         w = conn.execute("SELECT tryb FROM runs WHERE id = ?", (run_id,)).fetchone()
     except sqlite3.Error:
