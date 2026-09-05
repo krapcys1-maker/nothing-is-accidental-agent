@@ -129,7 +129,13 @@ print("=== 6. ARTYKUL TEZ SIEGA NAJPIERW DO SPIZARNI ===")
 # wejscia i 0,127 USD po to, zeby wybrac jeden fakt — podczas gdy w indeksie
 # lezaly gotowe, oplacone i przepuszczone przez bramke.
 i_spizarnia = src.find("stages.wez_kandydatow(ile)")
-i_szukanie = src.find("stages.znajdz_ciekawostki(conn, run_id, ile=ile)")
+# WOLANIE ROZBITE NA DWA WIERSZE od 5 wrzesnia 2026, bo doszedl
+# `dla_artykulu=True` — sciezka artykulu przedstawia sie, zeby limit
+# dobowy notek nie zaglodzil wtorkowego tekstu. Szukamy wiec samej
+# nazwy funkcji, nie calego wywolania z argumentami: literal z
+# argumentami lamie sie przy kazdym dolozeniu parametru, a pilnujemy
+# tu KOLEJNOSCI (spizarnia przed zakupami), nie ksztaltu wywolania.
+i_szukanie = src.find("stages.znajdz_ciekawostki(")
 sprawdz("wybierz_fakt pyta indeks", i_spizarnia > 0, i_spizarnia)
 sprawdz("i robi to PRZED platnym szukaniem",
         0 < i_spizarnia < i_szukanie, (i_spizarnia, i_szukanie))

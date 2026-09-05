@@ -285,7 +285,13 @@ def wybierz_fakt(conn, run_id, ile: int = 8) -> dict:
         print("  [temat] z indeksu: %d kandydatow (bez wyszukiwania)"
               % len(fakty), flush=True)
     else:
-        fakty = stages.znajdz_ciekawostki(conn, run_id, ile=ile)
+        # `dla_artykulu=True` ZDEJMUJE LIMIT DOBOWY, nie sufit prob.
+        # Przed wtorkowym artykulem chodza dwa przebiegi notek i przy wspolnym
+        # limicie moga zjesc caly przydzial — a wtedy tydzien konczy sie bez
+        # artykulu. Szukanie kosztuje 0,0185 USD, artykul okolo 1,5 USD i jest
+        # jedynym zrodlem subskrypcji.
+        fakty = stages.znajdz_ciekawostki(conn, run_id, ile=ile,
+                                          dla_artykulu=True)
     if not fakty:
         raise ValueError("pula ciekawostek pusta")
 

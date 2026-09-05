@@ -876,16 +876,66 @@ def _co_z_tego_wyszlo(wpisy: list[dict]) -> None:
     #
     # Odpowiedz znaczy, ze ktos poswiecil czas. Polubienie znaczy, ze ktos
     # przewinal i kliknal. To sa rozne zdarzenia i nie wolno ich sumowac.
+    # KANAL Z CELU REAKCJI, NIE Z JEJ TYPU — i to nie jest szczegol nazewniczy.
+    #
+    # Komentarz pod CUDZA NOTKA dostaje u Substacka numer z tej samej
+    # przestrzeni `c-`, co nasza notka, wiec polubienie takiego komentarza
+    # przychodzi jako `note_like`. Liczone po typie ladowalo w kanale notek.
+    #
+    # ZMIERZONE 5 wrzesnia 2026 na produkcyjnym dzienniku, od przestawienia
+    # konta: z 214 reakcji 26 typu `note_*` stoi pod NASZYM KOMENTARZEM.
+    # Roznica w tym, co z tego wychodzi:
+    #
+    #     po typie:    notka 2,84/szt   komentarz 0,13/szt   -> notka 22x lepsza
+    #     po numerze:  notka 1,27/szt   komentarz 0,29/szt   -> notka 4,4x
+    #
+    # Na podstawie tej pierwszej liczby napisalem wlascicielowi, ze komentarze
+    # sa 22 razy gorsze od notek. To bylo przeszacowane pieciokrotnie.
+    #
+    # `wzajemnosc.kanal_reakcji` robi to poprawnie od 2 wrzesnia — pyta o
+    # `czego`, czyli numer NASZEJ tresci, a typ zostawia jako droge zapasowa
+    # dla reakcji, ktorych podpiac sie nie da. Alarm tego nie uzywal.
+    try:
+        import wzajemnosc as _wz
+        _pozycje = _wz._nasze_pozycje()
+    except Exception:
+        _pozycje = {}
+
+    def _kanal(w) -> str:
+        if not _pozycje:
+            # BEZ POZYCJI ZOSTAJE STARY SPOSOB — z grubsza, ale jakis.
+            t = str(w.get("typ", ""))
+            return ("komentarz" if t.startswith("comment_")
+                    else "notka" if t.startswith("note_") else "nieznany")
+        k = _wz.kanal_reakcji(w, _pozycje)
+        return "komentarz" if k.startswith("komentarz") else k
+
     def _ilu(warunek) -> int:
         return sum(int(w.get("ilu") or 0) for w in skutki if warunek(str(w.get("typ", ""))))
 
-    odp_kom = _ilu(lambda t: t == "comment_reply")
-    odp_not = _ilu(lambda t: t == "note_reply")
-    lajk_kom = _ilu(lambda t: t == "comment_like")
-    lajk_not = _ilu(lambda t: t in ("note_like", "note_restack"))
+    def _ilu_kanalem(kanal: str, koncowka: tuple[str, ...]) -> int:
+        return sum(int(w.get("ilu") or 0) for w in skutki
+                   if _kanal(w) == kanal
+                   and str(w.get("typ", "")).endswith(koncowka))
+
+    odp_kom = _ilu_kanalem("komentarz", ("_reply",))
+    odp_not = _ilu_kanalem("notka", ("_reply",))
+    lajk_kom = _ilu_kanalem("komentarz", ("_like", "_restack"))
+    lajk_not = _ilu_kanalem("notka", ("_like", "_restack"))
     ile_kom = sum(1 for w in wystawione if w["rodzaj"] == "komentarz")
     ile_not = sum(1 for w in wystawione if w["rodzaj"] == "notka")
+    # ILE Z TEGO JEST NAPRAWDE ZMIERZONE. `kanal_reakcji` ma DROGE ZAPASOWA:
+    # reakcje, ktorej nie da sie podpiac pod nasza pozycje (bo wpis nie ma
+    # numeru albo dotyczy recznej notki wlasciciela), klasyfikuje po typie —
+    # czyli tak, jak robil to caly ten blok do 5 wrzesnia 2026. Zmierzone tego
+    # dnia: z 214 reakcji podpiac po numerze dalo sie 113, reszta szla droga
+    # zapasowa. Liczba bez tej informacji wygladalaby na dokladna.
+    _podpiete = sum(1 for w in skutki if str(w.get("czego") or "") in _pozycje)
     if ile_kom or ile_not:
+        if skutki:
+            print("\n  (podpiete pod nasza pozycje: %d z %d reakcji; reszta"
+                  " klasyfikowana po typie, czyli z grubsza)"
+                  % (_podpiete, len(skutki)))
         print("\n  ODPOWIEDZI na jedno dzialanie — to jest miara, ktora sie liczy:")
         if ile_kom:
             print(f"    komentarz u obcych  {odp_kom / ile_kom:>5.2f}"

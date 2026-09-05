@@ -35,7 +35,7 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-8728 wierszy, 148 funkcji na poziomie modułu, 0 klas
+8758 wierszy, 148 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -81,7 +81,7 @@
 | `_ile_prob_wolno_dzis()` *(wewn.)* | Ile RAZY wolno dzis siegnac po nowy material. |
 | `_przebiegi_z_bankiem_dzis(conn)` *(wewn.)* | Ile PRZEBIEGOW dobieralo dzis material do banku. |
 | `_polecenie_premiery(wydarzenia, ile)` *(wewn.)* | Polecenie o premierze do promptu ciekawostek — albo PUSTY NAPIS. |
-| `znajdz_ciekawostki(conn, run_id, ile)` | Materiał na notki w dni bez artykułu. |
+| `znajdz_ciekawostki(conn, run_id, ile, dla_artykulu)` | Materiał na notki w dni bez artykułu. |
 | `kuplet_korygujacy(tekst)` | Czy tekst uzywa ruchu „nie X. Y." — zaprzeczenie, potem poprawka. |
 | `zdania_z_tikiem(tekst)` | TE SAME trzy postacie tiku, ale oddane jako ZDANIA, nie jako „tak/nie". |
 | `ostatnie_otwarcia(rodzaj, ile)` | Pierwsze slowa ostatnich notek — zeby kolejna nie zaczela sie tak samo. |
@@ -376,7 +376,7 @@
 
 ### `alarm.py` — kontrola sesji, zdrowia i alarm do właściciela
 
-1006 wierszy, 23 funkcji na poziomie modułu, 0 klas
+1056 wierszy, 23 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -567,7 +567,7 @@
 
 ### `artykul_z_puli.py` — artykuł bierze temat z tej samej puli, co notki
 
-1451 wierszy, 14 funkcji na poziomie modułu, 0 klas
+1457 wierszy, 14 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|

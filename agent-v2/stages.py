@@ -1619,7 +1619,8 @@ def _polecenie_premiery(wydarzenia: list[dict[str, Any]], ile: int) -> str:
 
 
 def znajdz_ciekawostki(
-    conn: sqlite3.Connection, run_id: int, ile: int = config.CURIOSITY_BATCH
+    conn: sqlite3.Connection, run_id: int, ile: int = config.CURIOSITY_BATCH,
+    dla_artykulu: bool = False,
 ) -> list[dict[str, Any]]:
     """Materiał na notki w dni bez artykułu.
 
@@ -1703,6 +1704,35 @@ def znajdz_ciekawostki(
               " mimo limitu dobowego (proba %d z %d)"
               % (_wolnych_w_banku(), config.BANK_MIN_WOLNYCH,
                  _przebiegi_z_bankiem_dzis(conn) + 1,
+                 config.SZUKANIE_BANKU_MAKS_PROB), flush=True)
+    elif dla_artykulu:
+        # ARTYKUL NIE MOZE ZOSTAC ZAGLODZONY PRZEZ NOTKI SPRZED TRZECH GODZIN.
+        #
+        # Artykul idzie raz w tygodniu, we wtorek o 14:00; przed nim tego dnia
+        # chodza dwa przebiegi notek (07:00 i 11:20). Limit dobowy jest
+        # WSPOLNY, wiec przy banku, ktory nie schodzi pod podloge, notki moga
+        # zjesc caly przydzial, a `artykul_z_puli` konczy sie wtedy na
+        # `ValueError("pula ciekawostek pusta")`. `zalegly_artykul` tego nie
+        # ratuje — on ratuje TEKST, ktory powstal, a tu nie powstaje nic.
+        #
+        # RACHUNEK JEST ODWROTNY DO ZAMIERZONEGO. Limit oszczedza jedno
+        # szukanie — po przejsciu na spizarnie 5 wrzesnia 2026 zmierzone
+        # 0,0185 USD — i potrafi kosztowac caly artykul (~1,5 USD) plus tydzien
+        # publikacji. Artykul jest tez jedynym miejscem, z ktorego przychodza
+        # subskrypcje.
+        #
+        # SUFIT PROB ZOSTAJE. Zwolnienie dotyczy limitu DOBOWEGO, nie sufitu
+        # `SZUKANIE_BANKU_MAKS_PROB`: zepsute szukanie ma sie zatrzymac, a nie
+        # probowac w kolko, tylko dlatego, ze wola je artykul.
+        if _przebiegi_z_bankiem_dzis(conn) >= config.SZUKANIE_BANKU_MAKS_PROB:
+            print("  [ciekawostki] artykul, ale sufit prob wyczerpany"
+                  " (%d z %d) — nie szukam"
+                  % (_przebiegi_z_bankiem_dzis(conn),
+                     config.SZUKANIE_BANKU_MAKS_PROB), flush=True)
+            return []
+        print("  [ciekawostki] szukam DLA ARTYKULU mimo limitu dobowego"
+              " (proby dzis: %d, sufit %d)"
+              % (_przebiegi_z_bankiem_dzis(conn),
                  config.SZUKANIE_BANKU_MAKS_PROB), flush=True)
     elif _przebiegi_z_bankiem_dzis(conn) >= _ile_prob_wolno_dzis():
         # Zwykle dobieranie do banku: RAZ NA DOBE, nie przy kazdym z pieciu
@@ -8163,7 +8193,7 @@ def posortuj_bank(conn: sqlite3.Connection, run_id: int | None = None,
     # RANKUJEMY TYLKO WTEDY, GDY JEST CO RANKOWAC.
     #
     # `notki_dnia` wolalo to bezwarunkowo przy KAZDYM z pieciu przebiegow dnia,
-    # a bank zmienia sie najwyzej raz na dobe (`SZUKANIE_BANKU_NA_DOBE = 1`).
+    # a bank dobiera material najwyzej `SZUKANIE_BANKU_NA_DOBE` razy na dobe.
     # Zmierzone 4 wrzesnia 2026: CZTERNASCIE wywolan etapu `bank` w jednej
     # dobie, przy 3-7 w dniach wczesniejszych.
     #

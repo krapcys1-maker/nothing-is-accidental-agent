@@ -464,7 +464,11 @@ class StagesZIndeksem(AtrapaStages):
         # szukania: jedno wywolanie `curiosity` to 18 wyszukiwan i 0,127 USD.
         self.szukania = 0
 
-    def znajdz_ciekawostki(self, conn, run_id, ile=8):
+    def znajdz_ciekawostki(self, conn, run_id, ile=8, **kw):
+        # `**kw` PRZYJMUJE `dla_artykulu` — sciezka artykulu od
+        # 5 wrzesnia 2026 przedstawia sie przy wolaniu, zeby limit
+        # dobowy notek nie zaglodzil wtorkowego artykulu. Atrapa ma
+        # przyjmowac to samo, co prawdziwa funkcja.
         self.szukania += 1
         return []
 
