@@ -1338,10 +1338,37 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
                 print(f"  (zwloka {ile / 60:.0f} min przed pierwsza notka)",
                       flush=True)
                 time.sleep(ile)
+        # FAKTY NOTEK, KTORE NIE WYSZLY, WRACAJA DO PULI.
+        #
+        # `wez_kandydatow` odhacza CALA wyjeta osemke przy wyjmowaniu, a
+        # `stages.notki_dnia` oddaje na koncu tylko NIETKNIETY zapas. Fakt
+        # zdjety przez `wybierz_material` pod notke, ktora potem nie wyszla,
+        # nie byl ani wydany, ani zwrocony — przepadal na zawsze.
+        #
+        # ZMIERZONE NA PRODUKCJI, 14 dni: 50 notek napisanych, 40 wystawionych.
+        # SZESC straconych, w pieciu przebiegach (102, 104, 105, 129, 139),
+        # dwoma mechanizmami widocznymi w dzienniku:
+        #   104 — notka odrzucona za adres www w tresci, bez proby zastepczej;
+        #   139 — napisane TRZY notki z gory, wydana jedna, potem „czas
+        #         przebiegu wyczerpany"; dwie oplacone notki i dwa fakty
+        #         przepadly razem.
+        #
+        # ZASADA „WOLIMY STRACIC NIZ WYSTAWIC DWA RAZY" ZOSTAJE NIETKNIETA.
+        # Dotyczy faktu, ktory JUZ POSZEDL w swiat — takiego blokuje
+        # `zapisz_zuzyte` i pamiec notek. Fakt nigdy nieopublikowany nie ma
+        # jak sie zdublowac.
+        #
+        # `break` ZAMIAST `return`: petla jest ostatnia instrukcja `notki()`,
+        # wiec jedno znaczy dokladnie to samo co drugie — ale po `break` kod
+        # ponizej sie wykona i fakty wroca. `return` z tej petli gubil ich
+        # najwiecej, bo tak wychodzi sie przy koncu czasu.
+        niewydane: list[dict] = []
         for n in stages.notki_dnia(conn, run_id, ile=na_teraz["notki"],
                                    od=juz.get("notki", 0)):
             if not zostal_czas("notki"):
-                return
+                if n.get("fakt"):
+                    niewydane.append(n["fakt"])
+                break
             gotowe = [k for k in n["candidates"]
                       if k.get("safe_to_post") and k.get("length_ok")]
             if not gotowe:
@@ -1357,10 +1384,17 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
                         if powod:
                             break
                     stages.zakwestionuj_promocje(n["promocja_url"], powod)
+                # Tu ladowal przebieg 104: notka napisana, odrzucona za adres
+                # www w tresci, zadnego kandydata `safe_to_post` — i fakt
+                # zostawal odhaczony mimo ze nikt go nie zobaczyl.
+                if n.get("fakt"):
+                    niewydane.append(n["fakt"])
                 continue
             if wyslij:
                 if not rytm("notka", "notki", rytm_stanu):
-                    return
+                    if n.get("fakt"):
+                        niewydane.append(n["fakt"])
+                    break
                 wynik = browser.wystaw_notke(gotowe[0]["note"].strip(), wyslij=True,
                                              typ=n.get("type", ""),
                                              forma=n.get("forma", ""),
@@ -1388,6 +1422,10 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
                 # Fakt odhaczamy DOPIERO po potwierdzonej publikacji. Wczesniej
                 # znikal juz przy znalezieniu, wiec przepadal takze wtedy, gdy
                 # notka nie poszla albo gdy przebieg byl tylko sprawdzeniem.
+                # PUBLIKACJA SIE NIE UDALA — fakt wraca. Bez tego tekst byl
+                # zaplacony, notka nie poszla, a material znikal z puli.
+                if not wynik.get("wyslane") and n.get("fakt"):
+                    niewydane.append(n["fakt"])
                 if wynik.get("wyslane") and n.get("fakt"):
                     stages.zapisz_zuzyte([n["fakt"]])
                     # I TO SAMO W INDEKSIE — patrz `stages.oznacz_uzyty`.
@@ -1432,7 +1470,20 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
                          ", ".join(gotowe[0].get("zargon") or []))):
                     print("  ^ %-24s %s" % (_etykieta, _co or "czysto"),
                           flush=True)
+                # PRZEBIEG NA SUCHO NIE SPALA MATERIALU. Bez tego kazde
+                # obejrzenie notek przez `--poza-oknem` zabieralo pule faktow
+                # z produkcji — czyli moje wlasne sprawdzanie kosztowalo
+                # wieczorne publikacje. To sie juz raz zdarzylo (patrz
+                # `NIA_TRYB=test` w `db.tryb_przebiegu`).
+                if n.get("fakt"):
+                    niewydane.append(n["fakt"])
             zrobione["notki"] += 1
+
+        # ZWROT. Stoi tu, a nie w `finally`, bo z tej petli wychodzi sie juz
+        # tylko przez `break` — a `break` prowadzi dokladnie tutaj.
+        if niewydane:
+            print("  [notki] oddane do puli, bo nie wyszly: %d"
+                  % stages.zwroc_kandydatow(niewydane), flush=True)
 
     # --- 3. komentarze u innych ----------------------------------------------
     # KANAL NA CALYM BLOKU, NIE NA JEDNYM WYWOLANIU. Znacznik siedzial wczesniej
