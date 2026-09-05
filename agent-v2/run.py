@@ -1366,8 +1366,8 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
         for n in stages.notki_dnia(conn, run_id, ile=na_teraz["notki"],
                                    od=juz.get("notki", 0)):
             if not zostal_czas("notki"):
-                if n.get("fakt"):
-                    niewydane.append(n["fakt"])
+                if n.get("fakt_wpis"):
+                    niewydane.append(n["fakt_wpis"])
                 break
             gotowe = [k for k in n["candidates"]
                       if k.get("safe_to_post") and k.get("length_ok")]
@@ -1387,13 +1387,13 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
                 # Tu ladowal przebieg 104: notka napisana, odrzucona za adres
                 # www w tresci, zadnego kandydata `safe_to_post` — i fakt
                 # zostawal odhaczony mimo ze nikt go nie zobaczyl.
-                if n.get("fakt"):
-                    niewydane.append(n["fakt"])
+                if n.get("fakt_wpis"):
+                    niewydane.append(n["fakt_wpis"])
                 continue
             if wyslij:
                 if not rytm("notka", "notki", rytm_stanu):
-                    if n.get("fakt"):
-                        niewydane.append(n["fakt"])
+                    if n.get("fakt_wpis"):
+                        niewydane.append(n["fakt_wpis"])
                     break
                 wynik = browser.wystaw_notke(gotowe[0]["note"].strip(), wyslij=True,
                                              typ=n.get("type", ""),
@@ -1424,8 +1424,8 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
                 # notka nie poszla albo gdy przebieg byl tylko sprawdzeniem.
                 # PUBLIKACJA SIE NIE UDALA — fakt wraca. Bez tego tekst byl
                 # zaplacony, notka nie poszla, a material znikal z puli.
-                if not wynik.get("wyslane") and n.get("fakt"):
-                    niewydane.append(n["fakt"])
+                if not wynik.get("wyslane") and n.get("fakt_wpis"):
+                    niewydane.append(n["fakt_wpis"])
                 if wynik.get("wyslane") and n.get("fakt"):
                     stages.zapisz_zuzyte([n["fakt"]])
                     # I TO SAMO W INDEKSIE — patrz `stages.oznacz_uzyty`.
@@ -1475,8 +1475,8 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
                 # z produkcji — czyli moje wlasne sprawdzanie kosztowalo
                 # wieczorne publikacje. To sie juz raz zdarzylo (patrz
                 # `NIA_TRYB=test` w `db.tryb_przebiegu`).
-                if n.get("fakt"):
-                    niewydane.append(n["fakt"])
+                if n.get("fakt_wpis"):
+                    niewydane.append(n["fakt_wpis"])
             zrobione["notki"] += 1
 
         # ZWROT. Stoi tu, a nie w `finally`, bo z tej petli wychodzi sie juz

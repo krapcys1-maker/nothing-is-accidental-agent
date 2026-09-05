@@ -3978,6 +3978,55 @@ def teksty_ostatnich_notek(ile: int = 40) -> list[str]:
     return teksty
 
 
+# POLA WPISU BANKU, KTORE SA DOWODEM — i tylko one ida do pisarza notek.
+#
+# `material = {"fact": fakt}` podawalo CALY wpis indeksu, a `note()` wkleja go
+# do promptu przez `json.dumps` pod naglowkiem „The evidence — everything you
+# say comes from here". Zmierzone na zywym indeksie: 27 pol, z czego wiekszosc
+# to ksiegowosc banku i ZDANIA SEDZIEGO — `dlaczego_mocny` („A model escaping
+# a safety sandbox and hundreds of agents coordinating..."), `podobne_do`,
+# `ranga: 1`, `zielone_swiatlo: True`.
+#
+# Najgorsze jest `powod`: potrafi zawierac TEKST WCZESNIEJSZEJ NOTKI —
+# „juz o tym pisalismy — notka: Ox Alpha, the anonymous model that swept...".
+# Prompt notki mowi przy tym wprost: „Everything else in the evidence is
+# background you may draw on". Czyli zapraszalismy pisarza, zeby czerpal
+# z tresci notki, ktora juz wyszla — dokladnie ta plaskosc, przed ktora stoi
+# zapora „ta sama nazwa".
+DOWOD_DLA_PISARZA = frozenset({
+    "fact",             # sam fakt
+    "actually",         # co jest naprawde prawda wedlug zrodla
+    "control_fact",     # co mowi dokument kontrolny
+    "control_url",      # gdzie on stoi
+    "control_verdict",  # werdykt sprawdzenia
+    "control_date",     # z kiedy jest dokument
+    "url",              # zrodlo faktu
+    "source_date",      # data zrodla
+    "domain",           # dziedzina
+    "consequence",      # co z tego wynika — czesc ustalenia, nie oceny
+    "wrong_belief",     # w co czytelnik wierzy blednie — material notki
+    "kat_wziety",       # ZADANIE dla tej notki, prompt wola je po nazwie
+})
+
+# Pola, o ktorych WIEMY, ze sa ksiegowoscia. Nie sluza do filtrowania —
+# filtruje biala lista wyzej. Sluza do tego, zeby POLE, KTOREGO TU NIE MA
+# I NIE MA GO W BIALEJ LISCIE, dalo sie zauwazyc: nowy rodzaj dowodu
+# przepadlby inaczej po cichu, a to jest ten sam ksztalt, co wzorzec
+# `*klucz*` zjadajacy plik testu. Pilnuje tego test.
+KSIEGOWOSC_BANKU = frozenset({
+    "status", "powod", "kiedy", "wazny_do", "zielone_swiatlo", "ranga",
+    "na_artykul", "dlaczego_mocny", "podobne_do", "uzyty_kiedy", "katy",
+    "drugi_kat", "scalone_z", "z_kanalu", "kanal_zrodlowy", "decision",
+})
+
+
+def _fakt_do_pisarza(fakt: dict[str, Any]) -> dict[str, Any]:
+    """Wpis banku obciety do tego, co jest dowodem."""
+    if not isinstance(fakt, dict):
+        return fakt
+    return {k: v for k, v in fakt.items() if k in DOWOD_DLA_PISARZA}
+
+
 def wybierz_material(zapas: list[dict[str, Any]],
                      unikaj: list[str],
                      wczesniej: list[Any] | None = None,
@@ -4277,6 +4326,14 @@ def notki_dnia(
         # Stare `if nr < len(formy) else "PROSTA"` bylo martwa galezia i przy
         # dziesieciu notkach wygladalo na pulapke, ktora nia nie jest.
         forma = formy[nr]
+        # PELNY WPIS BANKU — osobno od tego, co widzi pisarz.
+        #
+        # `material["fact"]` jest od 5 wrzesnia 2026 OBCIETY do pol dowodowych
+        # (patrz `DOWOD_DLA_PISARZA`), a `run.py` potrzebuje calego wpisu, zeby
+        # oddac go do puli razem z katem, gdy notka nie wyjdzie. Dwie rozne
+        # rzeczy, dwa rozne pola — mieszanie ich juz raz kosztowalo blok notek
+        # (patrz `tekst_faktu`).
+        fakt = None
         if typ == "MYSL":
             # JEDYNY TYP BEZ KARTY DOWODOWEJ — i dlatego nie zabiera faktu z
             # puli. Fakt zuzyty na notke, ktorej nie wolno go uzyc, przepadlby
@@ -4349,7 +4406,7 @@ def notki_dnia(
                 break
             juz_o_tym.append("%s %s" % (fakt.get("domain") or "",
                                         fakt.get("fact") or ""))
-            material = {"fact": fakt}
+            material = {"fact": _fakt_do_pisarza(fakt)}
         print(f"  [{typ} / {forma}]", flush=True)
         # Adres artykułu leci TYLKO pod notką, która ten artykuł promuje.
         # Pod ciekawostką byłby reklamą doklejoną do faktu i psułby ją.
@@ -4382,6 +4439,19 @@ def notki_dnia(
         # MYSL nie zuzyla zadnego faktu, wiec nie ma czego odhaczac.
         wynik["fakt"] = (None if typ == "MYSL"
                          else tekst_faktu(material.get("fact")) or None)
+        # CALY WPIS, NIE SAMO ZDANIE — do oddania do puli, gdy notka nie wyjdzie.
+        #
+        # `wynik["fakt"]` jest ZDANIEM i tak ma zostac: `zapisz_zuzyte` przyjmuje
+        # wylacznie tekst, a slownik, ktory tam wpadl, wywalil kiedys caly blok
+        # notek. Ale `zwroc_kandydatow` potrzebuje SLOWNIKA — dopasowuje po
+        # `fact` i oddaje osobno `kat_wziety`. Bez tego pola `run.py` podawal
+        # tam string i funkcja wywalala sie na `.get`.
+        #
+        # ZLAPANE PRZY CZYTANIU KODU, NIE TESTEM — moj wlasny test podawal
+        # slowniki prosto do `zwroc_kandydatow`, wiec sprawdzal funkcje, a nie
+        # to, co naprawde jej podaje `run.py`. Dokladnie ta sama slepota, ktora
+        # dzis trzy razy wychodzila w atrapach.
+        wynik["fakt_wpis"] = None if typ == "MYSL" else fakt
         # RANGA JEDZIE RAZEM Z FAKTEM — do dziennika, nie do decyzji.
         #
         # PO CO. Bank ustawia fakty od najmocniejszego i to on decyduje, ktory
@@ -4398,8 +4468,15 @@ def notki_dnia(
         #
         # Z tym polem parowanie jest DOKLADNE i za dwa tygodnie probka jest
         # duza. Dopiero wtedy wolno cokolwiek zrobic z samym rankingiem.
+        # `fakt`, NIE `material`. `material` to `{"fact": ...}`, wiec `ranga`
+        # nigdy nie lezala na jego poziomie i `material.get("ranga")` oddawalo
+        # ZAWSZE None. Przyrzad zbudowany po to, zeby sprawdzic, czy ocena banku
+        # cokolwiek przewiduje, nie zapisywal wiec ani jednej rangi — a opis
+        # dwa akapity nizej mowi, ze „z tym polem parowanie jest DOKLADNE".
+        # ZMIERZONE NA DZIENNIKU PRODUKCJI: 18 wpisow niesie pole `fakt_ranga`,
+        # WSZYSTKIE OSIEMNASCIE maja tam `None`. Ani jednej rangi.
         wynik["fakt_ranga"] = (None if typ == "MYSL"
-                               else material.get("ranga"))
+                               else (fakt or {}).get("ranga"))
         # Ta sama zasada co przy faktach: dzien promocji odhacza ten, kto notke
         # NAPRAWDE wystawil. Wystarczylo, ze kandydat przeszedl bramke — wiec
         # nieudana publikacja albo zwykle sprawdzenie zjadaly po cichu jeden

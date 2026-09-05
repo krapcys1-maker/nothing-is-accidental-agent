@@ -119,17 +119,17 @@ if "niewydane: list[dict] = []" not in ZR:
     sys.exit(1)
 _blok = ZR[ZR.index("niewydane: list[dict] = []"):
            ZR.index("oddane do puli, bo nie wyszly")]
-sprawdz("koniec czasu", _blok.count('niewydane.append(n["fakt"])') >= 1)
+sprawdz("koniec czasu", _blok.count('niewydane.append(n["fakt_wpis"])') >= 1)
 sprawdz("brak kandydata po sprawdzeniu (przebieg 104)",
         "Tu ladowal przebieg 104" in _blok)
 sprawdz("rytm nie pozwolil wystawic", "rytm(" in _blok)
 sprawdz("publikacja sie nie udala",
-        'not wynik.get("wyslane") and n.get("fakt")' in _blok)
+        'not wynik.get("wyslane") and n.get("fakt_wpis")' in _blok)
 sprawdz("przebieg na sucho tez nie spala",
         "PRZEBIEG NA SUCHO NIE SPALA MATERIALU" in _blok)
 sprawdz("wszystkich odlozen jest piec",
-        _blok.count('niewydane.append(n["fakt"])') == 5,
-        _blok.count('niewydane.append(n["fakt"])'))
+        _blok.count('niewydane.append(n["fakt_wpis"])') == 5,
+        _blok.count('niewydane.append(n["fakt_wpis"])'))
 
 print()
 print("=== 4. WYDANY FAKT NIE WRACA ===")
@@ -141,6 +141,43 @@ sprawdz("po udanej publikacji fakt idzie do zuzytych",
 _po_wyslaniu = _blok[_blok.index('if wynik.get("wyslane") and n.get("fakt")'):]
 sprawdz("i NIE trafia do zwracanych",
         'niewydane.append' not in _po_wyslaniu.split("oznacz_uzyty")[0])
+
+print()
+print("=== 4b. TO, CO run.py PODAJE, MUSI DAC SIE ODDAC ===")
+# TU MIALEM SLEPOTE I ZAPISUJE JA, BO KOSZTOWALABY PRODUKCJE.
+#
+# Pierwsza wersja tej poprawki odkladala `n["fakt"]` — a to jest ZDANIE, nie
+# slownik: `notki_dnia` przepuszcza fakt przez `tekst_faktu`, celowo, bo
+# slownik w `zapisz_zuzyte` wywalil kiedys caly blok notek. `zwroc_kandydatow`
+# wola natomiast `k.get("fact")`, wiec na stringu leci AttributeError.
+#
+# Moj wlasny test tego nie zlapal, bo podawal slowniki PROSTO do funkcji —
+# sprawdzal ja, a nie to, co jej naprawde podaje `run.py`. Dokladnie ta sama
+# slepota, ktora tego dnia trzy razy wyszla w atrapach testow.
+#
+# Dlatego `notki_dnia` niesie teraz DWA pola: `fakt` (zdanie, do odhaczania)
+# i `fakt_wpis` (caly wpis, do oddania razem z katem).
+_st = pathlib.Path("agent-v2/stages.py").read_text(encoding="utf-8")
+sprawdz("notki_dnia niesie osobne pole z calym wpisem",
+        'wynik["fakt_wpis"]' in _st)
+sprawdz("run.py oddaje do puli WPIS, nie zdanie",
+        'niewydane.append(n["fakt_wpis"])' in ZR
+        and 'niewydane.append(n["fakt"])' not in ZR)
+sprawdz("a do zuzytych nadal idzie ZDANIE",
+        'stages.zapisz_zuzyte([n["fakt"]])' in ZR)
+
+# I dowod na zywym ksztalcie: string wywala funkcje, slownik nie.
+stages._zapisz_indeks([{"fact": "A thing happened.", "status": "uzyty",
+                        "kiedy": "2099-01-01"}])
+try:
+    stages.zwroc_kandydatow(["A thing happened."])
+    _string_przechodzi = True
+except AttributeError:
+    _string_przechodzi = False
+sprawdz("samo zdanie NIE nadaje sie do zwrotu (dlatego dwa pola)",
+        not _string_przechodzi)
+sprawdz("a wpis owszem",
+        stages.zwroc_kandydatow([{"fact": "A thing happened."}]) == 1)
 
 print()
 print("=== 5. ZWROT NAPRAWDE ODZNACZA W INDEKSIE ===")
