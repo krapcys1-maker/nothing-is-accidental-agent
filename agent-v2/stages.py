@@ -4558,6 +4558,34 @@ def sprawdz_fakty(
     return fakty
 
 
+def bez_malpy_w_nazwie_paczki(tekst: str) -> str:
+    """Zdejmuje `@` z nazwy paczki o ksztalcie `@zakres/nazwa`.
+
+    PO CO. Zapora blokuje `@nazwa` w tresci, zeby konto nie oznaczylo
+    prawdziwej osoby — i to jest sluszne, bo oznaczenie jest DZIALANIEM wobec
+    kogos, nie zdaniem. Ale nazwa paczki ma ten sam ksztalt.
+
+    ZMIERZONE NA PRODUKCJI 5 wrzesnia 2026, przy naprawie B5: w banku lezy
+    odrzucony fakt „Hugging Face published @huggingface/kernels, a package
+    containing more than…" z powodem „zapora: wzmianka @ w tresci". Zapora
+    wziela nazwe paczki za wzmianke o osobie — ten sam rodzaj falszywego
+    alarmu, co regula o slowie „no one" przy `bramka_kandydata`.
+
+    DLACZEGO ZDEJMUJEMY, A NIE WPUSZCZAMY. Kuszace bylo dopisac do zapory
+    wyjatek „`@nazwa` z ukosnikiem to nie wzmianka". Odrzucilem to: nie umiem
+    bezpiecznie sprawdzic, czy Substack sam nie zamieni `@huggingface` w
+    oznaczenie, zanim dojdzie do ukosnika. Zdjecie malpy jest scisle
+    bezpieczniejsze od obu poprzednich zachowan — fakt zyje, a oznaczenie nie
+    moze powstac, bo nie ma z czego.
+
+    ZNACZENIE ZOSTAJE. „huggingface/kernels" nazywa te paczke jednoznacznie
+    i tak sie ja w prozie zapisuje. Ruszamy WYLACZNIE ksztalt `@zakres/`,
+    nie kazde `@`: adres pocztowy, samotne `@nazwa` i wszystko inne idzie
+    przez zapore jak dotad.
+    """
+    return re.sub(r"(^|\s)@([A-Za-z0-9_.-]{2,}/)", r"\1\2", tekst or "")
+
+
 def bez_wstrzykniecia(tekst: str, wlasny_adres_ok: bool = False) -> tuple[bool, str]:
     """Czy w naszym tekscie nie ma sladu cudzych POLECEN.
 
@@ -4605,7 +4633,30 @@ def bez_wstrzykniecia(tekst: str, wlasny_adres_ok: bool = False) -> tuple[bool, 
     # `(?i:...)`, a nie `(?i)`, bo flaga na poczatku alternatywy wysypuje `re`.
     if _re.search(r"(?i:https?://|\bwww\.)", do_sprawdzenia):
         return False, "adres www w tresci"
-    if _re.search(r"(^|\s)@[A-Za-z0-9_]{2,}", do_sprawdzenia):
+    # GRANICA TO KAZDY ZNAK NIEBEDACY LITERA, NIE TYLKO SPACJA.
+    #
+    # Do 5 wrzesnia 2026 wzorzec brzmial `(^|\s)@[A-Za-z0-9_]{2,}` i sprawdzal
+    # wylacznie `@` po spacji albo na poczatku. Wszystko po innym znaku
+    # przechodzilo — zmierzone tego dnia na zywej zaporze:
+    #
+    #     „See github.com/@simonw for details."   PRZECHODZILO
+    #     „path/@simonw is the handle."           PRZECHODZILO
+    #
+    # Znalezione przy dokladaniu `bez_malpy_w_nazwie_paczki`: sprawdzalem, czy
+    # wlasna poprawka nie otwiera furtki, i okazalo sie, ze furtka byla otwarta
+    # od poczatku, a ja mialem ja tylko poszerzyc o jeden przypadek.
+    #
+    # `\W`, czyli KAZDY znak niebedacy litera, cyfra ani podkresleniem —
+    # razem z sama malpa. Pierwsza wersja tej poprawki miala `[^\w@]`
+    # i przepuszczala „@@simonw": pierwsza malpa nie byla granica dla drugiej.
+    # Napisalem przy niej komentarz twierdzacy, ze taki przypadek jest lapany,
+    # i to bylo NIEPRAWDA — zlapal to dopiero wlasny test.
+    #
+    # CO NADAL PRZECHODZI I DLACZEGO, oba sprawdzone testem:
+    #   „press@x.com"    — przed malpa stoi litera, wiec to nie jest wzmianka;
+    #   „@2 dollars"     — po malpie jest jeden znak i spacja, a wzorzec zada
+    #                      nazwy o dlugosci co najmniej dwoch znakow.
+    if _re.search(r"(^|\W)@[A-Za-z0-9_]{2,}", do_sprawdzenia):
         return False, "wzmianka @ w tresci"
     podejrzane = (
         "ignore the above", "ignore previous", "ignore all previous",
@@ -7767,6 +7818,15 @@ def dopisz_kandydatow(kandydaci: list[dict[str, Any]],
     licznik = {"przyjete": 0, "odrzucone": 0, "znane": 0, "podobne": 0,
                "powtorka_llm": 0, "juz_pisalismy": 0}
     for k in kandydaci or []:
+        # NAZWA PACZKI PRZESTAJE WYGLADAC JAK WZMIANKA — patrz
+        # `bez_malpy_w_nazwie_paczki`. Normalizujemy PRZED bramka i przed
+        # zapisem, zeby zapora widziala to samo, co pozniej pojdzie do pisarza.
+        # Gdybym poprawil tylko kopie do sprawdzenia, fakt przeszedlby bramke,
+        # a do tekstu i tak trafilaby malpa.
+        for _pole in ("fact", "wrong_belief", "actually", "decision",
+                      "consequence"):
+            if k.get(_pole):
+                k[_pole] = bez_malpy_w_nazwie_paczki(str(k[_pole]))
         klucz = _klucz_faktu(str(k.get("fact") or ""))
         if not klucz:
             licznik["znane"] += 1
