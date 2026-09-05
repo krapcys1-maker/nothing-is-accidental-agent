@@ -121,3 +121,13 @@ agent-v2/data/
 *.p12
 id_rsa*
 id_ed25519*
+
+# KATALOG ROBOCZY AGENTA. Wszystko, co agent tworzy na boku — skrypty
+# pomiarowe, kopie, wyniki prob — ma powstawac TUTAJ, wewnatrz projektu.
+#
+# 5 wrzesnia 2026 wlasciciel zastal kopie tego kodu, kopie bazy produkcyjnej
+# i pliki `.env` z kluczami w katalogu tymczasowym POZA projektem. Nic z tego
+# nie wycieklo na GitHuba, ale nie mialo prawa tam byc.
+#
+# ZASADA: agent nie zapisuje NICZEGO poza folderem projektu. Nigdy.
+robocze/

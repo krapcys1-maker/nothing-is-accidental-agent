@@ -394,13 +394,14 @@ def koszt() -> str | None:
     # awaria, dla ktorej powstal — „agent padajacy w polowie przebiegu".
     wydane_m = (db.spent_usd(conn, dzis[:7], tryb="produkcja")
                 + db.spent_usd(conn, dzis[:7], tryb="test"))
-    if wydane_m > config.MONTHLY_LIMIT_USD * 0.75:
+    _sufit_m = config.sufit_miesieczny()
+    if wydane_m > _sufit_m * 0.75:
         import calendar
 
         zostalo_dni = calendar.monthrange(teraz.year, teraz.month)[1] - teraz.day
-        zostalo_usd = config.MONTHLY_LIMIT_USD - wydane_m
+        zostalo_usd = _sufit_m - wydane_m
         return (f"W tym miesiacu wydane ${wydane_m:.2f} przy suficie "
-                f"${config.MONTHLY_LIMIT_USD}. Zostalo ${zostalo_usd:.2f} "
+                f"${_sufit_m}. Zostalo ${zostalo_usd:.2f} "
                 f"na {zostalo_dni} dni — po wyczerpaniu agent staje w miejscu, "
                 f"w ktorym akurat jest.")
     return None

@@ -1,7 +1,7 @@
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-2991 wierszy, 27 funkcji na poziomie modułu, 1 klas
+2997 wierszy, 27 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -35,7 +35,7 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-8574 wierszy, 146 funkcji na poziomie modułu, 0 klas
+8706 wierszy, 148 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -127,7 +127,8 @@
 | `sprawdz_fakty(conn, run_id, post)` | Szuka faktów do komentarza, zamiast pozwolić modelowi pisać z pamięci. |
 | `bez_wstrzykniecia(tekst, wlasny_adres_ok)` | Czy w naszym tekscie nie ma sladu cudzych POLECEN. |
 | `_status_twierdzenia(c)` *(wewn.)* | Status twierdzenia, znormalizowany. NIEZNANA ETYKIETA ZNACZY `unverified`. |
-| `zweryfikuj(conn, run_id, tekst, kontekst)` | Sprawdza to, co model NAPISAŁ — nie to, czego szukał przed pisaniem. |
+| `_rekord_do_weryfikacji(note_type, evidence)` *(wewn.)* | Kontekst dla weryfikatora: rekord, z ktorego notka powstala. |
+| `zweryfikuj(conn, run_id, tekst, kontekst, szukaj)` | Sprawdza to, co model NAPISAŁ — nie to, czego szukał przed pisaniem. |
 | `_zapora_notki(tekst)` *(wewn.)* | Pusty napis, gdy tekst notki przechodzi zapory. Inaczej powod. |
 | `_zapora_komentarza(tekst)` *(wewn.)* | To samo dla komentarza — ale komentarz ma zapore o jedna wiecej. |
 | `_liczby_zarzutu(c)` *(wewn.)* | Liczby z zarzutu, znormalizowane — po nich rozpoznajemy TEN SAM fakt. |
@@ -181,6 +182,7 @@
 | `_termin_waznosci(dni)` *(wewn.)* | Kiedy ta kandydatura przestaje byc tematem. Data z godzina, w UTC. |
 | `_po_terminie(k)` *(wewn.)* | Czy kandydatura jest juz po swoim terminie przydatnosci. |
 | `bank_pelny()` | Czy zapas wystarczy, zeby NIE placic za nowe szukanie. |
+| `oznacz_uzyty(fakt)` | Znaczy w indeksie fakt, ktory NAPRAWDE wyszedl w swiat. |
 | `zwroc_kandydatow(kandydaci)` | Oddaje do puli kandydatow, ktorych ostatecznie NIE uzyto. |
 | `stan_indeksu()` | Ile mamy zapasu i ile odsialismy — do wypisania przy starcie. |
 | `korpus_fedreg(ile_dokumentow, ile_gestych)` | Preambuly przepisow, w ktorych regulator ODPOWIADA na zastrzezenia. |
@@ -292,7 +294,7 @@
 
 ### `llm.py` — JEDYNA warstwa dostępu do modeli i liczenia kosztu
 
-815 wierszy, 15 funkcji na poziomie modułu, 3 klas
+816 wierszy, 15 funkcji na poziomie modułu, 3 klas
 
 | funkcja | co robi |
 |---|---|
@@ -374,7 +376,7 @@
 
 ### `alarm.py` — kontrola sesji, zdrowia i alarm do właściciela
 
-1005 wierszy, 23 funkcji na poziomie modułu, 0 klas
+1006 wierszy, 23 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -428,7 +430,7 @@
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-3042 wierszy, 27 funkcji na poziomie modułu, 0 klas
+3075 wierszy, 28 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -438,6 +440,7 @@
 | `w_szczycie(kiedy)` | Czy teraz obowiazuje droga taryfa. |
 | `narzedzie_wyszukiwania(model)` | Nazwa narzedzia wyszukiwania i ewentualne ostrzezenie. |
 | `sufit_dnia(dzien)` | Sufit obowiazujacy W TYM DNIU, nie dzisiaj. |
+| `sufit_miesieczny(dzis)` | Sufit miesieczny na DZIS. Po `PODWYZKA_DO` znowu bazowy. |
 | `kotwica_dlugosci(glebokosc)` | Zdanie kalibrujace dlugosc, dobrane do ilosci materialu. |
 | `dlugosc_dla(glebokosc)` | Ile slow ma miec artykul o tej glebokosci. |
 | `_tokens_for(chars)` *(wewn.)* | — |

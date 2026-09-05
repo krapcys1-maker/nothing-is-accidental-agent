@@ -158,7 +158,12 @@ sprawdz("DeepSeek ma swoje osobne ustawienie",
 
 print()
 print("=== 2. LIMIT MIESIECZNY: OSTRZEGA, ZANIM ZATRZYMA ===")
-sprawdz("alarm patrzy tez na miesiac", "MONTHLY_LIMIT_USD" in alarm_src)
+# SUFIT MIESIECZNY POSZEDL TA SAMA DROGA CO DZIENNY, i to jest cala tresc
+# tej poprawki testu. 5 wrzesnia 2026 wlasciciel podniosl sufit miesieczny do
+# 150 USD WYLACZNIE na wrzesien — a zwykle podniesienie stalej zostaloby na
+# zawsze, bo powrot zalezalby od czyjejs pamieci. Podwyzka wygasa z kalendarza
+# (`config.sufit_miesieczny`), dokladnie jak dzienna nizej.
+sprawdz("alarm patrzy tez na miesiac", "sufit_miesieczny(" in alarm_src)
 sprawdz("i mowi, ile dni zostalo", "zostalo_dni" in alarm_src)
 # Prog dzienny liczy sie teraz z `sufit_dnia(dzien)`, a nie ze stalej
 # `DAILY_LIMIT_USD`. Powod: alarm patrzy takze na WCZORAJ, a wczoraj sufit
@@ -166,8 +171,16 @@ sprawdz("i mowi, ile dni zostalo", "zostalo_dni" in alarm_src)
 # doniosl „Wczoraj wydane $7.22 przy suficie $5.0" w dniu, w ktorym
 # obowiazywal sufit dziesieciu dolarow.
 sprawdz("prog miesieczny jest nizszy niz dzienny",
-        "MONTHLY_LIMIT_USD * 0.75" in alarm_src
+        "_sufit_m * 0.75" in alarm_src
         and "sufit * 0.9" in alarm_src)
+# I NIKT NIE CZYTA JUZ STALEJ WPROST. Gdyby ktorykolwiek z tych trzech plikow
+# zostal przy `config.MONTHLY_LIMIT_USD`, wrzesniowa podwyzka omijalaby go po
+# cichu — to ta sama rodzina wad, co martwy wpis EFFORT z punktu 1.
+import pathlib as _pl3   # noqa: E402
+for _p in ("llm.py", "alarm.py", "run.py"):
+    sprawdz("%s nie czyta juz stalej wprost" % _p,
+            "config.MONTHLY_LIMIT_USD" not in
+            _pl3.Path("agent-v2/%s" % _p).read_text(encoding="utf-8"), _p)
 sprawdz("sufit dzienny brany z TAMTEGO dnia, nie z dzisiaj",
         "config.sufit_dnia(dzien)" in alarm_src)
 # NIE ZACZYNAJ TEGO, CZEGO NIE SKONCZYSZ — ta sama zasada co przy przerwach.

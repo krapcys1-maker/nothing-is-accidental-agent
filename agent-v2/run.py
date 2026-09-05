@@ -1381,6 +1381,12 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
                 # notka nie poszla albo gdy przebieg byl tylko sprawdzeniem.
                 if wynik.get("wyslane") and n.get("fakt"):
                     stages.zapisz_zuzyte([n["fakt"]])
+                    # I TO SAMO W INDEKSIE — patrz `stages.oznacz_uzyty`.
+                    # `zapisz_zuzyte` dopisuje do `zuzyte_fakty.json`, ktorego
+                    # `wez_kandydatow` NIE CZYTA. Bez tej linii opublikowany
+                    # fakt zostawal w indeksie jako „nowy" i mogl wyjsc drugi
+                    # raz nastepnego dnia.
+                    stages.oznacz_uzyty(n["fakt"])
                 # Dzien promocji artykulu tez odhaczamy dopiero po publikacji —
                 # inaczej artykul dostawal mniej niz piec notek promujacych,
                 # a nikt by tego nie zauwazyl.
@@ -2426,7 +2432,7 @@ def main() -> int:
         from datetime import datetime as _dt, timezone as _tz
 
         _m = _dt.now(_tz.utc).strftime("%Y-%m")
-        _zostalo = config.MONTHLY_LIMIT_USD - db.spent_usd(conn, _m)
+        _zostalo = config.sufit_miesieczny() - db.spent_usd(conn, _m)
         if _zostalo < config.RUN_LIMIT_USD:
             print(f"   MIESIAC NA WYCZERPANIU: zostalo ${_zostalo:.2f}, a caly "
                   f"artykul to do ${config.RUN_LIMIT_USD}. Nie zaczynam — "

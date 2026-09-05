@@ -299,9 +299,10 @@ def _preflight(purpose: str, conn: sqlite3.Connection, run_id: int | None) -> No
     # rozdzial obowiazkow — pieniadze wychodza z tej samej karty.
     spent_month = (db.spent_usd(conn, month, tryb="produkcja")
                    + db.spent_usd(conn, month, tryb="test"))
-    if spent_month >= config.MONTHLY_LIMIT_USD:
+    _sufit_m = config.sufit_miesieczny()
+    if spent_month >= _sufit_m:
         raise BudgetExceeded(
-            f"limit miesięczny wyczerpany: {spent_month:.4f} / {config.MONTHLY_LIMIT_USD} USD"
+            f"limit miesięczny wyczerpany: {spent_month:.4f} / {_sufit_m} USD"
         )
 ```
 

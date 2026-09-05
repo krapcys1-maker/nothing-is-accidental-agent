@@ -131,5 +131,49 @@ sprawdz("dni bez zapisanego planu sa oznaczone",
         "plan nieznany" in zrodlo)
 
 print()
+print("=== PODWYZKA MIESIECZNA WYGASA Z KALENDARZA, NIE Z PAMIECI ===")
+# CO SIE STALO. 5 wrzesnia 2026 pomiar pokazal, ze przy tempie tego miesiaca
+# sufit 40 USD padnie okolo 15.-20. dnia, a `BudgetExceeded` leci twardo przed
+# KAZDYM platnym wywolaniem — konto zamilkloby do konca miesiaca:
+#
+#     wrzesien, 5 dni:  13,11 USD;  konto 9,85 -> 1,97/dobe -> 59 USD/miesiac
+#
+# Wlasciciel podniosl sufit do 150 USD WYLACZNIE na wrzesien, bo w tym
+# miesiacu duzo sprawdzalismy; od pazdziernika ma wrocic 40.
+#
+# CZEGO TEN TEST PILNUJE: ze powrot NIE ZALEZY od tego, czy ktos o nim
+# pamieta 1 pazdziernika. Zwykle podniesienie stalej zostaloby na zawsze —
+# ta podwyzka konczy sie data.
+sprawdz("we wrzesniu sufit jest podniesiony",
+        config.sufit_miesieczny("2026-09-05") == config.PODWYZKA_MIESIECZNA_USD,
+        config.sufit_miesieczny("2026-09-05"))
+sprawdz("ostatniego dnia wrzesnia jeszcze obowiazuje",
+        config.sufit_miesieczny("2026-09-30") == config.PODWYZKA_MIESIECZNA_USD,
+        config.sufit_miesieczny("2026-09-30"))
+sprawdz("1 pazdziernika WRACA BAZOWY, bez niczyjego udzialu",
+        config.sufit_miesieczny("2026-10-01") == config.MONTHLY_LIMIT_USD,
+        config.sufit_miesieczny("2026-10-01"))
+sprawdz("i zostaje bazowy pozniej",
+        config.sufit_miesieczny("2027-03-01") == config.MONTHLY_LIMIT_USD,
+        config.sufit_miesieczny("2027-03-01"))
+# BEZ DATY BIERZE ZEGAR — inaczej produkcja liczylaby wedlug niczego.
+sprawdz("bez podanej daty oddaje liczbe, nie None",
+        isinstance(config.sufit_miesieczny(), float),
+        config.sufit_miesieczny())
+# PODWYZKA NIE MOZE OBNIZYC. Gdyby ktos wpisal tam mniej niz bazowy sufit,
+# „podwyzka" po cichu zacisnelaby budzet.
+sprawdz("podwyzka nigdy nie jest nizsza od bazowego sufitu",
+        config.sufit_miesieczny("2026-09-05") >= config.MONTHLY_LIMIT_USD)
+
+# KOD NAPRAWDE Z TEGO KORZYSTA. Sama funkcja w config.py nic nie znaczy,
+# jesli bramka nadal czyta stala — to ta sama rodzina wad co martwy EFFORT.
+import pathlib as _pl2   # noqa: E402
+for _plik in ("llm.py", "alarm.py", "run.py"):
+    _zr = _pl2.Path("agent-v2/%s" % _plik).read_text(encoding="utf-8")
+    sprawdz("%s pyta o sufit funkcja, nie stala" % _plik,
+            "sufit_miesieczny(" in _zr and "config.MONTHLY_LIMIT_USD" not in _zr,
+            _plik)
+
+print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))
 sys.exit(1 if oblane else 0)

@@ -3172,8 +3172,30 @@ def note(
         # `czysty` powyzej ZOSTAJE bramka i ma zostac: to zapora przeciw
         # wstrzyknieciu, czyli obrona przed cudzym tekstem probujacym pisac
         # przez nasze konto. To jest co innego niz watpliwosc co do faktu.
-        kontekst = f"Substack note, type {note_type}"
-        audyt = zweryfikuj(conn, run_id, text, kontekst)
+        # WERYFIKATOR DOSTAJE REKORD, NA KTORYM NOTKA STOI.
+        #
+        # Do 5 wrzesnia 2026 szlo tu samo „Substack note, type CIEKAWOSTKA".
+        # Fakt niesie `url`, `source_date`, `control_url`, `control_verdict`
+        # i `control_fact` — wszystko sprawdzone i OPLACONE wczesniej, przy
+        # dobieraniu do banku. Weryfikator tego nie widzial i szukal wszystkiego
+        # od nowa, a kazda runda wyszukiwania to 10-19 tys. tokenow wejscia.
+        #
+        # ZMIERZONE 29 sierpnia - 4 wrzesnia: 161 wywolan, 900 wyszukiwan
+        # (5,6 na wywolanie), 7,11 mln tokenow wejscia, 2,55 USD.
+        #
+        # TO NIE JEST WYLACZENIE BRAMKI. Weryfikator ma nadal prawo obalic
+        # rekord — i to jest cala wartosc: 14 z 87 tekstow w tym tygodniu
+        # mialo blad faktyczny (8 poprawionych, 6 zablokowanych), a wsrod nich
+        # zmyslona szesciomiesieczna przerwa i praca, ktora „nigdy nie twierdzi"
+        # tego, co jej przypisano. Zmienia sie tylko punkt startu: sprawdz
+        # wobec rekordu, szukaj tego, czego rekord nie rozstrzyga.
+        kontekst = _rekord_do_weryfikacji(note_type, evidence)
+        # MYSL NIE SZUKA W SIECI. Ten typ z zalozenia nie stoi na fakcie —
+        # `weryfikacja.md` sprawdza przy nim KSZTALT tekstu, nie prawdziwosc
+        # zewnetrznego twierdzenia. Wyszukiwanie nie mialo tam czego znalezc,
+        # a kosztowalo tyle samo, co przy notce faktograficznej.
+        audyt = zweryfikuj(conn, run_id, text, kontekst,
+                           szukaj=(note_type != "MYSL"))
 
         # ADRES NIE IDZIE DO NAPRAWY. Kilkadziesiat wierszy wyzej kod dokleja
         # do notki promujacej link do wlasnego artykulu — swiadomie WLASNYM
@@ -3188,7 +3210,18 @@ def note(
         sufiks = ogon if (ogon and text.endswith(ogon)) else ""
         proza = text[: -len(sufiks)] if sufiks else text
 
-        poprawka = napraw_obalone(
+        # NAPRAWA POMIJA MYSL — Q4 z audytu, potwierdzone u nas.
+        #
+        # `weryfikacja.md` kaze oznaczyc KAZDA liczbe w MYSL jako `refuted`, bo
+        # to naruszenie kontraktu typu, a nie falsz. `napraw_obalone` z zasady
+        # nie usuwa zdania, tylko poprawia je Z MATERIALU — a materialu tu nie
+        # ma (`what_the_source_says` jest puste). Model wymysla wiec liczbe albo
+        # naprawa odpada, a drugie sprawdzenie i tak jest zaplacone: dwa platne
+        # wywolania na zdarzenie, ktorego nie da sie naprawic.
+        #
+        # Wlasciwa reakcja to przepisanie bez liczby, czego `naprawa.md` wprost
+        # zabrania. Wiec nie naprawiamy — zastrzezenie zostaje w logu.
+        poprawka = None if note_type == "MYSL" else napraw_obalone(
             conn, run_id, proza, audyt,
             kontekst=kontekst,
             min_slow=_min_slow,
@@ -4433,8 +4466,38 @@ def _status_twierdzenia(c: dict[str, Any]) -> str:
                                 "unverified") else "unverified"
 
 
+# POLA REKORDU, KTORE WERYFIKATOR MA ZOBACZYC. Biala lista, nie caly wpis:
+# `status`, `ranga`, `powod` i `dlaczego_mocny` to zdania SEDZIEGO BANKU, nie
+# dowody, a podane weryfikatorowi wygladalyby jak ustalenia.
+POLA_DO_WERYFIKACJI = ("fact", "actually", "url", "source_date",
+                       "control_url", "control_date", "control_verdict",
+                       "control_fact")
+
+
+def _rekord_do_weryfikacji(note_type: str, evidence: dict[str, Any]) -> str:
+    """Kontekst dla weryfikatora: rekord, z ktorego notka powstala.
+
+    Pusty rekord (MYSL, ARTYKUL) oddaje sam opis typu — tak jak dotad.
+    """
+    naglowek = f"Substack note, type {note_type}"
+    fakt = (evidence or {}).get("fact")
+    zrodlo = fakt if isinstance(fakt, dict) else (evidence or {})
+    pola = [(k, str(zrodlo.get(k) or "").strip())
+            for k in POLA_DO_WERYFIKACJI]
+    pola = [(k, w) for k, w in pola if w]
+    if not pola:
+        return naglowek
+    return (naglowek + "\n\nThe text was written from this record, which was "
+            "already checked and paid for when the fact entered our bank. "
+            "Check the text against it FIRST, and search only for what the "
+            "record does not settle. The record is not above doubt: if it is "
+            "wrong, say so.\n\n"
+            + "\n".join("- %s: %s" % (k, w[:400]) for k, w in pola))
+
+
 def zweryfikuj(
     conn: sqlite3.Connection, run_id: int, tekst: str, kontekst: str = "",
+    szukaj: bool = True,
 ) -> dict[str, Any]:
     """Sprawdza to, co model NAPISAŁ — nie to, czego szukał przed pisaniem.
 
@@ -4451,7 +4514,7 @@ def zweryfikuj(
                      dzis=_dt.now(_tz.utc).strftime("%d %B %Y"))
     try:
         raw = llm.call("factcheck", FACTCHECK_SYSTEM, prompt,
-                       conn=conn, run_id=run_id, web_search=True)
+                       conn=conn, run_id=run_id, web_search=szukaj)
         out = llm.parse_json(raw)
     except PRZERYWAJA:
         # „SPRAWDZILEM I NIE WIEM" TO NIE TO SAMO, CO „NIE SPRAWDZILEM".
@@ -8096,7 +8159,35 @@ def posortuj_bank(conn: sqlite3.Connection, run_id: int | None = None,
         print("  [bank] za malo kandydatow do rankingu (%d)" % len(wolni),
               flush=True)
         return {"ocenione": 0, "wyrzucone": 0}
+
+    # RANKUJEMY TYLKO WTEDY, GDY JEST CO RANKOWAC.
+    #
+    # `notki_dnia` wolalo to bezwarunkowo przy KAZDYM z pieciu przebiegow dnia,
+    # a bank zmienia sie najwyzej raz na dobe (`SZUKANIE_BANKU_NA_DOBE = 1`).
+    # Zmierzone 4 wrzesnia 2026: CZTERNASCIE wywolan etapu `bank` w jednej
+    # dobie, przy 3-7 w dniach wczesniejszych.
+    #
+    # PIENIADZE SA TU DRUGORZEDNE. Wazniejsze, ze werdykt `wyrzuc` jest TRWALY:
+    # kazde losowanie to osobna szansa, ze graniczny fakt wypadnie z banku na
+    # zawsze. Piec przebiegow znaczylo piec niezaleznych szans na ten sam wpis,
+    # a zapory (kod z trzech werdyktow, veto NO_MECHANISM przy opisanym
+    # mechanizmie, prog polowy partii) chronia PARTIE, nie pojedynczy wpis.
+    #
+    # Sprawdzeniem jest brak rangi, nie zegar: wpis dopisany do banku nie ma
+    # jej z definicji, wiec nowy material sam wlacza ranking, a jego brak
+    # sam go wylacza. Nie trzeba niczego pamietac miedzy przebiegami.
+    # SUFIT PARTII NAJPIERW, DOPIERO POTEM PYTANIE O RANGE. Ranking obejmuje
+    # tylko pierwsze `ile` wolnych, wiec przy wiekszym banku nadwyzka NIGDY nie
+    # dostaje rangi — a liczona razem z reszta sprawialaby, ze „jest co
+    # rankowac" jest prawdziwe zawsze i caly ten warunek nie robilby nic.
     wolni = wolni[:ile]
+    bez_rangi = [k for k in wolni if not k.get("ranga")]
+    if not bez_rangi:
+        print("  [bank] wszystkie %d rozwazanych ma juz range — nie rankuje"
+              " ponownie" % len(wolni), flush=True)
+        return {"ocenione": 0, "wyrzucone": 0, "pominiete": len(wolni)}
+    print("  [bank] %d z %d rozwazanych bez rangi — rankuje"
+          % (len(bez_rangi), len(wolni)), flush=True)
 
     opis = "\n\n".join(
         "id: %d\nfakt: %s\nmechanizm: %s\ndla czytelnika: %s\ndziedzina: %s"
@@ -8388,6 +8479,47 @@ def bank_pelny() -> bool:
               and str(k.get("kiedy") or "")[:10] >= config.DATA_PRZESTAWIENIA
               and not _po_terminie(k))
     return ile >= config.BANK_MAKS_WOLNYCH
+
+
+def oznacz_uzyty(fakt: Any) -> int:
+    """Znaczy w indeksie fakt, ktory NAPRAWDE wyszedl w swiat.
+
+    DWIE KSIEGOWOSCI, KTORE SIE NIE WIDZIALY (Q1 z przegladu zewnetrznego,
+    potwierdzone na naszym kodzie). Notka moze wziac fakt dwiema drogami:
+
+      * z indeksu przez `wez_kandydatow` — ta nadaje `status = "uzyty"`;
+      * ze SWIEZEGO szukania przez `znajdz_ciekawostki` — ta nie nadaje nic.
+
+    Po potwierdzonej publikacji `run.py` dopisywal fakt do `zuzyte_fakty.json`,
+    ale wpis w `indeks_kandydatow.json` zostawal „nowy" — a `wez_kandydatow`
+    tego pliku nie czyta. Nastepnego dnia ten sam fakt mogl wyjsc z indeksu
+    jako swiezy. Zatrzymywalo go wylacznie rozmyte porownanie z pamiecia
+    notek, czyli statystyka, a nie konstrukcja.
+
+    To jest ta sama wpadka, co dwie notki o jajkach 23 i 24 sierpnia, ktora
+    pamiec permanentna miala zamknac.
+
+    Oddaje liczbe oznaczonych wpisow (0, gdy faktu nie ma w indeksie — bo
+    przyszedl ze swiezego szukania i nigdy tam nie trafil).
+    """
+    tekst = fakt.get("fact") if isinstance(fakt, dict) else fakt
+    klucz = _klucz_faktu(str(tekst or ""))
+    if not klucz:
+        return 0
+    indeks = wczytaj_indeks()
+    ile = 0
+    for k in indeks:
+        if k.get("status") != "nowy":
+            continue
+        if _klucz_faktu(str(k.get("fact") or "")) == klucz:
+            k["status"] = "uzyty"
+            k["wydany"] = db.now()
+            ile += 1
+    if ile:
+        _zapisz_indeks(indeks)
+        print("  [indeks] fakt odhaczony jako wydany (%d wpis%s)"
+              % (ile, "" if ile == 1 else "y"), flush=True)
+    return ile
 
 
 def zwroc_kandydatow(kandydaci: list[dict[str, Any]]) -> int:

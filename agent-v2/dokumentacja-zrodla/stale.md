@@ -51,6 +51,8 @@
 | `DAILY_LIMIT_USD` | `10.00 if _DZIS_UTC == SUFIT_PODNIESIONY_NA e` | — |
 | `TEST_LIMIT_USD` | `3.00` | SUFIT TORU TESTOWEGO — osobny od produkcyjnego i CELOWO NIE NIESKONCZONY. Wlasciciel: „nie licz budzetu do testow, to cos osobnego". Zgoda c |
 | `MONTHLY_LIMIT_USD` | `40.00` | — |
+| `PODWYZKA_MIESIECZNA_USD` | `150.00` | PODWYZSZENIE NA WRZESIEN 2026 — I WYGASA SAMO. DLACZEGO. 5 wrzesnia 2026 pomiar pokazal, ze przy tempie tego miesiaca sufit 40 USD padnie ok |
+| `PODWYZKA_DO` | `"2026-09-30"` | — |
 | `PONOWIENIA` | `2` | Sufit na JEDEN przebieg. Działa ZAWSZE, także przy AGENT_V2_NO_LIMIT=1. „Bez limitu na budowę" miało znaczyć „nie blokuj eksperymentów", a n |
 | `PONOWIENIE_ODSTEP_S` | `8` | — |
 | `RUN_LIMIT_USD` | `1.60` | — |

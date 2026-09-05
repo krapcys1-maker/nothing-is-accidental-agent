@@ -568,6 +568,39 @@ def sufit_dnia(dzien: str) -> float:
 TEST_LIMIT_USD = 3.00
 MONTHLY_LIMIT_USD = 40.00
 
+# PODWYZSZENIE NA WRZESIEN 2026 — I WYGASA SAMO.
+#
+# DLACZEGO. 5 wrzesnia 2026 pomiar pokazal, ze przy tempie tego miesiaca sufit
+# 40 USD padnie okolo 15.-20. dnia, a `BudgetExceeded` leci twardo przed
+# KAZDYM platnym wywolaniem — konto zamilkloby do konca miesiaca. Rozklad:
+#
+#     wrzesien, 5 dni:  13,11 USD
+#        konto:          9,85  ->  1,97/dobe  ->  59 USD/miesiac
+#        sprawdzanie:    3,26  (25%)
+#
+# Wlasciciel podniosl sufit do 150 USD WYLACZNIE na wrzesien, bo w tym
+# miesiacu duzo sprawdzalismy. Od pazdziernika wraca 40.
+#
+# DATA, NIE PAMIEC. Gdyby to bylo zwykle podniesienie `MONTHLY_LIMIT_USD`,
+# powrot zalezalby od tego, czy ktos o nim pamieta 1 pazdziernika. Tu
+# podwyzka konczy sie z kalendarza: po `PODWYZKA_DO` funkcja oddaje bazowy
+# sufit i nikt nie musi nic robic.
+PODWYZKA_MIESIECZNA_USD = 150.00
+PODWYZKA_DO = "2026-09-30"
+
+
+def sufit_miesieczny(dzis: str | None = None) -> float:
+    """Sufit miesieczny na DZIS. Po `PODWYZKA_DO` znowu bazowy.
+
+    `dzis` w formacie YYYY-MM-DD; bez niego bierzemy date z zegara UTC.
+    """
+    if dzis is None:
+        from datetime import datetime, timezone
+        dzis = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    if dzis <= PODWYZKA_DO:
+        return max(MONTHLY_LIMIT_USD, PODWYZKA_MIESIECZNA_USD)
+    return MONTHLY_LIMIT_USD
+
 # Sufit na JEDEN przebieg. Działa ZAWSZE, także przy AGENT_V2_NO_LIMIT=1.
 # „Bez limitu na budowę" miało znaczyć „nie blokuj eksperymentów", a nie
 # „pozwól jednemu przebiegowi kosztować 2 USD". Przebieg 16 kosztował $1,92,

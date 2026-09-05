@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **25 plików**, 31 437 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **25 plików**, 31 610 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -113,8 +113,8 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 > w głównej ścieżce artykułu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
-się testować bez przeglądarki i bez pieniędzy**. 133 zestawów
-testów, 3725 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+się testować bez przeglądarki i bez pieniędzy**. 134 zestawów
+testów, 3760 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -143,7 +143,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-2991 wierszy, 27 funkcji na poziomie modułu, 1 klas
+2997 wierszy, 27 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -177,7 +177,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-8574 wierszy, 146 funkcji na poziomie modułu, 0 klas
+8706 wierszy, 148 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -269,7 +269,8 @@ wiec nie da sie go rozjechac z kodem.
 | `sprawdz_fakty(conn, run_id, post)` | Szuka faktów do komentarza, zamiast pozwolić modelowi pisać z pamięci. |
 | `bez_wstrzykniecia(tekst, wlasny_adres_ok)` | Czy w naszym tekscie nie ma sladu cudzych POLECEN. |
 | `_status_twierdzenia(c)` *(wewn.)* | Status twierdzenia, znormalizowany. NIEZNANA ETYKIETA ZNACZY `unverified`. |
-| `zweryfikuj(conn, run_id, tekst, kontekst)` | Sprawdza to, co model NAPISAŁ — nie to, czego szukał przed pisaniem. |
+| `_rekord_do_weryfikacji(note_type, evidence)` *(wewn.)* | Kontekst dla weryfikatora: rekord, z ktorego notka powstala. |
+| `zweryfikuj(conn, run_id, tekst, kontekst, szukaj)` | Sprawdza to, co model NAPISAŁ — nie to, czego szukał przed pisaniem. |
 | `_zapora_notki(tekst)` *(wewn.)* | Pusty napis, gdy tekst notki przechodzi zapory. Inaczej powod. |
 | `_zapora_komentarza(tekst)` *(wewn.)* | To samo dla komentarza — ale komentarz ma zapore o jedna wiecej. |
 | `_liczby_zarzutu(c)` *(wewn.)* | Liczby z zarzutu, znormalizowane — po nich rozpoznajemy TEN SAM fakt. |
@@ -323,6 +324,7 @@ wiec nie da sie go rozjechac z kodem.
 | `_termin_waznosci(dni)` *(wewn.)* | Kiedy ta kandydatura przestaje byc tematem. Data z godzina, w UTC. |
 | `_po_terminie(k)` *(wewn.)* | Czy kandydatura jest juz po swoim terminie przydatnosci. |
 | `bank_pelny()` | Czy zapas wystarczy, zeby NIE placic za nowe szukanie. |
+| `oznacz_uzyty(fakt)` | Znaczy w indeksie fakt, ktory NAPRAWDE wyszedl w swiat. |
 | `zwroc_kandydatow(kandydaci)` | Oddaje do puli kandydatow, ktorych ostatecznie NIE uzyto. |
 | `stan_indeksu()` | Ile mamy zapasu i ile odsialismy — do wypisania przy starcie. |
 | `korpus_fedreg(ile_dokumentow, ile_gestych)` | Preambuly przepisow, w ktorych regulator ODPOWIADA na zastrzezenia. |
@@ -434,7 +436,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `llm.py` — JEDYNA warstwa dostępu do modeli i liczenia kosztu
 
-815 wierszy, 15 funkcji na poziomie modułu, 3 klas
+816 wierszy, 15 funkcji na poziomie modułu, 3 klas
 
 | funkcja | co robi |
 |---|---|
@@ -516,7 +518,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `alarm.py` — kontrola sesji, zdrowia i alarm do właściciela
 
-1005 wierszy, 23 funkcji na poziomie modułu, 0 klas
+1006 wierszy, 23 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -570,7 +572,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-3042 wierszy, 27 funkcji na poziomie modułu, 0 klas
+3075 wierszy, 28 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -580,6 +582,7 @@ wiec nie da sie go rozjechac z kodem.
 | `w_szczycie(kiedy)` | Czy teraz obowiazuje droga taryfa. |
 | `narzedzie_wyszukiwania(model)` | Nazwa narzedzia wyszukiwania i ewentualne ostrzezenie. |
 | `sufit_dnia(dzien)` | Sufit obowiazujacy W TYM DNIU, nie dzisiaj. |
+| `sufit_miesieczny(dzis)` | Sufit miesieczny na DZIS. Po `PODWYZKA_DO` znowu bazowy. |
 | `kotwica_dlugosci(glebokosc)` | Zdanie kalibrujace dlugosc, dobrane do ilosci materialu. |
 | `dlugosc_dla(glebokosc)` | Ile slow ma miec artykul o tej glebokosci. |
 | `_tokens_for(chars)` *(wewn.)* | — |
@@ -6630,9 +6633,10 @@ def _preflight(purpose: str, conn: sqlite3.Connection, run_id: int | None) -> No
     # rozdzial obowiazkow — pieniadze wychodza z tej samej karty.
     spent_month = (db.spent_usd(conn, month, tryb="produkcja")
                    + db.spent_usd(conn, month, tryb="test"))
-    if spent_month >= config.MONTHLY_LIMIT_USD:
+    _sufit_m = config.sufit_miesieczny()
+    if spent_month >= _sufit_m:
         raise BudgetExceeded(
-            f"limit miesięczny wyczerpany: {spent_month:.4f} / {config.MONTHLY_LIMIT_USD} USD"
+            f"limit miesięczny wyczerpany: {spent_month:.4f} / {_sufit_m} USD"
         )
 ```
 
@@ -12957,6 +12961,8 @@ wartosc i komentarz stojacy bezposrednio nad definicja.
 | `DAILY_LIMIT_USD` | `10.00 if _DZIS_UTC == SUFIT_PODNIESIONY_NA e` | — |
 | `TEST_LIMIT_USD` | `3.00` | SUFIT TORU TESTOWEGO — osobny od produkcyjnego i CELOWO NIE NIESKONCZONY. Wlasciciel: „nie licz budzetu do testow, to cos osobnego". Zgoda c |
 | `MONTHLY_LIMIT_USD` | `40.00` | — |
+| `PODWYZKA_MIESIECZNA_USD` | `150.00` | PODWYZSZENIE NA WRZESIEN 2026 — I WYGASA SAMO. DLACZEGO. 5 wrzesnia 2026 pomiar pokazal, ze przy tempie tego miesiaca sufit 40 USD padnie ok |
+| `PODWYZKA_DO` | `"2026-09-30"` | — |
 | `PONOWIENIA` | `2` | Sufit na JEDEN przebieg. Działa ZAWSZE, także przy AGENT_V2_NO_LIMIT=1. „Bez limitu na budowę" miało znaczyć „nie blokuj eksperymentów", a n |
 | `PONOWIENIE_ODSTEP_S` | `8` | — |
 | `RUN_LIMIT_USD` | `1.60` | — |
