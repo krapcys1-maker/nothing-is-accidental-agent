@@ -79,7 +79,13 @@ sprawdz("pusta powloka odpada", not tz._warto(""), "")
 sprawdz("krotka sciana zgody odpada",
         not tz._warto("Accept cookies to continue. Manage preferences."), "")
 sprawdz("prawdziwy artykul przechodzi",
-        tz._warto(" ".join(["word"] * 80) + " " + "x" * 400))
+        tz._warto(" ".join(["word"] * 200)))
+# PROG PODNIESIONY PO ZYWEJ PROBIE. Wpis „August newsletter is out" mial 1552
+# znaki samej nawigacji strony, przeszedl stary prog 60 slow i zajmowal miejsce
+# w spizarni nie dajac zadnego faktu.
+sprawdz("sama nawigacja strony NIE przechodzi",
+        not tz._warto(" ".join(["Skip to content Sign in"] * 20)),
+        len(" ".join(["Skip to content Sign in"] * 20).split()))
 
 print()
 print("=== 3. CZEGO NIE PROBUJEMY POBIERAC ===")
@@ -118,8 +124,8 @@ class _KlientUdawany:
             raise RuntimeError("padlo")
         if "smiec" in url:
             return _Odpowiedz(200, "<html><body>Accept cookies</body></html>")
-        return _Odpowiedz(200, "<html><body><p>%s</p><p>%s</p></body></html>"
-                          % (" ".join(["real"] * 80), "y" * 400))
+        return _Odpowiedz(200, "<html><body><p>%s</p></body></html>"
+                          % " ".join(["real"] * 200))
 
 
 import httpx  # noqa: E402
@@ -154,6 +160,30 @@ try:
     sprawdz("same odrzucone zrodla daja pusty napis",
             tz.blok_do_promptu(
                 [{"url": "https://a.example/pada", "kanal": "A"}]) == "")
+finally:
+    httpx.Client = _prawdziwy
+    tz.wyczysc_zapas()
+
+print()
+print("=== 5b. JEDNO ZRODLO NIE ZAJMUJE CALEJ SPIZARNI ===")
+# ZMIERZONE NA ZYWEJ SPIZARNI 5 wrzesnia 2026: bez sufitu Simon Willison
+# zajal TRZY z osmiu miejsc, bo korpus idzie po dacie, a on publikuje czesto.
+# Osiem tekstow z trzech zrodel to jedna polka, nie spizarnia — a skaut ma
+# z tego zrobic osiem faktow z ROZNYCH dziedzin.
+httpx.Client = _KlientUdawany
+try:
+    tz.wyczysc_zapas()
+    _gadatliwy = [{"url": "https://g.example/%d" % i, "kanal": "Gadatliwy",
+                   "temat": "t%d" % i} for i in range(6)]
+    _reszta = [{"url": "https://r%d.example/x" % i, "kanal": "Zrodlo%d" % i,
+                "temat": "u%d" % i} for i in range(4)]
+    _mix = tz.tresci_zrodel(_gadatliwy + _reszta, ile=6)
+    _ile_gadatliwego = sum(1 for z in _mix if z["kanal"] == "Gadatliwy")
+    sprawdz("jedno zrodlo nie przekracza sufitu",
+            _ile_gadatliwego <= tz.MAKS_Z_JEDNEGO_ZRODLA, _ile_gadatliwego)
+    sprawdz("a reszta miejsc idzie do innych zrodel",
+            len({z["kanal"] for z in _mix}) >= 3,
+            sorted({z["kanal"] for z in _mix}))
 finally:
     httpx.Client = _prawdziwy
     tz.wyczysc_zapas()

@@ -41,6 +41,9 @@ ILE_ZRODEL = 8
 # platne szukanie.
 ZNAKOW_ZE_STRONY = 2500
 
+# ILE MIEJSC MOZE ZAJAC JEDNO ZRODLO — patrz `tresci_zrodel`.
+MAKS_Z_JEDNEGO_ZRODLA = 2
+
 # CZEGO NIE PROBUJEMY POBIERAC. Strona filmu nie ma tekstu artykulu, a plik
 # binarny tylko zmarnuje zapytanie i czas.
 POMIJANE = ("youtube.com", "youtu.be", ".pdf", ".zip", ".mp4", ".mp3")
@@ -76,7 +79,11 @@ def _warto(tekst: str) -> bool:
         return False
     # Strona z liczbami jest tu warta wiecej niz strona bez nich, ale brak
     # liczb nie dyskwalifikuje: „OpenAI wycofuje model X" to tez fakt.
-    return len(tekst.split()) >= 60
+    #
+    # PROG PODNIESIONY Z 60 DO 150 SLOW po zywej probie 5 wrzesnia 2026:
+    # wpis „August newsletter is out" mial 1552 znaki samej nawigacji strony
+    # i przeszedl. Zajmowal miejsce w spizarni i nie dawal zadnego faktu.
+    return len(tekst.split()) >= 150
 
 
 def tresci_zrodel(wpisy: list[dict[str, Any]], ile: int = ILE_ZRODEL,
@@ -90,6 +97,12 @@ def tresci_zrodel(wpisy: list[dict[str, Any]], ile: int = ILE_ZRODEL,
     import httpx
 
     out: list[dict[str, str]] = []
+    # ILE MIEJSC MOZE ZAJAC JEDNO ZRODLO. Zmierzone na zywej spizarni
+    # 5 wrzesnia 2026: bez tego sufitu Simon Willison zajal TRZY z osmiu
+    # miejsc, bo korpus idzie po dacie, a on publikuje czesto. Osiem tekstow
+    # z trzech zrodel to nie jest spizarnia, tylko jedna polka — a skaut ma
+    # z tego zrobic osiem faktow z ROZNYCH dziedzin.
+    z_kanalu: dict[str, int] = {}
     naglowki = {"User-Agent": config.FETCH_USER_AGENT}
     try:
         klient = httpx.Client(timeout=config.FETCH_TIMEOUT_S,
@@ -103,6 +116,9 @@ def tresci_zrodel(wpisy: list[dict[str, Any]], ile: int = ILE_ZRODEL,
             url = str(w.get("url") or "").strip()
             if not url or any(p in url.lower() for p in POMIJANE):
                 continue
+            kan = str(w.get("kanal") or "?")
+            if z_kanalu.get(kan, 0) >= MAKS_Z_JEDNEGO_ZRODLA:
+                continue
             try:
                 r = c.get(url)
                 if r.status_code != 200:
@@ -112,8 +128,9 @@ def tresci_zrodel(wpisy: list[dict[str, Any]], ile: int = ILE_ZRODEL,
                 continue
             if not _warto(tekst):
                 continue
+            z_kanalu[kan] = z_kanalu.get(kan, 0) + 1
             out.append({
-                "kanal": str(w.get("kanal") or "?"),
+                "kanal": kan,
                 "temat": str(w.get("temat") or ""),
                 "data": str(w.get("data") or "")[:10],
                 "url": url,
