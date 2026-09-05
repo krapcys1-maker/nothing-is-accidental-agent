@@ -7699,6 +7699,38 @@ def dopisz_kandydatow(kandydaci: list[dict[str, Any]],
     """
     indeks = wczytaj_indeks()
     znane = {_klucz_faktu(k.get("fact", "")) for k in indeks}
+
+    # POPRAWIONA WERSJA ODRZUCONEGO POMYSLU MA PRAWO WEJSC.
+    #
+    # `znane` powstaje z CALEGO indeksu, takze z odrzuconych — wiec kandydat
+    # o tym samym kluczu byl pomijany, nawet gdy nadesłana wersja naprawiala
+    # dokladnie to, na czym poprzednia odpadla. Odrzucenie bylo ostateczne dla
+    # POMYSLU, a mialo byc ostateczne dla WADY.
+    #
+    # ZMIERZONE 5 wrzesnia 2026 przy naprawie B3: fakt o agentach OpenAI
+    # uzywajacych publicznych wiki odpadl na blednej regule o slowie „no one".
+    # Regule zdjalem, ale fakt sam nie wrocil: kazda jego nowa wersja byla
+    # pomijana jako powtorka wpisu, ktory jest w indeksie jako odrzucony.
+    # Jedna zla decyzja zamykala temat na zawsze.
+    #
+    # WRACAJA TYLKO ODRZUCENIA BRAMKI. Powtorka, parowanie blizniakow, „juz
+    # o tym pisalismy" i werdykt sedziego zostaja OSTATECZNE — tam nie ma
+    # czego naprawiac w kandydacie, bo wada jest w jego relacji do tego, co
+    # juz mamy. To dwie rozne rzeczy i mieszanie ich wpuscilo by powtorki.
+    #
+    # I WRACAJA TYLKO WTEDY, GDY NOWA WERSJA NAPRAWDE PRZECHODZI BRAMKE.
+    # Niezmieniony martwy pomysl odpada dalej i nie kosztuje nic: bramka to
+    # czysty kod, bez modelu i bez sieci.
+    ODRZUCENIA_OSTATECZNE = ("powtorka", "juz o tym pisalismy", "parowanie",
+                             "bank:")
+    _naprawialne: dict[str, dict[str, Any]] = {}
+    for _k in indeks:
+        if _k.get("status") != "odrzucony":
+            continue
+        _p = str(_k.get("powod") or "").strip().lower()
+        if _p.startswith(ODRZUCENIA_OSTATECZNE):
+            continue
+        _naprawialne.setdefault(_klucz_faktu(_k.get("fact", "")), _k)
     # ODSIEW PO ZNACZENIU, NIE PO NAPISIE. `_klucz_faktu` porownuje tekst, wiec
     # ten sam fakt opowiedziany innymi slowami wchodzil do banku jako nowy.
     # Zmierzone na produkcji 2 wrzesnia 2026: 37 wolnych pozycji to 24 rozne
@@ -7736,8 +7768,36 @@ def dopisz_kandydatow(kandydaci: list[dict[str, Any]],
                "powtorka_llm": 0, "juz_pisalismy": 0}
     for k in kandydaci or []:
         klucz = _klucz_faktu(str(k.get("fact") or ""))
-        if not klucz or klucz in znane:
+        if not klucz:
             licznik["znane"] += 1
+            continue
+        if klucz in znane:
+            _stary = _naprawialne.get(klucz)
+            _ok_teraz, _powod_teraz = (bramka_kandydata(k) if _stary
+                                       else (False, ""))
+            if not _ok_teraz:
+                licznik["znane"] += 1
+                continue
+            # AKTUALIZUJEMY W MIEJSCU, nie dokladamy drugiej kopii — inaczej
+            # indeks rosl by o kazda probe, a kolejne sita porownywaly nowy
+            # wpis ze starym i uznaly go za powtorke samego siebie.
+            _stary.update({
+                p: str(k.get(p) or "")[:400] for p in _POLA_Z_KSZTALTU})
+            _stary.update({
+                "status": "nowy",
+                "powod": ("poprawiona wersja odrzuconego wpisu przeszla bramke"
+                          " (poprzednio: %s)"
+                          % str(_stary.get("powod") or "")[:90]),
+                "kiedy": db.now(),
+                "z_kanalu": bool(k.get("z_kanalu")),
+                "kanal_zrodlowy": str(k.get("kanal_zrodlowy") or "")[:60],
+            })
+            # RANGA ZDJETA, zeby sedzia ocenil go na nowo razem z reszta.
+            _stary.pop("ranga", None)
+            _naprawialne.pop(klucz, None)
+            licznik["przyjete"] += 1
+            print("  [indeks] poprawiona wersja odrzuconego wpisu wraca: %s"
+                  % str(k.get("fact") or "")[:64], flush=True)
             continue
         tresc = str(k.get("fact") or "")
         blizniak = next((f for f in fakty_w_banku
