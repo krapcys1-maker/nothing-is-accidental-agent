@@ -113,8 +113,8 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 > w głównej ścieżce artykułu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
-się testować bez przeglądarki i bez pieniędzy**. 147 zestawów
-testów, 3936 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+się testować bez przeglądarki i bez pieniędzy**. 148 zestawów
+testów, 3949 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -10949,7 +10949,7 @@ see it. An empty answer costs nothing; a wrong group costs a paid fact.
 
 #### `prompts/pisarz.md`
 
-**519 wierszy.** Pola wejsciowe: `card_json`, `ile_paraleli`, `kotwica_dlugosci`, `language`, `max_words`, `min_words`, `poprzednie_uwagi`, `ruch_koncowy`, `ruch_koncowy_nazwa`, `style_examples`, `style_negative`, `style_positive`, `target_words`
+**527 wierszy.** Pola wejsciowe: `card_json`, `ile_paraleli`, `kotwica_dlugosci`, `language`, `max_words`, `min_words`, `poprzednie_uwagi`, `ruch_koncowy`, `ruch_koncowy_nazwa`, `style_examples`, `style_negative`, `style_positive`, `target_words`
 
 ````markdown
 You write for the anonymous editorial brand Nothing Is Accidental, a
@@ -11469,6 +11469,14 @@ material, ignore it — forcing a reader-address into a piece that has no object
 for it is worse than the fault it was meant to fix.
 
 ## The evidence card
+
+One claim may carry `"not_fetched": true`. That is the fact this article was
+commissioned from, and it is the one entry whose `evidence` is **not a passage
+lifted from a document we retrieved** — nobody on this run opened that page.
+Treat it as the starting point it is: you may state it, and you must attribute
+it to the source named in its `url`. Do not build a figure, a comparison or a
+conclusion on it that the fetched material does not also carry. Everything else
+in `confirmed_claims` came out of a document that was read.
 
 {card_json}
 ````

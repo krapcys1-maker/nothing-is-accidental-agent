@@ -516,4 +516,12 @@ for it is worse than the fault it was meant to fix.
 
 ## The evidence card
 
+One claim may carry `"not_fetched": true`. That is the fact this article was
+commissioned from, and it is the one entry whose `evidence` is **not a passage
+lifted from a document we retrieved** — nobody on this run opened that page.
+Treat it as the starting point it is: you may state it, and you must attribute
+it to the source named in its `url`. Do not build a figure, a comparison or a
+conclusion on it that the fetched material does not also carry. Everything else
+in `confirmed_claims` came out of a document that was read.
+
 {card_json}

@@ -153,7 +153,7 @@
 {{"grupy": [{{"zostaje": <id>, "scalone": [<id>, ...], "dlaczego": "<one clause: what makes these the same story>"}}]}}
 ```
 
-#### `pisarz.md` (519 wierszy)
+#### `pisarz.md` (527 wierszy)
 
 **Pola wejściowe:** `card_json`, `ile_paraleli`, `kotwica_dlugosci`, `language`, `max_words`, `min_words`, `poprzednie_uwagi`, `ruch_koncowy`, `ruch_koncowy_nazwa`, `style_examples`, `style_negative`, `style_positive`, `target_words`
 
