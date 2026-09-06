@@ -3820,7 +3820,8 @@ def nazwy_wlasne(tekst: str, z_niepewnymi: bool = False):
 
 
 def wspolna_nazwa(a: str, b: str, korpus: list[str] | None = None,
-                  maks_czestosc: int | None = None) -> str:
+                  maks_czestosc: int | None = None,
+                  korpus_zrodel: list[str] | None = None) -> str:
     """Nazwa wlasna, ktora wystepuje w OBU tekstach i jest rzadka w korpusie.
 
     DRUGI SYGNAL BLIZNIACTWA, obok liczby wspolnych slow. Powstal 31 sierpnia,
@@ -3896,7 +3897,37 @@ def wspolna_nazwa(a: str, b: str, korpus: list[str] | None = None,
     for tekst in korpus:
         for nazwa in nazwy_wlasne(tekst):
             czestosc[nazwa] = czestosc.get(nazwa, 0) + 1
-    rzadkie = [n for n in wspolne if czestosc.get(n, 0) <= maks_czestosc]
+    # DRUGI MIANOWNIK: KORPUS ZRODEL. Nasze 84 notki to za malo, zeby odroznic
+    # nazwe wszechobecna od nazwy tematu — ZMIERZONE 6 wrzesnia 2026: przy
+    # progu z naszego korpusu blokowaly 123 nazwy ze 124, czyli zapora byla
+    # w praktyce regula „jakakolwiek wspolna nazwa wlasna".
+    #
+    # Widac to bylo na zywo w przebiegu 154: przydzial trzech notek, wydana
+    # JEDNA, a szesciu kandydatow odrzuconych na `astra`, `google`, `claude`,
+    # `anthropic`, `openai's`. To sa nazwy, ktore w naszej niszy padaja
+    # w kazdej drugiej wiadomosci i nie znacza, ze dwa fakty sa o tym samym.
+    #
+    # Korpus kanalow to 206 tematow z tego samego tygodnia i on TO WIDZI:
+    #
+    #     claude   9 z 206 tematow (4,4%)   astra 13 (6,3%)   openai 14 (6,8%)
+    #     glm53    4 z 206 (1,9%)           astm  0           glm53flash 0
+    #
+    # Czyli dokladnie te, ktore maja przestac blokowac, sa czeste w zrodlach,
+    # a te, dla ktorych zapora powstala — nie sa.
+    #
+    # Nazwa jest wolna, gdy jest czesta W KTORYMKOLWIEK z dwoch korpusow.
+    # Blokuje tylko wtedy, gdy w OBU jest rzadka.
+    czeste_w_zrodlach: set[str] = set()
+    if korpus_zrodel:
+        prog_zrodel = max(5, len(korpus_zrodel) // 40)
+        licz: dict[str, int] = {}
+        for tekst in korpus_zrodel:
+            for nazwa in nazwy_wlasne(tekst):
+                licz[nazwa] = licz.get(nazwa, 0) + 1
+        czeste_w_zrodlach = {n for n, c in licz.items() if c > prog_zrodel}
+    rzadkie = [n for n in wspolne
+               if czestosc.get(n, 0) <= maks_czestosc
+               and n not in czeste_w_zrodlach]
     return sorted(rzadkie)[0] if rzadkie else ""
 
 
@@ -4048,10 +4079,40 @@ def _fakt_do_pisarza(fakt: dict[str, Any]) -> dict[str, Any]:
     return {k: v for k, v in fakt.items() if k in DOWOD_DLA_PISARZA}
 
 
+def _tematy_zrodel() -> list[str]:
+    """Tematy z korpusu kanalow — drugi mianownik dla rzadkosci nazw.
+
+    PO CO. Nasze 84 opublikowane teksty to za maly korpus, zeby odroznic nazwe
+    wszechobecna od nazwy tematu: przy progu liczonym z niego blokowaly
+    123 nazwy ze 124. Korpus kanalow ma 206 tematow z tego samego tygodnia
+    i widzi, ze `claude` pada w 4,4% z nich, a `glm53` w 1,9%.
+
+    NIGDY NIE SIEGA DO SIECI Z TESTU i nigdy nie podnosi wyjatku.
+    `korpus_kanalow` ma zapas procesowy, wiec w przebiegu pobiera sie raz —
+    ale test nie ma prawa czekac na siec ani placic za nia czasem. Bez pustej
+    listy w razie klopotu ta funkcja bylaby dokladnie tym, przed czym stoi
+    `test_testy_nie_czytaja_produkcji`.
+    """
+    if config.W_TESCIE:
+        return []
+    try:
+        import korpus_kanalow
+        return [("%s %s" % (w.get("temat") or "", w.get("opis") or "")).strip()
+                for w in korpus_kanalow.korpus_kanalow(400)
+                if (w.get("temat") or w.get("opis"))]
+    except Exception as exc:
+        print("  [notki] korpus zrodel niedostepny (%s) — rzadkosc nazw"
+              " liczona tylko z naszych tekstow" % type(exc).__name__,
+              flush=True)
+        return []
+
+
 def wybierz_material(zapas: list[dict[str, Any]],
                      unikaj: list[str],
                      wczesniej: list[Any] | None = None,
-                     teksty: list[str] | None = None) -> dict[str, Any] | None:
+                     teksty: list[str] | None = None,
+                     korpus_zrodel: list[str] | None = None
+                     ) -> dict[str, Any] | None:
     """Bierze fakt, ktory NIE jest o tym samym, co juz dzis wystawiamy.
 
     Poprzednio bylo `zapas.pop(0)` — pierwszy z brzegu. W przebiegu z 17 sierpnia
@@ -4177,7 +4238,8 @@ def wybierz_material(zapas: list[dict[str, Any]],
             korpus = opublikowane_teksty() or teksty_wczesniej
             wspolna = next(
                 (n for u in teksty_wczesniej
-                 if (n := wspolna_nazwa(fakt_tekst, u, korpus))), "")
+                 if (n := wspolna_nazwa(fakt_tekst, u, korpus,
+                                       korpus_zrodel=korpus_zrodel))), "")
             if wspolna:
                 print("  [notki] pomijam — ta sama nazwa co w juz wystawionej"
                       " notce: %s" % wspolna, flush=True)
@@ -4398,7 +4460,8 @@ def notki_dnia(
                     print("  [notki] brak materiału — kończę dzień krócej", flush=True)
                     break
             fakt = wybierz_material(zapas, juz_o_tym, wczesniejsze,
-                                    teksty=teksty_notek)
+                                    teksty=teksty_notek,
+                                    korpus_zrodel=_tematy_zrodel())
             if fakt is None and not dobrano_nowy:
                 # DZIEN NIE MOZE SIE ZAGLODZIC. Do 25 sierpnia to bylo `break`:
                 # cala pula zderzona = koniec dnia. Przy oknie dwunastu zdarzalo
@@ -4420,7 +4483,8 @@ def notki_dnia(
                     # przeszukiwanie ich najpierw byloby praca na darmo.
                     zapas = nowe + zapas
                     fakt = wybierz_material(zapas, juz_o_tym, wczesniejsze,
-                                    teksty=teksty_notek)
+                                    teksty=teksty_notek,
+                                    korpus_zrodel=_tematy_zrodel())
             if fakt is None:
                 print("  [notki] został tylko materiał o tym samym, co już dziś"
                       " wystawiamy — kończę dzień krócej", flush=True)

@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **25 plików**, 32 793 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **25 plików**, 32 857 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -114,7 +114,7 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
 się testować bez przeglądarki i bez pieniędzy**. 158 zestawów
-testów, 4114 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+testów, 4121 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -177,7 +177,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-9426 wierszy, 154 funkcji na poziomie modułu, 0 klas
+9490 wierszy, 155 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -259,11 +259,12 @@ wiec nie da sie go rozjechac z kodem.
 | `_slowa(tekst)` *(wewn.)* | Znaczace slowa tekstu, obciete do rdzenia. |
 | `_zderzenie(x, y, min_wspolnych, prog)` *(wewn.)* | To samo pytanie co `_o_tym_samym`, ale na GOTOWYCH rdzeniach. |
 | `nazwy_wlasne(tekst, z_niepewnymi)` | Nazwy wlasne i identyfikatory z tekstu, sprowadzone do jednej postaci. |
-| `wspolna_nazwa(a, b, korpus, maks_czestosc)` | Nazwa wlasna, ktora wystepuje w OBU tekstach i jest rzadka w korpusie. |
+| `wspolna_nazwa(a, b, korpus, maks_czestosc, korpus_zrodel)` | Nazwa wlasna, ktora wystepuje w OBU tekstach i jest rzadka w korpusie. |
 | `_o_tym_samym(a, b, min_wspolnych, prog)` *(wewn.)* | Czy dwa teksty mowia o tej samej rzeczy. |
 | `teksty_ostatnich_notek(ile)` | Tresci ostatnich notek — do porownania po NAZWACH WLASNYCH. |
 | `_fakt_do_pisarza(fakt)` *(wewn.)* | Wpis banku obciety do tego, co jest dowodem. |
-| `wybierz_material(zapas, unikaj, wczesniej, teksty)` | Bierze fakt, ktory NIE jest o tym samym, co juz dzis wystawiamy. |
+| `_tematy_zrodel()` *(wewn.)* | Tematy z korpusu kanalow — drugi mianownik dla rzadkosci nazw. |
+| `wybierz_material(zapas, unikaj, wczesniej, teksty, korpus_zrodel)` | Bierze fakt, ktory NIE jest o tym samym, co juz dzis wystawiamy. |
 | `notki_dnia(conn, run_id, dzien_artykulu, karta, ciekawostki, link_artykulu, ile, od)` | Do pieciu notek z dziennego planu, kazda z innego materialu. |
 | `ocen_restack(conn, run_id, notka)` | Czy podac te notke dalej i z jakim zdaniem. |
 | `_podloga_z_pamieci(tekst)` *(wewn.)* | Dwie podlogi, ktore dzialaja BEZ karty dowodowej. |

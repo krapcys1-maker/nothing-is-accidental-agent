@@ -131,6 +131,53 @@ sprawdz("GPT-5 zostaje (ma cyfre)", "gpt5" in _p, sorted(_p))
 sprawdz("DeepSeek zostaje (wielka litera w srodku)", "deepseek" in _p, sorted(_p))
 
 print()
+print("=== 5b. DRUGI MIANOWNIK: KORPUS ZRODEL ===")
+# ZMIERZONE NA ZYWO 6 wrzesnia 2026, przebieg 154: przydzial trzech notek,
+# wydana JEDNA, a szesciu kandydatow odrzuconych na `astra`, `google`,
+# `claude`, `anthropic`, `openai's`. Przy progu liczonym z naszych 84 notek
+# blokowaly 123 nazwy ze 124 — czyli zapora byla w praktyce regula
+# „jakakolwiek wspolna nazwa wlasna".
+#
+# Korpus kanalow (206 tematow z tego samego tygodnia) to widzi:
+#     claude 9 (4,4%)   astra 13 (6,3%)   openai 14 (6,8%)
+#     glm53  4 (1,9%)   astm  0           glm53flash 0
+# Czyli nazwy do zwolnienia sa czeste w zrodlach, a ta, dla ktorej zapora
+# powstala — nie jest.
+NASZE = ["nasza notka numer %d" % i for i in range(84)]
+# Nazwy MUSZA stac w srodku zdania: na poczatku ida do worka „niepewnych"
+# i wtedy w ogole nie sa nazwami. Pierwsza wersja tego sprawdzenia miala je
+# na poczatku i „przechodzila" z zupelnie innego powodu.
+A1 = "This week Anthropic raised prices for its API."
+A2 = "Last month Anthropic hired a new head of policy."
+G1 = "The model GLM-5.3-Flash repeats itself more than charts suggest."
+G2 = "In tests GLM-5.3-Flash ran on Chinese-made chips."
+ZRODLA = (["Report says Anthropic did something %d" % i for i in range(20)]
+          + ["Something unrelated %d" % i for i in range(60)])
+
+sprawdz("bez korpusu zrodel anthropic BLOKUJE (stan sprzed zmiany)",
+        stages.wspolna_nazwa(A1, A2, NASZE) == "anthropic")
+sprawdz("z korpusem, gdzie jest czeste — juz NIE blokuje",
+        not stages.wspolna_nazwa(A1, A2, NASZE, korpus_zrodel=ZRODLA),
+        stages.wspolna_nazwa(A1, A2, NASZE, korpus_zrodel=ZRODLA))
+sprawdz("a glm53 blokuje w OBU przypadkach",
+        stages.wspolna_nazwa(G1, G2, NASZE) == "glm53"
+        and stages.wspolna_nazwa(G1, G2, NASZE,
+                                 korpus_zrodel=ZRODLA) == "glm53")
+sprawdz("pusty korpus zrodel niczego nie zwalnia",
+        stages.wspolna_nazwa(A1, A2, NASZE, korpus_zrodel=[]) == "anthropic")
+
+print()
+print("=== 5c. KORPUS ZRODEL NIE SIEGA DO SIECI Z TESTU ===")
+# Ta funkcja jest wolana z `notki_dnia` przy kazdym wyborze materialu. Gdyby
+# w tescie pobierala kanaly, kazde uruchomienie zestawu czekaloby na siec.
+sprawdz("_tematy_zrodel w tescie oddaje pustke",
+        stages._tematy_zrodel() == [], stages._tematy_zrodel()[:2])
+_zr2 = pathlib.Path("agent-v2/stages.py").read_text(encoding="utf-8")
+sprawdz("i pyta o to config.W_TESCIE", "if config.W_TESCIE:" in _zr2)
+sprawdz("a awaria pobierania nie podnosi wyjatku",
+        "korpus zrodel niedostepny" in _zr2)
+
+print()
 print("=== 6. WYBOR NOTKI KORZYSTA Z TEGO SAMEGO PROGU ===")
 # Zapora ma sens tylko wtedy, gdy siega po nia produkcja.
 _zr = pathlib.Path("agent-v2/stages.py").read_text(encoding="utf-8")
