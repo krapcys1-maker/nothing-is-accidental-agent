@@ -69,6 +69,34 @@ POLA_INTERAKCJI = {
     "subscription": "subskrypcje", "subscriptions": "subskrypcje",
     "follow": "obserwacje", "follows": "obserwacje",
     "link click": "klikniecia_w_link", "link clicks": "klikniecia_w_link",
+    # DWA TYPY, KTORE SUBSTACK PRZYSYLA, A KTORYCH NIE POKAZYWALISMY.
+    #
+    # Zmierzone 6 wrzesnia 2026 na 3 911 rekordach statystyk. Substack oddaje
+    # siedem typow interakcji, a wlasne pole mialy tylko cztery:
+    #
+    #     Like           2929      -> bylo
+    #     Profile visit  1103      -> NIE BYLO
+    #     Reply           625      -> bylo
+    #     Restack         305      -> bylo
+    #     Link click      204      -> bylo
+    #     Share            71      -> jest jako `udostepnienia` z shareValues
+    #     Save             62      -> NIE BYLO
+    #
+    # ODWIEDZINY PROFILU TO DRUGI NAJCZESTSZY SYGNAL W CALYM ZBIORZE i zarazem
+    # jedyny, ktory mowi o KROKU PRZED SUBSKRYPCJA: ktos przeczytal i poszedl
+    # sprawdzic, kim jestesmy. Leżal w slowniku `interakcje` i nie czytal go
+    # ani jeden raport.
+    #
+    # Co pokazuje, gdy sie go policzy (na 100 wyswietlen):
+    #     odpowiedz  3,9   <- najlepsza konwersja, a kosztuje najmniej
+    #     notka      1,4
+    #     komentarz  1,0
+    #     artykul    0,0
+    # I osobno: 35 notek mialo ponad 20 wyswietlen przy ZEROWEJ liczbie
+    # odwiedzin — widziani, a nikt nie sprawdzil, kim jestesmy.
+    "profile visit": "odwiedziny_profilu",
+    "profile visits": "odwiedziny_profilu",
+    "save": "zapisane", "saves": "zapisane",
 }
 
 # Pola liczbowe, ktore rekord ma ZAWSZE, takze gdy karty nie bylo. Brak karty
@@ -76,7 +104,16 @@ POLA_INTERAKCJI = {
 # `subskrypcje`, a raz bez, wywala sie na pierwszej pozycji, ktorej nikt nie
 # polubil — czyli na najczestszym przypadku.
 POLA_ZEROWE = ("polubienia", "odpowiedzi", "restacki", "subskrypcje",
-               "obserwacje", "klikniecia_w_link")
+               "obserwacje", "klikniecia_w_link",
+               "odwiedziny_profilu", "zapisane")
+
+# `obserwacje` ZOSTAJE, choc Substack nie przyslal go ANI RAZU w 3 911
+# rekordach. To nie jest usterka do naprawienia: „Follow" dzieje sie na
+# profilu, nie pod notka, wiec karta interakcji notki nie ma go skad wziac.
+# Pole zostaje zerowe, zeby raport nie zmienial ksztaltu — ale niech nikt nie
+# szuka tu bledu. To samo dotyczy `zapisy_platne`: konto nie ma platnego
+# poziomu, wiec „new paid subs" jest zerem zgodnie z prawda, a `zapisy_darmowe`
+# dziala i ma wartosc w 71 rekordach.
 
 
 # --- parsowanie (bez sieci) ---------------------------------------------------

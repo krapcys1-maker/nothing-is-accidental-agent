@@ -88,6 +88,15 @@ KLUCZE = {"wyswietlenia", "powierzchnie", "odbiorcy", "interakcje",
           "interakcje_razem", "polubienia", "odpowiedzi", "restacki",
           "subskrypcje", "obserwacje", "klikniecia_w_link", "zmierzone",
           "wystawione", "ma_karty_zasiegu",
+          # DOPISANE 6 wrzesnia 2026. Substack przysyla SIEDEM typow
+          # interakcji, a wlasne pole mialy cztery. Policzone na 3 911
+          # rekordach: `Profile visit` wystapil 1103 razy i byl DRUGIM
+          # najczestszym sygnalem w calym zbiorze, `Save` 62 razy — i zaden
+          # raport ich nie czytal, bo lezaly tylko w slowniku `interakcje`.
+          # Odwiedziny profilu to krok PRZED subskrypcja: ktos przeczytal
+          # i poszedl sprawdzic, kim jestesmy. Patrz
+          # `test_odwiedziny_profilu.py`.
+          "odwiedziny_profilu", "zapisane",
           # DOPISANE 3 wrzesnia 2026 po audycie segmentu statystyk. Panel
           # oddawal te karty od zawsze, a `z_kart` ich nie czytal:
           #   `new_subscribers` -> ile osob i KTO sie zapisal z tej pozycji
