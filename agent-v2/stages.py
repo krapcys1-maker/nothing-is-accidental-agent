@@ -5631,7 +5631,49 @@ def comment_on(
         # podlogi z pamieci (zmyslone przezycie, nienazwane badanie). Tamte
         # bronia przed czyms, czego `zweryfikuj` nie umie sprawdzic — a to jest
         # co innego niz watpliwosc co do faktu.
-        audyt = zweryfikuj(conn, run_id, text, post.get("title", ""))
+        # SZUKANIE TYLKO WTEDY, GDY JEST CZEGO SZUKAC.
+        #
+        # ZMIERZONE NA 117 KOMENTARZACH: srednia dlugosc 33 slowa, a 47% NIE MA
+        # ANI LICZBY, ANI NAZWY WLASNEJ — czyli nie zawiera niczego, co dalo by
+        # sie sprawdzic w zrodle. Za kazdy taki tekst placilismy 26 231 tokenow
+        # wejscia i 3,3 wyszukiwania.
+        #
+        # Widac to bylo takze po tym, CO sprawdzenie odpowiadalo. Wszystkie
+        # cztery zastrzezenia z czternastu dni brzmialy tak samo:
+        #     „no checkable factual claims naming a study, institution, or
+        #      attributed figure"
+        #     „a positional argument and historical analogy containing no
+        #      number, date, study, named institution"
+        # Czyli nie lapalo falszu — meldowalo, ze nie bylo czego lapac.
+        #
+        # SPRAWDZENIE ZOSTAJE, ZNIKA TYLKO SZUKANIE. Model dalej ocenia tekst
+        # z wlasnej wiedzy, wiec twierdzenie bez liczby i bez nazwy — jak
+        # „a text-trained model sees co-occurrence rather than causality" —
+        # nadal przechodzi przez kontrole. To ten sam ruch, co przy notce MYSL
+        # (`szukaj=(note_type != "MYSL")`), i z tego samego powodu.
+        #
+        # SAM WOREK „PEWNYCH", bez wyrazow z poczatku zdania. Probowalem obu
+        # i zmierzylem na 117 zywych komentarzach:
+        #
+        #     pewne + niepewne : szukaloby 91% — oszczednosc 0,18 USD/miesiac
+        #     same pewne       : szukaloby 53% — oszczednosc 0,89 USD/miesiac
+        #
+        # Worek „niepewnych" lapie kazde slowo na poczatku zdania — „One",
+        # „Twenty", „Models", „Treating" — wiec z nim ta bramka nie robi nic.
+        #
+        # ZNANA LUKA, ZAPISANA ZAMIAST UKRYTEJ: „Google shipped it last week"
+        # zaczyna sie nazwa firmy, ktora trafia do worka niepewnych, wiec ten
+        # komentarz pojdzie BEZ szukania. Przyjmuje to swiadomie, bo cena bledu
+        # jest tu niska: sprawdzenie i tak NIE BLOKUJE komentarza (`safe_to_post`
+        # jest ustawiane na True bez wzgledu na werdykt), a model dalej ocenia
+        # tekst z wlasnej wiedzy. Traci sie tylko mozliwosc sprawdzenia takiego
+        # zdania w zrodle.
+        _jest_co = bool(re.search(r"\d", text)) or bool(nazwy_wlasne(text))
+        if not _jest_co:
+            print("    (bez liczby i bez nazwy wlasnej — sprawdzam bez"
+                  " platnego szukania)", flush=True)
+        audyt = zweryfikuj(conn, run_id, text, post.get("title", ""),
+                           szukaj=_jest_co)
 
         # DLUGOSC KOMENTARZA LICZY SIE OD ORYGINALU, nie ze stalej. Komentarz
         # nie ma sufitu w `config` i mial nie miec: `prompts/komentarz.md` mowi

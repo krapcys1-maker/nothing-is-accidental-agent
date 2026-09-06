@@ -76,8 +76,14 @@ class Licznik:
         self.wywolan = 0
         self.teksty = []
 
-    def __call__(self, conn, run_id, tekst, kontekst=""):
+    # `**k`, zeby atrapa przezyla dolozenie argumentu do `zweryfikuj`. Nie
+    # przezyla `szukaj=` i wywalila sie TypeError-em — siodmy taki przypadek
+    # w tej sesji. Zapisuje TEZ `szukaj`, bo to jest teraz rzecz warta
+    # sprawdzania: platne szukanie ma sie nie odpalac bez powodu.
+    def __call__(self, conn, run_id, tekst, kontekst="", **k):
         self.wywolan += 1
+        self.szukania = getattr(self, "szukania", [])
+        self.szukania.append(k.get("szukaj", True))
         self.teksty.append(tekst)
         return {"claims": [], "safe_to_post": True, "verdict": "ok"}
 
