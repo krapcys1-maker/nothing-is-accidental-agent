@@ -188,12 +188,20 @@ sprawdz("KONTRDOWOD: `DEEPSEEK_EFFORT` nadal gdzies w `llm.py` jest",
 print()
 print("=== 6. POMIAR, NA KTORYM TO STOI, JEST ZAPISANY PRZY KODZIE ===")
 # Liczba bez zapisanego pomiaru wraca za tydzien jako „chyba tak bylo".
+#
+# PIERWSZA WERSJA TEGO SPRAWDZENIA SZUKALA ZDANIA („ZMIENILO DECYZJE") i oblala
+# w chwili, gdy przepisalem ten komentarz — czyli pilnowala sformulowania,
+# a nie tresci. Teraz pilnuje LICZB, bo to one sa ustaleniem: sformulowanie
+# wolno poprawiac, pomiaru nie.
 _cfg = pathlib.Path("agent-v2/config.py").read_text(encoding="utf-8")
 sprawdz("config zapisuje, ze domyslne NIE JEST `high`",
         "NIE JEST `high`" in _cfg)
-sprawdz("i zapisuje, dlaczego tablica jest pusta",
-        "ZMIENILO DECYZJE" in _cfg.replace("Ę", "E").replace("Ł", "L")
-        or "ZMIENIŁO DECYZJĘ" in _cfg)
+for co, liczba in (("srednie wyjscie `disabled`", "719"),
+                   ("srednio wybranych celow bez rozumowania", "5,6"),
+                   ("zgodnosc decyzji `disabled` z baza", "0 / 5"),
+                   ("zgodnosc `low` z baza", "5 / 5"),
+                   ("bilans tygodniowy", "+0,02")):
+    sprawdz("zapisana %-42s (%s)" % (co, liczba), liczba in _cfg, liczba)
 
 print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))
