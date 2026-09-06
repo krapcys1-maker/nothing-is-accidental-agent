@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **25 plików**, 32 778 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **25 plików**, 32 793 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -114,7 +114,7 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
 się testować bez przeglądarki i bez pieniędzy**. 158 zestawów
-testów, 4110 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+testów, 4114 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -443,7 +443,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `llm.py` — JEDYNA warstwa dostępu do modeli i liczenia kosztu
 
-827 wierszy, 15 funkcji na poziomie modułu, 3 klas
+825 wierszy, 15 funkcji na poziomie modułu, 3 klas
 
 | funkcja | co robi |
 |---|---|
@@ -579,7 +579,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-3189 wierszy, 29 funkcji na poziomie modułu, 0 klas
+3206 wierszy, 30 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -590,6 +590,7 @@ wiec nie da sie go rozjechac z kodem.
 | `narzedzie_wyszukiwania(model)` | Nazwa narzedzia wyszukiwania i ewentualne ostrzezenie. |
 | `sufit_dnia(dzien)` | Sufit obowiazujacy W TYM DNIU, nie dzisiaj. |
 | `sufit_miesieczny(dzis)` | Sufit miesieczny na DZIS. Po `PODWYZKA_DO` znowu bazowy. |
+| `sufit_przebiegu(etap)` | Ktory sufit obowiazuje przebieg o tym etapie. |
 | `kotwica_dlugosci(glebokosc)` | Zdanie kalibrujace dlugosc, dobrane do ilosci materialu. |
 | `dlugosc_dla(glebokosc)` | Ile slow ma miec artykul o tej glebokosci. |
 | `_tokens_for(chars)` *(wewn.)* | — |
@@ -6620,9 +6621,7 @@ def _preflight(purpose: str, conn: sqlite3.Connection, run_id: int | None) -> No
             " FROM calls WHERE run_id = ?",
             (run_id, run_id),
         ).fetchone()
-        _etap = str(row["stage"] or "")
-        _sufit = (config.RUN_LIMIT_ARTYKUL_USD if "artykul" in _etap
-                  else config.RUN_LIMIT_USD)
+        _sufit = config.sufit_przebiegu(row["stage"])
         if float(row["s"]) >= _sufit:
             raise BudgetExceeded(
                 f"przebieg wydał już ${float(row['s']):.4f} przy suficie "

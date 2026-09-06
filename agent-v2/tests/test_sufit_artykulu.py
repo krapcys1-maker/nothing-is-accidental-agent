@@ -27,7 +27,6 @@ BEZ PYTESTA. Uruchamiac z korzenia repozytorium:
     PYTHONIOENCODING=utf-8 python agent-v2/tests/test_sufit_artykulu.py
 """
 import pathlib
-import sqlite3
 import sys
 import tempfile
 
@@ -37,8 +36,6 @@ import config   # noqa: E402
 
 config.uzyj_katalogu_danych(pathlib.Path(tempfile.mkdtemp()))
 
-import db    # noqa: E402
-import llm   # noqa: E402
 
 zdane = 0
 oblane = 0
@@ -72,40 +69,20 @@ sprawdz("cztery artykuly to nie wiecej niz cwierc miesiaca",
         4 * config.RUN_LIMIT_ARTYKUL_USD)
 
 
-def przebieg(stage, wydane):
-    """Baza z jednym przebiegiem danego etapu i juz wydana kwota.
-
-    PRAWDZIWY SCHEMAT, nie moj wlasnorecznie sklejony. Pierwsza wersja tworzyla
-    dwie tabele z pamieci i przewrocila sie na `no such column: c.at`, bo
-    `_preflight` po suficie przebiegu pyta jeszcze o sufit DOBOWY. Atrapa
-    schematu sprawdzalaby moje wyobrazenie o bazie.
-    """
-    conn = db.connect(pathlib.Path(tempfile.mkdtemp()) / "proba.db")
-    rid = db.start_run(conn, stage, tryb="test")
-    conn.execute(
-        "INSERT INTO calls (run_id, provider, purpose, model, tokens_in,"
-        " tokens_out, cost_usd, ok, at)"
-        " VALUES (?,?,?,?,?,?,?,1,datetime('now'))",
-        (rid, "proba", "write", "proba", 0, 0, wydane))
-    conn.commit()
-    return conn, rid
-
-
 def zatrzymuje(stage, wydane):
-    """Czy `_preflight` zatrzyma kolejny etap przy tym stanie.
+    """Czy przebieg o tym etapie zostalby zatrzymany po wydaniu tej kwoty.
 
-    ZADNEGO `except Exception`. Pierwsza wersja miala je i po cichu zamieniala
-    KAZDY blad na „nie zatrzymuje" — a mialem odwrocona kolejnosc argumentow
-    (`_preflight` bierze `purpose` PIERWSZY), wiec leciał `KeyError` i test
-    pokazywal szesc porazek bez slowa o przyczynie. Trzeci raz tego dnia, gdy
-    zbyt szerokie lapanie ukrylo prawdziwy blad.
+    PYTA `config.sufit_przebiegu`, A NIE `llm._preflight`.
+
+    Pierwsza wersja wolala `_preflight` i przechodzila u mnie, a padala na
+    serwerze — bo `_preflight` sprawdza po drodze zapore „darmowy test nie
+    placi", ktora jest ZWOLNIONA przy `DRY_RUN`. Mierzyla wiec srodowisko,
+    nie regule. Trzeci taki test w tej sesji, wiec regula wyladowala w osobnej
+    funkcji, ktora da sie sprawdzic wprost.
+
+    Warunek jest ten sam, co w `llm._preflight`: `wydane >= sufit`.
     """
-    try:
-        conn, rid = przebieg(stage, wydane)
-        llm._preflight("write", conn, rid)
-    except llm.BudgetExceeded:
-        return True
-    return False
+    return wydane >= config.sufit_przebiegu(stage)
 
 
 print()
@@ -119,26 +96,33 @@ sprawdz("dzien przy 0,50 USD — leci dalej", not zatrzymuje("dzien", 0.50))
 
 print()
 print("=== 3. MARGINES PRZEBIEGU 77 ===")
-# Konkretne liczby z produkcji, nie okragle. Przebieg 77 DOJECHAL — zaplacil
-# 1,5918 USD przy suficie 1,60, czyli skonczyl osiem tysiecznych przed
-# zatrzymaniem. Pytanie nie brzmi „czy padl", tylko „ile brakowalo".
+# Konkretne liczby z produkcji. Przebieg 77 DOJECHAL — zaplacil 1,5918 USD przy
+# suficie 1,60, czyli skonczyl osiem tysiecznych przed zatrzymaniem.
 sprawdz("1,5918 nie zatrzymuje na zadnym z torow — 77 dojechal",
         not zatrzymuje("dzien", 1.5918)
         and not zatrzymuje("artykul-z-puli", 1.5918))
-# A tak wygladal margines: JEDEN grosz wiecej i stary sufit by go zabil.
 sprawdz("1,61 USD na starym torze — ZATRZYMANY", zatrzymuje("dzien", 1.61))
 sprawdz("1,61 USD na torze artykulu — LECI DALEJ",
         not zatrzymuje("artykul-z-puli", 1.61))
-# I najwazniejsze: cale pasmo z opisu kosztu (1,4-2,1) miesci sie teraz.
 sprawdz("2,05 USD na torze artykulu jeszcze przechodzi",
         not zatrzymuje("artykul-z-puli", 2.05))
 
 print()
 print("=== 4. NIEZNANY ETAP DOSTAJE SUFIT OSTROZNIEJSZY ===")
-# Domyslnie ma obowiazywac nizsza liczba — nowy tor nie moze odziedziczyc
-# najluzniejszego sufitu przez samo to, ze nikt o nim nie pomyslal.
 sprawdz("nieznany etap przy 1,70 — ZATRZYMANY", zatrzymuje("cos-nowego", 1.70))
 sprawdz("brak etapu przy 1,70 — ZATRZYMANY", zatrzymuje(None, 1.70))
+sprawdz("pusty napis tez", zatrzymuje("", 1.70))
+
+print()
+print("=== 4b. llm._preflight PYTA TE SAMA FUNKCJE ===")
+# Bez tego sekcje wyzej sprawdzalyby regule, ktorej produkcja nie uzywa.
+_llm = pathlib.Path("agent-v2/llm.py").read_text(encoding="utf-8")
+_kod = chr(10).join(w for w in _llm.splitlines()
+                    if not w.lstrip().startswith("#"))
+sprawdz("preflight bierze sufit z config.sufit_przebiegu",
+        "config.sufit_przebiegu(row[" in _kod)
+sprawdz("i nie wybiera go sam", "RUN_LIMIT_ARTYKUL_USD if" not in _kod)
+sprawdz("porownanie nadal >= sufit", 'float(row["s"]) >= _sufit' in _kod)
 
 print()
 print("=== 5. KONTROLA PRZED STARTEM PYTA O TE SAMA LICZBE ===")

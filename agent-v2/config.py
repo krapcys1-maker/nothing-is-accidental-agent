@@ -630,6 +630,23 @@ RUN_LIMIT_USD = 1.60
 # miesiecznym 40 USD od pazdziernika cztery artykuly po 2,20 to juz 22% miesiaca.
 RUN_LIMIT_ARTYKUL_USD = 2.20
 
+
+def sufit_przebiegu(etap: str | None) -> float:
+    """Ktory sufit obowiazuje przebieg o tym etapie.
+
+    OSOBNA FUNKCJA, A NIE DWIE LINIE W `llm._preflight` — i to nie jest
+    kosmetyka. Test tej reguly musial inaczej wolac caly `_preflight`, ktory po
+    drodze sprawdza jeszcze zapore „darmowy test nie placi". Ta zapora jest
+    zwolniona przy `DRY_RUN`, wiec test PRZECHODZIL na maszynie z wlaczonym
+    `DRY_RUN` i PADAL na serwerze — czyli mierzyl srodowisko, nie regule.
+    To trzeci taki test w tej sesji.
+
+    Nieznany etap dostaje sufit OSTROZNIEJSZY. Nowy tor nie ma dziedziczyc
+    najluzniejszej liczby przez samo to, ze nikt o nim nie pomyslal.
+    """
+    return (RUN_LIMIT_ARTYKUL_USD if "artykul" in str(etap or "")
+            else RUN_LIMIT_USD)
+
 # =============================================================================
 # KONTRAKTY — ile czego prosimy. Sufity tokenów liczą się z tych liczb niżej.
 # =============================================================================

@@ -132,9 +132,7 @@ def _preflight(purpose: str, conn: sqlite3.Connection, run_id: int | None) -> No
             " FROM calls WHERE run_id = ?",
             (run_id, run_id),
         ).fetchone()
-        _etap = str(row["stage"] or "")
-        _sufit = (config.RUN_LIMIT_ARTYKUL_USD if "artykul" in _etap
-                  else config.RUN_LIMIT_USD)
+        _sufit = config.sufit_przebiegu(row["stage"])
         if float(row["s"]) >= _sufit:
             raise BudgetExceeded(
                 f"przebieg wydał już ${float(row['s']):.4f} przy suficie "
