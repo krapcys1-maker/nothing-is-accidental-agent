@@ -8,9 +8,10 @@ Dla **notek i artykułów** przyrząd jest dobry — 100% pozycji ma liczby, 13 
 na rekord. Przyrząd działa też dla komentarzy — i to on pokazał rzecz
 najważniejszą z całego audytu:
 
-**Czternaście najnowszych komentarzy pod cudzymi artykułami zobaczyło ZERO
-osób.** Nie „nie wiemy ile" — zero. A tam idzie 86% naszych komentarzy i
-największy wolumen wywołań modelu w całym systemie.
+**Czternaście najnowszych komentarzy pod cudzymi artykułami ma ZERO wyświetleń
+w kanale notek.** Ale to nie znaczy, że nikt ich nie czyta: 14% z nich dostaje
+polubienie, a 6% odpowiedź — czyli widzi je czytelnik na stronie artykułu,
+tylko nie liczy ich kanał. Szczegóły i wnioski w punkcie 6.
 
 ## 1. Zasięg, najwyższy odczyt na pozycję
 
@@ -94,25 +95,48 @@ tego nie sprawdził, zgłosiłbym nieistniejącą awarię.
 
 ## 6. Co da się z tym zrobić
 
-**Jedna rzecz jest teraz oczywista i mierzalna:**
+### ~~Przenieść komentarze z artykułów pod notki~~ — SPRAWDZONE, NIE ROBIĆ
 
-1. **Przenieść wysiłek komentarzy z artykułów pod notki.** Dziś blok
-   `komentarze()` celuje w artykuły i bierze pełny przydział, a blok
-   `dyskusje()` celuje w notki i bierze połowę tego samego. Zasięg mówi
-   odwrotnie: **artykuł 0, notka 2,9**. To jest zmiana przydziału, nie kodu
-   modelu — i pierwsza rzecz, jaką bym zrobił.
+Napisałem tu, że to „pierwsza rzecz, jaką bym zrobił". **Sprawdziłem i jest
+odwrotnie.** Zostawiam wywód, bo droga do odrzucenia tej zmiany jest sama
+w sobie ustaleniem.
 
-**Tanie i pewne:**
+**Krok 1 — miary niezależne od kart wyświetleń.** „Zero wyświetleń" dotyczy
+kanału NOTEK, a komentarz pod artykułem tam nie trafia — może go jednak
+widzieć czytelnik na stronie artykułu. Polubienia i odpowiedzi tego nie
+wymagają:
 
-2. **Dwa martwe pola** (`obserwacje`, `zapisy_platne`) — 4 848 zapisanych
+| gdzie | n | % z polubieniem | % z odpowiedzią |
+|---|---|---|---|
+| pod artykułem | 86 | **14%** | 6% |
+| pod notką | 13 | 31% | 15% |
+
+Komentarze pod artykułami **nie są niewidzialne** — co siódmy dostaje
+polubienie. Notki wypadają lepiej, ale na próbce **trzynastu sztuk**.
+
+**Krok 2 — dlaczego ta próbka jest tak mała.** Nie z przydziału i nie z czasu.
+Oba bloki startują 49 razy. Różnica jest w tym, co się w nich dzieje:
+
+| blok | wynik |
+|---|---|
+| dyskusje (pod notkami) | **38 × MILCZY**, 13 opublikowanych |
+| komentarze (pod artykułami) | **56 × POTWIERDZONY**, 8 × MILCZY |
+
+Pod notkami model prawie zawsze milczy — i słusznie. Powody, dosłownie:
+„Pure praise with nothing to build on", „The post is an aphorism with no claim
+to engage", „The comment is only an emoji with no question or substance".
+
+**Wniosek: przydział jest dobry.** Przeniesienie sił pod notki dałoby więcej
+MILCZENIA, czyli płatnych ocen bez tekstu. Artykuły są tam, gdzie jest o czym
+mówić.
+
+### Co zostaje do zrobienia
+
+1. **Dwa martwe pola** (`obserwacje`, `zapisy_platne`) — 4 848 zapisanych
    pustek. Sprawdzić, czy Substack je oddaje; jeśli nie, usunąć z wyciągu.
-
-**Pytanie warte najwięcej:**
-
-3. Wszystkie 7 przypisanych subskrypcji przyszło z **artykułów**, których
-   piszemy trzy na miesiąc. Notek 91, komentarzy 99. Jeśli ten rozkład utrzyma
-   się na większej próbce, pytanie o przydział sił jest ważniejsze niż każda
-   optymalizacja kosztu z tej sesji.
+2. **38 milczeń w bloku dyskusji** — każde kosztuje wywołanie pisania plus
+   udział w ocenie celów. Warto sprawdzić, czy da się rozpoznać „czysta
+   pochwała / aforyzm / emoji" ZANIM zapłacimy za próbę.
 
 ## 7. Ile razy pomyliłem się w tym jednym audycie
 
