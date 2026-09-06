@@ -15,16 +15,26 @@ Stan na 3 września 2026, rano. Produkcja na `42f1932`.
 
 ---
 
-## 1. Dwa bloki niezależnie zużywają ten sam budżet komentarzy
+## 1. ~~Dwa bloki niezależnie zużywają ten sam budżet komentarzy~~ — ZAMKNIĘTE
 
-Blok pod artykułami bierze `na_teraz["komentarze"]` celów, a późniejszy blok
-dyskusji pod notkami bierze **jeszcze** `max(1, na_teraz["komentarze"] // 2)`.
-Oba podbijają ten sam licznik, między nimi nie ma odjęcia. Przy przydziale N
-jeden przebieg może zrobić do `N + N/2` publikacji.
+**Sprawdzone 6 września 2026. Nie jest usterką i nigdy nią nie było.**
 
-Z audytu GPT (G1), niezweryfikowane pomiarem — do sprawdzenia przed poprawką,
-bo dziś wolumeny są **poniżej** normy, a nie powyżej, więc może to nie boli.
+Mechanizm jest realny: blok pod artykułami bierze `na_teraz["komentarze"]`,
+a blok dyskusji jeszcze `max(1, na_teraz["komentarze"] // 2)`, więc jeden
+przebieg może wystawić do `N + N/2`. Ale to jest **świadome** i opisane
+w `run.py` przy tej właśnie linii, razem z pomiarem na 51 przebiegach
+(18.08–02.09): przydział realizowany w 38%, sufit ruszył dwa razy, żadna doba
+nie przekroczyła budżetu. Powód strukturalny: `zostalo` liczy się od nowa
+z dziennika na początku KAŻDEGO przebiegu, więc nadmiar jednego zabiera
+z puli następnym.
 
+Sprawdziłem to jeszcze raz na świeższych danych i o mało nie zgłosiłem
+fałszywego alarmu: doby z 12, 15 i 18 publikacjami wyglądały na przekroczenia
+przydziału **7**. Przydział jest jednak DYNAMICZNY — w dzienniku występuje
+jako 7, 8, 9, 10, 15, 16 i 18. Tamte doby miały odpowiednio wyższy.
+
+Wniosek dla następnego czytelnika: zanim porównasz wolumen z „przydziałem",
+odczytaj przydział z dziennika tamtego dnia, a nie z konfiguracji dzisiaj.
 ---
 
 ## 2. Czternaście publikacji w tydzień bez potwierdzenia
