@@ -56,6 +56,16 @@ def uruchom(bank, odpowiedz):
     stages._zapisz_indeks = lambda x: None
     llm.call = lambda *a, **k: (odpowiedz if isinstance(odpowiedz, str)
                                 else json.dumps(odpowiedz))
+    # ODCISK CZYSZCZONY PRZED KAZDYM PRZYPADKIEM. Od 6 wrzesnia 2026
+    # `sparuj_bank` pomija pytanie, gdy zbior wolnych wpisow nie zmienil sie od
+    # ostatniego parowania (patrz `test_parowanie_nie_pyta_dwa_razy.py`) — a
+    # przypadki w TYM tescie sa niezalezne, nie sekwencja. Bez czyszczenia
+    # drugi przypadek o tym samym banku dostawal „pominiete" zamiast werdyktu
+    # i test zglaszal usterke tam, gdzie jej nie ma.
+    try:
+        (config.DATA_DIR / "parowanie_odcisk.txt").unlink(missing_ok=True)
+    except OSError:
+        pass
     try:
         return stages.sparuj_bank(None, None)
     finally:

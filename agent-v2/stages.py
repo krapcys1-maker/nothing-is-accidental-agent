@@ -8843,6 +8843,37 @@ def sparuj_bank(conn: sqlite3.Connection, run_id: int | None = None) -> dict[str
     if len(wolni) < 3:
         return {"grup": 0, "scalone": 0}
 
+    # NIE PYTAMY DWA RAZY O TEN SAM ZBIOR.
+    #
+    # ZMIERZONE NA PRODUKCJI, czternascie dni: szesc uruchomien, w PIECIU
+    # „grup: 0, scalonych pozycji: 0", w jednym jedna pozycja. Kazde kosztowalo
+    # okolo 20 tysiecy tokenow wyjscia (98% kosztu etapu) — czyli 1,43 USD
+    # miesiecznie za jedna scalona pare.
+    #
+    # Przyczyna nie byla w modelu, tylko w tym, ze pytalismy go o TO SAMO.
+    # `sparuj_bank` szlo przy KAZDYM przebiegu, a bank miedzy przebiegami
+    # czesto sie nie zmienia: material bierze sie z indeksu bez nowego
+    # szukania, wiec te same 20-40 wolnych wpisow jechalo do modelu piec razy
+    # dziennie. Odpowiedz „nie ma duplikatow" nie zmieni sie, dopoki zbior sie
+    # nie zmieni.
+    #
+    # ODCISK, NIE ZEGAR. Prog czasowy („raz na dobe") przepuscilby przebieg,
+    # w ktorym doszlo dwadziescia nowych faktow, i zablokowal ten, w ktorym
+    # doszlo zero. Pytanie brzmi „czy zbior sie zmienil", wiec pilnuje tego
+    # odcisk zbioru, a nie godzina.
+    odcisk = hashlib.sha256(
+        "|".join(sorted(str(k.get("fact") or "") for k in wolni))
+        .encode("utf-8")).hexdigest()[:16]
+    _plik_odcisku = config.DATA_DIR / "parowanie_odcisk.txt"
+    try:
+        if _plik_odcisku.read_text(encoding="utf-8").strip() == odcisk:
+            print("  [parowanie] bank bez zmian od ostatniego parowania"
+                  " (%d wolnych) — nie pytam drugi raz" % len(wolni),
+                  flush=True)
+            return {"grup": 0, "scalone": 0, "pominiete": 1}
+    except (OSError, ValueError):
+        pass
+
     pozycje = "\n".join(
         "%d. %s" % (i, str(k.get("fact") or "")[:300])
         for i, k in enumerate(wolni))
@@ -8890,6 +8921,22 @@ def sparuj_bank(conn: sqlite3.Connection, run_id: int | None = None) -> dict[str
             scalonych += 1
     if scalonych:
         _zapisz_indeks(indeks)
+    # ODCISK ZBIORU, O KTORY WLASNIE PYTALISMY. Nastepny przebieg policzy
+    # odcisk BIEZACEGO zbioru i pominie pytanie, jesli sie zgadza.
+    #
+    # Zapisujemy stan SPRZED scalen swiadomie: po scaleniu zbior jest inny,
+    # wiec odcisk sie nie zgodzi i model dostanie pytanie o nowy uklad. Jedno
+    # dodatkowe wywolanie po udanym scaleniu jest w porzadku — po scaleniu
+    # naprawde jest o co pytac.
+    #
+    # Zapis nie moze przewrocic przebiegu: pominiete parowanie kosztuje jedno
+    # zbedne wywolanie, a wyjatek tutaj kosztowalby caly blok notek.
+    try:
+        _plik_odcisku.parent.mkdir(parents=True, exist_ok=True)
+        _plik_odcisku.write_text(odcisk, encoding="utf-8")
+    except OSError as exc:
+        print("  [parowanie] odcisku nie zapisalem (%s) — nastepny przebieg"
+              " zapyta ponownie" % type(exc).__name__, flush=True)
     print("  [parowanie] grup: %d, scalonych pozycji: %d, zostaje wolnych: %d"
           % (grup, scalonych, len(wolni) - scalonych), flush=True)
     return {"grup": grup, "scalone": scalonych}
