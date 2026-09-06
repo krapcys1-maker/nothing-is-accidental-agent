@@ -536,7 +536,13 @@ WEB_SEARCH_USD_PER_1K = 10.00
 import datetime as _dt_sufit  # noqa: E402
 _DZIS_UTC = _dt_sufit.datetime.now(_dt_sufit.timezone.utc).strftime("%Y-%m-%d")
 SUFIT_PODNIESIONY_NA = "2026-08-30"
-DAILY_LIMIT_USD = 10.00 if _DZIS_UTC == SUFIT_PODNIESIONY_NA else 5.00
+# DAILY_LIMIT_USD JEST USTAWIANE NIZEJ, za `sufit_dnia` — bo od 6 wrzesnia
+# 2026 liczy sie z sufitu miesiecznego, a ten jest funkcja zdefiniowana
+# dalej w tym pliku. Nazwa i znaczenie bez zmian: „ile wolno wydac DZIS".
+#
+# Do 6 wrzesnia stalo tu na sztywno 5,00. Dla wrzesniowych 150 USD pasowalo
+# PRZYPADKIEM (5 x 30 = 150); dla pazdziernikowych 40 USD byloby trzy i pol
+# raza za luzne.
 
 
 def sufit_dnia(dzien: str) -> float:
@@ -552,7 +558,53 @@ def sufit_dnia(dzien: str) -> float:
 
     Falszywy alarm uczy ignorowac alarmy, a ten akurat ma pilnowac pieniedzy.
     """
-    return 10.00 if str(dzien)[:10] == SUFIT_PODNIESIONY_NA else 5.00
+    if str(dzien)[:10] == SUFIT_PODNIESIONY_NA:
+        return 10.00
+    return _sufit_dobowy_z_miesiecznego(str(dzien)[:10])
+
+
+def _sufit_dobowy_z_miesiecznego(dzis: str) -> float:
+    """Sufit dobowy LICZONY Z MIESIECZNEGO, a nie wpisany na sztywno.
+
+    CO BYLO ZLE, znalezione 6 wrzesnia 2026. `DAILY_LIMIT_USD` i `sufit_dnia`
+    oddawaly stale 5,00 USD, bez zwiazku z sufitem miesiecznym. Na wrzesien
+    pasowalo przypadkiem: 5 x 30 = 150, czyli dokladnie tyle, ile wynosi
+    podwyzka.
+
+    OD 1 PAZDZIERNIKA SUFIT MIESIECZNY WRACA DO 40 USD, czyli 1,33 na dobe —
+    a dobowy zostalby na 5,00. Trzy i pol raza za luzno. Miesiac dalby sie
+    wypalic w osiem dni, a jedyna zapora bylby sufit miesieczny, czyli dopiero
+    PO fakcie: przebieg, ktory go przekroczy, i tak juz zaplacil.
+
+    Podstawa: miesieczny przez liczbe dni TEGO miesiaca, razy 1,6. Wydatek nie
+    rozklada sie rowno — wtorek z artykulem kosztuje wielokrotnosc zwyklej
+    doby, a sufit dobowy ma zatrzymywac UCIECZKE, nie normalna nierownosc.
+
+    DWA OGRANICZENIA, oba postawione swiadomie:
+
+    NIGDY WYZEJ NIZ 5,00 — czyli nigdy luzniej, niz bylo. Wrzesniowa podwyzka
+    do 150 USD dalaby z tego wzoru 8,00 na dobe, a wlasciciel prosil o wiekszy
+    sufit MIESIECZNY, nie o luzniejsze doby. Ta poprawka ma zaciskac
+    pazdziernik, a nie rozluzniac wrzesien.
+
+    NIGDY NIZEJ NIZ NA JEDEN DZIEN Z ARTYKULEM. Sam przebieg artykulu ma sufit
+    `RUN_LIMIT_ARTYKUL_USD`, a wtorek to artykul PLUS zwykla doba notek
+    (zmierzone: okolo 1,05 USD). Pazdziernikowe 40/31 x 1,6 = 2,06 zabiloby
+    wtorek co tydzien — sufit dobowy odmawia PRZED wywolaniem, wiec artykul
+    nie powstalby wcale.
+    """
+    import calendar
+    from datetime import datetime, timezone
+    try:
+        rok, miesiac = int(dzis[:4]), int(dzis[5:7])
+    except (ValueError, IndexError):
+        teraz = datetime.now(timezone.utc)
+        rok, miesiac = teraz.year, teraz.month
+    dni = calendar.monthrange(rok, miesiac)[1]
+    z_miesiaca = sufit_miesieczny(dzis) / dni * 1.6
+    na_artykul = RUN_LIMIT_ARTYKUL_USD + 1.00
+    return round(min(5.00, max(z_miesiaca, na_artykul)), 2)
+
 
 # SUFIT TORU TESTOWEGO — osobny od produkcyjnego i CELOWO NIE NIESKONCZONY.
 #
@@ -601,6 +653,7 @@ def sufit_miesieczny(dzis: str | None = None) -> float:
         return max(MONTHLY_LIMIT_USD, PODWYZKA_MIESIECZNA_USD)
     return MONTHLY_LIMIT_USD
 
+
 # Sufit na JEDEN przebieg. Działa ZAWSZE, także przy AGENT_V2_NO_LIMIT=1.
 # „Bez limitu na budowę" miało znaczyć „nie blokuj eksperymentów", a nie
 # „pozwól jednemu przebiegowi kosztować 2 USD". Przebieg 16 kosztował $1,92,
@@ -629,6 +682,14 @@ RUN_LIMIT_USD = 1.60
 # 2,20 to gorna granica zapisanego pasma plus zapas. Nie wiecej: przy suficie
 # miesiecznym 40 USD od pazdziernika cztery artykuly po 2,20 to juz 22% miesiaca.
 RUN_LIMIT_ARTYKUL_USD = 2.20
+
+
+# DOPIERO TU. `sufit_dnia` siega po `sufit_miesieczny` ORAZ po
+# `RUN_LIMIT_ARTYKUL_USD`, wiec przypisanie musi stac za obiema. Przesuwalem je
+# w tej sesji DWA RAZY, za kazdym razem po `NameError` przy imporcie `config` —
+# a `config`, ktory sie nie importuje, zatrzymuje calego bota. Kolejnosci
+# pilnuje `test_sufit_dobowy_z_miesiecznego.py`.
+DAILY_LIMIT_USD = sufit_dnia(_DZIS_UTC)
 
 
 def sufit_przebiegu(etap: str | None) -> float:

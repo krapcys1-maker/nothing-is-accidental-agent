@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **25 plików**, 32 857 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **25 plików**, 32 918 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -113,8 +113,8 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 > w głównej ścieżce artykułu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
-się testować bez przeglądarki i bez pieniędzy**. 158 zestawów
-testów, 4121 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+się testować bez przeglądarki i bez pieniędzy**. 159 zestawów
+testów, 4139 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -580,7 +580,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-3206 wierszy, 30 funkcji na poziomie modułu, 0 klas
+3267 wierszy, 31 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -590,6 +590,7 @@ wiec nie da sie go rozjechac z kodem.
 | `w_szczycie(kiedy)` | Czy teraz obowiazuje droga taryfa. |
 | `narzedzie_wyszukiwania(model)` | Nazwa narzedzia wyszukiwania i ewentualne ostrzezenie. |
 | `sufit_dnia(dzien)` | Sufit obowiazujacy W TYM DNIU, nie dzisiaj. |
+| `_sufit_dobowy_z_miesiecznego(dzis)` *(wewn.)* | Sufit dobowy LICZONY Z MIESIECZNEGO, a nie wpisany na sztywno. |
 | `sufit_miesieczny(dzis)` | Sufit miesieczny na DZIS. Po `PODWYZKA_DO` znowu bazowy. |
 | `sufit_przebiegu(etap)` | Ktory sufit obowiazuje przebieg o tym etapie. |
 | `kotwica_dlugosci(glebokosc)` | Zdanie kalibrujace dlugosc, dobrane do ilosci materialu. |
@@ -13049,7 +13050,6 @@ wartosc i komentarz stojacy bezposrednio nad definicja.
 | `WEB_SEARCH_USD_PER_1K` | `10.00` | Wyszukiwanie po stronie Anthropic: USD za 1000 zapytań. |
 | `_DZIS_UTC` | `_dt_sufit.datetime.now(_dt_sufit.timezone.ut` | — |
 | `SUFIT_PODNIESIONY_NA` | `"2026-08-30"` | — |
-| `DAILY_LIMIT_USD` | `10.00 if _DZIS_UTC == SUFIT_PODNIESIONY_NA e` | — |
 | `TEST_LIMIT_USD` | `3.00` | SUFIT TORU TESTOWEGO — osobny od produkcyjnego i CELOWO NIE NIESKONCZONY. Wlasciciel: „nie licz budzetu do testow, to cos osobnego". Zgoda c |
 | `MONTHLY_LIMIT_USD` | `40.00` | — |
 | `PODWYZKA_MIESIECZNA_USD` | `150.00` | PODWYZSZENIE NA WRZESIEN 2026 — I WYGASA SAMO. DLACZEGO. 5 wrzesnia 2026 pomiar pokazal, ze przy tempie tego miesiaca sufit 40 USD padnie ok |
@@ -13058,6 +13058,7 @@ wartosc i komentarz stojacy bezposrednio nad definicja.
 | `PONOWIENIE_ODSTEP_S` | `8` | — |
 | `RUN_LIMIT_USD` | `1.60` | — |
 | `RUN_LIMIT_ARTYKUL_USD` | `2.20` | OSOBNY SUFIT DLA TORU ARTYKULU — jedna liczba byla za ciasna dla artykulu i za luzna dla notek. ZMIERZONE NA PRODUKCJI: przebieg artykulu 10 |
+| `DAILY_LIMIT_USD` | `sufit_dnia(_DZIS_UTC)` | DOPIERO TU. `sufit_dnia` siega po `sufit_miesieczny` ORAZ po `RUN_LIMIT_ARTYKUL_USD`, wiec przypisanie musi stac za obiema. Przesuwalem je w |
 | `TOPIC_COUNT` | `6` | --- skaut i różnorodność ---------------------------------------------------- |
 | `DIVERSITY_LOOKBACK` | `5` | — |
 | `DISCOVERY_MAX_RESULTS` | `10` | --- dyskoveria -------------------------------------------------------------- 10, nie 6. Odsiew przy pobieraniu jest brutalny: martwe adresy |

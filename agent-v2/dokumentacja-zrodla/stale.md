@@ -48,7 +48,6 @@
 | `WEB_SEARCH_USD_PER_1K` | `10.00` | Wyszukiwanie po stronie Anthropic: USD za 1000 zapytań. |
 | `_DZIS_UTC` | `_dt_sufit.datetime.now(_dt_sufit.timezone.ut` | — |
 | `SUFIT_PODNIESIONY_NA` | `"2026-08-30"` | — |
-| `DAILY_LIMIT_USD` | `10.00 if _DZIS_UTC == SUFIT_PODNIESIONY_NA e` | — |
 | `TEST_LIMIT_USD` | `3.00` | SUFIT TORU TESTOWEGO — osobny od produkcyjnego i CELOWO NIE NIESKONCZONY. Wlasciciel: „nie licz budzetu do testow, to cos osobnego". Zgoda c |
 | `MONTHLY_LIMIT_USD` | `40.00` | — |
 | `PODWYZKA_MIESIECZNA_USD` | `150.00` | PODWYZSZENIE NA WRZESIEN 2026 — I WYGASA SAMO. DLACZEGO. 5 wrzesnia 2026 pomiar pokazal, ze przy tempie tego miesiaca sufit 40 USD padnie ok |
@@ -57,6 +56,7 @@
 | `PONOWIENIE_ODSTEP_S` | `8` | — |
 | `RUN_LIMIT_USD` | `1.60` | — |
 | `RUN_LIMIT_ARTYKUL_USD` | `2.20` | OSOBNY SUFIT DLA TORU ARTYKULU — jedna liczba byla za ciasna dla artykulu i za luzna dla notek. ZMIERZONE NA PRODUKCJI: przebieg artykulu 10 |
+| `DAILY_LIMIT_USD` | `sufit_dnia(_DZIS_UTC)` | DOPIERO TU. `sufit_dnia` siega po `sufit_miesieczny` ORAZ po `RUN_LIMIT_ARTYKUL_USD`, wiec przypisanie musi stac za obiema. Przesuwalem je w |
 | `TOPIC_COUNT` | `6` | --- skaut i różnorodność ---------------------------------------------------- |
 | `DIVERSITY_LOOKBACK` | `5` | — |
 | `DISCOVERY_MAX_RESULTS` | `10` | --- dyskoveria -------------------------------------------------------------- 10, nie 6. Odsiew przy pobieraniu jest brutalny: martwe adresy |
