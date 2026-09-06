@@ -35,7 +35,7 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-9687 wierszy, 155 funkcji na poziomie modułu, 0 klas
+9712 wierszy, 155 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -599,7 +599,7 @@
 
 ### `seria.py` — serie tematyczne — cztery notki o jednym temacie, jedna na dobę; temat wybiera bank, nie plan
 
-413 wierszy, 14 funkcji na poziomie modułu, 0 klas
+479 wierszy, 15 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -613,8 +613,9 @@
 | `_zapisz(d)` *(wewn.)* | Zapis atomowy z jedną kopią — dokładnie jak `_zapisz_indeks`. |
 | `aktywna()` | Seria w toku, albo None. Skończona seria NIE jest aktywna. |
 | `czesc_na_dzis(a)` | Numer części do wydania dziś (1..N), albo None. |
+| `_ostatnia_godzina(wydane)` *(wewn.)* | Ile godzin minęło od ostatniej wydanej części. None, gdy nie wiadomo. |
 | `propozycja(zapas)` | Część serii do napisania TERAZ — albo None. NIE ZAPISUJE NICZEGO. |
-| `wybierz_fakt(zapas, temat, unikaj_faktow)` | Najlepiej dopasowany fakt na temat serii — ZDJĘTY z zapasu. |
+| `kandydaci_faktow(zapas, temat, unikaj_faktow)` | Fakty na temat serii, od najlepiej dopasowanego. NICZEGO NIE ZDEJMUJE. |
 | `zapisz_czesc(temat, czesc, id_notki, otwarcie, fakt)` | Zapisuje, że część NAPRAWDĘ poszła w świat. Zakłada serię, gdy trzeba. |
 | `kontekst(czesc, seria)` | To, co pisarz musi wiedzieć, żeby napisać CZĘŚĆ, a nie osobną notkę. |
 
@@ -688,7 +689,7 @@
 
 ### `wzajemnosc.py` — czy zaczepieni sie odwzajemniaja: liczy PO naszej akcji, osobno stan nieorzekalny
 
-1412 wierszy, 25 funkcji na poziomie modułu, 0 klas
+1433 wierszy, 25 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|

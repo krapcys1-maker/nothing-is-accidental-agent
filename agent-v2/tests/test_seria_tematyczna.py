@@ -364,10 +364,16 @@ sprawdz("propozycja jest", isinstance(_p, dict) and _p.get("czesc") == 1, _p)
 sprawdz("plik stanu NIE powstal", not seria.PLIK.exists(),
         "istnieje: %s" % seria.PLIK.exists())
 sprawdz("zadna seria nie jest aktywna", seria.aktywna() is None)
-sprawdz("fakt zostal ZDJETY z zapasu (nie wyjdzie drugi raz tego dnia)",
-        len(_zapas) == 3, len(_zapas))
-sprawdz("wzieto najlepiej dopasowany", _p["fakt"] is PRAD[0],
-        (_p["fakt"] or {}).get("domain"))
+# PO AUDYCIE Z 6.09: `propozycja` oddaje KANDYDATOW i niczego nie zdejmuje.
+# Wybor koncowy nalezy do `wybierz_material`, zeby czesc serii przechodzila
+# przez TE SAMA straz roznorodnosci, co zwykla notka — patrz sekcja 14.
+sprawdz("propozycja NICZEGO nie zdejmuje z zapasu",
+        len(_zapas) == 4, len(_zapas))
+sprawdz("oddaje liste kandydatow, nie jeden fakt",
+        isinstance(_p.get("kandydaci"), list) and len(_p["kandydaci"]) == 4,
+        type(_p.get("kandydaci")))
+sprawdz("na czele stoi najlepiej dopasowany", _p["kandydaci"][0] is PRAD[0],
+        (_p["kandydaci"][0] or {}).get("domain"))
 sprawdz("kontekst niesie etykiete PO ANGIELSKU, nie polski klucz",
         (_p["kontekst"] or {}).get("etykieta") == "Where the electricity goes",
         (_p["kontekst"] or {}).get("etykieta"))
@@ -393,6 +399,7 @@ sprawdz("i propozycja tez milczy", seria.propozycja(list(PRAD)) is None)
 # Cofamy dobe ostatniej czesci — udajemy, ze minela noc.
 _s = seria.stan()
 _s["aktywna"]["wydane"][0]["doba"] = "2000-01-01"
+_s["aktywna"]["wydane"][0]["kiedy"] = "2000-01-01T00:00:00+00:00"
 seria._zapisz(_s)
 sprawdz("nazajutrz czeka czesc 2", seria.czesc_na_dzis() == 2,
         seria.czesc_na_dzis())
@@ -402,9 +409,9 @@ print("=== 7. CZESC 2 NIE POWTARZA FAKTU CZESCI 1 ===")
 _zapas2 = list(PRAD)
 _p2 = seria.propozycja(_zapas2)
 sprawdz("propozycja czesci 2 jest", (_p2 or {}).get("czesc") == 2, _p2)
-sprawdz("i NIE bierze faktu, ktory juz poszedl",
-        (_p2 or {}).get("fakt") is not PRAD[0],
-        ((_p2 or {}).get("fakt") or {}).get("domain"))
+sprawdz("i fakt czesci 1 NIE jest juz wsrod kandydatow",
+        PRAD[0] not in ((_p2 or {}).get("kandydaci") or []),
+        [(f or {}).get("domain") for f in ((_p2 or {}).get("kandydaci") or [])])
 sprawdz("kontekst niesie otwarcie czesci 1, zeby go nie powtorzyc",
         "Data centres already use"
         in " ".join(((_p2 or {}).get("kontekst") or {}).get(
@@ -420,6 +427,7 @@ for i in range(1, 5):
     if i < 4:
         _s = seria.stan()
         _s["aktywna"]["wydane"][-1]["doba"] = "2000-01-0%d" % i
+        _s["aktywna"]["wydane"][-1]["kiedy"] = "2000-01-0%dT00:00:00+00:00" % i
         seria._zapisz(_s)
 sprawdz("po czwartej czesci zadna seria nie jest aktywna",
         seria.aktywna() is None, seria.aktywna())
@@ -445,6 +453,7 @@ sprawdz("czesc z innego tematu nie wchodzi do trwajacej serii",
 # Ten sam numer dwa razy — nieudana proba nie ma dolozyc drugiego wpisu.
 _s = seria.stan()
 _s["aktywna"]["wydane"][0]["doba"] = "2000-01-01"
+_s["aktywna"]["wydane"][0]["kiedy"] = "2000-01-01T00:00:00+00:00"
 seria._zapisz(_s)
 seria.zapisz_czesc("Prad i data centre", 1, "1-znowu")
 sprawdz("ta sama czesc nie zapisuje sie dwa razy",
@@ -545,6 +554,8 @@ try:
     stages.artykul_do_promocji = lambda: None
     stages.pamiec_wystawionych = lambda: []
     stages.znajdz_ciekawostki = lambda conn, run_id, ile=8: []
+    stages.opublikowane_teksty = lambda *a, **k: []
+    stages.teksty_ostatnich_notek = lambda *a, **k: []
     # `**k` — atrapa ma przyjmowac to, co przyjmuje oryginal. Atrapa wezsza od
     # kodu udaje usterke kodu; ten wzorzec powtorzyl sie dzis PIEC RAZY.
     stages.note = lambda conn, run_id, typ, material, link=None,         note_form="PROSTA", **k: {"typ": typ, "material": material,
@@ -591,6 +602,89 @@ try:
 finally:
     (stages.znajdz_ciekawostki, stages.note, stages.artykul_do_promocji,
      stages.pamiec_wystawionych, stages._prompt) = _oryg
+
+print()
+print("=== 14. DWIE WADY Z AUDYTU 6.09 — DOWOD, ZE NAPRAWIONE ===")
+czysto()
+
+# --- B4: doba UTC sama nie wystarcza -----------------------------------------
+# Zegar produkcji: 11:20, 17:00, 19:20, 21:30, 23:40 UTC. OSTATNI PRZEBIEG
+# PRZECHODZI PRZEZ POLNOC, wiec czesc o 23:51 (doba D) i czesc o 00:20
+# (doba D+1) to 29 MINUT ODSTEPU u czytelnika — a obie sa „jedna na dobe"
+# wedlug kalendarza. Dlatego druga bramka liczy GODZINY, nie kalendarz.
+from datetime import datetime as _dt, timedelta as _td, timezone as _tz  # noqa: E402
+
+seria.zapisz_czesc("Prad i data centre", 1, "111",
+                   otwarcie="o", fakt=PRAD[0]["fact"])
+_s = seria.stan()
+_w = _s["aktywna"]["wydane"][0]
+# Udajemy DOKLADNIE ten przypadek: czesc poszla 29 minut temu, ale wczoraj
+# wedlug kalendarza UTC.
+_w["doba"] = "2000-01-01"
+_w["kiedy"] = (_dt.now(_tz.utc) - _td(minutes=29)).isoformat()
+seria._zapisz(_s)
+sprawdz("KONTRDOWOD: sam kalendarz przepuscilby czesc 2 po 29 minutach",
+        _w["doba"] != seria._dzis())
+sprawdz("bramka odstepu ZATRZYMUJE ja", seria.czesc_na_dzis() is None,
+        seria.czesc_na_dzis())
+# 17 godzin to nadal za malo, 19 juz wystarczy — prog stoi na 18.
+for ile_h, ma_przejsc in ((17, False), (19, True)):
+    _s = seria.stan()
+    _s["aktywna"]["wydane"][0]["kiedy"] = (
+        _dt.now(_tz.utc) - _td(hours=ile_h)).isoformat()
+    seria._zapisz(_s)
+    sprawdz("po %d h czesc 2 %s" % (ile_h, "przechodzi" if ma_przejsc else "czeka"),
+            (seria.czesc_na_dzis() == 2) is ma_przejsc, seria.czesc_na_dzis())
+# Wpis bez czytelnego czasu NIE ma prawa zatrzymac serii na zawsze.
+_s = seria.stan()
+_s["aktywna"]["wydane"][0]["kiedy"] = "to nie jest data"
+_s["aktywna"]["wydane"][0]["doba"] = "2000-01-01"
+seria._zapisz(_s)
+sprawdz("zepsuty czas nie blokuje serii na zawsze",
+        seria.czesc_na_dzis() == 2, seria.czesc_na_dzis())
+
+# --- B5: czesc serii przechodzi przez TE SAMA straz, co zwykla notka ---------
+# Nie sprawdzam, czy `seria` ma wlasna straz — sprawdzam, ze NIE MA i ze
+# odsiew robi `wybierz_material`. Dwie kopie jednej reguly rozjezdzaja sie
+# przy pierwszej poprawce.
+print()
+_zr = pathlib.Path("agent-v2/seria.py").read_text(encoding="utf-8")
+sprawdz("`seria.py` NIE ma wlasnej kopii strazy roznorodnosci",
+        "wspolna_nazwa" not in _zr and "pamiec_wystawionych" not in _zr)
+_zs = pathlib.Path("agent-v2/stages.py").read_text(encoding="utf-8")
+_i_prop = _zs.index("seria.propozycja(")
+_ogon = _zs[_i_prop:_i_prop + 1400]
+sprawdz("`stages` puszcza kandydatow serii przez `wybierz_material`",
+        "wybierz_material(" in _ogon)
+sprawdz("i podaje jej pamiec wystawionych oraz teksty notek",
+        "wczesniejsze" in _ogon and "teksty_notek" in _ogon)
+
+# ZACHOWANIEM, NIE CZYTANIEM KODU: material zderzony z wczorajsza notka
+# NIE moze wyjsc jako czesc serii.
+czysto()
+_oryg2 = (stages.znajdz_ciekawostki, stages.note, stages.artykul_do_promocji,
+          stages.pamiec_wystawionych, stages.teksty_ostatnich_notek,
+          stages.opublikowane_teksty)
+try:
+    stages.artykul_do_promocji = lambda: None
+    stages.znajdz_ciekawostki = lambda conn, run_id, ile=8: []
+    stages.note = lambda conn, run_id, typ, material, link=None,         note_form="PROSTA", **k: {"typ": typ, "material": material,
+                                  "candidates": []}
+    stages.opublikowane_teksty = lambda *a, **k: []
+    # Pamiec udaje, ze KAZDY fakt serii juz wyszedl w poprzednich dniach.
+    stages.pamiec_wystawionych = lambda: [
+        frozenset(stages._slowa("%s %s" % (f.get("domain") or "",
+                                           f.get("fact") or "")))
+        for f in PRAD]
+    stages.teksty_ostatnich_notek = lambda *a, **k: []
+    _n = stages.notki_dnia(None, 0, ciekawostki=[dict(f) for f in PRAD], ile=2)
+    sprawdz("material zderzony z wczesniejsza notka NIE wychodzi jako czesc serii",
+            not any(x.get("seria_czesc") for x in _n),
+            [x.get("seria_czesc") for x in _n])
+finally:
+    (stages.znajdz_ciekawostki, stages.note, stages.artykul_do_promocji,
+     stages.pamiec_wystawionych, stages.teksty_ostatnich_notek,
+     stages.opublikowane_teksty) = _oryg2
 
 print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))

@@ -1,5 +1,17 @@
 # Trzy pytania o notki — pomiar z 6 września 2026
 
+> **SPROSTOWANIE z 6 września 2026, wieczorem.** Zdanie „artykuł 7 subskrypcji,
+> notka 0" w tym dokumencie jest **nieprawdziwe i wycofane**. Pole `subskrypcje`
+> przy pozycji to `signups_within_1_day` (`browser.py:1873`) — okno doby po
+> publikacji, z dowolnego źródła, a nie przypisanie; notka takiego pola nie ma
+> wcale, więc „0" znaczyło „nie mierzone". Własne przypisanie Substacka
+> (`zrodla.jsonl`, okno 30 dni) mówi odwrotnie: **`substack notes` 6 zapisów,
+> `substack.com` 1, artykuły 0.** Notki są jedynym źródłem zapisów tego konta.
+> Wniosek o seriach zostaje, ale z innego powodu: nie „notki nie działają",
+> tylko „notki są jedyną rzeczą, która działa". Źródło pomyłki: `wzajemnosc.py`
+> podpisywał tę kolumnę jako „przypisanie SAMEGO SUBSTACKA" — poprawione.
+
+
 Wszystko liczone na żywej bazie serwera (`agent-v2/data/agent-v2.db`) i na
 dzienniku produkcji. Daty publikacji notek wzięte z logu systemd, bo dziennik
 **nie zapisuje numeru notki przy publikacji**, a pole `kiedy` w statystykach to

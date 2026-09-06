@@ -163,6 +163,10 @@
 {{"title": "<the published headline>", "subtitle": "<one line>", "body": "<the article, plain text with blank lines between paragraphs>", "numbers_used": ["<each figure you wrote, exactly as written>"], "limits_paragraph_present": true|false}}
 ```
 
+#### `po_ludzku.md` (57 wierszy)
+
+**Pola wejściowe:** *(brak)*
+
 #### `powtorka.md` (26 wierszy)
 
 **Pola wejściowe:** `kandydaci`, `nowy`

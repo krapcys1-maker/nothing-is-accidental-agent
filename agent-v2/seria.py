@@ -1,25 +1,41 @@
 # -*- coding: utf-8 -*-
 """SERIE TEMATYCZNE — kilka notek o jednym temacie, w kolejnych dobach.
 
-PO CO TO ISTNIEJE. Zmierzone 6 września 2026 na żywej produkcji:
+PO CO TO ISTNIEJE — i SPROSTOWANIE, bo pierwsza wersja tego akapitu stała na
+liczbie odwróconej o 180 stopni.
 
-    artykuł      7 subskrypcji
-    notka        0
-    komentarz    0
-    odpowiedź    0
+Napisałem tu 6 września 2026: „artykuł 7 subskrypcji, notka 0 — notki robią
+zasięg, który NIE PROWADZI DONIKĄD". **To była nieprawda i biorę ją w całości
+z powrotem.** Pole `subskrypcje` przy pozycji to `signups_within_1_day`
+(`browser.py:1873`) — OKNO DOBY po publikacji, z dowolnego źródła, nie
+przypisanie. Dla notki tego pola po prostu nie ma, więc „0" znaczyło „nie
+mierzone", a nie „nic nie przyniosło".
 
-Notki robią zasięg (32,6 wyświetlenia średnio, zero pozycji z zerem), który
-NIE PROWADZI DONIKĄD. Powód jest prosty: pojedyncza notka nie daje nikomu
-powodu, żeby wrócić. „Część 2 jutro" — daje. To jedyny mechanizm, jakiego to
-konto nie próbowało, a który uderza dokładnie w tę zmierzoną słabość.
+WŁASNE przypisanie Substacka (`zrodla.jsonl`, odczyt 6.09 11:28, okno 30 dni):
 
-Drugi pomiar z tego samego dnia mówi, gdzie szukać skutku. Notki bez zaczepu
-w bieżącym mają MNIEJ wyświetleń niż newsowe (27,4 wobec 38,8), ale WIĘCEJ
-odwiedzin profilu (0,61 wobec 0,50) — a odwiedziny profilu to jedyny sygnał
-kroku PRZED subskrypcją, jaki panel Substacka nam oddaje. Miary rozchodzą się
-w przeciwne strony, więc serię trzeba oceniać po odwiedzinach i subskrypcjach,
-NIE po polubieniach: audyt z 3 września wykazał, że reakcje nie odróżniają
-dobrej notki od bełkotu (3,2 wobec 3,0 wobec 3,1 — płasko).
+    substack notes    6 zapisów
+    substack.com      1
+    artykuły          0
+    reszta            0
+
+Czyli odwrotnie, niż napisałem: **notki są jedynym źródłem zapisów tego konta,
+a artykuły nie przyprowadziły wprost nikogo.**
+
+Seria zostaje, ale z INNEGO powodu. Nie „notki nie działają, trzeba je
+naprawić", tylko „notki są jedyną rzeczą, która działa — więc to w nie warto
+inwestować, a część 2 daje czytelnikowi powód, żeby wrócić".
+
+MIARA SUKCESU zostaje ta sama i to ona była w tym akapicie jedyną rzeczą
+niezależną od zepsutego pola: odwiedziny profilu i `zapisy_darmowe` per
+pozycja, NIE polubienia — audyt z 3 września wykazał, że reakcje nie
+odróżniają dobrej notki od bełkotu (3,2 wobec 3,0 wobec 3,1 — płasko).
+Punkt odniesienia z notek co najmniej dwudniowych: notka bez zaczepu
+w bieżącym ma 0,61 odwiedzin profilu, newsowa 0,50.
+
+NAUKA, KTÓRA ZOSTAJE W TYM PLIKU: liczba, która potwierdza to, co się właśnie
+chce zbudować, wymaga sprawdzenia W ŹRÓDLE, a nie w raporcie, który ją
+przepisuje. Tę pomyłkę odziedziczyłem z `wzajemnosc.py`, gdzie `ZAP24` jest
+podpisane jako „przypisanie SAMEGO SUBSTACKA".
 
 JAK TEMAT JEST WYBIERANY — i dlaczego NIE z góry. Pierwsza wersja tego modułu
 miała brać temat z listy i czekać, aż bank dostarczy materiał. Zmierzone na
@@ -61,6 +77,13 @@ PLIK = config.DATA_DIR / "seria.json"
 # zdążył zauważyć, że to seria; przy pięciu bank dziś nie wyżywiłby ani
 # jednego tematu (przy czterech wyżywia dokładnie jeden).
 ILE_CZESCI = 4
+
+# MINIMALNY ODSTĘP MIĘDZY CZĘŚCIAMI. Bramka doby (UTC) sama nie wystarcza,
+# bo ostatni przebieg startuje o 23:40 UTC i przechodzi przez północ — patrz
+# `czesc_na_dzis`. Osiemnaście godzin, nie dwadzieścia cztery: przebiegi
+# chodzą od 11:20 do 23:40, więc przy 24 h seria gubiłaby całe doby za każdym
+# razem, gdy część wyszła wieczorem.
+MIN_ODSTEP_H = 18
 
 # PRÓG DOPASOWANIA — patrz nagłówek modułu. Jedno trafienie w `domain` (3 pkt)
 # NIE wystarcza samo z siebie; potrzeba go plus czegoś w treści, albo pięciu
@@ -257,8 +280,17 @@ def czesc_na_dzis(a: dict[str, Any] | None = None) -> int | None:
 
     JEDNA CZĘŚĆ NA DOBĘ i to jest cały sens. Sześć przebiegów na dobę wydałoby
     całą serię przed obiadem, a wtedy „część 2 jutro" nie znaczy nic — czytelnik
-    dostaje cztery notki naraz i nie ma po co wracać. Dlatego bramką jest DOBA
-    ostatniej wydanej części, nie licznik w przebiegu.
+    dostaje cztery notki naraz i nie ma po co wracać.
+
+    DWIE BRAMKI, NIE JEDNA — i druga jest tu dlatego, że pierwsza sama nie
+    wystarcza. Doba liczona po UTC pęka na ostatnim przebiegu dnia: zegar
+    startuje o **23:40 UTC**, więc JEDEN przebieg przechodzi przez północ.
+    Część wydana o 23:51 (doba D) i część o 00:20 (doba D+1) to **29 minut
+    odstępu u czytelnika**, a obie są „jedna na dobę" według kalendarza.
+    Zmierzone na zegarze produkcji: 11:20, 17:00, 19:20, 21:30, 23:40 UTC.
+
+    Dlatego drugą bramką jest ODSTĘP W GODZINACH, niezależny od tego, gdzie
+    wypada północ i w jakiej strefie siedzi czytelnik.
     """
     a = a if a is not None else aktywna()
     if not a:
@@ -266,7 +298,35 @@ def czesc_na_dzis(a: dict[str, Any] | None = None) -> int | None:
     wydane = a.get("wydane") or []
     if any((w or {}).get("doba") == _dzis() for w in wydane):
         return None
+    ost = _ostatnia_godzina(wydane)
+    if ost is not None and ost < MIN_ODSTEP_H:
+        print("  [seria] od poprzedniej części minęło %.1f h, czekam do %d h"
+              % (ost, MIN_ODSTEP_H), flush=True)
+        return None
     return len(wydane) + 1
+
+
+def _ostatnia_godzina(wydane: list[dict[str, Any]]) -> float | None:
+    """Ile godzin minęło od ostatniej wydanej części. None, gdy nie wiadomo.
+
+    Nie wiadomo znaczy PRZEPUŚĆ: bramka doby wyżej i tak obowiązuje, a wpis
+    bez czytelnego czasu nie ma prawa zatrzymać serii na zawsze.
+    """
+    czasy = []
+    for w in wydane or []:
+        t = (w or {}).get("kiedy")
+        if not t:
+            continue
+        try:
+            d = datetime.fromisoformat(str(t))
+        except ValueError:
+            continue
+        if d.tzinfo is None:
+            d = d.replace(tzinfo=timezone.utc)
+        czasy.append(d)
+    if not czasy:
+        return None
+    return (datetime.now(timezone.utc) - max(czasy)).total_seconds() / 3600.0
 
 
 def propozycja(zapas: list[dict[str, Any]]) -> dict[str, Any] | None:
@@ -296,42 +356,48 @@ def propozycja(zapas: list[dict[str, Any]]) -> dict[str, Any] | None:
     czesc = czesc_na_dzis(a)
     if czesc is None:
         return None
-    fakt = wybierz_fakt(zapas, str(a.get("temat") or ""),
-                        unikaj_faktow=[str((w or {}).get("fakt_klucz") or "")
-                                       for w in (a.get("wydane") or [])])
-    if fakt is None:
+    kandydaci = kandydaci_faktow(
+        zapas, str(a.get("temat") or ""),
+        unikaj_faktow=[str((w or {}).get("fakt_klucz") or "")
+                       for w in (a.get("wydane") or [])])
+    if not kandydaci:
         # Seria CZEKA. Część nie na temat byłaby gorsza niż przerwa: przerwę
         # czytelnik przeoczy, notkę nie na temat przeczyta i seria przestaje
         # być serią.
         print("  [seria] \"%s\" część %d czeka — bank nie ma dziś nic na ten"
               " temat" % (a.get("temat"), czesc), flush=True)
         return None
-    return {"temat": a.get("temat"), "czesc": czesc, "fakt": fakt,
+    # KANDYDACI, NIE GOTOWY FAKT — i to jest cała poprawka po audycie z 6.09.
+    #
+    # Pierwsza wersja oddawała tu jeden fakt, wybrany wyłącznie po dopasowaniu
+    # do tematu, i szła z nim prosto do pisarza. Czyli część serii OMIJAŁA
+    # straż różnorodności, przez którą przechodzi każda zwykła notka: pamięć
+    # wszystkich wystawionych, porównanie międzydniowe i wspólną nazwę własną.
+    # Część serii mogła być bliźniakiem notki sprzed dwóch dni.
+    #
+    # Nie przepisuję tamtej straży drugi raz — oddaję listę, a `notki_dnia`
+    # puszcza ją przez `wybierz_material`, czyli DOKŁADNIE TEN SAM kod, co
+    # zwykłe notki. Dwie kopie jednej reguły rozjeżdżają się przy pierwszej
+    # poprawce; w tym pliku jest już na to przykład (`po_ludzku.md`).
+    return {"temat": a.get("temat"), "czesc": czesc, "kandydaci": kandydaci,
             "kontekst": kontekst(czesc, a)}
 
 
-def wybierz_fakt(zapas: list[dict[str, Any]], temat: str,
-                 unikaj_faktow: list[str] | None = None
-                 ) -> dict[str, Any] | None:
-    """Najlepiej dopasowany fakt na temat serii — ZDJĘTY z zapasu.
+def kandydaci_faktow(zapas: list[dict[str, Any]], temat: str,
+                     unikaj_faktow: list[str] | None = None
+                     ) -> list[dict[str, Any]]:
+    """Fakty na temat serii, od najlepiej dopasowanego. NICZEGO NIE ZDEJMUJE.
 
-    Zdejmowanie jest po to samo, co w `wybierz_material`: fakt wzięty przez
-    serię nie może potem wyjść drugi raz jako zwykła notka tego samego dnia.
+    Oddaje LISTĘ, a nie jeden fakt, bo wybór końcowy należy do
+    `wybierz_material` w `stages` — to ono pilnuje różnorodności wobec tego,
+    co już wyszło, i to samo ma pilnować części serii. Patrz `propozycja`.
 
-    Gdy nic nie pasuje, oddaje None i seria CZEKA. Część nie na temat byłaby
-    gorsza niż przerwa: przerwę czytelnik przeoczy, notkę nie na temat
-    przeczyta i seria przestaje być serią.
+    Pusta lista znaczy: seria czeka. Część nie na temat byłaby gorsza niż
+    przerwa — przerwę czytelnik przeoczy, notkę nie na temat przeczyta.
     """
     juz = {_klucz(t) for t in (unikaj_faktow or ()) if _klucz(t)}
-    for _p, f in zdatne(zapas, temat):
-        if _klucz(f.get("fact")) in juz:
-            continue
-        try:
-            zapas.remove(f)
-        except ValueError:
-            pass
-        return f
-    return None
+    return [f for _p, f in zdatne(zapas, temat)
+            if _klucz(f.get("fact")) not in juz]
 
 
 def zapisz_czesc(temat: str, czesc: int, id_notki: str | None,

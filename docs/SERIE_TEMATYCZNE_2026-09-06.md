@@ -1,5 +1,17 @@
 # Serie tematyczne — co zbudowałem i po czym poznać, czy działa
 
+> **SPROSTOWANIE z 6 września 2026, wieczorem.** Zdanie „artykuł 7 subskrypcji,
+> notka 0" w tym dokumencie jest **nieprawdziwe i wycofane**. Pole `subskrypcje`
+> przy pozycji to `signups_within_1_day` (`browser.py:1873`) — okno doby po
+> publikacji, z dowolnego źródła, a nie przypisanie; notka takiego pola nie ma
+> wcale, więc „0" znaczyło „nie mierzone". Własne przypisanie Substacka
+> (`zrodla.jsonl`, okno 30 dni) mówi odwrotnie: **`substack notes` 6 zapisów,
+> `substack.com` 1, artykuły 0.** Notki są jedynym źródłem zapisów tego konta.
+> Wniosek o seriach zostaje, ale z innego powodu: nie „notki nie działają",
+> tylko „notki są jedyną rzeczą, która działa". Źródło pomyłki: `wzajemnosc.py`
+> podpisywał tę kolumnę jako „przypisanie SAMEGO SUBSTACKA" — poprawione.
+
+
 Zbudowane 6 września 2026. Moduł `agent-v2/seria.py`, haki w `stages.py`
 i `run.py`, test `agent-v2/tests/test_seria_tematyczna.py` (49 asercji).
 

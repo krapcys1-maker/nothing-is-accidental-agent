@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **26 plików**, 33 581 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **26 plików**, 33 693 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -114,7 +114,7 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
 się testować bez przeglądarki i bez pieniędzy**. 163 zestawów
-testów, 4227 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+testów, 4236 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -177,7 +177,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-9687 wierszy, 155 funkcji na poziomie modułu, 0 klas
+9712 wierszy, 155 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -741,7 +741,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `seria.py` — serie tematyczne — cztery notki o jednym temacie, jedna na dobę; temat wybiera bank, nie plan
 
-413 wierszy, 14 funkcji na poziomie modułu, 0 klas
+479 wierszy, 15 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -755,8 +755,9 @@ wiec nie da sie go rozjechac z kodem.
 | `_zapisz(d)` *(wewn.)* | Zapis atomowy z jedną kopią — dokładnie jak `_zapisz_indeks`. |
 | `aktywna()` | Seria w toku, albo None. Skończona seria NIE jest aktywna. |
 | `czesc_na_dzis(a)` | Numer części do wydania dziś (1..N), albo None. |
+| `_ostatnia_godzina(wydane)` *(wewn.)* | Ile godzin minęło od ostatniej wydanej części. None, gdy nie wiadomo. |
 | `propozycja(zapas)` | Część serii do napisania TERAZ — albo None. NIE ZAPISUJE NICZEGO. |
-| `wybierz_fakt(zapas, temat, unikaj_faktow)` | Najlepiej dopasowany fakt na temat serii — ZDJĘTY z zapasu. |
+| `kandydaci_faktow(zapas, temat, unikaj_faktow)` | Fakty na temat serii, od najlepiej dopasowanego. NICZEGO NIE ZDEJMUJE. |
 | `zapisz_czesc(temat, czesc, id_notki, otwarcie, fakt)` | Zapisuje, że część NAPRAWDĘ poszła w świat. Zakłada serię, gdy trzeba. |
 | `kontekst(czesc, seria)` | To, co pisarz musi wiedzieć, żeby napisać CZĘŚĆ, a nie osobną notkę. |
 
@@ -830,7 +831,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `wzajemnosc.py` — czy zaczepieni sie odwzajemniaja: liczy PO naszej akcji, osobno stan nieorzekalny
 
-1412 wierszy, 25 funkcji na poziomie modułu, 0 klas
+1433 wierszy, 25 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -11518,6 +11519,72 @@ in `confirmed_claims` came out of a document that was read.
 
 ---
 
+#### `prompts/po_ludzku.md`
+
+**57 wierszy.** Pola wejsciowe: *(brak)*
+
+````markdown
+# Jak nie brzmieć jak maszyna
+
+Ten fragment jest dołączany do promptów komentarza, odpowiedzi i notki.
+Pochodzi z researchu o tym, po czym ludzie i platformy rozpoznają tekst
+generowany — nie z przeczucia.
+
+---
+
+## Punctuation: this is the strongest tell in short text
+
+**No em dashes. No semicolons.** Not "few" — none, unless a quotation contains
+one. Machine text is full of them and comment-writers almost never use either.
+Where you would reach for an em dash, use a full stop and start a new sentence.
+
+Use the marks people actually use: full stops, commas, question marks. An
+occasional ellipsis is fine. Do not balance every sentence with a colon.
+
+## Length: vary it, hard
+
+Do not write everything at the same length. That uniformity is itself a tell —
+a person's replies range from four words to a paragraph depending on how much
+they have to say.
+
+- Sometimes answer in **one short sentence**. Under fifteen words is a normal,
+  complete human reply.
+- Sometimes go longer, when the point genuinely needs it.
+- Never pad to reach a length. If the thought is finished in eight words, stop
+  at eight.
+
+## Openers and closers
+
+Start mid-thought, with the substance. Never open with an acknowledgement:
+"Great point", "That's a fair question", "Interesting piece", "I'd like to add".
+
+End on the point. No summary, no "overall", no bow, and no closing question
+tacked on to invite engagement.
+
+## Hedging
+
+Hedge at most once, and only where you are actually unsure. "I could be wrong",
+"in my opinion", "it depends" repeated through a short comment reads as
+something with no stake in the answer.
+
+## Register
+
+Take a position. Where the honest reaction is blunt, be blunt. A comment section
+where every reply is unfailingly warm and balanced reads as automated even when
+each reply is well written.
+
+Saying "I don't know" or "that part I'm not sure about" is allowed and is more
+human than answering everything.
+
+## Banned vocabulary
+
+delve, moreover, furthermore, in conclusion, overall, a testament to, it's
+important to note, landscape, navigate (figurative), leverage, foster, robust,
+underscore, crucial, seamless, holistic, myriad, tapestry.
+````
+
+---
+
 #### `prompts/powtorka.md`
 
 **26 wierszy.** Pola wejsciowe: `kandydaci`, `nowy`
@@ -13013,7 +13080,6 @@ nie szukaj miejsca, w ktorym sa wolane, bo takiego nie ma.
 - `prompts/ROZWOJ_KONTA.md` (102 wierszy)
 - `prompts/SKAD_BRAC.md` (127 wierszy)
 - `prompts/ZASADY_NOTEK_I_KOMENTARZY.md` (139 wierszy)
-- `prompts/po_ludzku.md` (57 wierszy)
 
 
 ## ZALACZNIK B — WSZYSTKIE STALE KONFIGURACJI

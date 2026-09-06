@@ -4551,13 +4551,38 @@ def notki_dnia(
             if not seria_wzieta:
                 _prop = seria.propozycja(zapas)
                 if _prop:
-                    fakt = _prop["fakt"]
-                    seria_kontekst = _prop["kontekst"]
-                    seria_wzieta = True
-                    print("  [seria] \"%s\" część %d z %d"
-                          % (_prop["temat"], _prop["czesc"],
-                             (_prop["kontekst"] or {}).get("ile_czesci")),
-                          flush=True)
+                    # TA SAMA STRAZ, CO PRZY ZWYKLEJ NOTCE — nie druga jej
+                    # kopia. Poprawka po audycie z 6 wrzesnia 2026.
+                    #
+                    # Pierwsza wersja brala fakt prosto z `seria.propozycja`,
+                    # wybrany wylacznie po dopasowaniu do tematu, i szla z nim
+                    # do pisarza. Czyli czesc serii OMIJALA pamiec wszystkich
+                    # wystawionych notek, porownanie miedzydniowe i wspolna
+                    # nazwe wlasna — mogla byc blizniakiem notki sprzed dwoch
+                    # dni. Seria z powtorka w srodku jest gorsza niz jej brak.
+                    #
+                    # `wybierz_material` dostaje KOPIE listy kandydatow, bo
+                    # zdejmuje wybrany element z podanej listy; prawdziwy
+                    # `zapas` czyscimy sami, dopiero po wyborze.
+                    _kandydaci = list(_prop["kandydaci"])
+                    fakt = wybierz_material(_kandydaci, juz_o_tym, wczesniejsze,
+                                            teksty=teksty_notek,
+                                            korpus_zrodel=_tematy_zrodel())
+                    if fakt is None:
+                        print("  [seria] \"%s\" część %d czeka — cały materiał"
+                              " na ten temat zderza się z tym, co już poszło"
+                              % (_prop["temat"], _prop["czesc"]), flush=True)
+                    else:
+                        try:
+                            zapas.remove(fakt)
+                        except ValueError:
+                            pass
+                        seria_kontekst = _prop["kontekst"]
+                        seria_wzieta = True
+                        print("  [seria] \"%s\" część %d z %d"
+                              % (_prop["temat"], _prop["czesc"],
+                                 (_prop["kontekst"] or {}).get("ile_czesci")),
+                              flush=True)
             if fakt is None:
                 fakt = wybierz_material(zapas, juz_o_tym, wczesniejsze,
                                         teksty=teksty_notek,

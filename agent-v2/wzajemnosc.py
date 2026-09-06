@@ -1356,17 +1356,38 @@ def raport() -> list[str]:
                  " Odpowiedz brzmi „nie wiadomo\",")
         L.append("    a nie „zadnym kanalem\".")
     if kan["pozycyjnie"]:
-        L.append("  POZYCYJNIE (przypisanie SAMEGO SUBSTACKA, per wpis, nie per"
-                 " osoba):")
+        # TA ETYKIETA KOSZTOWALA TRZY DOKUMENTY I JEDNA FUNKCJE W KODZIE.
+        #
+        # Stalo tu „przypisanie SAMEGO SUBSTACKA, per wpis". To NIE JEST
+        # przypisanie. Kolumna liczy pole `signups_within_1_day`
+        # (`browser.py:1873`): ile osob zapisalo sie w ciagu DOBY po
+        # publikacji, Z DOWOLNEGO ZRODLA. Notka takiego pola nie ma wcale,
+        # wiec przy notkach stoi zero — co znaczy „nie mierzone", a nie „nic
+        # nie przyniosla".
+        #
+        # 6 wrzesnia 2026 przeczytalem stad „artykul 7 subskrypcji, notka 0"
+        # i zbudowalem na tym trzy dokumenty oraz caly `seria.py`. Wlasne
+        # przypisanie Substacka (`zrodla.jsonl`, okno 30 dni) mowi ODWROTNIE:
+        # `substack notes` 6 zapisow, `substack.com` 1, artykuly 0.
+        #
+        # `raport_statystyk.py` przemianowal te kolumne na `ZAP24` juz
+        # 3 wrzesnia. Ten raport — ten, ktory wlasciciel czyta co rano —
+        # zostal przy starej etykiecie i dlatego pomylka wrocila.
+        L.append("  ZAP24 (zapisy w ciagu DOBY po publikacji, z DOWOLNEGO"
+                 " zrodla — to NIE jest przypisanie):")
         suma = 0
         for rodzaj, d in sorted(kan["pozycyjnie"].items(),
                                 key=lambda kv: -kv[1]["subskrypcje"]):
             suma += d["subskrypcje"]
             L.append("    %-11s %3d pozycji, POLICZONYCH PRZEZ SUBSTACK %3d"
-                     " (bez kart zasiegu %2d), %5d wyswietlen -> %d"
-                     " subskrypcji, %d obserwacji"
+                     " (bez kart zasiegu %2d), %5d wyswietlen -> ZAP24 %d,"
+                     " %d obserwacji"
                      % (rodzaj, d["pozycje"], d["zmierzone"], d["bez_zasiegu"],
                         d["wyswietlenia"], d["subskrypcje"], d["obserwacje"]))
+        L.append("    UWAGA: notka nie ma pola ZAP24, wiec zero przy notkach"
+                 " znaczy NIE MIERZONE.")
+        L.append("    Prawdziwe przypisanie jest w `zrodla.jsonl`"
+                 " (growth/sources) — patrz `browser.zapisz_zrodla_ruchu`.")
         bez = {r: d for r, d in kan["pozycyjnie"].items() if d["bez_zasiegu"]}
         if bez:
             # DLACZEGO TO STOI TAK BLISKO TABELI. Pozycja bez karty zasiegu
