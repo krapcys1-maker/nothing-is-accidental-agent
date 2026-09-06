@@ -3193,11 +3193,23 @@ def note(
                 "notes together add up to, in one sentence. Do not promise "
                 "more.")
         else:
+            # ZAPOWIADAMY PYTANIE, NIE TRESC NASTEPNEJ CZESCI.
+            #
+            # Pierwsza wersja kazala modelowi napisac KONKRETNIE, czym zajmie
+            # sie czesc nastepna — a fakt na nia jest wybierany dopiero
+            # nazajutrz, z tego, co bank wtedy ma. Czyli konto obiecywaloby
+            # rzecz, ktorej nie kontroluje, i lamalo wlasna zasade: nie
+            # twierdzimy niczego, czego nie mamy czym poprzec.
+            #
+            # Pytanie zostawione otwarte jest obietnica, ktorej dotrzymamy:
+            # wynika z TEJ notki, nie z nastepnej.
             blok.append(
-                "\nThis is not the last part. End by naming — concretely — "
-                "what the next part will look at. Not \"more tomorrow\": the "
-                "actual question. A reader should finish knowing what they "
-                "would come back for.")
+                "\nThis is not the last part. End on the question this note "
+                "leaves open — the one a reader would want answered next. "
+                "State the QUESTION, not what the next part will contain: you "
+                "do not know yet which evidence it will stand on, and this "
+                "account does not promise what it cannot show. Not \"more "
+                "tomorrow\" either.")
         blok.append(
             "\nFINAL LINE, exactly this shape and nothing else, on its own "
             "line at the very end:\n\n    %s — %d/%d\n\nIt is how a reader "
