@@ -449,20 +449,36 @@ def _deepseek_pick_from_urls(
 
 
 def _call_deepseek(purpose: str, system: str, user: str) -> tuple[str, int, int, int]:
+    cialo = {
+        # MODEL Z ROUTINGU, nie zaszyta stala. Bylo tu config.DEEPSEEK, wiec
+        # kazdy etap bez wyszukiwania jechal na flashu niezaleznie od tego,
+        # co mowil MODEL_FOR — a koszt ksiegowalismy po stawce pro.
+        "model": config.MODEL_FOR[purpose],
+        "max_tokens": config.MAX_TOKENS[purpose],
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+    }
+    # ROZUMOWANIE — patrz `config.DEEPSEEK_MYSLENIE`.
+    #
+    # Ta galaz do 6 wrzesnia 2026 nie istniala i to byla cicha dziura
+    # w rachunku: DeepSeek na `chat/completions` rozumuje DOMYSLNIE, a jedyne
+    # pokretlo, jakie mielismy (`DEEPSEEK_EFFORT`), trafia wylacznie do
+    # `/responses`. Zmierzone na `cele`: 15 000 tokenow wyjscia na wywolanie,
+    # z czego odpowiedz to kilkadziesiat.
+    #
+    # `None` znaczy „nie wysylaj parametru", czyli dokladnie to, co bylo. Etap
+    # dostaje ustawienie dopiero wtedy, gdy pomiar pokaze, ze jego DECYZJA sie
+    # nie zmienia — bo tanszy etap, ktory wybiera dwa razy wiecej celow,
+    # kosztuje wiecej w dole potoku, niz oszczedzil u siebie.
+    _mysl = config.myslenie_deepseek(purpose)
+    if _mysl:
+        cialo["thinking"] = _mysl
     response = httpx.post(
         f"{config.DEEPSEEK_BASE_URL}/chat/completions",
         headers={"Authorization": f"Bearer {config.DEEPSEEK_API_KEY}"},
-        json={
-            # MODEL Z ROUTINGU, nie zaszyta stala. Bylo tu config.DEEPSEEK, wiec
-            # kazdy etap bez wyszukiwania jechal na flashu niezaleznie od tego,
-            # co mowil MODEL_FOR — a koszt ksiegowalismy po stawce pro.
-            "model": config.MODEL_FOR[purpose],
-            "max_tokens": config.MAX_TOKENS[purpose],
-            "messages": [
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
-            ],
-        },
+        json=cialo,
         timeout=config.timeout_for(config.MAX_TOKENS[purpose]),
     )
     response.raise_for_status()

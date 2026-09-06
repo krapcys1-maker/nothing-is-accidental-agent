@@ -299,7 +299,53 @@ DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 # Głębokość rozumowania DeepSeeka na /responses. Tokeny rozumowania liczą się
 # do sufitu wyjścia, więc przy `high` model kończy budżet na szukaniu i nie
 # zdąża napisać odpowiedzi.
+#
+# UWAGA, TO USTAWIENIE DZIAŁA TYLKO NA `/responses`. Trafia do `llm.py:340`
+# i dotyczy wyłącznie etapów z wyszukiwaniem (curiosity, discovery, factcheck,
+# aktualne_modele, reply). Etapy na `chat/completions` NIE WIDZIAŁY go nigdy —
+# patrz `DEEPSEEK_MYSLENIE` niżej. Zapis w `KOSZT_2026-09-05.md` („DeepSeek ma
+# jedno wspólne DEEPSEEK_EFFORT=low, już najniższe") był z tego powodu
+# nieprawdziwy dla dwóch trzecich etapów.
 DEEPSEEK_EFFORT = "low"
+
+# ROZUMOWANIE NA `chat/completions` — per etap, i domyślnie NIE RUSZAMY GO.
+#
+# CO ZMIERZYŁEM 6 września 2026, pytając samego API (nie dokumentacji):
+# rozumowanie jest tam włączone DOMYŚLNIE, a `_call_deepseek` nigdy nie wysyłał
+# parametru `thinking`. Cztery warianty, to samo pytanie, `deepseek-v4-flash`:
+#
+#     brak parametru (jak było)   53 tokeny wyjścia, 42 rozumowania
+#     thinking disabled           10                  0
+#     thinking low                91                 80
+#     thinking high              121                110
+#
+# Wszystkie cztery dały IDENTYCZNĄ, poprawną odpowiedź. Dwie rzeczy z tego
+# wynikają i obie są ważne:
+#
+# 1. Domyślne ustawienie NIE JEST `high` — jest niższe niż `low`, czyli
+#    DeepSeek dobiera wysiłek sam. Zewnętrzny audyt zalecał ustawić `low`
+#    wszędzie; na tym pomiarze `low` byłoby DROŻSZE od dzisiejszego stanu.
+# 2. Dźwignią jest `disabled`, nie `low`.
+#
+# DLACZEGO MIMO TO TA TABLICA JEST PUSTA. Na PRAWDZIWYM prompcie `cele`
+# (12 celów z żywego korpusu) `disabled` zbiło wyjście z ~15 000 tokenów do
+# ~600, ale ZMIENIŁO DECYZJĘ: jeden przebieg wybrał sześć celów zamiast trzech.
+# Sześć celów to dwa razy więcej płatnych prób komentarza w dole potoku, więc
+# oszczędność potrafi zjeść samą siebie. Etap wchodzi tu dopiero wtedy, gdy
+# pomiar pokaże, że decyzja się NIE zmienia.
+#
+# Brak etapu w tej tablicy = zero zmian wobec tego, co konto robiło do dziś.
+DEEPSEEK_MYSLENIE: dict[str, dict[str, str]] = {}
+
+
+def myslenie_deepseek(etap: str) -> dict[str, str] | None:
+    """Ustawienie `thinking` dla etapu, albo None = nie wysyłaj parametru.
+
+    None znaczy DOKŁADNIE to, co konto robiło do 6 września 2026: nie ruszamy
+    niczego i DeepSeek dobiera wysiłek sam.
+    """
+    w = DEEPSEEK_MYSLENIE.get(etap)
+    return dict(w) if isinstance(w, dict) and w else None
 
 # Tryb tani: wszystko na DeepSeeku poza dyskoveria, ktora ten jawny override
 # zostawia u Claude'a. Sluzy do testowania HYDRAULIKI — czy lancuch przechodzi,
