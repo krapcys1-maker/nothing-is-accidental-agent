@@ -63,6 +63,7 @@ MODULY = [
     ("tresc_zrodel.py", "treść źródeł z korpusu pobrana za darmo — spiżarnia przed zakupami"),
     ("aktualne_modele.py", "jakie modele istnieją DZIŚ; pytane na żywo, nie z pamięci"),
     ("artykul_z_puli.py", "artykuł bierze temat z tej samej puli, co notki"),
+    ("seria.py", "serie tematyczne — cztery notki o jednym temacie, jedna na dobę; temat wybiera bank, nie plan"),
     ("norma.py", "licznik produkcji: ile agent wystawil wobec normy dziennej"),
     ("audyt_tematow.py", "audyt segmentu tematow na zywych danych: jedenascie etapow, od kanalow po zwrot do puli"),
     ("przeglad_dnia.py", "caly lancuch jednego dnia bez wolania modelu: szukanie, bank z katami, powody odrzucen, notki"),

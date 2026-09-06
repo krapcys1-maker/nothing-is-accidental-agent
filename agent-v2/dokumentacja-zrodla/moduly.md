@@ -1,7 +1,7 @@
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-3100 wierszy, 27 funkcji na poziomie modułu, 1 klas
+3116 wierszy, 27 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -35,7 +35,7 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-9579 wierszy, 155 funkcji na poziomie modułu, 0 klas
+9675 wierszy, 155 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -103,7 +103,7 @@
 | `hak_bez_zaczepu(tekst)` | Otwarcie jednym slowem, ktorego nastepne zdanie nie wiaze. Puste, gdy wiaze. |
 | `odeslanie_donikad(tekst)` | Odeslanie w PIERWSZYM zdaniu do badania, ktorego czytelnik nie widzial. |
 | `za_duzo_zargonu(tekst)` | Terminy insiderskie, gdy jest ich wiecej, niz notka udzwignie. Inaczej pusto. |
-| `note(conn, run_id, note_type, evidence, link, note_form, etap)` | Jedna notka danego typu i danej FORMY — do szuflady. |
+| `note(conn, run_id, note_type, evidence, link, note_form, etap, seria)` | Jedna notka danego typu i danej FORMY — do szuflady. |
 | `_pola_ksztaltu(ksztalt, pomin)` *(wewn.)* | Nazwy pol z kontraktu na odpowiedz, bez klucza opakowujacego. |
 | `zakwestionuj_promocje(url, powod)` | Artykul, ktorego notka promujaca odpadla na sprawdzeniu faktow. |
 | `zapamietaj_niewystawiony(sciezka, powod)` | Zapisuje, ze gotowy artykul lezy na dysku i nie poszedl w swiat. |
@@ -596,6 +596,27 @@
 | `_zrodla(card)` *(wewn.)* | Sekcja `## Sources` — bez pytania bazy o nazwy zrodel. |
 | `_ratuj_tekst(run_id, brief, card, draft, etap, exc, raport)` *(wewn.)* | Gotowy tekst na dysk, gdy budzet albo wylacznik przerywa PO pisaniu. |
 | `_napisz_i_zapisz(conn, run_id, brief, card, evidence)` *(wewn.)* | Od bramki „warto pisac" do zapisu i grafiki. |
+
+### `seria.py` — serie tematyczne — cztery notki o jednym temacie, jedna na dobę; temat wybiera bank, nie plan
+
+413 wierszy, 14 funkcji na poziomie modułu, 0 klas
+
+| funkcja | co robi |
+|---|---|
+| `_dzis()` *(wewn.)* | Doba w UTC. Ta sama podstawa, co przy wyborze pisarza w `stages.py`. |
+| `_klucz(tekst)` *(wewn.)* | Postać faktu, po której wolno porównywać — po OBU stronach ta sama. |
+| `punkty(fakt, terminy)` | Ile temat pasuje do faktu. Trafienie w `domain` liczy 3, w treść 1. |
+| `zdatne(zapas, temat)` | Fakty na dany temat, od najlepiej dopasowanego, powyżej progu. |
+| `mozliwe(zapas, pomijaj)` | Tematy, które ten bank wyżywi na CAŁĄ serię — od najlepiej zaopatrzonego. |
+| `_pusty()` *(wewn.)* | — |
+| `stan()` | Cały zapis o seriach. Uszkodzony plik czytamy jako pusty, nie jako błąd. |
+| `_zapisz(d)` *(wewn.)* | Zapis atomowy z jedną kopią — dokładnie jak `_zapisz_indeks`. |
+| `aktywna()` | Seria w toku, albo None. Skończona seria NIE jest aktywna. |
+| `czesc_na_dzis(a)` | Numer części do wydania dziś (1..N), albo None. |
+| `propozycja(zapas)` | Część serii do napisania TERAZ — albo None. NIE ZAPISUJE NICZEGO. |
+| `wybierz_fakt(zapas, temat, unikaj_faktow)` | Najlepiej dopasowany fakt na temat serii — ZDJĘTY z zapasu. |
+| `zapisz_czesc(temat, czesc, id_notki, otwarcie, fakt)` | Zapisuje, że część NAPRAWDĘ poszła w świat. Zakłada serię, gdy trzeba. |
+| `kontekst(czesc, seria)` | To, co pisarz musi wiedzieć, żeby napisać CZĘŚĆ, a nie osobną notkę. |
 
 ### `norma.py` — licznik produkcji: ile agent wystawil wobec normy dziennej
 

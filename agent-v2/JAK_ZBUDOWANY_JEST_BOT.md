@@ -49,14 +49,14 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **25 plików**, 33 044 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **26 plików**, 33 569 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
 | jedno polecenie uruchamiające | `python agent-v2/run.py` | dotrzymane |
 | pełna autonomia, zero pytań | brak interaktywnych promptów | dotrzymane |
 
-**WADA — 25 plików zamiast dziesięciu.** Najbliższe usunięciu:
+**WADA — 26 plików zamiast dziesięciu.** Najbliższe usunięciu:
 `style.py` (127 wierszy, wołany tylko z `stages.py`) i
 `kopia_subskrybentow.py` (203 wierszy, narzędzie ręczne poza
 przebiegiem). Scalenie któregokolwiek przywraca zgodność z mandatem.
@@ -113,8 +113,8 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 > w głównej ścieżce artykułu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
-się testować bez przeglądarki i bez pieniędzy**. 162 zestawów
-testów, 4178 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+się testować bez przeglądarki i bez pieniędzy**. 163 zestawów
+testów, 4227 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -143,7 +143,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-3100 wierszy, 27 funkcji na poziomie modułu, 1 klas
+3116 wierszy, 27 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -177,7 +177,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-9579 wierszy, 155 funkcji na poziomie modułu, 0 klas
+9675 wierszy, 155 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -245,7 +245,7 @@ wiec nie da sie go rozjechac z kodem.
 | `hak_bez_zaczepu(tekst)` | Otwarcie jednym slowem, ktorego nastepne zdanie nie wiaze. Puste, gdy wiaze. |
 | `odeslanie_donikad(tekst)` | Odeslanie w PIERWSZYM zdaniu do badania, ktorego czytelnik nie widzial. |
 | `za_duzo_zargonu(tekst)` | Terminy insiderskie, gdy jest ich wiecej, niz notka udzwignie. Inaczej pusto. |
-| `note(conn, run_id, note_type, evidence, link, note_form, etap)` | Jedna notka danego typu i danej FORMY — do szuflady. |
+| `note(conn, run_id, note_type, evidence, link, note_form, etap, seria)` | Jedna notka danego typu i danej FORMY — do szuflady. |
 | `_pola_ksztaltu(ksztalt, pomin)` *(wewn.)* | Nazwy pol z kontraktu na odpowiedz, bez klucza opakowujacego. |
 | `zakwestionuj_promocje(url, powod)` | Artykul, ktorego notka promujaca odpadla na sprawdzeniu faktow. |
 | `zapamietaj_niewystawiony(sciezka, powod)` | Zapisuje, ze gotowy artykul lezy na dysku i nie poszedl w swiat. |
@@ -738,6 +738,27 @@ wiec nie da sie go rozjechac z kodem.
 | `_zrodla(card)` *(wewn.)* | Sekcja `## Sources` — bez pytania bazy o nazwy zrodel. |
 | `_ratuj_tekst(run_id, brief, card, draft, etap, exc, raport)` *(wewn.)* | Gotowy tekst na dysk, gdy budzet albo wylacznik przerywa PO pisaniu. |
 | `_napisz_i_zapisz(conn, run_id, brief, card, evidence)` *(wewn.)* | Od bramki „warto pisac" do zapisu i grafiki. |
+
+### `seria.py` — serie tematyczne — cztery notki o jednym temacie, jedna na dobę; temat wybiera bank, nie plan
+
+413 wierszy, 14 funkcji na poziomie modułu, 0 klas
+
+| funkcja | co robi |
+|---|---|
+| `_dzis()` *(wewn.)* | Doba w UTC. Ta sama podstawa, co przy wyborze pisarza w `stages.py`. |
+| `_klucz(tekst)` *(wewn.)* | Postać faktu, po której wolno porównywać — po OBU stronach ta sama. |
+| `punkty(fakt, terminy)` | Ile temat pasuje do faktu. Trafienie w `domain` liczy 3, w treść 1. |
+| `zdatne(zapas, temat)` | Fakty na dany temat, od najlepiej dopasowanego, powyżej progu. |
+| `mozliwe(zapas, pomijaj)` | Tematy, które ten bank wyżywi na CAŁĄ serię — od najlepiej zaopatrzonego. |
+| `_pusty()` *(wewn.)* | — |
+| `stan()` | Cały zapis o seriach. Uszkodzony plik czytamy jako pusty, nie jako błąd. |
+| `_zapisz(d)` *(wewn.)* | Zapis atomowy z jedną kopią — dokładnie jak `_zapisz_indeks`. |
+| `aktywna()` | Seria w toku, albo None. Skończona seria NIE jest aktywna. |
+| `czesc_na_dzis(a)` | Numer części do wydania dziś (1..N), albo None. |
+| `propozycja(zapas)` | Część serii do napisania TERAZ — albo None. NIE ZAPISUJE NICZEGO. |
+| `wybierz_fakt(zapas, temat, unikaj_faktow)` | Najlepiej dopasowany fakt na temat serii — ZDJĘTY z zapasu. |
+| `zapisz_czesc(temat, czesc, id_notki, otwarcie, fakt)` | Zapisuje, że część NAPRAWDĘ poszła w świat. Zakłada serię, gdy trzeba. |
+| `kontekst(czesc, seria)` | To, co pisarz musi wiedzieć, żeby napisać CZĘŚĆ, a nie osobną notkę. |
 
 ### `norma.py` — licznik produkcji: ile agent wystawil wobec normy dziennej
 

@@ -21,6 +21,7 @@ import config
 import korpus_kanalow
 import db
 import llm
+import seria
 
 # DWA WYJATKI, KTORE NIE SA AWARIA JEDNEGO WYWOLANIA, TYLKO STANEM KONTA.
 #
@@ -3108,6 +3109,7 @@ def za_duzo_zargonu(tekst: str) -> list[str]:
 def note(
     conn: sqlite3.Connection, run_id: int, note_type: str, evidence: dict[str, Any],
     link: str | None = None, note_form: str = "PROSTA", etap: str = "note",
+    seria: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Jedna notka danego typu i danej FORMY — do szuflady.
 
@@ -3147,6 +3149,61 @@ def note(
             sorted(ostatnie_otwarcia()) or ["(zadnych jeszcze nie ma)"],
             ensure_ascii=False),
     )
+    # SERIA — patrz `seria.py`. Blok idzie do promptu TYLKO wtedy, gdy ta
+    # notka naprawde jest czescia serii; `notki_dnia` zeruje kontekst przy
+    # kazdej notce, zeby zwykla notka nie dostala zapowiedzi ciagu dalszego,
+    # ktorego nie ma.
+    #
+    # ZNACZNIK NA KONCU, NIE NA POCZATKU. Konto ma bramki mierzace OTWARCIE
+    # notki (`ostatnie_otwarcia`, `otwiera_sporem`, tik „nie X. Y."), wiec
+    # numer serii w pierwszym zdaniu zderzalby sie z nimi i pierwsze slowo
+    # kazdej czesci byloby identyczne — czyli dokladnie ten podpis maszyny,
+    # ktorego cala reszta tego pliku unika.
+    if seria:
+        _ile = int(seria.get("ile_czesci") or 0)
+        _nr = int(seria.get("czesc") or 0)
+        # ETYKIETA, NIE KLUCZ. Klucze tematow sa po polsku, bo sa dla nas;
+        # notka jest po angielsku i polski napis pod nia bylby jedyna rzecza na
+        # profilu, ktora zdradza, kto ja pisze.
+        _et = seria.get("etykieta") or seria.get("temat") or ""
+        blok = [
+            "\n\n## This note is part of a series\n",
+            "You are writing **part %d of %d** of a short series titled "
+            "**%s**." % (_nr, _ile, _et),
+            "\nOne part goes out per day. The reader may not have seen the "
+            "others, so this note must stand on its own evidence and make "
+            "complete sense alone. It is not a chapter that continues a "
+            "sentence.",
+        ]
+        if seria.get("poprzednie_otwarcia"):
+            blok.append(
+                "\nParts already published opened like this. Do not reuse "
+                "these openings, and do not restate what they established:\n"
+                + "\n".join("- %s" % o[:160]
+                            for o in seria["poprzednie_otwarcia"]))
+        if seria.get("poprzednie_fakty"):
+            blok.append(
+                "\nAnd they stood on these facts. Yours must be a DIFFERENT "
+                "one — same subject, new evidence:\n"
+                + "\n".join("- %s" % f[:180]
+                            for f in seria["poprzednie_fakty"]))
+        if seria.get("ostatnia"):
+            blok.append(
+                "\nThis is the LAST part. Close the series: say what the four "
+                "notes together add up to, in one sentence. Do not promise "
+                "more.")
+        else:
+            blok.append(
+                "\nThis is not the last part. End by naming — concretely — "
+                "what the next part will look at. Not \"more tomorrow\": the "
+                "actual question. A reader should finish knowing what they "
+                "would come back for.")
+        blok.append(
+            "\nFINAL LINE, exactly this shape and nothing else, on its own "
+            "line at the very end:\n\n    %s — %d/%d\n\nIt is how a reader "
+            "knows there is more. Do not put the number anywhere else, and do "
+            "not open with it." % (_et, _nr, _ile))
+        prompt += "".join(blok)
     # I TO SAMO DLA TIKU „nie X. Y." — DRUGIE KRYTERIUM, KTORE NIE MIALO
     # ZAMIENNIKA.
     #
@@ -4399,6 +4456,9 @@ def notki_dnia(
     # szukanie ciekawostek to platne wywolanie modelu, a piec notek razy druga
     # proba to piec dodatkowych rachunkow za to samo.
     dobrano_nowy: bool = False
+    # SERIA — jedna część na przebieg. Patrz `seria.py` i miejsce, gdzie ta
+    # flaga się zapala.
+    seria_wzieta: bool = False
     if karta:
         juz_o_tym.append("%s %s" % (karta.get("article_title") or "",
                                     (karta.get("article_text") or "")[:400]))
@@ -4417,6 +4477,11 @@ def notki_dnia(
         # rzeczy, dwa rozne pola — mieszanie ich juz raz kosztowalo blok notek
         # (patrz `tekst_faktu`).
         fakt = None
+        # ZEROWANE PRZY KAZDEJ NOTCE. Gdyby zostawalo z poprzedniego obiegu,
+        # druga notka w przebiegu dostalaby prompt czesci serii bez bycia
+        # czescia serii — i wyszlaby z zapowiedzia ciagu dalszego, ktorego nie
+        # ma. Dokladnie ta klasa wady co `promowany` przed 1 wrzesnia.
+        seria_kontekst: dict[str, Any] | None = None
         if typ == "MYSL":
             # JEDYNY TYP BEZ KARTY DOWODOWEJ — i dlatego nie zabiera faktu z
             # puli. Fakt zuzyty na notke, ktorej nie wolno go uzyc, przepadlby
@@ -4459,9 +4524,32 @@ def notki_dnia(
                 if not zapas:
                     print("  [notki] brak materiału — kończę dzień krócej", flush=True)
                     break
-            fakt = wybierz_material(zapas, juz_o_tym, wczesniejsze,
-                                    teksty=teksty_notek,
-                                    korpus_zrodel=_tematy_zrodel())
+            # SERIA TEMATYCZNA BIERZE PIERWSZA — patrz `seria.py`.
+            #
+            # Pierwsza, bo `wybierz_material` sortuje po roznorodnosci wobec
+            # tego, co juz dzis poszlo, i zdejmuje wziete z `zapas`. Gdyby
+            # seria wybierala po nim, jej temat moglby juz byc zjedzony przez
+            # zwykla notke tego samego dnia — a wtedy czesc czeka mimo tego,
+            # ze material byl.
+            #
+            # JEDNA CZESC NA PRZEBIEG I JEDNA NA DOBE. Bramka doby siedzi
+            # w `seria.czesc_na_dzis`, ta flaga pilnuje tylko tego, zeby jeden
+            # przebieg biorący dwie notki nie wzial dwoch czesci naraz —
+            # `propozycja` nie widzi tego, czego jeszcze nie opublikowalismy.
+            if not seria_wzieta:
+                _prop = seria.propozycja(zapas)
+                if _prop:
+                    fakt = _prop["fakt"]
+                    seria_kontekst = _prop["kontekst"]
+                    seria_wzieta = True
+                    print("  [seria] \"%s\" część %d z %d"
+                          % (_prop["temat"], _prop["czesc"],
+                             (_prop["kontekst"] or {}).get("ile_czesci")),
+                          flush=True)
+            if fakt is None:
+                fakt = wybierz_material(zapas, juz_o_tym, wczesniejsze,
+                                        teksty=teksty_notek,
+                                        korpus_zrodel=_tematy_zrodel())
             if fakt is None and not dobrano_nowy:
                 # DZIEN NIE MOZE SIE ZAGLODZIC. Do 25 sierpnia to bylo `break`:
                 # cala pula zderzona = koniec dnia. Przy oknie dwunastu zdarzalo
@@ -4518,7 +4606,15 @@ def notki_dnia(
                                       etap_pisarza), flush=True)
         wynik = note(conn, run_id, typ, material,
                      link=link_artykulu if typ == "ARTYKUL" else None,
-                     note_form=forma, etap=etap_pisarza)
+                     note_form=forma, etap=etap_pisarza,
+                     seria=seria_kontekst)
+        # NUMER CZESCI JEDZIE Z NOTKA, tak samo jak fakt i ranga: `run.py`
+        # odhacza czesc DOPIERO po potwierdzonej publikacji. Bez tych dwoch
+        # pol seria zapisywalaby sie przy pisaniu, wiec nieudana publikacja
+        # zjadlaby czesc i czytelnik dostalby 1, 2 i 4.
+        if seria_kontekst:
+            wynik["seria_temat"] = seria_kontekst.get("temat")
+            wynik["seria_czesc"] = seria_kontekst.get("czesc")
         # Fakt jedzie razem z notka, zeby `run.py` mial co odhaczyc dopiero
         # wtedy, gdy notka naprawde pojdzie w swiat.
         # MYSL nie zuzyla zadnego faktu, wiec nie ma czego odhaczac.

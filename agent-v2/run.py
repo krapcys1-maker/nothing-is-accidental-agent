@@ -21,6 +21,7 @@ import config
 import db
 import gates
 import llm
+import seria
 import stages
 
 # DWA WYJATKI, KTORE NIE SA AWARIA JEDNEGO WYWOLANIA, TYLKO STANEM KONTA.
@@ -1426,6 +1427,21 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
                 # zaplacony, notka nie poszla, a material znikal z puli.
                 if not wynik.get("wyslane") and n.get("fakt_wpis"):
                     niewydane.append(n["fakt_wpis"])
+                # CZESC SERII ODHACZAMY DOPIERO PO POTWIERDZONEJ PUBLIKACJI —
+                # z tego samego powodu, co fakt i dzien promocji. `seria.py`
+                # celowo nie zapisuje nic przy pisaniu: gdyby zapisywala,
+                # nieudana publikacja zjadlaby czesc i czytelnik dostalby
+                # czesci 1, 2 i 4, a stan mowilby, ze seria poszla cala.
+                if wynik.get("wyslane") and n.get("seria_czesc"):
+                    seria.zapisz_czesc(
+                        str(n.get("seria_temat") or ""),
+                        int(n["seria_czesc"]),
+                        wynik.get("id"),
+                        # OTWARCIE I FAKT ZAPISUJEMY PO TO, zeby nastepna czesc
+                        # dostala je w prompcie i nie powtorzyla ani pierwszego
+                        # zdania, ani dowodu.
+                        otwarcie=(gotowe[0].get("note") or "").strip()[:160],
+                        fakt=stages.tekst_faktu(n.get("fakt")) or "")
                 if wynik.get("wyslane") and n.get("fakt"):
                     stages.zapisz_zuzyte([n["fakt"]])
                     # I TO SAMO W INDEKSIE — patrz `stages.oznacz_uzyty`.
