@@ -327,12 +327,35 @@ DEEPSEEK_EFFORT = "low"
 #    wszędzie; na tym pomiarze `low` byłoby DROŻSZE od dzisiejszego stanu.
 # 2. Dźwignią jest `disabled`, nie `low`.
 #
-# DLACZEGO MIMO TO TA TABLICA JEST PUSTA. Na PRAWDZIWYM prompcie `cele`
-# (12 celów z żywego korpusu) `disabled` zbiło wyjście z ~15 000 tokenów do
-# ~600, ale ZMIENIŁO DECYZJĘ: jeden przebieg wybrał sześć celów zamiast trzech.
-# Sześć celów to dwa razy więcej płatnych prób komentarza w dole potoku, więc
-# oszczędność potrafi zjeść samą siebie. Etap wchodzi tu dopiero wtedy, gdy
-# pomiar pokaże, że decyzja się NIE zmienia.
+# DLACZEGO MIMO TO TA TABLICA JEST PUSTA — i to jest ROZSTRZYGNIĘTE POMIAREM,
+# a nie ostrożnością. Pięć powtórzeń na PRAWDZIWYM prompcie `cele` (12 celów
+# z żywego korpusu, `deepseek-v4-flash`):
+#
+#     wariant     wyjście śr.   USD/wyw.   wybranych celów   zgodność z „dziś"
+#     dziś            11 721     0,0077     2,4  (2-3)              —
+#     low             13 507     0,0089     2,2  (2-3)            5 / 5
+#     disabled           719     0,0005     5,6  (3-7)            0 / 5
+#
+# `low` jest DROŻSZE od dzisiejszego stanu przy identycznych decyzjach — to
+# obala zalecenie zewnętrznego audytu, żeby ustawić `low` na etapach wyboru.
+#
+# `disabled` jest 16 razy tańsze NA ETAPIE i bezużyteczne w całości, bo wybiera
+# ponad dwa razy więcej celów. Policzone na wolumenie z produkcji (82 wywołania
+# `cele` na 7 dni, koszt wyjścia `comment` 0,0044 USD):
+#
+#     oszczędność na `cele`                       +0,60 USD / 7 dni
+#     262 dodatkowe cele, z tego połowa zagadana  -0,58 USD / 7 dni
+#     BILANS                                      +0,02 USD / 7 dni
+#
+# Czyli zero — a cele są przy tym GORSZE (zgodność 0 na 5). Etap wchodzi tu
+# dopiero wtedy, gdy pomiar pokaże, że jego DECYZJA się nie zmienia.
+#
+# CZEGO NIE ZMIERZYŁEM: etapów, które PISZĄ (`comment`, `restack`, `bank`,
+# `forma`, `synthesis`, `note_tani`). Tam „ta sama decyzja" nie jest miarą —
+# trzeba porównać teksty, a to jest osobny eksperyment, nie porównanie zbiorów.
+# `comment` to największa pozycja wyjścia w całym rachunku (1,29 USD / 7 dni),
+# więc jest wart tego eksperymentu; `note_tani` pisze notki i tego bym nie
+# ruszał bez bardzo mocnego powodu.
 #
 # Brak etapu w tej tablicy = zero zmian wobec tego, co konto robiło do dziś.
 DEEPSEEK_MYSLENIE: dict[str, dict[str, str]] = {}
