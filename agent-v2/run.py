@@ -2409,9 +2409,33 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
             print(f"  nie zrobilem kopii: {type(exc).__name__}: {exc}"[:160],
                   flush=True)
 
+    # DYSKUSJE PRZED KOMENTARZAMI — zmiana z 6 wrzesnia 2026, po audycie.
+    #
+    # Kanal z LEPSZYM wynikiem dostawal resztki czasu po kanale z gorszym.
+    # Zmierzone na dzienniku systemowym z 7 dni i na dzienniku wlasnym:
+    #
+    #     blok        uciety na czasie    komentarzy z reakcja
+    #     dyskusje    7 razy w 7 dni      31% (n=13 z odczytem)
+    #     komentarze  3 razy              16% (n=86)
+    #
+    # Dyskusje staly szoste z dziewieciu, zaraz PO komentarzach, wiec to one
+    # traciły na wyczerpanym czasie przebiegu — dwa razy czesciej niz blok,
+    # ktory wypada gorzej.
+    #
+    # CZEGO TA ZMIANA CELOWO NIE ROBI: nie rusza PRZYDZIALU. Artykuly nadal
+    # biora `na_teraz["komentarze"]`, dyskusje `max(1, N // 2)` — bo przewaga
+    # dyskusji stoi na TRZYNASTU pozycjach z odczytem i to za malo, zeby na tym
+    # przestawiac wolumeny. Ta kolejnosc jest tania i sama te probke powieksza:
+    # blok, ktory przestaje byc ucinany, zaczyna produkowac dane do decyzji
+    # o przydziale. Wtedy — nie teraz — bedzie o czym rozmawiac.
+    #
+    # AUDYT CHCIAL WIECEJ i tego NIE zrobilem, bo wlasny pomiar tego nie
+    # potwierdzil. Trzy sygnaly wyboru celu, na ktorych stalo zalecenie
+    # (malo reakcji pod celem, brak tloku, swiezy cel), wyszly mi plasko:
+    # 17% wobec 13%, 22/6/16% niemonotonicznie, 17% zamiast obiecanych 50%.
     for nazwa, robota in (("odpowiedzi", odpowiedzi), ("notki", notki),
                           ("obserwowanie", obserwuj), ("subskrypcje", subskrybuj),
-                          ("komentarze", komentarze), ("dyskusje", dyskusje),
+                          ("dyskusje", dyskusje), ("komentarze", komentarze),
                           ("polubienia", polubienia), ("restacki", restacki),
                           ("zalegly artykul", zalegly_artykul),
                           ("kopia listy", kopia_listy)):

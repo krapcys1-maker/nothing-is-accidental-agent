@@ -378,10 +378,29 @@ sprawdz("nieudana dyskusja nie podbija licznika",
 
 print()
 print("=== 4. MARTWY HOST ODSIANY PRZED PLATNA OCENA ===")
+
+def ocena_artykulow(slad_):
+    """Wywolanie `wybierz_cele` NALEZACE DO BLOKU KOMENTARZY, nie pierwsze.
+
+    Ten test brał `oceniane[0]` — czyli pierwsze platne wywolanie w calym
+    przebiegu. To bylo ukryte zalozenie o KOLEJNOSCI BLOKOW, a nie o tym, co
+    ten test sprawdza (odsiew martwych hostow przed platna ocena). 6 wrzesnia
+    2026 dyskusje przeszly przed komentarze i `oceniane[0]` zaczelo oddawac
+    liste NOTEK — test oblal, choc badany mechanizm byl nietkniety.
+
+    Blok komentarzy pyta o wpisy `/p/`, blok dyskusji o `note/c-`. Wybieramy
+    wiec po TRESCI, nie po pozycji, i kolejnosc blokow przestaje mieć znaczenie.
+    """
+    for lista in (slad_.oceniane or []):
+        if any("/p/" in u for u in lista):
+            return lista
+    return []
+
+
 # `wybierz_cele` to jedyne platne wywolanie w tym bloku. Pytanie brzmi wiec
 # nie „czy odsiewamy", tylko „czy odsiewamy, ZANIM zaplacimy".
 
-pierwsza_ocena = slad.oceniane[0] if slad.oceniane else []
+pierwsza_ocena = ocena_artykulow(slad)
 print("    do oceny poszlo: %s" % pierwsza_ocena)
 sprawdz("platny wybierz_cele w ogole dostal cele (test cokolwiek mierzy)",
         bool(pierwsza_ocena), pierwsza_ocena)
@@ -393,7 +412,7 @@ sprawdz("zywy host trafil (nie odsialismy za szeroko)",
 # Bez wpisow o porazkach lista jest pusta i nic nie moze zniknac z puli.
 slad_pusty, _ = przebieg(ZRODLO, wyslane=True, martwe_hosty=())
 sprawdz("przy pustej liscie martwych hostow oceniane sa OBA cele",
-        len(slad_pusty.oceniane[0]) == 2, slad_pusty.oceniane[0])
+        len(ocena_artykulow(slad_pusty)) == 2, ocena_artykulow(slad_pusty))
 
 print()
 print("=== 5. KONTRDOWOD: KOD SPRZED POPRAWKI OBLEWA TE SAME PYTANIA ===")
@@ -434,8 +453,7 @@ sprawdz("zrodlo sprzed poprawki naprawde sie rozni", stary != ZRODLO)
 slad_s, wydruk_s = przebieg(stary, wyslane=False, nazwa="run_sprzed_poprawki")
 print("    STARY KOD: zapamietane=%s zapomniane=%s licznik=%s"
       % (slad_s.zapamietane, slad_s.zapomniane_platne, licznik(wydruk_s)))
-print("    STARY KOD: do oceny poszlo %s" % (slad_s.oceniane[0]
-                                             if slad_s.oceniane else []))
+print("    STARY KOD: do oceny poszlo %s" % ocena_artykulow(slad_s))
 
 sprawdz("STARY KOD palil publikacje mimo nieudanego komentarza",
         slad_s.zapamietane != [], slad_s.zapamietane)
@@ -447,8 +465,8 @@ sprawdz("STARY KOD zdejmowal host z listy platnych mimo porazki",
 sprawdz("STARY KOD meldowal 3 komentarze, z ktorych nie wszedl ANI JEDEN",
         licznik(wydruk_s) == 3, licznik(wydruk_s))
 sprawdz("STARY KOD placil za ocene martwego hosta",
-        any(MARTWY in u for u in (slad_s.oceniane[0] if slad_s.oceniane else [])),
-        slad_s.oceniane[:1])
+        any(MARTWY in u for u in ocena_artykulow(slad_s)),
+        ocena_artykulow(slad_s))
 sprawdz("STARY KOD nie zapisywal postawy przy dyskusjach",
         all(not k.get("postawa") for k in slad_s.konteksty_dyskusji),
         slad_s.konteksty_dyskusji)
@@ -542,7 +560,7 @@ print("=== 8. CEL Z `www.` PRZECHODZI PRZEZ SITO TAK SAMO JAK ZAPORA ===")
 slad_w, _ = przebieg(ZRODLO, wyslane=True,
                      martwe_hosty=("www.%s" % MARTWY,),
                      nazwa="run_www")
-ocena_w = slad_w.oceniane[0] if slad_w.oceniane else []
+ocena_w = ocena_artykulow(slad_w)
 print("    lista martwych = {'www.%s'},  do oceny poszlo: %s" % (MARTWY, ocena_w))
 sprawdz("cel bez `www.` NIE wypada przez wpis z `www.` (sito = zapora)",
         any("https://%s/" % MARTWY in u for u in ocena_w), ocena_w)
@@ -550,7 +568,7 @@ sprawdz("cel bez `www.` NIE wypada przez wpis z `www.` (sito = zapora)",
 slad_w2, wydruk_w2 = przebieg(ZRODLO, wyslane=True, martwe_hosty=(MARTWY,),
                               nazwa="run_www2")
 sprawdz("a cel z tym samym hostem co wpis — wypada",
-        all(MARTWY not in u for u in (slad_w2.oceniane[0]
+        all(MARTWY not in u for u in (ocena_artykulow(slad_w2)
                                       if slad_w2.oceniane else [])),
         slad_w2.oceniane[:1])
 sprawdz("i log mowi, KTORY host wypadl, nie tylko ile",
