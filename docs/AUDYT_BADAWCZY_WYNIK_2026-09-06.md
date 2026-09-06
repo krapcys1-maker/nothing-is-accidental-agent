@@ -34,17 +34,27 @@ Serwer po całości: `d1e08f6`, zestaw na serwerze **158 zdanych / 0 oblanych**.
 | **Q9** | Produkcja ma **13 kanałów**, nie 0. |
 | **Q10** | Audyt sam: „w produkcji 0, bo ścieżka nie jest na zegarze". |
 
-## Zostaje jedno — i wymaga decyzji, nie kodu
+## M7 — rozstrzygnięte pomiarem, zostaje `high`
 
-**M7: pisarz artykułu, 0,76 USD, z czego wejście to jedna ósma.**
+Jedna karta, dwa razy ten sam artykuł, `high` kontra `medium`. Pełny zapis
+w [M7_WYSILEK_PISARZA_2026-09-06.md](M7_WYSILEK_PISARZA_2026-09-06.md).
 
-Dźwignią jest `EFFORT["write"] = "high"`. Audyt mówi wprost: **nie zmieniać na
-ślepo**. Rozstrzygnięcie kosztuje jeden płatny przebieg: `--do-karty` i dwa
-razy `--z-karty` (high kontra medium) na tej samej karcie, ocenione przez
-`gates.deterministic_floors` i `ocen_forme`. Kontrdowód: jeśli medium ma więcej
-uwag bramek albo mniej beatów na 150 słów, zostaje high.
+| | high | medium |
+|---|---|---|
+| `write` wyjście | 13 714 | 7 066 |
+| `write` koszt | 0,8535 USD | **0,5210 USD** |
+| uwag bramek | 6 | 6 |
+| **przekonań** | **6** | **5** |
 
-To jest wydatek realnych pieniędzy na eksperyment — czeka na decyzję właściciela.
+Wejście identyczne co do 7 tokenów — cała różnica jest w wyjściu, więc audyt
+ma rację, że skracanie promptu nic tu nie da.
+
+Kryterium audytu („medium ma więcej uwag ALBO mniej beatów → zostaje high")
+wskazuje `high`: uwagi remis 6:6, ale przekonań 5 wobec 6. Czytanie zgadza się
+z liczbą — `medium` zaczyna akapitem rozbiegowym zamiast od mechanizmu.
+
+Odrzucona oszczędność: 0,33 USD na artykuł, 1,33 USD miesięcznie, ~3% budżetu
+październikowego.
 
 ## Co znalazłem POZA audytem, i co było ważniejsze
 
