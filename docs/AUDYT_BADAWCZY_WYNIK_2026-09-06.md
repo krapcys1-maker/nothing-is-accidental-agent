@@ -4,7 +4,7 @@ Audyt zrobiony na **czystym bocie**, nie na naszym drzewie. Przerobiony punkt
 po punkcie 5–6 września 2026, każdy sprawdzony na żywej produkcji przed
 tknięciem kodu.
 
-Serwer po całości: `d1e08f6`, zestaw na serwerze **158 zdanych / 0 oblanych**.
+Serwer po całości: `82a427a`, zestaw na serwerze **158 zdanych / 0 oblanych**.
 
 ## Naprawione (9)
 
