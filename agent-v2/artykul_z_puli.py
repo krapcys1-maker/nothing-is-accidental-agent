@@ -1512,7 +1512,12 @@ def _napisz_i_zapisz(conn, run_id, brief, card, evidence=None) -> int:
     # WYLACZNIE jako wpis w logu — widac, co model zakwestionowal, i tyle.
     print()
     print("-- sprawdzenie faktow (log, NIE bramka) --", flush=True)
-    audyt = stages.zweryfikuj(conn, run_id, draft["body"], draft.get("title", ""))
+    # KARTA IDZIE DO WERYFIKATORA, NIE SAM TYTUL. Dotad szedl `draft["title"]`,
+    # wiec sprawdzenie faktow szukalo od zera wszystkiego, co ten przebieg
+    # wlasnie kupil i sklasyfikowal. Patrz `stages.karta_do_weryfikacji`.
+    audyt = stages.zweryfikuj(
+        conn, run_id, draft["body"],
+        stages.karta_do_weryfikacji(draft.get("title", ""), card))
     if audyt.get("safe_to_post"):
         print("   czysto: %s" % str(audyt.get("verdict", ""))[:150], flush=True)
     else:

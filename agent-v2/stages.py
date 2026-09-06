@@ -4898,6 +4898,53 @@ def _rekord_do_weryfikacji(note_type: str, evidence: dict[str, Any]) -> str:
             + "\n".join("- %s: %s" % (k, w[:400]) for k, w in pola))
 
 
+def karta_do_weryfikacji(tytul: str, card: dict[str, Any] | None) -> str:
+    """To samo, co `_rekord_do_weryfikacji`, ale dla karty artykulu.
+
+    ARTYKUL DOSTAWAL JAKO KONTEKST SAM TYTUL. `artykul_z_puli` wolalo
+    `zweryfikuj(conn, run_id, draft["body"], draft.get("title", ""))`, wiec
+    weryfikator szukal od zera wszystkiego, co potok wlasnie kupil i sprawdzil:
+    karta niesie `confirmed_claims`, kazde z wyciagiem ze zrodla i adresem.
+
+    To jest ta sama luka, ktora przy notkach zamknal `_rekord_do_weryfikacji`
+    — tylko przy artykule material jest wiekszy i drozszy, a tekst dluzszy,
+    wiec kazde zbedne szukanie kosztuje wiecej.
+
+    DWA OGRANICZENIA WPISANE W KSZTALT:
+      * `not_fetched` jest OZNACZONE. To jedyne twierdzenie w karcie, ktorego
+        nikt nie pobral (patrz `artykul_z_puli` i `gates._niepobrane`) — gdyby
+        szlo tu bez etykiety, weryfikator uznalby je za sprawdzone i przestal
+        je sprawdzac, czyli naprawa zjadlaby wlasny sens;
+      * sufit na wyciag i na liczbe twierdzen, bo karta bywa dluga, a kontekst
+        idzie do modelu przy KAZDYM sprawdzeniu.
+    """
+    naglowek = str(tytul or "")
+    twierdzenia = [c for c in ((card or {}).get("confirmed_claims") or [])
+                   if isinstance(c, dict) and c.get("claim")]
+    if not twierdzenia:
+        return naglowek
+    wiersze = []
+    for c in twierdzenia[:MAKS_TWIERDZEN_DO_WERYFIKACJI]:
+        znak = " [NOT FETCHED — nobody opened this page]" if c.get("not_fetched") else ""
+        wiersze.append(
+            "- claim: %s%s\n  evidence: %s\n  source: %s"
+            % (str(c.get("claim") or "").strip()[:300], znak,
+               str(c.get("evidence") or "").strip()[:400],
+               str(c.get("url") or "").strip()[:200]))
+    return (naglowek + "\n\nThe article was written from this evidence card. "
+            "Every claim below was fetched, classified and paid for before "
+            "writing. Check the text against the card FIRST, and search only "
+            "for what the card does not settle. The card is not above doubt: "
+            "if an entry is wrong, say so — and an entry marked NOT FETCHED "
+            "is not a quotation from any document we opened.\n\n"
+            + "\n".join(wiersze))
+
+
+# ILE TWIERDZEN Z KARTY IDZIE DO WERYFIKATORA. Karta ma zwykle 7-8, ale bywa
+# dluzsza, a ten kontekst leci przy kazdym sprawdzeniu artykulu.
+MAKS_TWIERDZEN_DO_WERYFIKACJI = 12
+
+
 def zweryfikuj(
     conn: sqlite3.Connection, run_id: int, tekst: str, kontekst: str = "",
     szukaj: bool = True,

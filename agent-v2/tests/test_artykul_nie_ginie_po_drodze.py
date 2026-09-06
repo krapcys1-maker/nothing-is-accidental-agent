@@ -144,6 +144,21 @@ class AtrapaStages:
     Kazde wywolanie zapisuje slad — test pyta o SKUTEK (czy tekst powstal,
     czy sie zapisal, z jaka glebokoscia), a nie o to, czy cos zostalo wolane.
     """
+    # ATRAPA MOWI, ZE JEJ CZEGOS BRAKUJE — zamiast udawac usterke kodu.
+    #
+    # 5-6 wrzesnia 2026 CZTERY RAZY w jednej sesji produkcja zaczela wolac
+    # metode, ktorej ta klasa nie miala. `blok()` w `run.py` lapie wyjatki,
+    # wiec `AttributeError` nie wygladal jak brak metody, tylko jak „etap sie
+    # nie wykonal" — i test zglaszal porazki o jedna linijke za pozno.
+    #
+    # `print` PRZED `raise`, bo to wlasnie wyjatek bywa polkniety, a wydruk
+    # nie. Bez tego komunikat ginie razem z przyczyna.
+    def __getattr__(self, nazwa):
+        print("  [ATRAPA] brak metody %r — to nie jest usterka kodu"
+              " produkcyjnego, tylko niepelna atrapa w tym tescie" % nazwa,
+              flush=True)
+        raise AttributeError(nazwa)
+
 
     # Stopka z data idzie do PRAWDZIWEGO `stages` — jest czysta (bez sieci,
     # modelu i bazy), a atrapowanie jej zamienialoby test w sprawdzanie wlasnej

@@ -35,7 +35,7 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-9379 wierszy, 153 funkcji na poziomie modułu, 0 klas
+9426 wierszy, 154 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -131,6 +131,7 @@
 | `bez_wstrzykniecia(tekst, wlasny_adres_ok)` | Czy w naszym tekscie nie ma sladu cudzych POLECEN. |
 | `_status_twierdzenia(c)` *(wewn.)* | Status twierdzenia, znormalizowany. NIEZNANA ETYKIETA ZNACZY `unverified`. |
 | `_rekord_do_weryfikacji(note_type, evidence)` *(wewn.)* | Kontekst dla weryfikatora: rekord, z ktorego notka powstala. |
+| `karta_do_weryfikacji(tytul, card)` | To samo, co `_rekord_do_weryfikacji`, ale dla karty artykulu. |
 | `zweryfikuj(conn, run_id, tekst, kontekst, szukaj)` | Sprawdza to, co model NAPISAŁ — nie to, czego szukał przed pisaniem. |
 | `_zapora_notki(tekst)` *(wewn.)* | Pusty napis, gdy tekst notki przechodzi zapory. Inaczej powod. |
 | `_zapora_komentarza(tekst)` *(wewn.)* | To samo dla komentarza — ale komentarz ma zapore o jedna wiecej. |
@@ -574,7 +575,7 @@
 
 ### `artykul_z_puli.py` — artykuł bierze temat z tej samej puli, co notki
 
-1555 wierszy, 14 funkcji na poziomie modułu, 0 klas
+1560 wierszy, 14 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|

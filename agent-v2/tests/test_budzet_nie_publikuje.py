@@ -176,6 +176,21 @@ class AtrapaStages:
     podmienionym `llm.call`. Inaczej test dowodzilby wylacznie tego, jak sobie
     wyobrazam ostatnia bramke, a to ona decyduje o publikacji.
     """
+    # ATRAPA MOWI, ZE JEJ CZEGOS BRAKUJE — zamiast udawac usterke kodu.
+    #
+    # 5-6 wrzesnia 2026 CZTERY RAZY w jednej sesji produkcja zaczela wolac
+    # metode, ktorej ta klasa nie miala. `blok()` w `run.py` lapie wyjatki,
+    # wiec `AttributeError` nie wygladal jak brak metody, tylko jak „etap sie
+    # nie wykonal" — i test zglaszal porazki o jedna linijke za pozno.
+    #
+    # `print` PRZED `raise`, bo to wlasnie wyjatek bywa polkniety, a wydruk
+    # nie. Bez tego komunikat ginie razem z przyczyna.
+    def __getattr__(self, nazwa):
+        print("  [ATRAPA] brak metody %r — to nie jest usterka kodu"
+              " produkcyjnego, tylko niepelna atrapa w tym tescie" % nazwa,
+              flush=True)
+        raise AttributeError(nazwa)
+
 
     # Czyste funkcje (bez sieci, modelu i bazy) ida do PRAWDZIWEGO `stages` —
     # atrapowanie ich zamienialoby test w sprawdzanie wlasnej atrapy.
@@ -248,6 +263,14 @@ class AtrapaStages:
     def ocen_forme(self, conn, run_id, draft):
         self._licz("ocen_forme")
         return {"beliefs": [], "support_only": [], "reader_moment": {}}
+
+    # Kontekst dla weryfikatora budowany z karty — `artykul_z_puli` wola to
+    # TUZ PRZED `zweryfikuj`. Bez tej metody atrapa podnosila AttributeError,
+    # ktory `blok()` polykal, a test widzial „zweryfikuj sie nie wykonalo"
+    # i zglaszal cztery porazki nie tam, gdzie byla przyczyna. Czwarty raz
+    # tego dnia, gdy niepelna atrapa udawala usterke kodu.
+    def karta_do_weryfikacji(self, tytul, card):
+        return str(tytul or "")
 
     def zweryfikuj(self, conn, run_id, tekst, kontekst=""):
         self.slad.append("zweryfikuj")
