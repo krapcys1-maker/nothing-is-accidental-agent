@@ -53,7 +53,19 @@ fi
 # wisialy na serwerze 30 sierpnia i przez pol godziny udawaly trwajacy przebieg.
 #
 # Nawiasy w "[r]un" zostaja — chronia przed dopasowaniem samego `pgrep`.
-if pgrep -f "python.*[r]un\.py --dzien" >/dev/null; then
+# TYLKO NASZ PROCES, NIE CUDZY. Od 7 wrzesnia 2026 na tym serwerze stoi DRUGI
+# bot (inne konto Substacka, katalog ~/nia-agent, wlasny .venv). Wzorzec
+# "python.*run.py --dzien" lapal takze JEGO — wiec przebieg drugiego bota
+# blokowal wdrozenie naszego i skrypt meldowal „PRZEBIEG TRWA", kiedy nasz
+# przebieg byl dawno skonczony. Zlapane na zywo: nasz skonczyl o 12:03, a o
+# 15:12 wdrozenie nadal odmawialo, bo NIA byla w trakcie swojego.
+#
+# Zamek (wyzej) byl od poczatku zawezony do WLASNEGO katalogu danych i dzialal
+# poprawnie. Wada siedziala w zapasie, ktory mial byc tylko zapasem.
+#
+# Rozroznia nas SCIEZKA WLASNEGO `.venv` — kazda kopia ma swoj.
+NASZ_PYTHON="$(pwd)/.venv/bin/python"
+if pgrep -f "^${NASZ_PYTHON} .*[r]un\.py --dzien" >/dev/null; then
     echo "  PRZEBIEG TRWA — nie wdrazam, sprobuj po jego zakonczeniu"
     exit 1
 fi
