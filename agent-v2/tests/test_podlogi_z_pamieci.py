@@ -21,6 +21,7 @@ import hashlib
 import json
 import pathlib
 import sys
+import tempfile
 
 sys.path.insert(0, "agent-v2")
 import config   # noqa: E402
@@ -44,9 +45,31 @@ def odcisk(p):
     return hashlib.sha256(p.read_bytes()).hexdigest()[:16] if p.exists() else "brak"
 
 
-PILNOWANE = [config.DB_PATH, config.DATA_DIR / "dziennik.jsonl",
-             config.DATA_DIR / "promocja.json"]
+# SCIEZKI PRODUKCJI ZAPAMIETANE PRZED PRZEKIEROWANIEM — to one sa pilnowane
+# na koncu. Po przestawieniu `DATA_DIR` nie da sie juz odtworzyc, gdzie bylo
+# naprawde.
+PILNOWANE = [pathlib.Path(config.DB_PATH),
+             pathlib.Path(config.DATA_DIR) / "dziennik.jsonl",
+             pathlib.Path(config.DATA_DIR) / "promocja.json"]
 PRZED = {str(p): odcisk(p) for p in PILNOWANE}
+
+# I DOPIERO TERAZ ODCINAMY SIE OD PRODUKCJI.
+#
+# ZNALEZIONE 7 wrzesnia 2026: ten test PRZECHODZIL na komputerze wlasciciela
+# i OBLEWAL na serwerze, deterministycznie, sześć razy na sześć. Nie od zmiany
+# w kodzie — od DZIENNIKA. `comment_on` sortuje kandydatow miedzy innymi po
+# tym, czy powtarzaja otwarcie ostatnich wpisow (`ostatnie_otwarcia`), a ta
+# funkcja czyta `DATA_DIR/dziennik.jsonl`. Na serwerze lezy tam prawdziwy
+# dziennik z 889 wpisami, wiec kandydat ze zmyslonym przezyciem ladowal na
+# koncu listy i petla konczyla sie, zanim do niego doszla — bez `safe_to_post`
+# i bez `odrzucony`. Lokalnie kolejnosc wychodzila inna i test swiecil na
+# zielono.
+#
+# Test oceny kandydatow nie ma prawa zalezec od tego, co konto opublikowalo
+# wczoraj. To ta sama klasa wady, ktora `test_testy_nie_czytaja_produkcji`
+# opisuje dla szesciu innych plikow.
+_KATALOG_TESTOWY = pathlib.Path(tempfile.mkdtemp())
+config.uzyj_katalogu_danych(_KATALOG_TESTOWY)
 
 # Teksty realne co do ksztaltu: pierwszy to zmyslone przezycie, drugi to
 # powolanie na badanie, ktorego nikt nie nazwal, trzeci jest czysty.
