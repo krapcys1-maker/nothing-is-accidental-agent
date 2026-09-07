@@ -35,12 +35,12 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-9712 wierszy, 155 funkcji na poziomie modułu, 0 klas
+9736 wierszy, 155 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
 | `_na_kanal(nazwa)` *(wewn.)* | Wszystko, co ta funkcja zaplaci, ksieguje sie na kanal `nazwa`. |
-| `_prompt(name, **fields)` *(wewn.)* | — |
+| `_prompt(name, **fields)` *(wewn.)* | Prompt z pliku, z podstawionymi polami. |
 | `_juz_w_domu(ile_banku, ile_notek)` *(wewn.)* | Co juz mamy poza artykulami: fakty czekajace w banku i wydane notki. |
 | `recent_angles(conn, limit)` | Ostatnie kąty redakcyjne — wejście do reguły różnorodności. |
 | `tematy_do_porownania(conn, limit)` | Poprzednie artykuly w postaci NADAJACEJ SIE DO POROWNANIA. |
@@ -197,7 +197,7 @@
 
 ### `browser.py` — cała styczność z Substackiem; nie woła modelu
 
-5316 wierszy, 98 funkcji na poziomie modułu, 0 klas
+5325 wierszy, 98 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -438,7 +438,7 @@
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-3336 wierszy, 32 funkcji na poziomie modułu, 0 klas
+3402 wierszy, 33 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -450,6 +450,7 @@
 | `narzedzie_wyszukiwania(model)` | Nazwa narzedzia wyszukiwania i ewentualne ostrzezenie. |
 | `sufit_dnia(dzien)` | Sufit obowiazujacy W TYM DNIU, nie dzisiaj. |
 | `_sufit_dobowy_z_miesiecznego(dzis)` *(wewn.)* | Sufit dobowy LICZONY Z MIESIECZNEGO, a nie wpisany na sztywno. |
+| `_env_float(nazwa, domyslnie)` *(wewn.)* | Liczba ze srodowiska, z bezpiecznym powrotem do wartosci domyslnej. |
 | `sufit_miesieczny(dzis)` | Sufit miesieczny na DZIS. Po `PODWYZKA_DO` znowu bazowy. |
 | `sufit_przebiegu(etap)` | Ktory sufit obowiazuje przebieg o tym etapie. |
 | `kotwica_dlugosci(glebokosc)` | Zdanie kalibrujace dlugosc, dobrane do ilosci materialu. |

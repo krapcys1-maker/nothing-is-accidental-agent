@@ -205,12 +205,36 @@ _nr = [0]
 
 
 def zbuduj(zrodlo, nazwa_pliku, nazwa):
-    """Wykonuje zrodlo jako osobny modul, nie ruszajac tego z `sys.modules`."""
+    """Wykonuje zrodlo jako osobny modul, nie ruszajac tego z `sys.modules`.
+
+    KOD SPRZED NAPRAWY, PROMPTY Z DYSKA — i to jest szew, ktory raz juz
+    peknal. 7 wrzesnia 2026 nazwa marki przestala byc wpisana w dziewieciu
+    plikach promptow i zaczela byc polem `{marka}`, wstawianym centralnie
+    przez `stages._prompt`. Wersja „PRZED" pochodzi z przypietego commita, wiec
+    ma STARY loader — ktory tego pola nie zna — a pliki promptow czyta te
+    BIEZACE, z dysku. Skutek: `KeyError: 'marka'` w kazdym wywolaniu,
+    wszystkie dziesiec asercji kontrdowodu na zerze i wniosek „przed naprawa
+    tez bylo dobrze", czyli dokladnie odwrotny do prawdy.
+
+    Ten test pyta o BUDZET I SPRAWDZANIE FAKTOW, nie o pola promptow (od tego
+    sa `test_martwe_sygnaly` i `test_bariera_wstrzykniecia`). Dokladamy wiec
+    staremu loaderowi pola, ktorych dzis doklada nowy — inaczej kontrdowod
+    mierzylby niezgodnosc szablonow zamiast zachowania.
+    """
     _nr[0] += 1
     m = types.ModuleType("%s_%d" % (nazwa, _nr[0]))
     m.__dict__["__name__"] = m.__name__      # zeby nie odpalic `__main__`
     m.__dict__["__file__"] = nazwa_pliku
     exec(compile(zrodlo, nazwa_pliku, "exec"), m.__dict__)
+    _stary = m.__dict__.get("_prompt")
+    if callable(_stary) and "marka" not in (_stary.__doc__ or ""):
+        import config as _cfg_marka
+
+        def _prompt_z_marka(name, __oryg=_stary, **pola):
+            pola.setdefault("marka", _cfg_marka.MARKA)
+            return __oryg(name, **pola)
+
+        m.__dict__["_prompt"] = _prompt_z_marka
     return m
 
 

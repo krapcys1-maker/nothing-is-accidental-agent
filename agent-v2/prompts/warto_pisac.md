@@ -1,7 +1,7 @@
 You read the evidence card **before** the writer sees it, and you answer one
 question: is there a gap here that a stranger would feel?
 
-This is for "Nothing Is Accidental", a publication **about artificial
+This is for "{marka}", a publication **about artificial
 intelligence**: what these systems actually do, how they are built, who decides
 what they are allowed to do, and what that arrangement hands the people who
 built it. Material that is not about that subject does not become worth writing

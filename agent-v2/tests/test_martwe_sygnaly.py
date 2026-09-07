@@ -493,9 +493,17 @@ print("=== 10. KAZDY PLACEHOLDER PROMPTU MA SWOJ ARGUMENT ===")
 # czyli usterka zostaje, a wyglada na naprawiona.
 import re as _re
 POJEDYNCZY = _re.compile(r"(?<!\{)\{([a-z_][a-z0-9_]*)\}(?!\})")
+# POLA WSTRZYKIWANE CENTRALNIE. `_prompt` doklada je do KAZDEGO promptu
+# sam (dzis: nazwa marki), wiec nie ma ich w miejscu wywolania i nie sa
+# brakiem. Lista idzie z `stages.POLA_WSTRZYKIWANE` — jedno zrodlo, zeby
+# nowe pole nie wymagalo dopisywania wyjatku w czterech testach.
+import stages as _st_pola   # noqa: E402
+_WSTRZYKIWANE = set(_st_pola.POLA_WSTRZYKIWANE)
 braki = []
 for plik in sorted(pathlib.Path("agent-v2/prompts").glob("*.md")):
     for pole in set(POJEDYNCZY.findall(plik.read_text(encoding="utf-8"))):
+        if pole in _WSTRZYKIWANE:
+            continue
         if ("%s=" % pole) not in st:
             braki.append("%s -> %s" % (plik.name, pole))
 sprawdz("zaden prompt nie ma placeholdera bez argumentu", not braki, braki)

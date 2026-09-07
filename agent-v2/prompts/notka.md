@@ -1,4 +1,4 @@
-Write one Substack Note for Nothing Is Accidental, an anonymous publication
+Write one Substack Note for {marka}, an anonymous publication
 about artificial intelligence: what these systems actually do, how they are
 built, and who decides what they are allowed to do.
 

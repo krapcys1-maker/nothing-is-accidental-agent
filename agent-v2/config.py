@@ -81,7 +81,23 @@ IMAGE_PRICE_USD = 0.04   # cennik sierpien 2026, NIEPOTWIERDZONY na fakturze
 IMAGE_TIMEOUT_S = 300
 
 # Konto na Substacku.
-SUBSTACK_HANDLE = "nothingisaccidental"
+#
+# ZE SRODOWISKA, ZEBY DALO SIE POSTAWIC DRUGIEGO AGENTA NA INNYM KONCIE.
+# Druga kopia repozytorium dostaje wlasny `DATA_DIR` (liczony od polozenia
+# katalogu), wiec zamek, baza, dziennik, bank i sesja rozdzielaja sie same —
+# ale UCHWYT KONTA byl zaszyty w kodzie i w dwoch miejscach naraz.
+#
+# TO BYLA WADA NIEZALEZNA OD DRUGIEGO AGENTA: obok tej stalej stalo
+# `browser.PROFIL_HANDLE` z ta sama wartoscia, uzywane do adresow PROFILU,
+# podczas gdy ta sluzy adresom PUBLIKACJI. Zmiana jednego bez drugiego znaczy,
+# ze agent sprawdza jeden profil, a publikuje na drugim — i nic o tym nie
+# powie. Teraz jest jedno zrodlo, a `browser` je czyta.
+SUBSTACK_HANDLE = _env("SUBSTACK_HANDLE", "nothingisaccidental")
+
+# NAZWA MARKI, ktora agent widzi w promptach. Wstawiana automatycznie przez
+# `stages._prompt` jako pole `{marka}` — dziewiec plikow promptow mialo ja
+# wpisana w tresci, wiec drugi agent pisalby cudzym nazwiskiem.
+MARKA = _env("MARKA", "Nothing Is Accidental")
 
 # Czy agent ma klikac "Wylacz wykrywanie AI" przy kazdej publikacji.
 # WLACZONE decyzja wlasciciela z 2026-08-15. To wybor publiczny, nie ustawienie
@@ -687,7 +703,40 @@ def _sufit_dobowy_z_miesiecznego(dzis: str) -> float:
 # ponad stu rankingow banku. Na dzien pracy nad kodem starczy z zapasem, a
 # przy petli bez wyjscia strata konczy sie na kwocie, ktora nie boli.
 TEST_LIMIT_USD = 3.00
-MONTHLY_LIMIT_USD = 40.00
+
+
+def _env_float(nazwa: str, domyslnie: float) -> float:
+    """Liczba ze srodowiska, z bezpiecznym powrotem do wartosci domyslnej.
+
+    Pusta albo popsuta wartosc ma znaczyc „zostaw jak jest", a NIE zero:
+    `MONTHLY_LIMIT_USD=` w `.env` z literowka nie moze uciszyc konta na caly
+    miesiac. Ujemne tez odrzucamy — sufit ponizej zera zatrzymalby pierwsze
+    platne wywolanie.
+    """
+    surowe = _env(nazwa)
+    if not surowe:
+        return domyslnie
+    try:
+        w = float(surowe.replace(",", "."))
+    except ValueError:
+        print("  [config] %s=%r nie jest liczba — zostawiam %s"
+              % (nazwa, surowe, domyslnie), flush=True)
+        return domyslnie
+    if w < 0:
+        print("  [config] %s=%r jest ujemne — zostawiam %s"
+              % (nazwa, surowe, domyslnie), flush=True)
+        return domyslnie
+    return w
+
+
+# SUFIT MIESIECZNY ZE SRODOWISKA — zeby druga kopia repozytorium (drugi agent,
+# inne konto Substacka) mogla miec wlasny, bez zmiany KODU. Bez tego dwie
+# kopie znaczylyby dwie galezie do utrzymania.
+#
+# WAZNE PRZY DRUGIM AGENCIE: te sufity sa PER KOPIA, nie per karta — patrz
+# `sufit_miesieczny`. Dwaj agenci z ta sama wartoscia to DWA RAZY tyle
+# pieniedzy, a nie ta sama kwota podzielona na dwoje.
+MONTHLY_LIMIT_USD = _env_float("MONTHLY_LIMIT_USD", 40.00)
 
 # PODWYZSZENIE NA WRZESIEN 2026 — I WYGASA SAMO.
 #
@@ -706,14 +755,31 @@ MONTHLY_LIMIT_USD = 40.00
 # powrot zalezalby od tego, czy ktos o nim pamieta 1 pazdziernika. Tu
 # podwyzka konczy sie z kalendarza: po `PODWYZKA_DO` funkcja oddaje bazowy
 # sufit i nikt nie musi nic robic.
-PODWYZKA_MIESIECZNA_USD = 150.00
-PODWYZKA_DO = "2026-09-30"
+# TAKZE ZE SRODOWISKA, i to jest wazniejsze, niz wyglada. Ta podwyzka byla
+# decyzja wlasciciela O TYM KONCIE, bo w tym miesiacu duzo sprawdzalismy.
+# Gdyby zostala stala, DRUGI agent na innym koncie odziedziczylby sufit
+# 150 USD do 30 wrzesnia, nie prosiwszy o niego i nie majac powodu.
+# Druga kopia ustawia sobie `PODWYZKA_MIESIECZNA_USD=0` i dostaje swoj bazowy.
+PODWYZKA_MIESIECZNA_USD = _env_float("PODWYZKA_MIESIECZNA_USD", 150.00)
+PODWYZKA_DO = _env("PODWYZKA_DO", "2026-09-30")
 
 
 def sufit_miesieczny(dzis: str | None = None) -> float:
     """Sufit miesieczny na DZIS. Po `PODWYZKA_DO` znowu bazowy.
 
     `dzis` w formacie YYYY-MM-DD; bez niego bierzemy date z zegara UTC.
+
+    UWAGA PRZY DRUGIM AGENCIE: TEN SUFIT JEST PER KOPIA, NIE PER KARTA.
+    Wydatki liczy `llm._preflight` przez `db.spent_usd(conn, ...)`, czyli
+    z WLASNEJ bazy danej kopii repozytorium. DWAJ AGENCI na jednym serwerze
+    maja wiec DWA PELNE SUFITY: kazdy uzna, ze ma cale 40 (albo 150) dolarow,
+    i zaden nie zobaczy wydatkow drugiego. Rachunek wychodzi z jednej karty,
+    wiec faktyczny sufit sie PODWAJA — po cichu, bez zadnego ostrzezenia
+    w logu.
+
+    Jesli stawiasz druga kopie: ustaw obu suma, ktora ma sens RAZEM
+    (`MONTHLY_LIMIT_USD` w `.env` kazdej kopii), a nie te sama wartosc dwa
+    razy. Wspolne liczenie wymagaloby wspolnej bazy i tego tu nie ma.
     """
     if dzis is None:
         from datetime import datetime, timezone

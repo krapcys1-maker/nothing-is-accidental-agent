@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **26 plików**, 33 802 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **26 plików**, 33 901 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -113,8 +113,8 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 > w głównej ścieżce artykułu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
-się testować bez przeglądarki i bez pieniędzy**. 165 zestawów
-testów, 4262 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+się testować bez przeglądarki i bez pieniędzy**. 166 zestawów
+testów, 4284 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -177,12 +177,12 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-9712 wierszy, 155 funkcji na poziomie modułu, 0 klas
+9736 wierszy, 155 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
 | `_na_kanal(nazwa)` *(wewn.)* | Wszystko, co ta funkcja zaplaci, ksieguje sie na kanal `nazwa`. |
-| `_prompt(name, **fields)` *(wewn.)* | — |
+| `_prompt(name, **fields)` *(wewn.)* | Prompt z pliku, z podstawionymi polami. |
 | `_juz_w_domu(ile_banku, ile_notek)` *(wewn.)* | Co juz mamy poza artykulami: fakty czekajace w banku i wydane notki. |
 | `recent_angles(conn, limit)` | Ostatnie kąty redakcyjne — wejście do reguły różnorodności. |
 | `tematy_do_porownania(conn, limit)` | Poprzednie artykuly w postaci NADAJACEJ SIE DO POROWNANIA. |
@@ -339,7 +339,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `browser.py` — cała styczność z Substackiem; nie woła modelu
 
-5316 wierszy, 98 funkcji na poziomie modułu, 0 klas
+5325 wierszy, 98 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -580,7 +580,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-3336 wierszy, 32 funkcji na poziomie modułu, 0 klas
+3402 wierszy, 33 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -592,6 +592,7 @@ wiec nie da sie go rozjechac z kodem.
 | `narzedzie_wyszukiwania(model)` | Nazwa narzedzia wyszukiwania i ewentualne ostrzezenie. |
 | `sufit_dnia(dzien)` | Sufit obowiazujacy W TYM DNIU, nie dzisiaj. |
 | `_sufit_dobowy_z_miesiecznego(dzis)` *(wewn.)* | Sufit dobowy LICZONY Z MIESIECZNEGO, a nie wpisany na sztywno. |
+| `_env_float(nazwa, domyslnie)` *(wewn.)* | Liczba ze srodowiska, z bezpiecznym powrotem do wartosci domyslnej. |
 | `sufit_miesieczny(dzis)` | Sufit miesieczny na DZIS. Po `PODWYZKA_DO` znowu bazowy. |
 | `sufit_przebiegu(etap)` | Ktory sufit obowiazuje przebieg o tym etapie. |
 | `kotwica_dlugosci(glebokosc)` | Zdanie kalibrujace dlugosc, dobrane do ilosci materialu. |
@@ -8755,13 +8756,13 @@ pokazuje się **niezależnie** od tego ustawienia — u Jonathana widać naraz
 
 #### `prompts/bank.md`
 
-**197 wierszy.** Pola wejsciowe: `co_zadzialalo`, `kandydaci`
+**197 wierszy.** Pola wejsciowe: `co_zadzialalo`, `kandydaci`, `marka`
 
 ````markdown
 Rank these candidate facts against each other, strongest first, and say which
 ones this publication should throw away.
 
-Nothing Is Accidental is a publication **about artificial intelligence**: what
+{marka} is a publication **about artificial intelligence**: what
 these systems actually do, how they are built, who decides what they are allowed
 to do, and what that arrangement hands the people who built it.
 
@@ -9027,7 +9028,7 @@ Return only valid JSON, shaped exactly as:
 
 #### `prompts/cele.md`
 
-**87 wierszy.** Pola wejsciowe: `posts`
+**87 wierszy.** Pola wejsciowe: `marka`, `posts`
 
 ````markdown
 Choose which of these posts are worth commenting on, and which are not.
@@ -9036,7 +9037,7 @@ Most of them will not be. That is the expected answer, not a failure.
 
 ## What this publication is
 
-Nothing Is Accidental is a publication about artificial intelligence: what
+{marka} is a publication about artificial intelligence: what
 these systems do, how they are built, and who decides what they may do. Its
 comments are worth reading because they add a
 mechanism the post did not name — not because they are enthusiastic.
@@ -9123,7 +9124,7 @@ visible either way:
 
 #### `prompts/ciekawostki.md`
 
-**437 wierszy.** Pola wejsciowe: `dziedziny`, `dzis`, `generatory`, `ile`, `miesiac`, `premiera`, `stan_modeli`, `uzyte`, `w_reku`, `wydarzenia`, `zaczyn_kanalow`, `zamowienia`
+**437 wierszy.** Pola wejsciowe: `dziedziny`, `dzis`, `generatory`, `ile`, `marka`, `miesiac`, `premiera`, `stan_modeli`, `uzyte`, `w_reku`, `wydarzenia`, `zaczyn_kanalow`, `zamowienia`
 
 ````markdown
 Find {ile} documented facts worth stopping a stranger mid-scroll.
@@ -9133,7 +9134,7 @@ against is not a fact you can use here.
 
 ## What this publication is
 
-Nothing Is Accidental is a publication **about artificial intelligence**: what
+{marka} is a publication **about artificial intelligence**: what
 these systems actually do, how they are built, who decides what they are
 allowed to do, and what that arrangement hands the people who built it.
 
@@ -10148,11 +10149,11 @@ Return only valid JSON:
 
 #### `prompts/komentarz.md`
 
-**311 wierszy.** Pola wejsciowe: `author`, `body`, `cel_slow`, `language`, `otwarcie`, `postawa`, `postawa_opis`, `title`
+**311 wierszy.** Pola wejsciowe: `author`, `body`, `cel_slow`, `language`, `marka`, `otwarcie`, `postawa`, `postawa_opis`, `title`
 
 ````markdown
 You are writing a comment under someone else's Substack post, as the anonymous
-editorial brand Nothing Is Accidental — a publication about artificial
+editorial brand {marka} — a publication about artificial
 intelligence: what these systems actually do, how they are built, and who
 decides what they are allowed to do.
 
@@ -10517,10 +10518,10 @@ Return only:
 
 #### `prompts/notka.md`
 
-**154 wierszy.** Pola wejsciowe: `evidence`, `form_brief`, `language`, `max_words`, `min_words`, `note_form`, `note_type`, `ostatnie_otwarcia_json`, `type_brief`
+**154 wierszy.** Pola wejsciowe: `evidence`, `form_brief`, `language`, `marka`, `max_words`, `min_words`, `note_form`, `note_type`, `ostatnie_otwarcia_json`, `type_brief`
 
 ````markdown
-Write one Substack Note for Nothing Is Accidental, an anonymous publication
+Write one Substack Note for {marka}, an anonymous publication
 about artificial intelligence: what these systems actually do, how they are
 built, and who decides what they are allowed to do.
 
@@ -10680,11 +10681,11 @@ Return only valid JSON:
 
 #### `prompts/odpowiedz.md`
 
-**205 wierszy.** Pola wejsciowe: `cel_slow`, `comment`, `commenter`, `evidence`, `language`, `otwarcie`, `under_what`
+**205 wierszy.** Pola wejsciowe: `cel_slow`, `comment`, `commenter`, `evidence`, `language`, `marka`, `otwarcie`, `under_what`
 
 ````markdown
 Someone has replied to you. Write the response, as the anonymous editorial brand
-Nothing Is Accidental.
+{marka}.
 
 Write in {language}, unless the comment is in another language — then reply in
 that language if you can do so naturally, otherwise stay silent.
@@ -10986,10 +10987,10 @@ see it. An empty answer costs nothing; a wrong group costs a paid fact.
 
 #### `prompts/pisarz.md`
 
-**527 wierszy.** Pola wejsciowe: `card_json`, `ile_paraleli`, `kotwica_dlugosci`, `language`, `max_words`, `min_words`, `poprzednie_uwagi`, `ruch_koncowy`, `ruch_koncowy_nazwa`, `style_examples`, `style_negative`, `style_positive`, `target_words`
+**527 wierszy.** Pola wejsciowe: `card_json`, `ile_paraleli`, `kotwica_dlugosci`, `language`, `marka`, `max_words`, `min_words`, `poprzednie_uwagi`, `ruch_koncowy`, `ruch_koncowy_nazwa`, `style_examples`, `style_negative`, `style_positive`, `target_words`
 
 ````markdown
-You write for the anonymous editorial brand Nothing Is Accidental, a
+You write for the anonymous editorial brand {marka}, a
 publication about artificial intelligence: what these systems actually do,
 how they are built, who decides what they are allowed to do, and what that
 arrangement hands the people who built it.
@@ -11783,10 +11784,10 @@ Return only valid JSON, shaped exactly as:
 
 #### `prompts/skaut.md`
 
-**661 wierszy.** Pola wejsciowe: `count`, `history_json`, `juz_mamy`, `pytania_czytelnikow`, `zaczyn_kanalow`
+**661 wierszy.** Pola wejsciowe: `count`, `history_json`, `juz_mamy`, `marka`, `pytania_czytelnikow`, `zaczyn_kanalow`
 
 ````markdown
-You are a topic scout for the English-language Substack "Nothing Is Accidental",
+You are a topic scout for the English-language Substack "{marka}",
 a publication **about artificial intelligence**: what these systems actually do,
 how they are built, who decides what they are allowed to do, and what that
 arrangement hands the people who built it.
@@ -12612,13 +12613,13 @@ Return only valid JSON, shaped exactly as:
 
 #### `prompts/warto_pisac.md`
 
-**151 wierszy.** Pola wejsciowe: `card_json`
+**151 wierszy.** Pola wejsciowe: `card_json`, `marka`
 
 ````markdown
 You read the evidence card **before** the writer sees it, and you answer one
 question: is there a gap here that a stranger would feel?
 
-This is for "Nothing Is Accidental", a publication **about artificial
+This is for "{marka}", a publication **about artificial
 intelligence**: what these systems actually do, how they are built, who decides
 what they are allowed to do, and what that arrangement hands the people who
 built it. Material that is not about that subject does not become worth writing
@@ -13110,7 +13111,8 @@ wartosc i komentarz stojacy bezposrednio nad definicja.
 | `IMAGE_QUALITY` | `"high"` | — |
 | `IMAGE_PRICE_USD` | `0.04` | — |
 | `IMAGE_TIMEOUT_S` | `300` | — |
-| `SUBSTACK_HANDLE` | `"nothingisaccidental"` | Konto na Substacku. |
+| `SUBSTACK_HANDLE` | `_env("SUBSTACK_HANDLE", "nothingisaccidental` | Konto na Substacku. ZE SRODOWISKA, ZEBY DALO SIE POSTAWIC DRUGIEGO AGENTA NA INNYM KONCIE. Druga kopia repozytorium dostaje wlasny `DATA_DIR |
+| `MARKA` | `_env("MARKA", "Nothing Is Accidental")` | NAZWA MARKI, ktora agent widzi w promptach. Wstawiana automatycznie przez `stages._prompt` jako pole `{marka}` — dziewiec plikow promptow mi |
 | `WYLACZ_WYKRYWANIE_AI` | `True` | Czy agent ma klikac "Wylacz wykrywanie AI" przy kazdej publikacji. WLACZONE decyzja wlasciciela z 2026-08-15. To wybor publiczny, nie ustawi |
 | `DRY_RUN` | `_env("DRY_RUN", "false").lower() in {"1", "t` | — |
 | `KILL_SWITCH` | `_env("KILL_SWITCH", "false").lower() in {"1"` | — |
@@ -13139,9 +13141,9 @@ wartosc i komentarz stojacy bezposrednio nad definicja.
 | `_DZIS_UTC` | `_dt_sufit.datetime.now(_dt_sufit.timezone.ut` | — |
 | `SUFIT_PODNIESIONY_NA` | `"2026-08-30"` | — |
 | `TEST_LIMIT_USD` | `3.00` | SUFIT TORU TESTOWEGO — osobny od produkcyjnego i CELOWO NIE NIESKONCZONY. Wlasciciel: „nie licz budzetu do testow, to cos osobnego". Zgoda c |
-| `MONTHLY_LIMIT_USD` | `40.00` | — |
-| `PODWYZKA_MIESIECZNA_USD` | `150.00` | PODWYZSZENIE NA WRZESIEN 2026 — I WYGASA SAMO. DLACZEGO. 5 wrzesnia 2026 pomiar pokazal, ze przy tempie tego miesiaca sufit 40 USD padnie ok |
-| `PODWYZKA_DO` | `"2026-09-30"` | — |
+| `MONTHLY_LIMIT_USD` | `_env_float("MONTHLY_LIMIT_USD", 40.00)` | SUFIT MIESIECZNY ZE SRODOWISKA — zeby druga kopia repozytorium (drugi agent, inne konto Substacka) mogla miec wlasny, bez zmiany KODU. Bez t |
+| `PODWYZKA_MIESIECZNA_USD` | `_env_float("PODWYZKA_MIESIECZNA_USD", 150.00` | PODWYZSZENIE NA WRZESIEN 2026 — I WYGASA SAMO. DLACZEGO. 5 wrzesnia 2026 pomiar pokazal, ze przy tempie tego miesiaca sufit 40 USD padnie ok |
+| `PODWYZKA_DO` | `_env("PODWYZKA_DO", "2026-09-30")` | — |
 | `PONOWIENIA` | `2` | Sufit na JEDEN przebieg. Działa ZAWSZE, także przy AGENT_V2_NO_LIMIT=1. „Bez limitu na budowę" miało znaczyć „nie blokuj eksperymentów", a n |
 | `PONOWIENIE_ODSTEP_S` | `8` | — |
 | `RUN_LIMIT_USD` | `1.60` | — |

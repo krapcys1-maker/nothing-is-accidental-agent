@@ -5,7 +5,7 @@
 
 #### `bank.md` (197 wierszy)
 
-**Pola wejściowe:** `co_zadzialalo`, `kandydaci`
+**Pola wejściowe:** `co_zadzialalo`, `kandydaci`, `marka`
 
 **Kontrakt wyjścia:**
 
@@ -25,7 +25,7 @@
 
 #### `cele.md` (87 wierszy)
 
-**Pola wejściowe:** `posts`
+**Pola wejściowe:** `marka`, `posts`
 
 **Kontrakt wyjścia:**
 
@@ -35,7 +35,7 @@
 
 #### `ciekawostki.md` (437 wierszy)
 
-**Pola wejściowe:** `dziedziny`, `dzis`, `generatory`, `ile`, `miesiac`, `premiera`, `stan_modeli`, `uzyte`, `w_reku`, `wydarzenia`, `zaczyn_kanalow`, `zamowienia`
+**Pola wejściowe:** `dziedziny`, `dzis`, `generatory`, `ile`, `marka`, `miesiac`, `premiera`, `stan_modeli`, `uzyte`, `w_reku`, `wydarzenia`, `zaczyn_kanalow`, `zamowienia`
 
 **Kontrakt wyjścia:**
 
@@ -105,7 +105,7 @@
 
 #### `komentarz.md` (311 wierszy)
 
-**Pola wejściowe:** `author`, `body`, `cel_slow`, `language`, `otwarcie`, `postawa`, `postawa_opis`, `title`
+**Pola wejściowe:** `author`, `body`, `cel_slow`, `language`, `marka`, `otwarcie`, `postawa`, `postawa_opis`, `title`
 
 **Kontrakt wyjścia:**
 
@@ -125,7 +125,7 @@
 
 #### `notka.md` (154 wierszy)
 
-**Pola wejściowe:** `evidence`, `form_brief`, `language`, `max_words`, `min_words`, `note_form`, `note_type`, `ostatnie_otwarcia_json`, `type_brief`
+**Pola wejściowe:** `evidence`, `form_brief`, `language`, `marka`, `max_words`, `min_words`, `note_form`, `note_type`, `ostatnie_otwarcia_json`, `type_brief`
 
 **Kontrakt wyjścia:**
 
@@ -135,7 +135,7 @@
 
 #### `odpowiedz.md` (205 wierszy)
 
-**Pola wejściowe:** `cel_slow`, `comment`, `commenter`, `evidence`, `language`, `otwarcie`, `under_what`
+**Pola wejściowe:** `cel_slow`, `comment`, `commenter`, `evidence`, `language`, `marka`, `otwarcie`, `under_what`
 
 **Kontrakt wyjścia:**
 
@@ -155,7 +155,7 @@
 
 #### `pisarz.md` (527 wierszy)
 
-**Pola wejściowe:** `card_json`, `ile_paraleli`, `kotwica_dlugosci`, `language`, `max_words`, `min_words`, `poprzednie_uwagi`, `ruch_koncowy`, `ruch_koncowy_nazwa`, `style_examples`, `style_negative`, `style_positive`, `target_words`
+**Pola wejściowe:** `card_json`, `ile_paraleli`, `kotwica_dlugosci`, `language`, `marka`, `max_words`, `min_words`, `poprzednie_uwagi`, `ruch_koncowy`, `ruch_koncowy_nazwa`, `style_examples`, `style_negative`, `style_positive`, `target_words`
 
 **Kontrakt wyjścia:**
 
@@ -199,7 +199,7 @@
 
 #### `skaut.md` (661 wierszy)
 
-**Pola wejściowe:** `count`, `history_json`, `juz_mamy`, `pytania_czytelnikow`, `zaczyn_kanalow`
+**Pola wejściowe:** `count`, `history_json`, `juz_mamy`, `marka`, `pytania_czytelnikow`, `zaczyn_kanalow`
 
 **Kontrakt wyjścia:**
 
@@ -219,7 +219,7 @@
 
 #### `warto_pisac.md` (151 wierszy)
 
-**Pola wejściowe:** `card_json`
+**Pola wejściowe:** `card_json`, `marka`
 
 **Kontrakt wyjścia:**
 

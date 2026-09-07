@@ -79,13 +79,13 @@ pokazuje się **niezależnie** od tego ustawienia — u Jonathana widać naraz
 
 #### `prompts/bank.md`
 
-**197 wierszy.** Pola wejsciowe: `co_zadzialalo`, `kandydaci`
+**197 wierszy.** Pola wejsciowe: `co_zadzialalo`, `kandydaci`, `marka`
 
 ````markdown
 Rank these candidate facts against each other, strongest first, and say which
 ones this publication should throw away.
 
-Nothing Is Accidental is a publication **about artificial intelligence**: what
+{marka} is a publication **about artificial intelligence**: what
 these systems actually do, how they are built, who decides what they are allowed
 to do, and what that arrangement hands the people who built it.
 
@@ -351,7 +351,7 @@ Return only valid JSON, shaped exactly as:
 
 #### `prompts/cele.md`
 
-**87 wierszy.** Pola wejsciowe: `posts`
+**87 wierszy.** Pola wejsciowe: `marka`, `posts`
 
 ````markdown
 Choose which of these posts are worth commenting on, and which are not.
@@ -360,7 +360,7 @@ Most of them will not be. That is the expected answer, not a failure.
 
 ## What this publication is
 
-Nothing Is Accidental is a publication about artificial intelligence: what
+{marka} is a publication about artificial intelligence: what
 these systems do, how they are built, and who decides what they may do. Its
 comments are worth reading because they add a
 mechanism the post did not name — not because they are enthusiastic.
@@ -447,7 +447,7 @@ visible either way:
 
 #### `prompts/ciekawostki.md`
 
-**437 wierszy.** Pola wejsciowe: `dziedziny`, `dzis`, `generatory`, `ile`, `miesiac`, `premiera`, `stan_modeli`, `uzyte`, `w_reku`, `wydarzenia`, `zaczyn_kanalow`, `zamowienia`
+**437 wierszy.** Pola wejsciowe: `dziedziny`, `dzis`, `generatory`, `ile`, `marka`, `miesiac`, `premiera`, `stan_modeli`, `uzyte`, `w_reku`, `wydarzenia`, `zaczyn_kanalow`, `zamowienia`
 
 ````markdown
 Find {ile} documented facts worth stopping a stranger mid-scroll.
@@ -457,7 +457,7 @@ against is not a fact you can use here.
 
 ## What this publication is
 
-Nothing Is Accidental is a publication **about artificial intelligence**: what
+{marka} is a publication **about artificial intelligence**: what
 these systems actually do, how they are built, who decides what they are
 allowed to do, and what that arrangement hands the people who built it.
 
@@ -1472,11 +1472,11 @@ Return only valid JSON:
 
 #### `prompts/komentarz.md`
 
-**311 wierszy.** Pola wejsciowe: `author`, `body`, `cel_slow`, `language`, `otwarcie`, `postawa`, `postawa_opis`, `title`
+**311 wierszy.** Pola wejsciowe: `author`, `body`, `cel_slow`, `language`, `marka`, `otwarcie`, `postawa`, `postawa_opis`, `title`
 
 ````markdown
 You are writing a comment under someone else's Substack post, as the anonymous
-editorial brand Nothing Is Accidental — a publication about artificial
+editorial brand {marka} — a publication about artificial
 intelligence: what these systems actually do, how they are built, and who
 decides what they are allowed to do.
 
@@ -1841,10 +1841,10 @@ Return only:
 
 #### `prompts/notka.md`
 
-**154 wierszy.** Pola wejsciowe: `evidence`, `form_brief`, `language`, `max_words`, `min_words`, `note_form`, `note_type`, `ostatnie_otwarcia_json`, `type_brief`
+**154 wierszy.** Pola wejsciowe: `evidence`, `form_brief`, `language`, `marka`, `max_words`, `min_words`, `note_form`, `note_type`, `ostatnie_otwarcia_json`, `type_brief`
 
 ````markdown
-Write one Substack Note for Nothing Is Accidental, an anonymous publication
+Write one Substack Note for {marka}, an anonymous publication
 about artificial intelligence: what these systems actually do, how they are
 built, and who decides what they are allowed to do.
 
@@ -2004,11 +2004,11 @@ Return only valid JSON:
 
 #### `prompts/odpowiedz.md`
 
-**205 wierszy.** Pola wejsciowe: `cel_slow`, `comment`, `commenter`, `evidence`, `language`, `otwarcie`, `under_what`
+**205 wierszy.** Pola wejsciowe: `cel_slow`, `comment`, `commenter`, `evidence`, `language`, `marka`, `otwarcie`, `under_what`
 
 ````markdown
 Someone has replied to you. Write the response, as the anonymous editorial brand
-Nothing Is Accidental.
+{marka}.
 
 Write in {language}, unless the comment is in another language — then reply in
 that language if you can do so naturally, otherwise stay silent.
@@ -2310,10 +2310,10 @@ see it. An empty answer costs nothing; a wrong group costs a paid fact.
 
 #### `prompts/pisarz.md`
 
-**527 wierszy.** Pola wejsciowe: `card_json`, `ile_paraleli`, `kotwica_dlugosci`, `language`, `max_words`, `min_words`, `poprzednie_uwagi`, `ruch_koncowy`, `ruch_koncowy_nazwa`, `style_examples`, `style_negative`, `style_positive`, `target_words`
+**527 wierszy.** Pola wejsciowe: `card_json`, `ile_paraleli`, `kotwica_dlugosci`, `language`, `marka`, `max_words`, `min_words`, `poprzednie_uwagi`, `ruch_koncowy`, `ruch_koncowy_nazwa`, `style_examples`, `style_negative`, `style_positive`, `target_words`
 
 ````markdown
-You write for the anonymous editorial brand Nothing Is Accidental, a
+You write for the anonymous editorial brand {marka}, a
 publication about artificial intelligence: what these systems actually do,
 how they are built, who decides what they are allowed to do, and what that
 arrangement hands the people who built it.
@@ -3107,10 +3107,10 @@ Return only valid JSON, shaped exactly as:
 
 #### `prompts/skaut.md`
 
-**661 wierszy.** Pola wejsciowe: `count`, `history_json`, `juz_mamy`, `pytania_czytelnikow`, `zaczyn_kanalow`
+**661 wierszy.** Pola wejsciowe: `count`, `history_json`, `juz_mamy`, `marka`, `pytania_czytelnikow`, `zaczyn_kanalow`
 
 ````markdown
-You are a topic scout for the English-language Substack "Nothing Is Accidental",
+You are a topic scout for the English-language Substack "{marka}",
 a publication **about artificial intelligence**: what these systems actually do,
 how they are built, who decides what they are allowed to do, and what that
 arrangement hands the people who built it.
@@ -3936,13 +3936,13 @@ Return only valid JSON, shaped exactly as:
 
 #### `prompts/warto_pisac.md`
 
-**151 wierszy.** Pola wejsciowe: `card_json`
+**151 wierszy.** Pola wejsciowe: `card_json`, `marka`
 
 ````markdown
 You read the evidence card **before** the writer sees it, and you answer one
 question: is there a gap here that a stranger would feel?
 
-This is for "Nothing Is Accidental", a publication **about artificial
+This is for "{marka}", a publication **about artificial
 intelligence**: what these systems actually do, how they are built, who decides
 what they are allowed to do, and what that arrangement hands the people who
 built it. Material that is not about that subject does not become worth writing

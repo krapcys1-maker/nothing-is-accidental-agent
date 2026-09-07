@@ -119,8 +119,13 @@ for _w in _ast.walk(_ast.parse(_zrodlo_st)):
 
 sprawdz("znalazlem wywolanie promptu skauta w kodzie", bool(_pola_kodu),
         sorted(_pola_kodu))
+# `marka` i reszta pol wstrzykiwanych przez `_prompt` NIE stoja w miejscu
+# wywolania — doklada je sam loader. Lista z `stages.POLA_WSTRZYKIWANE`,
+# zeby nowe takie pole nie wymagalo wyjatku w czterech testach.
+import stages as _st_pola   # noqa: E402
+_brak_skaut = _skaut_pola - _pola_kodu - set(_st_pola.POLA_WSTRZYKIWANE)
 sprawdz("kod podaje KAZDE pole, ktorego prompt zada",
-        not (_skaut_pola - _pola_kodu), sorted(_skaut_pola - _pola_kodu))
+        not _brak_skaut, sorted(_brak_skaut))
 sprawdz("i nie podaje pol, ktorych prompt nie ma",
         not (_pola_kodu - _skaut_pola), sorted(_pola_kodu - _skaut_pola))
 sprawdz("prompt naprawde ma pola do podstawienia", len(_skaut_pola) >= 3,

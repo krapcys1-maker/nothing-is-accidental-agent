@@ -112,8 +112,9 @@ def _na_kanal(nazwa: str):
 # komunikacie systemowym i "artificial intelligence" w prompcie — a to tlumaczy,
 # czemu kazdy przebieg skreca ku przepisom i procedurom.
 SCOUT_SYSTEM = (
-    "You are a topic scout for the English-language Substack 'Nothing Is "
-    "Accidental', a publication about artificial intelligence: what these "
+    "You are a topic scout for the English-language Substack '%s'"
+    % config.MARKA +
+    ", a publication about artificial intelligence: what these "
     "systems do, how they are built, and who decides what they are allowed to "
     "do. Return only valid JSON."
 )
@@ -121,9 +122,32 @@ SCOUT_SYSTEM = (
 SEED_HISTORY = config.PROMPTS_DIR / "historia_startowa.json"
 
 
+# POLA WSTRZYKIWANE CENTRALNIE, czyli takie, ktorych NIE podaje sie w miejscu
+# wywolania — `_prompt` dokłada je do kazdego promptu sam.
+#
+# JEDNO ZRODLO PRAWDY, i to nie jest ozdoba. Cztery testy pilnuja zasady
+# „kazde pole, ktorego zada prompt, musi ktos podac" — bo placeholder bez
+# argumentu to `KeyError` w srodku platnego przebiegu, PO oplaceniu
+# wczesniejszych etapow. Gdyby kazdy z tych testow mial wlasna liste wyjatkow,
+# pierwsze dodane pole trzeba by dopisac w czterech miejscach i pierwsze
+# zapomniane przywrocilby ten sam blad.
+POLA_WSTRZYKIWANE = ("marka",)
+
+
 def _prompt(name: str, **fields: Any) -> str:
+    """Prompt z pliku, z podstawionymi polami.
+
+    MARKA WSTAWIANA TU, RAZ DLA WSZYSTKICH. Dziewiec plikow promptow mialo
+    nazwe konta wpisana w tresci, wiec drugi agent na innym koncie pisalby
+    cudzym nazwiskiem. Pole idzie z `config.MARKA` przy KAZDYM wywolaniu, a nie
+    z miejsca wywolania — inaczej trzeba by pamietac o nim w dwudziestu
+    czterech miejscach i pierwsze zapomniane konczy sie `KeyError` w srodku
+    platnego przebiegu.
+
+    Podane `fields` maja pierwszenstwo, zeby dalo sie je nadpisac w tescie.
+    """
     text = (config.PROMPTS_DIR / name).read_text(encoding="utf-8")
-    return text.format(**fields)
+    return text.format(**{"marka": config.MARKA, **fields})
 
 
 def _juz_w_domu(ile_banku: int = 25, ile_notek: int = 25) -> list[str]:
@@ -438,7 +462,7 @@ def save(
 
 
 WRITER_SYSTEM = (
-    "You write for the anonymous editorial brand Nothing Is Accidental. You "
+    "You write for the anonymous editorial brand %s. You " % config.MARKA +
     "assert only what the supplied evidence card establishes. Return exactly one "
     "JSON object, with no Markdown fence and no prose around it."
 )

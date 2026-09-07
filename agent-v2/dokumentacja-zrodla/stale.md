@@ -20,7 +20,8 @@
 | `IMAGE_QUALITY` | `"high"` | — |
 | `IMAGE_PRICE_USD` | `0.04` | — |
 | `IMAGE_TIMEOUT_S` | `300` | — |
-| `SUBSTACK_HANDLE` | `"nothingisaccidental"` | Konto na Substacku. |
+| `SUBSTACK_HANDLE` | `_env("SUBSTACK_HANDLE", "nothingisaccidental` | Konto na Substacku. ZE SRODOWISKA, ZEBY DALO SIE POSTAWIC DRUGIEGO AGENTA NA INNYM KONCIE. Druga kopia repozytorium dostaje wlasny `DATA_DIR |
+| `MARKA` | `_env("MARKA", "Nothing Is Accidental")` | NAZWA MARKI, ktora agent widzi w promptach. Wstawiana automatycznie przez `stages._prompt` jako pole `{marka}` — dziewiec plikow promptow mi |
 | `WYLACZ_WYKRYWANIE_AI` | `True` | Czy agent ma klikac "Wylacz wykrywanie AI" przy kazdej publikacji. WLACZONE decyzja wlasciciela z 2026-08-15. To wybor publiczny, nie ustawi |
 | `DRY_RUN` | `_env("DRY_RUN", "false").lower() in {"1", "t` | — |
 | `KILL_SWITCH` | `_env("KILL_SWITCH", "false").lower() in {"1"` | — |
@@ -49,9 +50,9 @@
 | `_DZIS_UTC` | `_dt_sufit.datetime.now(_dt_sufit.timezone.ut` | — |
 | `SUFIT_PODNIESIONY_NA` | `"2026-08-30"` | — |
 | `TEST_LIMIT_USD` | `3.00` | SUFIT TORU TESTOWEGO — osobny od produkcyjnego i CELOWO NIE NIESKONCZONY. Wlasciciel: „nie licz budzetu do testow, to cos osobnego". Zgoda c |
-| `MONTHLY_LIMIT_USD` | `40.00` | — |
-| `PODWYZKA_MIESIECZNA_USD` | `150.00` | PODWYZSZENIE NA WRZESIEN 2026 — I WYGASA SAMO. DLACZEGO. 5 wrzesnia 2026 pomiar pokazal, ze przy tempie tego miesiaca sufit 40 USD padnie ok |
-| `PODWYZKA_DO` | `"2026-09-30"` | — |
+| `MONTHLY_LIMIT_USD` | `_env_float("MONTHLY_LIMIT_USD", 40.00)` | SUFIT MIESIECZNY ZE SRODOWISKA — zeby druga kopia repozytorium (drugi agent, inne konto Substacka) mogla miec wlasny, bez zmiany KODU. Bez t |
+| `PODWYZKA_MIESIECZNA_USD` | `_env_float("PODWYZKA_MIESIECZNA_USD", 150.00` | PODWYZSZENIE NA WRZESIEN 2026 — I WYGASA SAMO. DLACZEGO. 5 wrzesnia 2026 pomiar pokazal, ze przy tempie tego miesiaca sufit 40 USD padnie ok |
+| `PODWYZKA_DO` | `_env("PODWYZKA_DO", "2026-09-30")` | — |
 | `PONOWIENIA` | `2` | Sufit na JEDEN przebieg. Działa ZAWSZE, także przy AGENT_V2_NO_LIMIT=1. „Bez limitu na budowę" miało znaczyć „nie blokuj eksperymentów", a n |
 | `PONOWIENIE_ODSTEP_S` | `8` | — |
 | `RUN_LIMIT_USD` | `1.60` | — |

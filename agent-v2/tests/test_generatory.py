@@ -242,7 +242,12 @@ for _w in _ast.walk(_drzewo):
 
 sprawdz("znalazlem wywolanie promptu ciekawostek w kodzie", bool(_pola_kodu),
         sorted(_pola_kodu))
-_brakuje = sorted(_pola_promptu - _pola_kodu)
+# `marka` i reszta pol wstrzykiwanych przez `_prompt` NIE stoja w miejscu
+# wywolania — doklada je sam loader. Lista z `stages.POLA_WSTRZYKIWANE`,
+# zeby nowe takie pole nie wymagalo wyjatku w czterech testach.
+import stages as _st_pola   # noqa: E402
+_brakuje = sorted(_pola_promptu - _pola_kodu
+                  - set(_st_pola.POLA_WSTRZYKIWANE))
 sprawdz("kod podaje KAZDE pole, ktorego prompt zada", not _brakuje,
         "brakuje: %s" % _brakuje)
 _zbedne = sorted(_pola_kodu - _pola_promptu)

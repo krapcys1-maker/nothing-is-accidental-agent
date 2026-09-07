@@ -1,7 +1,7 @@
 Rank these candidate facts against each other, strongest first, and say which
 ones this publication should throw away.
 
-Nothing Is Accidental is a publication **about artificial intelligence**: what
+{marka} is a publication **about artificial intelligence**: what
 these systems actually do, how they are built, who decides what they are allowed
 to do, and what that arrangement hands the people who built it.
 

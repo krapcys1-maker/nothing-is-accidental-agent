@@ -760,8 +760,10 @@ def rozpoznanie() -> None:
     checks = [
         ("feed — skąd brać posty", "https://substack.com/home", 6000),
         ("notki — feed", "https://substack.com/notes", 6000),
-        ("panel publikacji", "https://nothingisaccidental.substack.com/publish/home", 9000),
-        ("edytor artykułu", "https://nothingisaccidental.substack.com/publish/post", 12000),
+        ("panel publikacji",
+         f"https://{config.SUBSTACK_HANDLE}.substack.com/publish/home", 9000),
+        ("edytor artykułu",
+         f"https://{config.SUBSTACK_HANDLE}.substack.com/publish/post", 12000),
         ("skrzynka", "https://substack.com/inbox", 6000),
     ]
     with sync_playwright() as p:
@@ -798,7 +800,14 @@ def rozpoznanie() -> None:
         browser.close()
 
 
-PROFIL_HANDLE = "nothingisaccidental"
+# JEDNO ZRODLO UCHWYTU KONTA — patrz `config.SUBSTACK_HANDLE`.
+#
+# Stala wartosc byla tu zapisana DRUGI RAZ, obok tej w `config`. Ta
+# sluzyla adresom PROFILU (`/@uchwyt/followers`, `public_profile`), tamta
+# adresom PUBLIKACJI (`uchwyt.substack.com`). Zmiana jednej bez drugiej
+# znaczy, ze agent sprawdza jeden profil, a publikuje na drugim — bez
+# jednego komunikatu bledu, bo obie sciezki dzialaja poprawnie osobno.
+PROFIL_HANDLE = config.SUBSTACK_HANDLE
 
 # Substack tłumaczy cudze treści na język interfejsu i podmienia je w HTML-u.
 # Nasza notka po angielsku wyświetlała się po polsku, a odpowiedź Anglika też.

@@ -484,6 +484,16 @@ print("      katalog: %s" % KATALOG)
 sprawdz("znalazlem prompty z markerem %r" % MARKER, bool(Z_BARIERA),
         "zaden z %d plikow" % len(PLIKI))
 
+# POLA, KTORE `_prompt` DOKLADA SAM — czytane ze zrodla `stages.py`, zeby
+# istniala jedna lista, a nie kopia w kazdym tescie.
+POLA_WSTRZYKIWANE = set(re.findall(
+    r'"([a-z_]+)"',
+    (re.search(r"POLA_WSTRZYKIWANE\s*=\s*\(([^)]*)\)",
+               (pathlib.Path("agent-v2/stages.py")
+                .read_text(encoding="utf-8"))) or
+     type("x", (), {"group": lambda self, n: ""})()).group(1)))
+assert POLA_WSTRZYKIWANE, "nie znalazlem POLA_WSTRZYKIWANE w stages.py"
+
 OBCE_DLA = {}
 for p, linie in Z_BARIERA:
     kod = MAPA.get(p.name)
@@ -498,7 +508,13 @@ for p, linie in Z_BARIERA:
     sprawdz("%s: kazde pole w kodzie da sie rozstrzygnac" % p.name, not nieznane,
             "nierozstrzygniete: %s" % nieznane)
 
-    w_pliku = {n for n, _ in ocen(linie, set())["pola"]}
+    # `marka` i reszta pol wstrzykiwanych przez `_prompt` NIE stoja w miejscu
+    # wywolania — doklada je sam loader, wiec nie sa brakiem.
+    #
+    # CZYTANE ZE ZRODLA, NIE PRZEZ IMPORT: ten plik bada kod jako TEKST i
+    # celowo nie wciaga modulow agenta. Import `stages` sciagnalby tu cala
+    # konfiguracje razem ze sciezkami produkcji.
+    w_pliku = {n for n, _ in ocen(linie, set())["pola"]} - POLA_WSTRZYKIWANE
     w_kodzie = set(kod) - {"**"}
     # OBUSTRONNA ZGODNOSC — to jest zamiast listy nazw na sztywno. Nowe pole
     # nie moze sie przemknac ani przez plik, ani przez kod.
