@@ -71,8 +71,12 @@ for od, ile in ((0, 2), (2, 2), (4, 2), (6, 2), (8, 2)):
         pary.append((a, b))
     print("    przebieg od=%s: %s" % (od, list(zip(t, f))))
 
-sprawdz("w ciagu dnia jest kilka roznych form",
-        len({f for _, f in pary}) >= 4, {f for _, f in pary})
+# CZTERECH FORM NIE DA SIE MIEC PRZY TRZECH NOTKACH. Do 7 wrzesnia zadalismy
+# czterech, bo notek bylo dziesiec. Wlasciwe pytanie brzmi: czy KAZDA notka
+# dnia ma INNA forme — bo to ono chroni przed jednakowym ksztaltem, a nie
+# konkretna liczba.
+sprawdz("kazda notka dnia ma INNA forme",
+        len({f for _, f in pary}) == len(pary), {f for _, f in pary})
 sprawdz("dzien ma tyle form co typow", len(pary) == len(TYPY), len(pary))
 
 # KAZDA FORMA MUSI BYC OSIAGALNA. To jest sprawdzenie, ktorego brakowalo.
@@ -111,9 +115,11 @@ sprawdz("w ciagu miesiaca wypada KOMPLET par typ-forma (%d)" % mozliwe,
 # TE SAMA FORME. Tak wlasnie wygladalo to przed poprawka — audyt zmierzyl trzy
 # z czterech typow z jedna przypisana forma. Dlatego kontrdowod pyta teraz
 # o liczbe PAR, a nie o zasieg form.
-stare_pary = {(TYPY[od + i], config.NOTE_FORM_MIX[(od + i) % len(config.NOTE_FORM_MIX)])
-              for od, ile in ((0, 2), (2, 2), (4, 2), (6, 2), (8, 2))
-              for i in range(ile)}
+# WYCINKI WYPROWADZONE Z DLUGOSCI MIKSU, nie wpisane. Stalo tu
+# `((0,2),(2,2),(4,2),(6,2),(8,2))`, czyli dziesiec pozycji na sztywno — po
+# zejsciu do trzech notek test wywalal sie na `IndexError`, a nie na tresci.
+stare_pary = {(TYPY[i], config.NOTE_FORM_MIX[i % len(config.NOTE_FORM_MIX)])
+              for i in range(len(TYPY))}
 sprawdz("KONTRDOWOD: bez dryfu typ dostaje na stale te sama forme"
         " (%d par zamiast %d)" % (len(stare_pary), mozliwe),
         len(stare_pary) < mozliwe / 2, len(stare_pary))

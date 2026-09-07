@@ -607,11 +607,30 @@ try:
     # Przy progu 5 skrocenie tej krotki o JEDEN element wyciszalo wykrzykniki
     # przy notkach — czyli przy pozycji, od ktorej caly licznik sie zaczal.
     ile_notek = len(config.NOTE_MIX_OTHER_DAY)
-    sprawdz("plan notek (%d) jest z zapasem nad progiem dziennym (%d)"
+    # ZAPAS ZNIKNAL 7 WRZESNIA 2026 i to jest swiadome. Plan notek zszedl
+    # z dziesieciu do TRZECH, czyli DOKLADNIE na prog — wiec nie da sie juz
+    # zadac, zeby przetrwal skrocenie o jeden. Zamiast slabszej wersji tamtej
+    # asercji stoi tu PODLOGA: zejscie ponizej progu ma ten test wywalic.
+    sprawdz("plan notek (%d) nie jest ponizej progu dziennego (%d)"
             % (ile_notek, norma.MIN_PLAN_DZIENNY_DO_ZNAKU),
-            ile_notek - 1 >= norma.MIN_PLAN_DZIENNY_DO_ZNAKU, ile_notek)
-    sprawdz("wiec skrocenie NOTE_MIX_OTHER_DAY o jeden NIE wycisza notek",
-            norma._znak(0, ile_notek - 1) == "!!", ile_notek - 1)
+            ile_notek >= norma.MIN_PLAN_DZIENNY_DO_ZNAKU, ile_notek)
+    # I DLACZEGO TA PODLOGA NIE JEST OZDOBA — pokazane, nie opisane.
+    # Do 7 wrzesnia stalo tu zadanie, zeby plan przetrwal skrocenie o jeden.
+    # Przy planie 3 to zadanie jest niespelnialne, wiec zastapil je kontrdowod:
+    # jeden element mniej I WYKRZYKNIK GASNIE. To jest cala tresc ostrzezenia
+    # przy `MIN_PLAN_DZIENNY_DO_ZNAKU`.
+    sprawdz("KONTRDOWOD: jeden element mniej i wykrzyknik przy notkach GASNIE",
+            norma._znak(0, ile_notek - 1) == "", ile_notek - 1)
+    # A PRZY DZISIEJSZYM PLANIE KRZYCZY — takze w polowie doby, kiedy plan jest
+    # PRZYCIETY do naleznych przebiegow. To druga polowa poprawki z 7 wrzesnia:
+    # `prog_z` sadzi prog po planie CALODOBOWYM, a procent po przycietym.
+    sprawdz("przy dzisiejszym planie krzyczy", norma._znak(0, ile_notek) == "!!")
+    sprawdz("i krzyczy TAKZE przy planie przycietym w polowie doby",
+            norma._znak(0, max(1, ile_notek - 1), ile_notek) == "!!",
+            norma._znak(0, max(1, ile_notek - 1), ile_notek))
+    # KONTRDOWOD DO TAMTEJ POPRAWKI: bez `prog_z` przyciety plan milczy.
+    sprawdz("KONTRDOWOD: bez pelnego planu przyciecie by go uciszylo",
+            norma._znak(0, ile_notek - 1) == "")
     # KONTRDOWOD ODTWARZANY, NIE OPISANY: podstawiamy STARY prog (5) i pytamy
     # te sama funkcje o plan, jaki zostawal po skroceniu OWCZESNEJ, PIECIO-
     # ELEMENTOWEJ krotki — czyli o cztery. Piatka i czworka sa wpisane na

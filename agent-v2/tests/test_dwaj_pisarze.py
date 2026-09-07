@@ -208,9 +208,18 @@ sprawdz("KONTRDOWOD (miks pieciu): bez przesuniecia jeden pisarz NIGDY nie"
 sprawdz("a z przesunieciem tamten miks tez sie domyka",
         all(z_nim_5[("note", t)] and z_nim_5[("note_tani", t)] for t in typy_5),
         {t: (z_nim_5[("note", t)], z_nim_5[("note_tani", t)]) for t in typy_5})
-sprawdz("dzisiejszy miks ma parzysta dlugosc, wiec sam nie przypina pisarza"
-        " do rodzaju",
-        len(MIKS) % 2 == 0, len(MIKS))
+# MIKS MA DZIS NIEPARZYSTA DLUGOSC (trzy typy, po jednym), wiec kazdy typ stoi
+# na STALEJ pozycji w dobie — a parzystosc pozycji przesadza o pisarzu. Bez
+# przesuniecia dobowego DeepSeek pisalby na zawsze ten sam rodzaj notki, a
+# porownanie po dwoch tygodniach mierzyloby RODZAJ, nie pisarza.
+#
+# Do 7 wrzesnia stalo tu zadanie parzystej dlugosci. Przy trzech notkach jest
+# niespelnialne, a zarazem NIEPOTRZEBNE: cala robote wykonuje `_doba` i to ona
+# ma byc sprawdzana. Nizej stoi asercja „z przesunieciem KAZDY pisarz dostaje
+# KAZDY rodzaj" — i to ona jest tu prawdziwym pytaniem.
+sprawdz("KONTRDOWOD: BEZ przesuniecia dobowego pisarz przypina sie do rodzaju",
+        any(not (bez[("note", t)] and bez[("note_tani", t)]) for t in typy),
+        {t: (bez[("note", t)], bez[("note_tani", t)]) for t in typy})
 sprawdz("z przesunieciem KAZDY pisarz dostaje KAZDY rodzaj",
         all(z_nim[("note", t)] and z_nim[("note_tani", t)] for t in typy),
         {t: (z_nim[("note", t)], z_nim[("note_tani", t)]) for t in typy})

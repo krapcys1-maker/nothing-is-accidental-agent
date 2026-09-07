@@ -119,10 +119,42 @@ sprawdz("KONTRDOWOD: stary uklad (30,44)+(6,12) mial to dokladnie odwrotnie",
 # Teraz ten sam argument dziala w gore i ma juz pomiar pod soba: panel Substacka
 # przypisuje notkom piec zapisow na szesc. Polowe pisze tanszy model, wiec dwa
 # razy wiecej notek kosztuje mniej niz dotychczasowe piec na samym Opusie.
-sprawdz("notki podniesione do dziesieciu — to silnik wzrostu",
-        len(config.NOTE_MIX_OTHER_DAY) == 10, len(config.NOTE_MIX_OTHER_DAY))
-sprawdz("i material nadaza: dwa dobierania na dobe zamiast jednego",
-        config.SZUKANIE_BANKU_NA_DOBE == 2, config.SZUKANIE_BANKU_NA_DOBE)
+# TRZY OD 7 WRZESNIA 2026 (bylo dziesiec od 3 wrzesnia, wczesniej piec).
+# Decyzja wlasciciela: „lepiej zrobic 3 ale mocne i dobre niz 10 rozmytych".
+# Ta asercja pilnuje TRZECH rzeczy naraz, bo kazda z nich cicho psuje cos
+# innego, gdy ktos ruszy te krotke bez czytania:
+sprawdz("notki zeszly do trzech — mocne zamiast rozmytych",
+        len(config.NOTE_MIX_OTHER_DAY) == 3, len(config.NOTE_MIX_OTHER_DAY))
+# 1. Ponizej progu licznika wykrzykniki przy notkach GASNA (`norma._znak`).
+import norma as _n   # noqa: E402
+sprawdz("i nie zeszly ponizej progu licznika (%d)" % _n.MIN_PLAN_DZIENNY_DO_ZNAKU,
+        len(config.NOTE_MIX_OTHER_DAY) >= _n.MIN_PLAN_DZIENNY_DO_ZNAKU,
+        (len(config.NOTE_MIX_OTHER_DAY), _n.MIN_PLAN_DZIENNY_DO_ZNAKU))
+# 2. MYSL wypadla, bo jako jedyna nie stoi na fakcie i miala ZERO odwiedzin
+#    profilu na piec notek. Zostawienie jej przy trzech notkach awansowaloby
+#    ja z 20% doby na 33%.
+sprawdz("MYSL nie wrocila do miksu", "MYSL" not in config.NOTE_MIX_OTHER_DAY,
+        config.NOTE_MIX_OTHER_DAY)
+# 3. Kazdy typ raz — inaczej przy trzech notkach jeden zajmuje dwie trzecie dnia.
+sprawdz("kazdy typ dokladnie raz",
+        len(set(config.NOTE_MIX_OTHER_DAY)) == len(config.NOTE_MIX_OTHER_DAY),
+        config.NOTE_MIX_OTHER_DAY)
+# MATERIAL ZESZEDL RAZEM Z NOTKAMI. Dwa dobierania weszly 3 wrzesnia wylacznie
+# pod dziesiec notek; przy trzech produkowalyby PIEC RAZY wiecej, niz konto
+# wydaje, a `BANK_MAKS_DNI` = 7 sprawia, ze nadwyzka nie czeka, tylko umiera.
+sprawdz("material zszedl razem z notkami: jedno dobieranie na dobe",
+        config.SZUKANIE_BANKU_NA_DOBE == 1, config.SZUKANIE_BANKU_NA_DOBE)
+# I TO JEST WLASCIWE PYTANIE, a nie sama liczba: czy zapas w banku wystarcza
+# na tyle dni, ile fakt zyje. Sufit 20 przy 3 notkach to 6,7 doby, termin to 7.
+_dni_zapasu = config.BANK_MAKS_WOLNYCH / float(len(config.NOTE_MIX_OTHER_DAY))
+sprawdz("sufit banku (%d) starcza na %.1f doby, a fakt zyje %d — pasuje"
+        % (config.BANK_MAKS_WOLNYCH, _dni_zapasu, config.BANK_MAKS_DNI),
+        _dni_zapasu <= config.BANK_MAKS_DNI, "%.1f > %d" % (_dni_zapasu, config.BANK_MAKS_DNI))
+# KONTRDOWOD: przy dziesieciu notkach ten sam sufit starczal na dwa dni —
+# czyli to TEMPO bylo zle dobrane, a nie sufit.
+sprawdz("KONTRDOWOD: przy 10 notkach sufit starczalby na %.1f doby"
+        % (config.BANK_MAKS_WOLNYCH / 10.0),
+        config.BANK_MAKS_WOLNYCH / 10.0 < 3)
 
 print()
 print("=== 3. KAZDE WIDELKI MAJA SENS JAKO WIDELKI ===")

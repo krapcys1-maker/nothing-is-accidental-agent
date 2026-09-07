@@ -170,7 +170,7 @@ sprawdz("i jest OSTRZEJSZY niz usuniety (raz na kilka dni, nie 2 dziennie)",
 # pilnuje ZASADY, nie liczby: liczba notek na dobe ma wynikac z dlugosci miksu
 # i z niczego innego — stala obok byla by druga prawda, ktora sie rozjedzie.
 sprawdz("liczbe notek nadal wyznacza NOTE_MIX_OTHER_DAY",
-        len(config.NOTE_MIX_OTHER_DAY) == 10, len(config.NOTE_MIX_OTHER_DAY))
+        len(config.NOTE_MIX_OTHER_DAY) == 3, len(config.NOTE_MIX_OTHER_DAY))
 sprawdz("tempo nadal wyznaczaja ODSTEPY", bool(config.ODSTEPY))
 sprawdz("zrodlem prawdy o bramkach jest gates.deterministic_floors",
         "def deterministic_floors" in

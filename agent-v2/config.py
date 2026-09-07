@@ -2053,7 +2053,29 @@ BANK_MIN_WOLNYCH = 15
 # w dniu, w ktorym bank naprawde jest pusty.
 SZUKANIE_BANKU_MAKS_PROB = 5
 
-SZUKANIE_BANKU_NA_DOBE = 2
+# JEDNO SZUKANIE NA DOBE — z powrotem, 7 wrzesnia 2026, razem z zejsciem
+# z dziesieciu notek na trzy. Dwa weszly 3 wrzesnia WYLACZNIE dlatego, ze
+# dziesiec notek zjadalo bank szybciej, niz jedno dobieranie go napelnialo.
+#
+# ARYTMETYKA, ktora za tym stoi — zmierzona na produkcji 7 wrzesnia:
+#
+#     bank produkuje                 ~17 faktow na dobe
+#     przy 3 notkach schodzi           3 na dobe
+#     lezy niewydanych               131 (z tego 54 naprawde nowych)
+#     JUZ PRZETERMINOWANYCH           23 ze 131, czyli 18%
+#     koszt szukania materialu      0,42 USD/dobe = 12,70 USD/miesiac
+#         (curiosity 0,28 + bank 0,10 + parowanie 0,05)
+#
+# Przy trzech notkach dwa dobierania na dobe produkowalyby PIEC RAZY wiecej
+# materialu, niz konto jest w stanie wydac — a `BANK_MAKS_DNI` wynosi 7, wiec
+# nadwyzka nie czeka, tylko UMIERA. Placilibysmy za fakty, ktore z gory nie
+# maja szansy wyjsc.
+#
+# DLACZEGO SUFIT BANKU ZOSTAJE BEZ ZMIAN. `BANK_MAKS_WOLNYCH` = 20 przy trzech
+# notkach starcza na 6,7 doby, a termin waznosci mija po 7 — te dwie liczby
+# schodza sie prawie dokladnie. Przy dziesieciu notkach sufit starczal na dwa
+# dni i to on wymuszal drugie dobieranie. Wiec nie sufit byl zly, tylko tempo.
+SZUKANIE_BANKU_NA_DOBE = 1
 
 # JAK DLUGO TO SAMO WYDARZENIE NIE OTWIERA FURTKI DRUGI RAZ.
 #
@@ -2082,7 +2104,14 @@ BANK_MAKS_DNI = 7
 # notkami bez ani jednego faktu. Jedna na dzien, nie wiecej — wlasciciel
 # powiedzial wprost "nie maja byc wszystkie takie", i ma racje: feed samych
 # rozmyslan bez pokrycia to inne konto, nie nasze.
-NOTE_MIX_ARTICLE_DAY = ("ARTYKUL", "ARTYKUL", "CIEKAWOSTKA", "SPROSTOWANIE", "MYSL")
+# MIKS DNIA ARTYKULU — SKROCONY RAZEM Z TAMTYM, mimo ze jest MARTWY.
+#
+# `run.py` nie podaje `dzien_artykulu` ani razu, wiec `notki_dnia` zawsze
+# bierze `NOTE_MIX_OTHER_DAY`; promocja dziala inaczej, nadpisujac `typy[0]`
+# na „ARTYKUL". Zostawienie tu pieciu pozycji byloby wiec minA: pierwsze
+# wlaczenie tej galezi wskrzesiloby stary wolumen i nikt by nie skojarzyl
+# dlaczego. Dlugosc trzyma sie tamtej, a MYSL wypada z tego samego powodu.
+NOTE_MIX_ARTICLE_DAY = ("ARTYKUL", "CIEKAWOSTKA", "SPROSTOWANIE")
 
 # KSZTALTY NOTKI TYPU MYSL. Losowane w kodzie i podawane jako PRZYDZIAL.
 #
@@ -2128,27 +2157,54 @@ def losowy_ksztalt_mysli() -> str:
     """Ktory ksztalt dostaje ta MYSL. Losowany, bo wybor zbiega do stalej."""
     import random
     return random.choice(list(KSZTALTY_MYSLI))
-# DZIESIEC NOTEK NA DOBE ZAMIAST PIECIU — decyzja wlasciciela, 3 wrzesnia 2026.
+# TRZY NOTKI NA DOBE ZAMIAST DZIESIECIU — decyzja wlasciciela, 7 wrzesnia 2026.
 # Liczba notek na dobe to DLUGOSC TEJ KROTKI i tylko ona.
 #
-# Powod: panel Substacka przypisuje notkom piec zapisow na szesc, a komentarzom
-# zero — wiec pieniadze ida tam, gdzie cos przychodzi. Polowa notek idzie
-# tanszym pisarzem (`note_tani`), wiec dwa razy wiecej notek kosztuje MNIEJ niz
-# dzisiejsze piec na samym Opusie.
+# POWOD WLASCICIELA, doslownie: „lepiej zrobic 3 ale mocne i dobre niz 10
+# rozmytych". Dziesiec weszlo 3 wrzesnia i nie przynioslo tego, po co weszlo.
 #
-# Proporcje zostaja te same, co przy pieciu — krotka jest podwojona, nie
-# przemyslana od nowa. Powod: miks byl dobrany pomiarem („konwertuja notki
-# konkretne i taktyczne, nie motywacyjne"), a podwojenie zachowuje ten rozklad
-# i nie udaje, ze mamy nowa wiedze.
+# UCZCIWIE O DANYCH: pomiar z 6 wrzesnia NIE ROZSTRZYGNAL tego pytania.
+# Notka zbiera zasieg przez TRZY DNI (1 dzien 7,1 wyswietlenia, 3 dni 28,5,
+# 6 dni 54,0), wiec po odsianiu mlodych zostawalo PIEC notek z okresu po
+# podwojeniu — probka, na ktorej nie wolno niczego orzekac. To jest decyzja
+# wlasciciela oparta na tym, co widzi na koncie, a nie wniosek z tabeli;
+# zapisuje to tak, zeby nikt za miesiac nie szukal pomiaru, ktorego nie ma.
 #
-# CO TO WYMUSZA PO STRONIE MATERIALU, policzone przed zmiana: bank ma dzis 24
-# rozne tematy. Przy dziesieciu notkach schodzi o dziesiec dziennie, a jedno
-# dobieranie oddaje osiem faktow, z ktorych po odsiewie swiezosci zostaje okolo
-# pieciu. Jedno szukanie na dobe znaczyloby wiec ubytek piec dziennie i pusty
-# bank po pieciu dobach. Dlatego razem z ta zmiana idzie
-# `SZUKANIE_BANKU_NA_DOBE = 2`.
-NOTE_MIX_OTHER_DAY = ("CIEKAWOSTKA", "CIEKAWOSTKA", "DYSKUSJA", "SPROSTOWANIE", "MYSL",
-                      "CIEKAWOSTKA", "CIEKAWOSTKA", "DYSKUSJA", "SPROSTOWANIE", "MYSL")
+# DLACZEGO WYPADLA MYSL, a nie ktorys z pozostalych. Zmierzone na notkach
+# co najmniej dwudniowych (`typ` zapisujemy dopiero od niedawna, wiec probki
+# sa male i to jest trop, nie dowod):
+#
+#     typ            n   wysw   polub   odpowiedzi   ODWIEDZINY   ze skutkiem
+#     CIEKAWOSTKA    7   26,4    2,43       0,57         0,43          43%
+#     DYSKUSJA       4   23,0    4,50       0,50         0,25          50%
+#     SPROSTOWANIE   5   28,6    4,00       0,40         0,20          40%
+#     MYSL           5   28,8    3,20       0,60        *0,00*         20%
+#
+# MYSL ma ZERO odwiedzin profilu na piec notek i najnizszy udzial pozycji
+# z jakimkolwiek skutkiem. Odwiedziny profilu to jedyny sygnal kroku PRZED
+# subskrypcja, jaki panel oddaje. MYSL jest tez JEDYNYM typem bez karty
+# dowodowej — nie stoi na fakcie — wiec przy poleceniu „mocne i dobre"
+# wypada pierwszy. Przy trzech notkach zostawienie jej znaczyloby awans
+# z 20% dnia na 33%, czyli dokladnie odwrotnie, niz mowi pomiar.
+#
+# Zostaja trzy typy stojace na fakcie, po jednym na dobe. Rotacja form
+# (`NOTE_FORM_MIX`) przesuwa sie z dnia na dzien, wiec ten sam typ nie ma
+# tego samego ksztaltu dwa dni z rzedu.
+#
+# CO SIE PRZEZ TO ZMIENIA POZA LICZBA — trzy rzeczy, wszystkie sprawdzone:
+#
+#  1. PROMOCJA ARTYKULU URASTA DO JEDNEJ TRZECIEJ DNIA. `notki_dnia`
+#     nadpisuje `typy[0]` na „ARTYKUL", gdy jest co promowac, przez
+#     `NOTEK_PROMUJACYCH` dni z rzedu. Przy dziesieciu notkach to bylo 10%
+#     doby, przy trzech jest 33%.
+#  2. CZESC SERII TEMATYCZNEJ TEZ ZAJMUJE JEDNA TRZECIA (patrz `seria.py`).
+#     W dniu promocji artykulu zostaje wiec jedna notka „zwykla".
+#  3. ALARM O BRAKUJACYCH NOTKACH STOI DOKLADNIE NA GRANICY.
+#     `norma.MIN_PLAN_DZIENNY_DO_ZNAKU` wynosi 3, a warunek jest `>=`, wiec
+#     przy planie 3 wykrzykniki jeszcze dzialaja. SKROCENIE TEJ KROTKI DO
+#     DWOCH WYCISZYLOBY JE PO CICHU — jest to napisane wprost w `norma.py`
+#     i pilnowane przez `tests/test_dzien_awarii.py`.
+NOTE_MIX_OTHER_DAY = ("CIEKAWOSTKA", "DYSKUSJA", "SPROSTOWANIE")
 
 # --- zachowanie spoleczne: widelki, nie stale liczby -------------------------
 # Stala liczba dziennie wyglada jak robot, bo czlowiek nie ma normy. Losujemy

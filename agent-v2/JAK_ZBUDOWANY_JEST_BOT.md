@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **26 plików**, 33 943 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **26 plików**, 34 025 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -114,7 +114,7 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
 się testować bez przeglądarki i bez pieniędzy**. 167 zestawów
-testów, 4305 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+testów, 4314 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -580,7 +580,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-3402 wierszy, 33 funkcji na poziomie modułu, 0 klas
+3458 wierszy, 33 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -765,7 +765,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `norma.py` — licznik produkcji: ile agent wystawil wobec normy dziennej
 
-1106 wierszy, 13 funkcji na poziomie modułu, 0 klas
+1132 wierszy, 13 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -774,9 +774,9 @@ wiec nie da sie go rozjechac z kodem.
 | `_poprawna_data(dzien)` *(wewn.)* | Czy da sie z tego zrobic date. Zepsuty wpis ma znikac, nie zabijac raport. |
 | `wczytaj(dni)` | (zrobione, nieudane) — liczniki per dzien i rodzaj. |
 | `slad_dziennika(zalozone)` | (najstarszy znany dzien, zbior dni z JAKIMKOLWIEK wpisem w dzienniku). |
-| `_znak(ile, norma)` *(wewn.)* | Jak daleko od planu NA TEN DZIEN. Sam PROCENT jest ten sam, co w `alarm.py`. |
+| `_znak(ile, norma, prog_z)` *(wewn.)* | Jak daleko od planu NA TEN DZIEN. Sam PROCENT jest ten sam, co w `alarm.py`. |
 | `dni_okna(dni, z_wpisami, zalozone, najstarszy)` | Wszystkie dni okna — TAKZE te, w ktorych nie wyszlo NIC. |
-| `_komorka(ile, cel, wyciszony, ma_wpisy, w_toku, szacowany)` *(wewn.)* | Jedna kratka tabeli. `cel is None` znaczy „planu nie znamy". |
+| `_komorka(ile, cel, wyciszony, ma_wpisy, w_toku, szacowany, cel_calodobowy)` *(wewn.)* | Jedna kratka tabeli. `cel is None` znaczy „planu nie znamy". |
 | `przebiegow_dzis()` | Ile przebiegow agenta domknelo sie dzis. Zero, gdy bazy nie ma. |
 | `godziny_przebiegow()` | Minuty od polnocy UTC, o ktorych systemd odpala agenta. |
 | `przebiegow_naleznych(teraz)` | (ile przebiegow POWINNO juz oddac swoja czesc, ile ich jest na dobe). |
@@ -13223,13 +13223,13 @@ wartosc i komentarz stojacy bezposrednio nad definicja.
 | `BANK_MAKS_WOLNYCH` | `20` | --- BANK POMYSLOW: BUFOR, NIE MAGAZYN -------------------------------------- Wlasciciel, 30 sierpnia: „nie moze byc tak, ze mamy za duzo tem |
 | `BANK_MIN_WOLNYCH` | `15` | ILE RAZY NA DOBE WOLNO DOBIERAC MATERIAL DO BANKU. Bylo: przy kazdym z pieciu przebiegow. Zmierzone 1 wrzesnia 2026 na produkcji: srednio 26 |
 | `SZUKANIE_BANKU_MAKS_PROB` | `5` | SUFIT PROB NA DOBE, gdy bank jest pod podloga. Bez niego zepsute szukanie (takie jak 3 wrzesnia: 23 zapytania, 513 tys. tokenow, ZERO faktow |
-| `SZUKANIE_BANKU_NA_DOBE` | `2` | — |
+| `SZUKANIE_BANKU_NA_DOBE` | `1` | JEDNO SZUKANIE NA DOBE — z powrotem, 7 wrzesnia 2026, razem z zejsciem z dziesieciu notek na trzy. Dwa weszly 3 wrzesnia WYLACZNIE dlatego,  |
 | `WYDARZENIE_WAZNE_DNI` | `2` | JAK DLUGO TO SAMO WYDARZENIE NIE OTWIERA FURTKI DRUGI RAZ. Wlasciciel: „chce napisac o tym w tym samym dniu, max dzien po". Dwie doby pokryw |
 | `WYDARZENIE_PROB_MAKS` | `3` | ILE RAZY PROBUJEMY DOBRAC MATERIAL DO JEDNEGO WYDARZENIA, zanim uznamy je za zamkniete mimo braku materialu. Od 2 wrzesnia 2026 furtke zamyk |
 | `BANK_MAKS_DNI` | `7` | TERMIN WAZNOSCI W BANKU, liczony od dnia dopisania — osobny od wieku ZRODLA. To sa dwa rozne pytania: dokument kontrolny mowi, czy fakt jest |
-| `NOTE_MIX_ARTICLE_DAY` | `("ARTYKUL", "ARTYKUL", "CIEKAWOSTKA", "SPROS` | MIESZANKA DNIA. Ostatnia pozycja to MYSL — notka bez zadnego dowodu. Powod jest w NOTE_TYPES przy samym typie: wszystkie pozostale wymagaja  |
+| `NOTE_MIX_ARTICLE_DAY` | `("ARTYKUL", "CIEKAWOSTKA", "SPROSTOWANIE")` | MIESZANKA DNIA. Ostatnia pozycja to MYSL — notka bez zadnego dowodu. Powod jest w NOTE_TYPES przy samym typie: wszystkie pozostale wymagaja  |
 | `KSZTALTY_MYSLI` | `{ "PYTANIE": ( "Ask something nobody can set` | KSZTALTY NOTKI TYPU MYSL. Losowane w kodzie i podawane jako PRZYDZIAL. Powod jest zmierzony: opis typu wymienial pytanie i obserwacje jako d |
-| `NOTE_MIX_OTHER_DAY` | `("CIEKAWOSTKA", "CIEKAWOSTKA", "DYSKUSJA", "` | DZIESIEC NOTEK NA DOBE ZAMIAST PIECIU — decyzja wlasciciela, 3 wrzesnia 2026. Liczba notek na dobe to DLUGOSC TEJ KROTKI i tylko ona. Powod: |
+| `NOTE_MIX_OTHER_DAY` | `("CIEKAWOSTKA", "DYSKUSJA", "SPROSTOWANIE")` | TRZY NOTKI NA DOBE ZAMIAST DZIESIECIU — decyzja wlasciciela, 7 wrzesnia 2026. Liczba notek na dobe to DLUGOSC TEJ KROTKI i tylko ona. POWOD  |
 | `LAJKI_DZIENNIE` | `(10, 16)` | --- zachowanie spoleczne: widelki, nie stale liczby ------------------------- Stala liczba dziennie wyglada jak robot, bo czlowiek nie ma no |
 | `KOMENTARZE_DZIENNIE` | `(7, 9)` | Osiemnascie komentarzy dziennie pod cudzymi tekstami to nie jest tempo czytelnika, tylko podpis bota — i kosztuje najwiecej po pisaniu, bo k |
 | `FOLLOW_MIESIECZNIE` | `(10, 16)` | ZEROWANE 2026-08-23, PRZYWROCONE 2026-09-01 — BO WNIOSEK BYL FALSZYWY. Stalo tu `(0, 0)` z uzasadnieniem „Substack zdjal Follow ze stron pro |

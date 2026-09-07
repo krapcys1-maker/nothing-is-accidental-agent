@@ -340,9 +340,17 @@ for ile in podzial:
 sprawdz("trzy przebiegi odtwarzaja CALY sklad dnia", zebrane == MIX, zebrane)
 sprawdz("w ciagu dnia sa rozne rodzaje notek, nie same CIEKAWOSTKI",
         len(set(zebrane)) > 1, set(zebrane))
-stare = MIX[:2] + MIX[:2] + MIX[:1]
-sprawdz("STARY wycinek dawalby same %r (test rozroznia)" % MIX[0],
-        len(set(stare)) == 1 and stare != zebrane, set(stare))
+# KONTRDOWOD: STARY rozdzielnik bral wycinek ZAWSZE OD POCZATKU, wiec kazdy
+# przebieg zaczynal od `MIX[0]` i dzien szedl jednym rodzajem.
+#
+# Do 7 wrzesnia bylo tu `MIX[:2] + MIX[:2] + MIX[:1]` — pieciopozycyjny
+# wycinek dzialal, bo miks zaczynal sie od DWOCH CIEKAWOSTEK. Po zejsciu do
+# trzech notek (kazdy typ raz) taki wycinek daje juz dwa rodzaje i kontrdowod
+# przestal cokolwiek dowodzic. Odtwarzamy wiec wade doslownie: kazdy przebieg
+# bierze od zera.
+stare = [MIX[0] for _ in zebrane]
+sprawdz("KONTRDOWOD: STARY wycinek dawalby same %r (test rozroznia)" % MIX[0],
+        len(set(stare)) == 1 and stare != list(zebrane), set(stare))
 
 sygn = inspect.signature(stages.notki_dnia).parameters
 sprawdz("notki_dnia przyjmuje 'ile' i 'od'", "ile" in sygn and "od" in sygn)

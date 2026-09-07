@@ -383,11 +383,25 @@ def slad_dziennika(zalozone: dict):
     return (min(kandydaci) if kandydaci else None), ze_sladem
 
 
-def _znak(ile: float, norma: float) -> str:
+def _znak(ile: float, norma: float, prog_z: float | None = None) -> str:
     """Jak daleko od planu NA TEN DZIEN. Sam PROCENT jest ten sam, co w `alarm.py`.
 
     Przy planie mniejszym niz MIN_PLAN_DZIENNY_DO_ZNAKU procent nie niesie
     informacji (plan 2, brak jednego = 50%), wiec wykrzyknika nie stawiamy.
+
+    `prog_z` ROZDZIELA DWIE ROLE, KTORE DO 7 WRZESNIA 2026 PELNILA JEDNA
+    LICZBA. `norma` jest PRZYCIETA do przebiegow, ktore juz powinny byly wyjsc
+    — i tak ma byc, bo o jedenastej rano nie rozlicza sie calej doby. Ale prog
+    „czy ten plan jest w ogole na tyle duzy, zeby procent cos znaczyl" dotyczy
+    KATEGORII, a nie pory dnia.
+
+    Zlapane przy zejsciu z dziesieciu notek na trzy: plan dobowy 3 przyciety
+    w polowie doby daje 2, czyli PONIZEJ progu — i wykrzyknik przy notkach
+    znikal na wiekszosc dnia. Alarm o najwazniejszej pozycji licznika gasl
+    dlatego, ze bylo wczesnie, a nie dlatego, ze wszystko bylo w porzadku.
+    Wada byla opisana w `MIN_PLAN_DZIENNY_DO_ZNAKU` jako przyszla i przyszla.
+
+    Bez `prog_z` zachowanie jest dokladnie takie jak dotad.
 
     TO NIE JEST TA SAMA BRAMKA, CO NA DOLE RAPORTU, i celowo: tutaj pytamy o
     JEDEN DZIEN, tam o SUME CALEGO OKNA. Wczesniej stala byla jedna i udawala,
@@ -414,7 +428,7 @@ def _znak(ile: float, norma: float) -> str:
     o subskrypcjach (plan ~3,7 na tydzien), o ktorych ten licznik swiadomie
     milczy. Domkniecie tego wymaga zmiany w `alarm.py`, nie tutaj.
     """
-    if norma < MIN_PLAN_DZIENNY_DO_ZNAKU:
+    if (norma if prog_z is None else prog_z) < MIN_PLAN_DZIENNY_DO_ZNAKU:
         return ""
     proc = 100.0 * ile / norma
     if proc >= 90:
@@ -468,7 +482,7 @@ def dni_okna(dni: int, z_wpisami: set, zalozone: dict, najstarszy=None) -> list:
 
 
 def _komorka(ile: int, cel, wyciszony: bool, ma_wpisy: bool,
-             w_toku: bool, szacowany: bool = False) -> str:
+             w_toku: bool, szacowany: bool = False, cel_calodobowy=None) -> str:
     """Jedna kratka tabeli. `cel is None` znaczy „planu nie znamy".
 
     `szacowany` dokleja `~`: plan tego dnia nie zostal zapisany i jest
@@ -486,7 +500,8 @@ def _komorka(ile: int, cel, wyciszony: bool, ma_wpisy: bool,
         return "%d/?" % ile
     tylda = "~" if szacowany else ""
     if cel >= 1:
-        return "%d/%.0f%s%s" % (ile, cel, tylda, _znak(ile, cel))
+        return "%d/%.0f%s%s" % (ile, cel, tylda,
+                                _znak(ile, cel, cel_calodobowy))
     # Plan ponizej jednego to nie jest liczba, ktora da sie oszacowac — `-~`
     # sugerowaloby oszacowanie tam, gdzie nie ma czego szacowac.
     return "%d" % ile if ile else "-"
@@ -735,6 +750,9 @@ def main() -> int:
         # jest zadnym rozliczeniem: o tej porze nic jeszcze nie mialo wyjsc i
         # mowi o tym osobna linia („norma rozklada sie na caly dzien"), tak jak
         # w tabeli mowi o tym `?` i podpis „dzien w toku".
+        # PELNE PLANY DOBOWE, przed przycieciem — do progu wykrzyknika.
+        # Patrz `_znak(prog_z=...)`: prog dotyczy KATEGORII, nie pory dnia.
+        cele_calodobowe = dict(plan or {})
         cele = {}
         for r in RODZAJE:
             c = (plan or {}).get(r)
@@ -780,7 +798,8 @@ def main() -> int:
                 # liczba jest PODSTAWIONA z normy, a nie zapisana przez agenta.
                 print("  %-12s %3d / %-5s %3.0f%%%s" % (
                     r, ile, "%.0f%s" % (cel, "~" if szacowany else ""),
-                    100.0 * ile / cel, _znak(ile, cel)))
+                    100.0 * ile / cel,
+                    _znak(ile, cel, cele_calodobowe.get(r))))
             else:
                 # Jedno miejsce po przecinku, bo tu z definicji stoi plan
                 # MNIEJSZY NIZ JEDEN (0,3 subskrypcji na dobe, jeszcze
@@ -898,6 +917,12 @@ def main() -> int:
             # DZIEN BIEZACY ROZLICZAMY Z CZESCI PLANU, NIE Z CALEGO. Patrz
             # `przebiegow_naleznych` — o 21:30 nalezne sa trzy przebiegi z
             # pieciu, wiec plan 5 notek znaczy dzis 3, a nie 5.
+            # PELNY PLAN DOBOWY ZAPAMIETANY PRZED PRZYCIECIEM — patrz
+            # `_znak(prog_z=...)`. Prog „czy ten plan jest na tyle duzy, zeby
+            # procent cos znaczyl" dotyczy KATEGORII, a nie pory dnia; bez tego
+            # rozdzielenia plan 3 notek przyciety w polowie doby do 2 spadal
+            # ponizej progu i gasil wykrzyknik przy najwazniejszej pozycji.
+            cel_calodobowy = cel
             if znany and czesciowy:
                 cel = cel * nalezne_dzis / float(przebiegow)
             if not wyciszony and not w_toku:
@@ -919,7 +944,8 @@ def main() -> int:
                     wykonane[r] += ile
                     plany[r] += cel
             wiersz += "%12s" % _komorka(ile, cel, wyciszony, ma_wpisy, w_toku,
-                                        szacowany)
+                                        szacowany,
+                                        cel_calodobowy=cel_calodobowy)
         if dzien_zmierzony:
             zmierzone_dni += 1
         # CICHY DZIEN MOWI, CZEGO NIE NADAJEMY — NIE, ZE NIC SIE NIE DZIALO.

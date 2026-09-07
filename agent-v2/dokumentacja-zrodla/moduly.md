@@ -438,7 +438,7 @@
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-3402 wierszy, 33 funkcji na poziomie modułu, 0 klas
+3458 wierszy, 33 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -623,7 +623,7 @@
 
 ### `norma.py` — licznik produkcji: ile agent wystawil wobec normy dziennej
 
-1106 wierszy, 13 funkcji na poziomie modułu, 0 klas
+1132 wierszy, 13 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -632,9 +632,9 @@
 | `_poprawna_data(dzien)` *(wewn.)* | Czy da sie z tego zrobic date. Zepsuty wpis ma znikac, nie zabijac raport. |
 | `wczytaj(dni)` | (zrobione, nieudane) — liczniki per dzien i rodzaj. |
 | `slad_dziennika(zalozone)` | (najstarszy znany dzien, zbior dni z JAKIMKOLWIEK wpisem w dzienniku). |
-| `_znak(ile, norma)` *(wewn.)* | Jak daleko od planu NA TEN DZIEN. Sam PROCENT jest ten sam, co w `alarm.py`. |
+| `_znak(ile, norma, prog_z)` *(wewn.)* | Jak daleko od planu NA TEN DZIEN. Sam PROCENT jest ten sam, co w `alarm.py`. |
 | `dni_okna(dni, z_wpisami, zalozone, najstarszy)` | Wszystkie dni okna — TAKZE te, w ktorych nie wyszlo NIC. |
-| `_komorka(ile, cel, wyciszony, ma_wpisy, w_toku, szacowany)` *(wewn.)* | Jedna kratka tabeli. `cel is None` znaczy „planu nie znamy". |
+| `_komorka(ile, cel, wyciszony, ma_wpisy, w_toku, szacowany, cel_calodobowy)` *(wewn.)* | Jedna kratka tabeli. `cel is None` znaczy „planu nie znamy". |
 | `przebiegow_dzis()` | Ile przebiegow agenta domknelo sie dzis. Zero, gdy bazy nie ma. |
 | `godziny_przebiegow()` | Minuty od polnocy UTC, o ktorych systemd odpala agenta. |
 | `przebiegow_naleznych(teraz)` | (ile przebiegow POWINNO juz oddac swoja czesc, ile ich jest na dobe). |

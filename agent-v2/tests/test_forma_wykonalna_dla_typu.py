@@ -88,11 +88,20 @@ sprawdz("zero niewykonalnych par w calym roku", zle == 0, zle)
 
 print()
 print("=== 2. ROZNORODNOSC NIE ZNIKA ===")
-_mysl = per_typ.get("MYSL", Counter())
-_dozwolone = [f for f in config.NOTE_FORM_MIX
-              if f not in config.FORMY_NIEMOZLIWE["MYSL"]]
-sprawdz("MYSL dostaje KAZDA z form, ktore moze wykonac",
-        set(_mysl) == set(_dozwolone), (sorted(_mysl), sorted(_dozwolone)))
+# MYSL WYPADLA Z MIKSU 7 wrzesnia 2026 (zero odwiedzin profilu na piec notek),
+# wiec nie dostaje juz zadnej formy — i to jest poprawne, nie zepsute.
+# Sprawdzamy wiec KAZDY typ, ktory w miksie ZOSTAL, zamiast pytac o jeden
+# wpisany z nazwy: test ma nadazac za miksem, a nie za moja pamiecia o nim.
+for _typ in sorted(set(config.NOTE_MIX_OTHER_DAY)):
+    _widziane = per_typ.get(_typ, Counter())
+    _dozwolone = [f for f in config.NOTE_FORM_MIX
+                  if f not in config.FORMY_NIEMOZLIWE.get(_typ, ())]
+    sprawdz("%-13s dostaje KAZDA z form, ktore moze wykonac" % _typ,
+            set(_widziane) == set(_dozwolone),
+            (sorted(_widziane), sorted(_dozwolone)))
+sprawdz("KONTRDOWOD: typ spoza miksu nie dostaje form (MYSL)",
+        not per_typ.get("MYSL") or "MYSL" in config.NOTE_MIX_OTHER_DAY,
+        sorted(per_typ.get("MYSL", Counter())))
 _ciek = per_typ.get("CIEKAWOSTKA", Counter())
 sprawdz("typ bez wykluczen nadal dostaje PELNA rotacje",
         set(_ciek) == set(config.NOTE_FORM_MIX), sorted(_ciek))
@@ -101,11 +110,20 @@ print()
 print("=== 3. ROZKLAD JEST ROWNY, NIE SKOSNY ===")
 # Pierwsza wersja poprawki dawala WYJASNIENIE w 56% przypadkow MYSL, bo
 # zbierala wszystkie odrzucone na nastepnej dozwolonej formie w kolejce.
-_naj = max(_mysl.values()) / sum(_mysl.values())
-sprawdz("zadna forma MYSL nie przekracza polowy przydzialow",
-        _naj < 0.5, "%.0f%%" % (100 * _naj))
-sprawdz("i mieszcza sie blisko rownego udzialu",
-        _naj < 1.5 / len(_dozwolone), "%.2f" % _naj)
+# MYSL wypadla z miksu 7 wrzesnia, wiec to samo pytanie zadajemy KAZDEMU
+# typowi, ktory w miksie zostal — skos moze sie pojawic przy kazdym, ktory
+# ma wykluczenia, a nie tylko przy tym jednym.
+for _typ in sorted(set(config.NOTE_MIX_OTHER_DAY)):
+    _widziane = per_typ.get(_typ, Counter())
+    if not _widziane:
+        continue
+    _dozw = [f for f in config.NOTE_FORM_MIX
+             if f not in config.FORMY_NIEMOZLIWE.get(_typ, ())]
+    _naj = max(_widziane.values()) / sum(_widziane.values())
+    sprawdz("%-13s: zadna forma nie przekracza polowy przydzialow" % _typ,
+            _naj < 0.5, "%.0f%%" % (100 * _naj))
+    sprawdz("%-13s: i mieszcza sie blisko rownego udzialu" % _typ,
+            _naj < 1.5 / max(1, len(_dozw)), "%.2f" % _naj)
 
 print()
 print("=== 4. LISTA WYKLUCZEN NIE ROSNIE O PODEJRZENIA ===")
