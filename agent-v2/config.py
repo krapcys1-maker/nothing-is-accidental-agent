@@ -1372,6 +1372,39 @@ DZIEDZINY_CIEKAWOSTEK = (
 )
 ILE_DZIEDZIN_NA_PRZEBIEG = 5
 
+# CO DRUGIE SZUKANIE BEZ ZACZYNU Z KANALOW — 7 wrzesnia 2026.
+#
+# CO ZMIERZYLEM. Wlasciciel: „na koncie zrobila sie monotonia, jak na tablicy
+# ogloszen". Sprawdzilem najpierw, czy to styl — NIE JEST: na 60 notkach ery AI
+# jest 60 roznych otwarc, zero powtorzonych, a rotacja form dziala. Monotonia
+# siedzi w TEMACIE. Bank, 131 wolnych faktow:
+#
+#     tylko branza (ceny, modele, benchmarki, firmy)     92  (70%)
+#     o swiecie (ludzie, szkola, sad, praca, zdrowie)     8  (6%)
+#     jedno i drugie                                     27
+#
+# A LISTA DZIEDZIN JEST ZBALANSOWANA: z 46 pozycji 22 sa branzowe, 20 o swiecie,
+# 4 historyczne. Losujemy piec, wiec powinno wychodzic pol na pol. Nie wychodzi,
+# bo model dostaje w tym samym prompcie DRUGIE, MOCNIEJSZE zrodlo tematu:
+#
+#     zaczyn z kanalow   2201 znakow, konkretne datowane naglowki branzowe
+#     dziedziny          315 znakow, abstrakcyjne opisy obszarow
+#
+# Siedem razy wiecej miejsca i konkret zamiast abstrakcji. Do tego `ciekawostki.md`
+# mowilo wprost: „Work the grid, but work it ON THE WEEK'S SUBJECTS".
+#
+# DLACZEGO KODEM, A NIE PROSBA W PROMPCIE. Bo „prosba w prompcie nie jest
+# bramka" — to jest w tym projekcie zapisane krwia. Poprawilem tez tamto
+# zdanie i opis pola `domain`, ale gwarancje daje dopiero to: PRZY CO DRUGIM
+# SZUKANIU ZACZYN W OGOLE NIE IDZIE DO MODELU. Wtedy siatka dziedzin nie ma
+# z czym przegrac, bo nie ma konkurencji.
+#
+# Parzystosc liczona z DOBY, wiec jest deterministyczna i da sie ja odtworzyc
+# z dziennika — tak samo jak przy wyborze pisarza.
+#
+# JAK COFNAC: `False`.
+ZACZYN_CO_DRUGIE_SZUKANIE = True
+
 CURIOSITY_BATCH = 8
 # Ile ostatnio zuzytych faktow pokazujemy szukajacemu jako zakaz powtorki.
 # Bez tego to samo szukanie codziennie oddaje te same slynne osiem.

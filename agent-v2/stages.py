@@ -1920,12 +1920,32 @@ def znajdz_ciekawostki(
               flush=True)
         for _z in _zamowienia[:3]:
             print("      - %s" % _z[:88], flush=True)
+    # ZACZYN CO DRUGIE SZUKANIE — patrz `config.ZACZYN_CO_DRUGIE_SZUKANIE`.
+    #
+    # Zaczyn zajmuje w prompcie 2201 znakow konkretnych, datowanych naglowkow
+    # branzowych; siatka dziedzin 315 znakow abstrakcji. Model szedl za
+    # konkretem i bank wychodzil w 70% branzowy przy 6% o swiecie — mimo ze
+    # sama lista dziedzin jest zbalansowana (22 branzowe, 20 o swiecie).
+    #
+    # Odbieramy mu wiec konkurencje co drugi raz, zamiast prosic, zeby jej nie
+    # sluchal. Tekst zastepczy jest jawny, bo prompt ma wiedziec, ze listy NIE
+    # MA — pusta sekcja czytalaby sie jak awaria.
+    from datetime import datetime as _dt2, timezone as _tz2
+    _z_zaczynem = (not config.ZACZYN_CO_DRUGIE_SZUKANIE
+                   or _dt2.now(_tz2.utc).toordinal() % 2 == 0)
+    _zaczyn = zaczyn_z_kanalow() if _z_zaczynem else (
+        "(brak listy tym razem — to jest zamierzone. Dzis pracujesz WYLACZNIE "
+        "na siatce obszarow i wzorcow ponizej. Nie zgaduj, o czym mowi sie w "
+        "tym tygodniu, i nie siegaj po najswiezsza premiere modelu tylko "
+        "dlatego, ze jest swieza.)")
+    print("  [ciekawostki] zaczyn z kanalow: %s"
+          % ("TAK" if _z_zaczynem else "NIE — dzis sama siatka"), flush=True)
     prompt = _prompt(
         "ciekawostki.md", ile=ile,
         dziedziny=NOWA_LINIA.join(f"- {d}" for d in dziedziny),
         generatory=NOWA_LINIA.join(
             f"**{g}** — {config.GENERATORY[g]}" for g in generatory),
-        zaczyn_kanalow=zaczyn_z_kanalow(),
+        zaczyn_kanalow=_zaczyn,
         # ZAMOWIENIE Z BANKU — patrz `zamowienia_z_banku`. Bank juz wie, czego
         # brakuje do napisania katow, ktore sam wymyslil; bez tego wiersza
         # szukacz zaczyna za kazdym razem od zera i przynosi to, co mamy.

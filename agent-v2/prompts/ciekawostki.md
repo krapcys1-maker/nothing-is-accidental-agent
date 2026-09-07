@@ -161,9 +161,20 @@ area**, not by hunting for something that feels interesting.
 
 {generatory}
 
-Work the grid, but work it ON THE WEEK'S SUBJECTS: take a live subject from
-the list further up, pick a pattern, and ask the pattern's probe question of
-that subject. The area tells you which aspect of it to press.
+Work the grid. Pick an area, pick a pattern, and ask the pattern's probe
+question of that area.
+
+If a live list appeared further up, you may anchor a candidate to something on
+it — but the grid is the source, not the list. A week's headlines are all the
+same shape: a company shipped a thing, a price moved, a score changed. Working
+only from them turns this publication into a trade noticeboard, which is
+exactly what it is not for. **At least half of what you return must come from
+an area on the grid that no headline this week touched.**
+
+The areas below are deliberately mixed: some are about how the machines work,
+some about what they are already doing to schools, clinics, courts and jobs.
+Both halves matter. A reader who is not in the industry has no way in through
+pricing and benchmarks.
 
 A worked example of the whole move, so the shape is not in doubt. Live subject:
 *a chip is said to beat the market leader*. Pattern MARGIN asks what the number
@@ -397,7 +408,7 @@ mechanism in a neighbouring industry. Go somewhere else entirely.
 
 Return only valid JSON:
 
-{{"facts": [{{"fact": "<one or two sentences, the fact itself, specific and checkable>", "wrong_belief": "<what most people believe, written as a plain sentence they would say out loud>", "actually": "<what is true instead, one sentence>", "decision": "<WHAT MAKES IT SO: a decision (who signed it and when), a measurement (who tested it and what came back), a constraint (what about the design or the mathematics forces it), or a trade-off (what is given up and by whom). Not necessarily a person or an institution. Empty string only if you cannot name any of the four>", "consequence": "<the thing the reader can touch, hold, see or wait for because of that decision>", "url": "<source that states it>", "source_date": "<the date THAT SOURCE was published, as YYYY-MM-DD. Not the date of the event it describes. Empty string only if the page genuinely carries no date>", "control_date": "<YYYY-MM-DD of the newest document that GOVERNS this claim — see \"The control document\" above. Not necessarily newer than source_date>", "control_url": "<url of that document>", "control_verdict": "CONFIRMS"|"MODIFIES"|"ENDS", "control_fact": "<one clause. For MODIFIES, the qualifier the writer must carry. For CONFIRMS, what you checked and found unchanged>", "domain": "<the part of the AI stack, industry or public record it belongs to>"}}]}}
+{{"facts": [{{"fact": "<one or two sentences, the fact itself, specific and checkable>", "wrong_belief": "<what most people believe, written as a plain sentence they would say out loud>", "actually": "<what is true instead, one sentence>", "decision": "<WHAT MAKES IT SO: a decision (who signed it and when), a measurement (who tested it and what came back), a constraint (what about the design or the mathematics forces it), or a trade-off (what is given up and by whom). Not necessarily a person or an institution. Empty string only if you cannot name any of the four>", "consequence": "<the thing the reader can touch, hold, see or wait for because of that decision>", "url": "<source that states it>", "source_date": "<the date THAT SOURCE was published, as YYYY-MM-DD. Not the date of the event it describes. Empty string only if the page genuinely carries no date>", "control_date": "<YYYY-MM-DD of the newest document that GOVERNS this claim — see \"The control document\" above. Not necessarily newer than source_date>", "control_url": "<url of that document>", "control_verdict": "CONFIRMS"|"MODIFIES"|"ENDS", "control_fact": "<one clause. For MODIFIES, the qualifier the writer must carry. For CONFIRMS, what you checked and found unchanged>", "domain": "<where this belongs — a part of the AI stack, OR a place in the world where it lands: a clinic, a classroom, a court, a job, a street, a bill somebody pays>"}}]}}
 
 ## The two halves, and why a fact without both is worthless to us
 

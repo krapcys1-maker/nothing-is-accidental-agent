@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **26 plików**, 34 107 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **26 plików**, 34 160 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -113,8 +113,8 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 > w głównej ścieżce artykułu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
-się testować bez przeglądarki i bez pieniędzy**. 167 zestawów
-testów, 4321 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+się testować bez przeglądarki i bez pieniędzy**. 168 zestawów
+testów, 4340 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -177,7 +177,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-9742 wierszy, 155 funkcji na poziomie modułu, 0 klas
+9762 wierszy, 155 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -580,7 +580,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-3534 wierszy, 33 funkcji na poziomie modułu, 0 klas
+3567 wierszy, 33 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -9124,7 +9124,7 @@ visible either way:
 
 #### `prompts/ciekawostki.md`
 
-**437 wierszy.** Pola wejsciowe: `dziedziny`, `dzis`, `generatory`, `ile`, `marka`, `miesiac`, `premiera`, `stan_modeli`, `uzyte`, `w_reku`, `wydarzenia`, `zaczyn_kanalow`, `zamowienia`
+**448 wierszy.** Pola wejsciowe: `dziedziny`, `dzis`, `generatory`, `ile`, `marka`, `miesiac`, `premiera`, `stan_modeli`, `uzyte`, `w_reku`, `wydarzenia`, `zaczyn_kanalow`, `zamowienia`
 
 ````markdown
 Find {ile} documented facts worth stopping a stranger mid-scroll.
@@ -9290,9 +9290,20 @@ area**, not by hunting for something that feels interesting.
 
 {generatory}
 
-Work the grid, but work it ON THE WEEK'S SUBJECTS: take a live subject from
-the list further up, pick a pattern, and ask the pattern's probe question of
-that subject. The area tells you which aspect of it to press.
+Work the grid. Pick an area, pick a pattern, and ask the pattern's probe
+question of that area.
+
+If a live list appeared further up, you may anchor a candidate to something on
+it — but the grid is the source, not the list. A week's headlines are all the
+same shape: a company shipped a thing, a price moved, a score changed. Working
+only from them turns this publication into a trade noticeboard, which is
+exactly what it is not for. **At least half of what you return must come from
+an area on the grid that no headline this week touched.**
+
+The areas below are deliberately mixed: some are about how the machines work,
+some about what they are already doing to schools, clinics, courts and jobs.
+Both halves matter. A reader who is not in the industry has no way in through
+pricing and benchmarks.
 
 A worked example of the whole move, so the shape is not in doubt. Live subject:
 *a chip is said to beat the market leader*. Pattern MARGIN asks what the number
@@ -9526,7 +9537,7 @@ mechanism in a neighbouring industry. Go somewhere else entirely.
 
 Return only valid JSON:
 
-{{"facts": [{{"fact": "<one or two sentences, the fact itself, specific and checkable>", "wrong_belief": "<what most people believe, written as a plain sentence they would say out loud>", "actually": "<what is true instead, one sentence>", "decision": "<WHAT MAKES IT SO: a decision (who signed it and when), a measurement (who tested it and what came back), a constraint (what about the design or the mathematics forces it), or a trade-off (what is given up and by whom). Not necessarily a person or an institution. Empty string only if you cannot name any of the four>", "consequence": "<the thing the reader can touch, hold, see or wait for because of that decision>", "url": "<source that states it>", "source_date": "<the date THAT SOURCE was published, as YYYY-MM-DD. Not the date of the event it describes. Empty string only if the page genuinely carries no date>", "control_date": "<YYYY-MM-DD of the newest document that GOVERNS this claim — see \"The control document\" above. Not necessarily newer than source_date>", "control_url": "<url of that document>", "control_verdict": "CONFIRMS"|"MODIFIES"|"ENDS", "control_fact": "<one clause. For MODIFIES, the qualifier the writer must carry. For CONFIRMS, what you checked and found unchanged>", "domain": "<the part of the AI stack, industry or public record it belongs to>"}}]}}
+{{"facts": [{{"fact": "<one or two sentences, the fact itself, specific and checkable>", "wrong_belief": "<what most people believe, written as a plain sentence they would say out loud>", "actually": "<what is true instead, one sentence>", "decision": "<WHAT MAKES IT SO: a decision (who signed it and when), a measurement (who tested it and what came back), a constraint (what about the design or the mathematics forces it), or a trade-off (what is given up and by whom). Not necessarily a person or an institution. Empty string only if you cannot name any of the four>", "consequence": "<the thing the reader can touch, hold, see or wait for because of that decision>", "url": "<source that states it>", "source_date": "<the date THAT SOURCE was published, as YYYY-MM-DD. Not the date of the event it describes. Empty string only if the page genuinely carries no date>", "control_date": "<YYYY-MM-DD of the newest document that GOVERNS this claim — see \"The control document\" above. Not necessarily newer than source_date>", "control_url": "<url of that document>", "control_verdict": "CONFIRMS"|"MODIFIES"|"ENDS", "control_fact": "<one clause. For MODIFIES, the qualifier the writer must carry. For CONFIRMS, what you checked and found unchanged>", "domain": "<where this belongs — a part of the AI stack, OR a place in the world where it lands: a clinic, a classroom, a court, a job, a street, a bill somebody pays>"}}]}}
 
 ## The two halves, and why a fact without both is worthless to us
 
@@ -13194,6 +13205,7 @@ wartosc i komentarz stojacy bezposrednio nad definicja.
 | `NOTE_CANDIDATES` | `1` | Ilu kandydatow generujemy. Dawniej bylo pieciu, potem trzech; dodatkowe warianty tego samego zdania niczego nie dokladaly, a placilismy za n |
 | `DZIEDZINY_CIEKAWOSTEK` | `( # --- co te systemy realnie robia i jak sa` | Ile ciekawostek szukamy naraz. Cztery z pięciu notek dziennie stoją na nich, a jedno szukanie kosztuje tyle co jedno — więc bierzemy zapas n |
 | `ILE_DZIEDZIN_NA_PRZEBIEG` | `5` | — |
+| `ZACZYN_CO_DRUGIE_SZUKANIE` | `True` | CO DRUGIE SZUKANIE BEZ ZACZYNU Z KANALOW — 7 wrzesnia 2026. CO ZMIERZYLEM. Wlasciciel: „na koncie zrobila sie monotonia, jak na tablicy oglo |
 | `CURIOSITY_BATCH` | `8` | — |
 | `CURIOSITY_MEMORY` | `60` | Ile ostatnio zuzytych faktow pokazujemy szukajacemu jako zakaz powtorki. Bez tego to samo szukanie codziennie oddaje te same slynne osiem. |
 | `PAMIEC_NOTEK` | `20` | Ile OSTATNICH WYSTAWIONYCH NOTEK bot pamieta, wybierajac material na dzis. `None` = WSZYSTKIE, jakie kiedykolwiek wyszly. To jest stan obowi |
