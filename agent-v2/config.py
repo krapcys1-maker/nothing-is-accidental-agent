@@ -2206,6 +2206,35 @@ def losowy_ksztalt_mysli() -> str:
 #     i pilnowane przez `tests/test_dzien_awarii.py`.
 NOTE_MIX_OTHER_DAY = ("CIEKAWOSTKA", "DYSKUSJA", "SPROSTOWANIE")
 
+# KTO PISZE NOTKI — decyzja wlasciciela z 7 wrzesnia 2026: „zostaw Opusa".
+#
+# Naprzemiennosc weszla 3 wrzesnia jako SLEPA PROBA: polowa notek Opusem,
+# polowa DeepSeekiem, z parzystoscia przesuwana co dobe, zeby pisarz nie
+# przywiazal sie do rodzaju notki. Dzialala poprawnie — zmierzone po dniach:
+# 6/5, 9/11, 4/4, 3/4.
+#
+# CO PROBA ZDAZYLA POWIEDZIEC (notki co najmniej 2-dniowe, 10 wobec 9 sztuk):
+# zasiegi NIE DO ODROZNIENIA. Mediana 23 wobec 26 wyswietlen, zakresy 16-36
+# wobec 18-38 — nakladaja sie prawie calkowicie.
+#
+# DLACZEGO MIMO TO JA KONCZYMY. Notki zeszly wlasnie z dziesieciu na trzy, wiec
+# probka rosnie TRZY RAZY WOLNIEJ: na rozstrzygniecie trzeba by okolo pieciu
+# miesiecy. Proba, ktora konczy sie za pol roku, nie jest proba, tylko podatkiem
+# od niepewnosci.
+#
+# CENA TEJ DECYZJI, policzona na kosztach PO wrzesniowej zmianie `effort`:
+#
+#     Opus      0,04257 USD za notke   (848 tokenow wyjscia)
+#     DeepSeek  0,01157 USD za notke   (4866 tokenow — reszta to rozumowanie)
+#
+# Przy trzech notkach: 0,128 USD/dobe zamiast 0,081, czyli 3,83 zamiast 2,44
+# USD miesiecznie. Zaplata za pewnosc wynosi 1,4 USD na miesiac przy suficie 40.
+#
+# CO TRACIMY, i to trzeba powiedziec wprost: nie dowiemy sie juz, czy DeepSeek
+# pisal rownie dobrze. Mechanizm zostaje jednak nietkniety — dopisanie
+# `"note_tani"` do tej krotki wznawia slepa probe jednym slowem.
+PISARZE_NOTEK = ("note",)
+
 # --- zachowanie spoleczne: widelki, nie stale liczby -------------------------
 # Stala liczba dziennie wyglada jak robot, bo czlowiek nie ma normy. Losujemy
 # w tych granicach, osobno na kazdy dzien.

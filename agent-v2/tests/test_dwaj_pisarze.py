@@ -150,8 +150,15 @@ sprawdz("KONTRDOWOD: liczone w skali przebiegu dalo by piec razy ten sam model",
         set(w_skali_przebiegu) == {"note"}, w_skali_przebiegu)
 
 zrodlo = pathlib.Path("agent-v2/stages.py").read_text(encoding="utf-8")
-sprawdz("i tak wlasnie liczy to kod produkcyjny (doba + numer notki)",
-        '"note" if (od + nr + _doba) % 2 == 0 else "note_tani"' in zrodlo)
+# WZOR ZOSTAL, ZMIENILO SIE ZRODLO PISARZY. Do 7 wrzesnia 2026 stala tu para
+# wpisana w kod; dzis lista idzie z `config.PISARZE_NOTEK`, a sam wzor
+# `(od + nr + _doba) % len(...)` jest ten sam co byl. Sprawdzamy WZOR, bo to
+# on niesie zasade „licz w skali doby, nie przebiegu" — a nie nazwy modeli.
+sprawdz("kod produkcyjny nadal liczy w skali doby (doba + numer notki)",
+        "(od + nr + _doba) % len(_pisarze)" in zrodlo)
+sprawdz("i bierze pisarzy z konfiguracji, nie z pary w kodzie",
+        "config.PISARZE_NOTEK" in zrodlo
+        and '"note" if (od + nr + _doba)' not in zrodlo)
 
 print()
 print("=== 3b. PISARZ NIE MOZE BYC PRZYPIETY DO RODZAJU NOTKI ===")
@@ -307,6 +314,37 @@ for p in PILNOWANE:
                           else ("bez zmian" if ok else "ZMIENIONA")))
 
 config.przywroc_katalog_danych(STARE_SCIEZKI)
+print()
+print("=== 5. JEDEN PISARZ OD 7 WRZESNIA 2026 — I MECHANIZM NIETKNIETY ===")
+# Decyzja wlasciciela: „zostaw Opusa". Slepa proba konczy sie nie dlatego, ze
+# cos rozstrzygnela — zasiegi wyszly NIE DO ODROZNIENIA (mediana 23 wobec 26,
+# zakresy 16-36 wobec 18-38) — tylko dlatego, ze notki zeszly z dziesieciu na
+# trzy i probka rosnie trzy razy wolniej. Rozstrzygniecie wypadaloby za okolo
+# piec miesiecy.
+sprawdz("notki pisze jeden pisarz", len(config.PISARZE_NOTEK) == 1,
+        config.PISARZE_NOTEK)
+sprawdz("i jest nim Opus", config.MODEL_FOR[config.PISARZE_NOTEK[0]] == "claude-opus-5",
+        config.MODEL_FOR[config.PISARZE_NOTEK[0]])
+# MECHANIZM MA ZOSTAC ZDATNY DO UZYCIA. Cala wartosc tej zmiany polega na tym,
+# ze wznowienie proby to dopisanie jednego slowa, a nie przywracanie kodu.
+_dwaj = ("note", "note_tani")
+_kto = lambda od, nr, doba: _dwaj[(od + nr + doba) % len(_dwaj)]
+_rozne = {_kto(od, 0, doba) for od in range(3) for doba in range(2)}
+sprawdz("przy DWOCH pisarzach rotacja nadal rozdziela obu", _rozne == set(_dwaj),
+        _rozne)
+# I KONTRDOWOD DO SAMEJ ZMIANY: przy jednym pisarzu rotacja jest bezczynna.
+_jeden = tuple(config.PISARZE_NOTEK)
+sprawdz("KONTRDOWOD: przy jednym pisarzu rotacja zawsze daje ten sam etap",
+        len({_jeden[(od + 0 + d) % len(_jeden)]
+             for od in range(3) for d in range(3)}) == 1)
+# I ZE `stages` NAPRAWDE CZYTA TE LISTE, a nie ma zaszytej parzystosci.
+import pathlib   # noqa: E402
+_zr = pathlib.Path("agent-v2/stages.py").read_text(encoding="utf-8")
+sprawdz("`stages` bierze pisarza z `config.PISARZE_NOTEK`",
+        "config.PISARZE_NOTEK" in _zr)
+sprawdz("i nie ma juz zaszytej pary w kodzie",
+        'etap_pisarza = "note" if' not in _zr)
+
 print()
 print("=== WYNIK: %d zdanych, %d oblanych%s ===" %
       (zdane, oblane, ", PRODUKCJA RUSZONA" if zle else ""))

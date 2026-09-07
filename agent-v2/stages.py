@@ -4662,7 +4662,13 @@ def notki_dnia(
         # dzien zawsze daje ten sam uklad i da sie go odtworzyc z dziennika.
         from datetime import datetime as _dt, timezone as _tz
         _doba = _dt.now(_tz.utc).toordinal()
-        etap_pisarza = "note" if (od + nr + _doba) % 2 == 0 else "note_tani"
+        # PISARZ Z LISTY `config.PISARZE_NOTEK`, nie z zaszytej parzystosci.
+        # Przy jednym pisarzu rotacja jest bezczynna i zawsze wypada ten sam;
+        # przy dwoch dziala dokladnie tak, jak dzialala do 7 wrzesnia 2026.
+        # Cala tresc powyzszego akapitu o przesunieciu dobowym zostaje w mocy:
+        # to `_doba` sprawia, ze pisarz nie przywiazuje sie do rodzaju notki.
+        _pisarze = tuple(config.PISARZE_NOTEK) or ("note",)
+        etap_pisarza = _pisarze[(od + nr + _doba) % len(_pisarze)]
         print("  [pisarz] %s (%s)" % (config.MODEL_FOR.get(etap_pisarza, "?"),
                                       etap_pisarza), flush=True)
         wynik = note(conn, run_id, typ, material,
