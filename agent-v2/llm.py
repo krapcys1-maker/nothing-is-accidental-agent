@@ -520,6 +520,30 @@ def przejsciowy(exc: BaseException) -> bool:
         return False
     if isinstance(exc, (httpx.TimeoutException, httpx.TransportError)):
         return True
+    # WYJATKI SDK ANTHROPICA — dolozone 7 wrzesnia 2026.
+    #
+    # `anthropic.APITimeoutError` i `APIConnectionError` NIE dziedzicza po
+    # niczym z `httpx` i NIE niosa `status_code`. Sprawdzone na produkcyjnym
+    # srodowisku, nie wyrozumowane:
+    #
+    #     APITimeoutError      dziedziczy po httpx: False   status_code: brak
+    #     APIConnectionError   dziedziczy po httpx: False   status_code: brak
+    #     przejsciowy(...) oddawalo dla obu: False
+    #
+    # Czyli ZERWANE LACZE bylo ksiegowane jako blad TRWALY. Skutek widac
+    # dopiero pietro wyzej: pisanie artykulu nie ponawialo sie, tylko od razu
+    # przerzucalo na pisarza zapasowego — bez sladu w logu, ze to byla awaria
+    # transportu, a nie odmowa modelu. Ta sama klasa co „kod 200 nie jest
+    # sprawdzeniem": mechanizm dzialal, tylko mierzyl co innego, niz mysleli
+    # jego autorzy.
+    #
+    # Bierzemy oba przez `getattr`, bo starsze wydania SDK nie mialy
+    # `APITimeoutError` — brak klasy nie ma prawa wywalic klasyfikatora bledow.
+    _sdk = tuple(k for k in (getattr(anthropic, "APITimeoutError", None),
+                             getattr(anthropic, "APIConnectionError", None))
+                 if isinstance(k, type))
+    if _sdk and isinstance(exc, _sdk):
+        return True
     kod = getattr(exc, "status_code", None) or getattr(
         getattr(exc, "response", None), "status_code", None)
     if isinstance(kod, int):

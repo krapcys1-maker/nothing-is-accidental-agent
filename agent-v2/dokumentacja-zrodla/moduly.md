@@ -197,7 +197,7 @@
 
 ### `browser.py` — cała styczność z Substackiem; nie woła modelu
 
-5325 wierszy, 98 funkcji na poziomie modułu, 0 klas
+5343 wierszy, 98 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -302,7 +302,7 @@
 
 ### `llm.py` — JEDYNA warstwa dostępu do modeli i liczenia kosztu
 
-841 wierszy, 15 funkcji na poziomie modułu, 3 klas
+865 wierszy, 15 funkcji na poziomie modułu, 3 klas
 
 | funkcja | co robi |
 |---|---|

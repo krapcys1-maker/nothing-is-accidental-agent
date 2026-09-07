@@ -323,7 +323,25 @@ def naprawde_wyslac(wyslij: bool, co: str) -> bool:
     przebieg "na sucho" na serwerze nie napisal ani slowa, a mimo to polubil
     dwa cudze posty. Tryb, ktory nazywa sie suchym, musi byc suchy takze wobec
     swiata zewnetrznego, inaczej jest pulapka.
+
+    WYLACZNIK DOLOZONY 7 wrzesnia 2026 — i to jest dokladnie ta sama wada, co
+    wyzej, tylko o pietro wyzej. `KILL_SWITCH` byl sprawdzany W JEDNYM
+    MIEJSCU: w `llm._preflight`, czyli przed wywolaniem MODELU. Zmierzone
+    grepem po calym drzewie: w `browser.py` nie wystepowal ani razu.
+
+    Skutek: dzialania, ktore modelu NIE POTRZEBUJA, wychodzily w swiat mimo
+    wlaczonego wylacznika. Sprawdzone po kolei — `polub`, `zasubskrybuj`
+    i `obserwuj` nie wolaja `llm` ani razu. Wlasciciel ustawiajacy
+    `KILL_SWITCH=true`, zeby zatrzymac konto, dostawal wiec konto, ktore
+    przestaje PISAC, ale dalej lajkuje, subskrybuje i obserwuje ludzi.
+
+    Wylacznik ma zatrzymywac konto, a nie tylko rachunek za model. Warunek
+    stoi tutaj, bo to jedyna brama, przez ktora przechodzi KAZDY zapis.
     """
+    if wyslij and config.KILL_SWITCH:
+        print(f"  [{co}] KILL_SWITCH — NIE wysylam, mimo ze proszono",
+              flush=True)
+        return False
     if wyslij and config.DRY_RUN:
         print(f"  [{co}] DRY_RUN — NIE wysylam, mimo ze proszono", flush=True)
         return False
