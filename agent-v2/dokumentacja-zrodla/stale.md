@@ -105,7 +105,7 @@
 | `ILE_DZIEDZIN_NA_PRZEBIEG` | `5` | — |
 | `CURIOSITY_BATCH` | `8` | — |
 | `CURIOSITY_MEMORY` | `60` | Ile ostatnio zuzytych faktow pokazujemy szukajacemu jako zakaz powtorki. Bez tego to samo szukanie codziennie oddaje te same slynne osiem. |
-| `PAMIEC_NOTEK` | `None` | Ile OSTATNICH WYSTAWIONYCH NOTEK bot pamieta, wybierajac material na dzis. `None` = WSZYSTKIE, jakie kiedykolwiek wyszly. To jest stan obowi |
+| `PAMIEC_NOTEK` | `20` | Ile OSTATNICH WYSTAWIONYCH NOTEK bot pamieta, wybierajac material na dzis. `None` = WSZYSTKIE, jakie kiedykolwiek wyszly. To jest stan obowi |
 | `MAKS_WIEK_ZRODLA_DNI` | `30` | ILE DNI MOZE MIEC ZRODLO FAKTU, KTORY TWIERDZI COS O STANIE TERAZ. Wlasciciel ustawil to sam, dwa razy. Najpierw ogolnie: „cos, co mialo sen |
 | `TWIERDZI_O_TERAZ` | `( "now", "currently", "today", "these days",` | Slowa, po ktorych poznajemy, ze zdanie twierdzi cos o STANIE SWIATA TERAZ, a nie opowiada o zdarzeniu z wlasna data. Tylko takie zdania podl |
 | `ZNIKA` | `( "deprecat", "retired", "retirement", "suns` | Slowa, ktore mowia, ze rzecz jest W TRAKCIE ZNIKANIA. Publikacja o AI nie ma po co opisywac czegos, co za osiem tygodni przestanie istniec — |

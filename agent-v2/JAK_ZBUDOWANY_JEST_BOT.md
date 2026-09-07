@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **26 plików**, 34 060 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **26 plików**, 34 107 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -580,7 +580,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-3487 wierszy, 33 funkcji na poziomie modułu, 0 klas
+3534 wierszy, 33 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -13196,7 +13196,7 @@ wartosc i komentarz stojacy bezposrednio nad definicja.
 | `ILE_DZIEDZIN_NA_PRZEBIEG` | `5` | — |
 | `CURIOSITY_BATCH` | `8` | — |
 | `CURIOSITY_MEMORY` | `60` | Ile ostatnio zuzytych faktow pokazujemy szukajacemu jako zakaz powtorki. Bez tego to samo szukanie codziennie oddaje te same slynne osiem. |
-| `PAMIEC_NOTEK` | `None` | Ile OSTATNICH WYSTAWIONYCH NOTEK bot pamieta, wybierajac material na dzis. `None` = WSZYSTKIE, jakie kiedykolwiek wyszly. To jest stan obowi |
+| `PAMIEC_NOTEK` | `20` | Ile OSTATNICH WYSTAWIONYCH NOTEK bot pamieta, wybierajac material na dzis. `None` = WSZYSTKIE, jakie kiedykolwiek wyszly. To jest stan obowi |
 | `MAKS_WIEK_ZRODLA_DNI` | `30` | ILE DNI MOZE MIEC ZRODLO FAKTU, KTORY TWIERDZI COS O STANIE TERAZ. Wlasciciel ustawil to sam, dwa razy. Najpierw ogolnie: „cos, co mialo sen |
 | `TWIERDZI_O_TERAZ` | `( "now", "currently", "today", "these days",` | Slowa, po ktorych poznajemy, ze zdanie twierdzi cos o STANIE SWIATA TERAZ, a nie opowiada o zdarzeniu z wlasna data. Tylko takie zdania podl |
 | `ZNIKA` | `( "deprecat", "retired", "retirement", "suns` | Slowa, ktore mowia, ze rzecz jest W TRAKCIE ZNIKANIA. Publikacja o AI nie ma po co opisywac czegos, co za osiem tygodni przestanie istniec — |

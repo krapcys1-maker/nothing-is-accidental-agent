@@ -342,14 +342,20 @@ sprawdz("wiec dwie notki z linkiem nie sa 'o tym samym'",
         stages._o_tym_samym(Z_LINKIEM, Z_LINKIEM_2) is False)
 
 print()
-print("=== 4c. PAMIEC JEST PERMANENTNA, NIE 'WIEKSZA' ===")
-# Okno dwunastu bylo ochrona z terminem waznosci: powtorka sprzed pieciu dni
-# przechodzila z automatu. Wlasciciel chce zera powtorzen NIGDY.
+print("=== 4c. PAMIEC MA OKNO — I DLACZEGO WROCILO 7 WRZESNIA 2026 ===")
+# Pamiec bez konca weszla 25 sierpnia i byla wtedy DARMOWA: zmierzone na 29
+# notkach, okna 8/12/20/40 i pamiec pelna blokowaly te same PIEC notek, zero
+# roznicy, zero falszywych alarmow.
 #
-# Zmierzone 2026-08-25 na 29 wystawionych notkach: okna 8, 12, 20, 40 i pamiec
-# PELNA blokuja te same PIEC notek. Zero roznicy, zero falszywych alarmow —
-# z 399 par o roznych tematach prog miedzy dniami nie przepuscil ani jednej.
-# Pelny rachunek stoi w docstringu `stages.pamiec_wystawionych`.
+# PRZY DZIEWIECDZIESIECIU NOTKACH PRZESTALA BYC DARMOWA. Zmierzone 7 wrzesnia
+# na zywym banku (131 wolnych faktow, ile PRZECHODZI): okno 20 -> 22 fakty,
+# bez konca -> 14. A na koncie widac bylo to tak: 1 odrzucenie przez zapore
+# 1 wrzesnia, 14 trzeciego, 24 piatego, 31 szostego — i ZERO WYSTAWIONYCH
+# NOTEK 7 wrzesnia, bo wszystkie osiem kandydatow ze spizarni odpadlo na
+# wspolnej nazwie („google" wystapil RAZ w calym korpusie i blokowal).
+#
+# Ten test pilnuje teraz OBU stron: ze okno naprawde tnie pamiec I ze ochrona
+# przed powtorka w oknie nadal dziala.
 
 
 def dziennik_z_notek(katalog, teksty):
@@ -382,22 +388,36 @@ with tempfile.TemporaryDirectory() as tmp:
         dziennik_z_notek(tmp, [WCZORAJ] + WYPELNIACZ)
         pamiec = stages.pamiec_wystawionych()
         print("    notek w dzienniku: 120, odciskow w pamieci: %d" % len(pamiec))
-        sprawdz("pamiec obejmuje wszystkie 120 notek", len(pamiec) == 120,
-                len(pamiec))
-        sprawdz("notka sprzed 119 pozycji NADAL blokuje powtorke",
-                stages.wybierz_material([dict(DZIS)], [], pamiec) is None)
+        sprawdz("pamiec jest PRZYCIETA do okna (%s)" % config.PAMIEC_NOTEK,
+                len(pamiec) == config.PAMIEC_NOTEK, len(pamiec))
+        # I TO JEST CENA TEJ ZMIANY, nazwana wprost: notka sprzed 119 pozycji
+        # juz NIE blokuje. Tak ma byc — czytelnik jej nie widzi, przewijajac
+        # profil, a przy trzech notkach na dobe okno 20 to okolo tygodnia.
+        sprawdz("CENA: notka sprzed 119 pozycji juz NIE blokuje",
+                stages.wybierz_material([dict(DZIS)], [], pamiec) is not None)
 
         # KONTRDOWOD: to samo z oknem dwunastu, czyli kodem sprzed zmiany.
         # Notka o szamponie wypada z okna i powtorka przechodzi jak gdyby nigdy nic.
-        config.PAMIEC_NOTEK = 12
-        okno = stages.pamiec_wystawionych()
-        sprawdz("KONTRDOWOD: okno 12 pamieta tylko 12 ostatnich", len(okno) == 12,
-                len(okno))
-        sprawdz("KONTRDOWOD: i przy oknie 12 powtorka PRZECHODZI (tak bylo)",
-                stages.wybierz_material([dict(DZIS)], [], okno) is not None)
+        # A TERAZ DRUGA STRONA: ochrona w oknie MUSI dzialac, inaczej okno
+        # znaczy „brak zapory". Ta sama powtorka, ale swieza — na koncu
+        # dziennika, czyli w zasiegu okna.
+        stages.PAMIEC_NOTEK_PLIK.unlink()
+        dziennik_z_notek(tmp, WYPELNIACZ + [WCZORAJ])
+        pamiec_swieza = stages.pamiec_wystawionych()
+        sprawdz("powtorka SPRZED CHWILI nadal blokuje",
+                stages.wybierz_material([dict(DZIS)], [], pamiec_swieza) is None)
+        # KONTRDOWOD: bez okna ta sama notka blokowalaby TAKZE sprzed 119 pozycji
+        # — czyli to okno, a nie zapora, przepuscilo tamta wyzej.
+        config.PAMIEC_NOTEK = None
+        stages.PAMIEC_NOTEK_PLIK.unlink()
+        dziennik_z_notek(tmp, [WCZORAJ] + WYPELNIACZ)
+        bez_okna = stages.pamiec_wystawionych()
+        sprawdz("KONTRDOWOD: bez okna blokowalaby takze sprzed 119 pozycji",
+                stages.wybierz_material([dict(DZIS)], [], bez_okna) is None,
+                len(bez_okna))
         config.PAMIEC_NOTEK = stare_okno
-        sprawdz("stan obowiazujacy to pamiec bez okna",
-                config.PAMIEC_NOTEK is None, config.PAMIEC_NOTEK)
+        sprawdz("stan obowiazujacy to okno 20",
+                config.PAMIEC_NOTEK == 20, config.PAMIEC_NOTEK)
 
         # LUZNE ZDERZENIE NADAL NIE BLOKUJE — to jest cena, ktorej nie placimy.
         # Przy pamieci bez konca kazda zapamietana notka to kolejna szansa na
@@ -409,8 +429,8 @@ with tempfile.TemporaryDirectory() as tmp:
             [{"domain": "Sun care", "fact": LUZNE_B}], [], pamiec_luzna)
         sprawdz("luzne zderzenie NIE blokuje mimo pelnej pamieci",
                 luzny is not None and luzny["domain"] == "Sun care", luzny)
-        sprawdz("i 119 obcych notek tez go nie blokuje",
-                len(pamiec_luzna) == 120, len(pamiec_luzna))
+        sprawdz("i obce notki z okna tez go nie blokuja",
+                len(pamiec_luzna) == config.PAMIEC_NOTEK, len(pamiec_luzna))
 
         # DZIENNIK ZOSTAJE ZRODLEM PRAWDY: liczy sie to, co NAPRAWDE wyszlo.
         (tmp / "dziennik.jsonl").write_text("\n".join([
@@ -590,8 +610,14 @@ try:
     _linie[30] = _wpis(30, "Wind turbines shed ice by heating the blade root before dawn")
     _dz.write_text("\n".join(_linie) + "\n", encoding="utf-8")
 
+    # LICZBY WYPROWADZANE Z OKNA, nie wpisane. Ta sekcja bada PRZELICZANIE
+    # pamieci po recznej edycji dziennika, a nie jej rozmiar — a rozmiar zalezy
+    # od `PAMIEC_NOTEK`, ktore 7 wrzesnia 2026 wrocilo do okna 20.
+    def _ile(z_dziennika):
+        return min(z_dziennika, config.PAMIEC_NOTEK or z_dziennika)
+
     _p1 = stages.pamiec_wystawionych()
-    sprawdz("pierwsze czytanie widzi wszystkie notki", len(_p1) == 40, len(_p1))
+    sprawdz("pierwsze czytanie widzi notki z okna", len(_p1) == _ile(40), len(_p1))
     sprawdz("i notka o turbinach w niej jest",
             any("turbin" in " ".join(sorted(o)) for o in _p1))
 
@@ -604,7 +630,8 @@ try:
     _dz.write_text("\n".join(_linie) + "\n", encoding="utf-8")
 
     _p2 = stages.pamiec_wystawionych()
-    sprawdz("po recznej edycji pamiec ma WSZYSTKIE notki", len(_p2) == 42, len(_p2))
+    sprawdz("po recznej edycji pamiec ma komplet z okna",
+            len(_p2) == _ile(42), len(_p2))
     sprawdz("i edytowana notka NIE zginela",
             any("turbin" in " ".join(sorted(o)) for o in _p2))
 
@@ -617,7 +644,7 @@ try:
         _json.dumps(_skrot, ensure_ascii=False), encoding="utf-8")
     _p3 = stages.pamiec_wystawionych()
     sprawdz("offset w srodku wiersza wymusza przeliczenie od zera",
-            len(_p3) == 42, len(_p3))
+            len(_p3) == _ile(42), len(_p3))
 finally:
     stages.PAMIEC_NOTEK_PLIK = _stary_plik
     config.przywroc_katalog_danych(_zdjecie_notek)

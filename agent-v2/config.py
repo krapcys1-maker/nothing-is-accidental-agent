@@ -1405,7 +1405,54 @@ CURIOSITY_MEMORY = 60
 # wtedy zawiodla: dopoki zero stalo w konfiguracji Z WYJASNIENIEM, nie bylo
 # jak zauwazyc, ze wyjasnienie jest falszywe. Wylaczenie na jedna stala jest
 # tanie w odwrocie i drogie w rewizji.
-PAMIEC_NOTEK = None
+# OKNO WRACA 7 WRZESNIA 2026 — DZWIGNIA ODWROTU, O KTOREJ MOWI AKAPIT WYZEJ,
+# ZOSTALA WLASNIE POCIAGNIETA. I to jest jej pierwsze uzycie.
+#
+# CO SIE ZMIENILO OD TAMTEGO POMIARU. Pamiec bez konca zmierzono 25 sierpnia
+# na DWUDZIESTU DZIEWIECIU notkach: okna 8, 12, 20, 40 i pamiec pelna dawaly
+# te same piec blokad, zero roznicy. Dzis notek jest DZIEWIECDZIESIAT i
+# roznica jest cala.
+#
+# ZMIERZONE 7 wrzesnia na zywym banku (131 wolnych faktow, ile PRZECHODZI):
+#
+#     okno  8   ->  23 fakty (18%)
+#     okno 12   ->  22       (17%)
+#     okno 20   ->  22       (17%)
+#     okno 30   ->  20       (15%)
+#     okno 40   ->  19       (15%)
+#     bez konca ->  14       (11%)
+#
+# I CO Z TEGO WYNIKALO NA KONCIE — zapora dusila produkcje coraz mocniej:
+#
+#     dzien   odrzuconych przez zapore   wyszlo notek
+#     01.09            1                      1
+#     03.09           14                      4
+#     05.09           24                      8
+#     06.09           31                      6
+#     07.09            5                    ZERO
+#
+# 7 wrzesnia poranny przebieg wzial osiem kandydatow ze spizarni, WSZYSTKIE
+# odpadly na wspolnej nazwie („face", „critical", „astra's", „openai's",
+# „google"), a dobranie nowych odmowilo, bo bank jest pelny. Zakleszczenie:
+# material jest, tylko caly zderza sie z tym, co juz napisalismy.
+#
+# PRZYCZYNA JEST W ARYTMETYCE, NIE W ZLEJ NAZWIE. Zapora zwalnia nazwe dopiero,
+# gdy wystapi co najmniej cztery razy w NASZYCH notkach. Przy 90 notkach mamy
+# 134 rozne nazwy, z czego 132 wystepuja rzadziej — wiec blokuja. „google"
+# wystapil RAZ w calym korpusie i blokowal.
+#
+# DLACZEGO 20, A NIE MNIEJ. Okna 12 i 20 daja tyle samo (22 fakty), wiec biore
+# WIEKSZE — mniejsze nie kupuje nic, a traci pamiec. Przy trzech notkach na
+# dobe 20 notek to okolo TYGODNIA, czyli tyle, ile czytelnik realnie widzi,
+# przewijajac profil.
+#
+# CZEGO TO NIE DOTYKA. Zapora „to samo, co juz DZIS wystawiamy" (`unikaj`) jest
+# OSOBNA i obowiazuje bez zmian. Incydent, dla ktorego caly ten mechanizm
+# powstal — trzy notki o GLM-5.3 jednego dnia, 31 sierpnia — lapie sie wlasnie
+# w niej. Okno dotyczy wylacznie porownania MIEDZY DNIAMI.
+#
+# JAK COFNAC: wpisac tu z powrotem `None`.
+PAMIEC_NOTEK = 20
 
 # ILE DNI MOZE MIEC ZRODLO FAKTU, KTORY TWIERDZI COS O STANIE TERAZ.
 #
