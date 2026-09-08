@@ -11,6 +11,7 @@ bez ostrzeżenia.
 
 | plik | co robi | orientacyjny koszt |
 |---|---|---|
+| `proba_tematow.py` | **MIERZY SKŁAD TEMATÓW** — N szukań przez prawdziwy potok, klasyfikacja branża/świat, nic nie publikuje i **nic nie dopisuje do banku** | ok. 0,078 USD za szukanie, czyli **0,78 USD za dziesięć** |
 | `test_integracja.py` | **PEŁNY PŁATNY PRZEBIEG DNIA** z przerwami 45–90 min | godziny pracy, kilka USD |
 | `test_notki_ab.py` | notki na DeepSeeku i Fable, ten sam materiał | ~$0,95 |
 | `test_notki_szeroki_material.py` | trzy notki na Fable z szerokiego materiału | ~$0,70 |
