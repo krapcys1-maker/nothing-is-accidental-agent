@@ -190,5 +190,100 @@ sprawdz("wersja BEZ zaczynu zachowuje ochrone przed staroscia",
         "2022 and 1992" in _zr or "age rules below still hold" in _zr)
 
 print()
+print("=== 9. ROZNORODNOSC ZRODEL — DWIE POLOWY JEDNEJ ZMIANY ===")
+# ZMIERZONE 8 wrzesnia dwa razy po piec szukan:
+#     32 swieze fakty -> CZTERY hosty
+#     35 swiezych     -> siedem hostow, ale te same cztery daly 32 z 35 (91%)
+# a bank narastajacy tygodniami ma 88 ROZNYCH hostow na 131 faktow.
+# Material jest — nie widzial go WYBOR.
+
+print("  -- polowa pierwsza: wybor z banku --")
+sprawdz("`_host_faktu` stoi na poziomie modulu (trzy miejsca go wolaja)",
+        callable(getattr(stages, "_host_faktu", None)))
+for _u, _ocz in (("https://www.PyTorch.org/blog/x", "pytorch.org"),
+                 ("https://latent.space/p/y", "latent.space"),
+                 ("", ""), (None, "")):
+    sprawdz("host %-34r -> %r" % (_u, _ocz),
+            stages._host_faktu({"url": _u}) == _ocz,
+            stages._host_faktu({"url": _u}))
+sprawdz("pusty fakt nie wywala funkcji", stages._host_faktu(None) == "")
+sprawdz("`wez_kandydatow` pomija drugi fakt z tego samego hosta",
+        "z_tego_hosta.append" in _zr)
+# NIE ODRZUCA — to jest cala roznica wobec odsiewu przy zapisie.
+sprawdz("i robi to POMIJAJAC, nie odrzucajac (fakt zostaje w banku)",
+        "zostaje w banku: %s" in _zr)
+sprawdz("i melduje to GLOSNO, tak jak blizniaki",
+        "drugi fakt z `%s` zostaje w banku" in _zr)
+
+print("  -- polowa druga: zuzyte hosty jako DANE --")
+sprawdz("`znajdz_ciekawostki` liczy fakty po hostach", "_po_hostach" in _zr)
+sprawdz("i podaje wyczerpane zrodla do promptu",
+        "wyczerpane_zrodla=" in _zr)
+sprawdz("prompt ma na to pole", "{wyczerpane_zrodla}" in _p)
+sprawdz("i nazywa to FAKTEM o naszej polce, nie regula",
+        "This is not" in _p and "a rule" in _p)
+# KONTRDOWOD DO SAMEJ ZMIANY: regula w prompcie juz raz oblala pomiar.
+sprawdz('KONTRDOWOD zapisany: regula o dwoch faktach z hosta nie zadzialala',
+        "nie wiecej niz dwa fakty z jednego zrodla" in _zr
+        or "ZMIERZYLEM, ze to nie dziala" in _zr)
+sprawdz("prog wyczerpania to cztery fakty z hosta", "n >= 4" in _zr)
+
+print()
+print("=== 10. ROZNORODNOSC NIE MA PRAWA GLODZIC ===")
+# TO JEST POPRAWKA DO POPRAWKI. 7 wrzesnia zapora „ta sama nazwa wlasna"
+# udusila konto do ZERA NOTEK w jednej dobie. Limit na host ma ten sam ksztalt
+# i moglby zrobic to samo, gdy bank jest skoncentrowany — a wlasnie zmierzone,
+# ze swieze szukania wracaja z czterech blogow.
+sprawdz("`wez_kandydatow` ma drugie przejscie", "partia byla za krotka" in _zr)
+sprawdz("i dobiera z POMINIETYCH, gdy partia za krotka",
+        "roznorodnosc nie moze glodzic" in _zr)
+sprawdz("powod zapisany przy kodzie (zero notek 7 wrzesnia)",
+        "udusila konto do ZERA NOTEK" in _zr)
+
+# ZACHOWANIEM: osiem faktow z JEDNEGO hosta ma oddac PELNA partie, nie jeden.
+import json as _json   # noqa: E402
+import tempfile as _tf  # noqa: E402
+
+_kat = pathlib.Path(_tf.mkdtemp())
+_zdjecie = config.uzyj_katalogu_danych(_kat)
+try:
+    import db as _db   # noqa: E402
+    _dzis = _db.now()[:10]
+    # ZDANIA MUSZA BYC NAPRAWDE ROZNE, nie tylko ponumerowane. Pierwsza wersja
+    # tej atrapy brzmiala „Fakt numer N o zupelnie innej rzeczy: X" — wspolna
+    # ramka sprawiala, ze wszystkie odpadaly jako BLIZNIAKI, zanim doszly do
+    # limitu hostow, i test oblewal na wlasnej atrapie. Ta sama slepota, co
+    # przy atrapie banku dla klasyfikatora.
+    _ZDANIA = [
+        "Irish data centres drew a fifth of all metered electricity last year.",
+        "A school district switched off its exam proctoring software in March.",
+        "One text model drew a pelican on a bicycle using Blender scripts.",
+        "Byte-level tokenizers stopped splitting Thai words mid-syllable.",
+        "The Delhi High Court issued its first ruling on training corpora.",
+        "A vaccine trial reused an assay that had failed reproduction twice.",
+        "Rotterdam harbour cranes now idle on forecast wind, not on schedule.",
+        "Turbine blades over eighty metres cannot cross most motorway bridges.",
+    ]
+    _bank = [{"fact": _zd, "url": "https://jedynyhost.example/%d" % i,
+              "domain": "dziedzina %d" % i, "status": "nowy",
+              "kiedy": _dzis + "T08:00:00+00:00",
+              "source_date": _dzis, "control_date": _dzis,
+              "z_kanalu": True, "ranga": i}
+             for i, _zd in enumerate(_ZDANIA, 1)]
+    (_kat / "indeks_kandydatow.json").write_text(
+        _json.dumps(_bank, ensure_ascii=False), encoding="utf-8")
+    import io as _io, contextlib as _ctx   # noqa: E402
+    with _ctx.redirect_stdout(_io.StringIO()):
+        _partia = stages.wez_kandydatow(3)
+    sprawdz("osiem faktow z JEDNEGO hosta oddaje pelna partie (3), nie jeden",
+            len(_partia) == 3, len(_partia))
+    # KONTRDOWOD: bez drugiego przejscia byloby dokladnie JEDEN.
+    _hosty = {stages._host_faktu(k) for k in _partia}
+    sprawdz("KONTRDOWOD: wszystkie z tego samego hosta, wiec limit DZIALAL",
+            _hosty == {"jedynyhost.example"}, _hosty)
+finally:
+    config.przywroc_katalog_danych(_zdjecie)
+
+print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))
 sys.exit(1 if oblane else 0)

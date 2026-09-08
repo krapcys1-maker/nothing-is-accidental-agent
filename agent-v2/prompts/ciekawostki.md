@@ -149,6 +149,23 @@ repetition.
 
 {ile_z_obszarow}
 
+## Sources this publication has already drained
+
+Below is every source we already hold four or more facts from. This is not
+a rule, it is a fact about what we already hold — the same way you are told which
+openings we have already used.
+
+{wyczerpane_zrodla}
+
+A reader who follows any of those has already seen what we would find there
+today. Going back to them is not wrong, it is *redundant*: you would be
+spending a paid search to fetch something we already have.
+
+Prefer a source not on that list. The document you want is usually one step
+further out than the blog that summarised it — the filing itself, the paper
+itself, the court's own page, the regulator's own notice, the hospital
+trust's own report.
+
 ## WHAT SHAPE to look for — apply each pattern to each area
 
 The areas tell you where to look. They do not tell you what you are looking

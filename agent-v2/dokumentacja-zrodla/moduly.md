@@ -35,7 +35,7 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-9836 wierszy, 155 funkcji na poziomie modułu, 0 klas
+9949 wierszy, 156 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -121,6 +121,7 @@
 | `_o_tym_samym(a, b, min_wspolnych, prog)` *(wewn.)* | Czy dwa teksty mowia o tej samej rzeczy. |
 | `teksty_ostatnich_notek(ile)` | Tresci ostatnich notek — do porownania po NAZWACH WLASNYCH. |
 | `_fakt_do_pisarza(fakt)` *(wewn.)* | Wpis banku obciety do tego, co jest dowodem. |
+| `_host_faktu(fakt)` *(wewn.)* | Host zrodla, bez `www.` — do pilnowania ROZNORODNOSCI ZRODEL. |
 | `_tematy_zrodel()` *(wewn.)* | Tematy z korpusu kanalow — drugi mianownik dla rzadkosci nazw. |
 | `wybierz_material(zapas, unikaj, wczesniej, teksty, korpus_zrodel)` | Bierze fakt, ktory NIE jest o tym samym, co juz dzis wystawiamy. |
 | `notki_dnia(conn, run_id, dzien_artykulu, karta, ciekawostki, link_artykulu, ile, od)` | Do pieciu notek z dziennego planu, kazda z innego materialu. |

@@ -1931,6 +1931,31 @@ def znajdz_ciekawostki(
     # ZAMOWIENIA WIDOCZNE W DZIENNIKU. Sygnal, ktorego nie widac w logu, wraca
     # do stanu sprzed naprawy: pole bylo zapisywane i liczone, i nikt nie
     # zauwazyl przez dobe, ze nikt go nie czyta.
+    # ZUZYTE ZRODLA JAKO DANE, NIE JAKO PROSBA.
+    #
+    # To jest ten sam ruch, ktory w tym pliku juz raz wypalil: `ostatnie_otwarcia`
+    # poszly do modelu jako LISTA i scielly dwie trzecie rachunku za notki.
+    # Komentarz przy tamtej zmianie mowi to wprost — „zamiast prosic model, zeby
+    # byl dobry, daj mu informacje, ktorej mu brakuje".
+    #
+    # DLACZEGO NIE REGULA. 8 wrzesnia napisalem w `ciekawostki.md` wprost „nie
+    # wiecej niz dwa fakty z jednego zrodla" i ZMIERZYLEM, ze to nie dziala:
+    # 35 faktow, te same cztery blogi daly 32 (91%). Model nie wie, ktore
+    # zrodla juz wyczerpal — regula tego nie mowi, lista mowi.
+    _z_banku = [k for k in wczytaj_indeks()
+                if isinstance(k, dict) and k.get("url")]
+    _po_hostach: dict[str, int] = {}
+    for _k in _z_banku:
+        _h = _host_faktu(_k)
+        if _h:
+            _po_hostach[_h] = _po_hostach.get(_h, 0) + 1
+    _wyczerpane = sorted((h for h, n in _po_hostach.items() if n >= 4),
+                         key=lambda h: -_po_hostach[h])[:12]
+    if _wyczerpane:
+        print("  [ciekawostki] zrodla juz wyczerpane: %s"
+              % ", ".join("%s (%d)" % (h, _po_hostach[h]) for h in _wyczerpane[:6]),
+              flush=True)
+
     _zamowienia = zamowienia_z_banku()
     if _zamowienia:
         print("  [ciekawostki] zamowienia z banku: %d" % len(_zamowienia),
@@ -2020,6 +2045,11 @@ def znajdz_ciekawostki(
         zaczyn_kanalow=_zaczyn,
         jak_uzywac_obszarow=_jak_obszary,
         ile_z_obszarow=_ile_obszary,
+        wyczerpane_zrodla=(
+            NOWA_LINIA.join("- %s (%d faktow juz mamy)" % (h, _po_hostach[h])
+                            for h in _wyczerpane)
+            if _wyczerpane else
+            "(zadne jeszcze nie jest wyczerpane — bank jest mlody)"),
         # ZAMOWIENIE Z BANKU — patrz `zamowienia_z_banku`. Bank juz wie, czego
         # brakuje do napisania katow, ktore sam wymyslil; bez tego wiersza
         # szukacz zaczyna za kazdym razem od zera i przynosi to, co mamy.
@@ -4264,6 +4294,23 @@ def _fakt_do_pisarza(fakt: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(fakt, dict):
         return fakt
     return {k: v for k, v in fakt.items() if k in DOWOD_DLA_PISARZA}
+
+
+def _host_faktu(fakt) -> str:
+    """Host zrodla, bez `www.` — do pilnowania ROZNORODNOSCI ZRODEL.
+
+    NA POZIOMIE MODULU, bo tej samej odpowiedzi potrzebuja TRZY miejsca: wybor
+    z banku (`wez_kandydatow`), lista zuzytych hostow podawana modelowi
+    (`znajdz_ciekawostki`) i pomiar w `tests/platne/proba_tematow.py`. Trzy
+    kopie jednego parsowania adresu rozjechalyby sie przy pierwszym adresie
+    z portem albo wielka litera w domenie.
+    """
+    from urllib.parse import urlparse
+    try:
+        return (urlparse(str((fakt or {}).get("url") or "")).netloc
+                or "").lower().replace("www.", "")
+    except ValueError:
+        return ""
 
 
 def _tematy_zrodel() -> list[str]:
@@ -8821,6 +8868,7 @@ def wez_kandydatow(ile: int = 1) -> list[dict[str, Any]]:
     #
     # Fakty z dzis wchodza WYLACZNIE do porownania — nie do `wziete`, bo tamta
     # lista jest zwracana i znaczona jako uzyta.
+    z_tego_hosta: list[tuple[str, str]] = []
     _dzis = db.now()[:10]
     porownanie = [k for k in indeks
                   if str(k.get("uzyty_kiedy") or "")[:10] == _dzis]
@@ -8880,6 +8928,33 @@ def wez_kandydatow(ile: int = 1) -> list[dict[str, Any]]:
             blizniaki.append((tresc + ((" [rzadkie: %s]" % rzadkie) if rzadkie else ""),
                               str(blizniak.get("fact") or "")))
             continue
+        # JEDEN FAKT Z HOSTA NA PARTIE — dokladnie ta sama zasada, co przy
+        # blizniakach dwa akapity wyzej, i tak samo NIE ODRZUCA: fakt zostaje
+        # w banku ze statusem „nowy" i wyjdzie nastepnym razem.
+        #
+        # ZMIERZONE 8 wrzesnia 2026, dwa razy po piec szukan przez
+        # `tests/platne/proba_tematow.py`:
+        #
+        #     32 swieze fakty -> CZTERY hosty
+        #     35 swiezych     -> siedem hostow, ale te same cztery blogi
+        #                        daly 32 z 35 (91%)
+        #
+        # a bank narastajacy tygodniami ma 88 ROZNYCH hostow na 131 faktow.
+        # Czyli material jest — nie widzial go WYBOR.
+        #
+        # DLACZEGO TU, A NIE PRZY ZAPISIE. Odsiew przy zapisie wyrzucalby fakty
+        # juz oplacone: przy limicie dwoch na host z tamtego przebiegu wypadlyby
+        # 24 z 35. Tutaj nie ginie nic — koncentracja przestaje docierac do
+        # notek, a bank zachowuje wszystko, za co zaplacilismy.
+        #
+        # CZEGO TO NIE NAPRAWIA: samego szukania. Jesli swieze szukania dalej
+        # wracaja z czterech blogow, bank z czasem sie do nich zapadnie i nie
+        # bedzie z czego wybierac. Na to celuje druga polowa tej zmiany —
+        # zuzyte hosty podane modelowi jako DANE (patrz `znajdz_ciekawostki`).
+        _host = _host_faktu(k)
+        if _host and _host in {_host_faktu(w) for w in wziete}:
+            z_tego_hosta.append((_host, tresc))
+            continue
         wziete.append(k)
         porownanie.append(k)
     # GLOSNO, nie po cichu. Partia przycieta bez slowa wyglada jak partia
@@ -8887,6 +8962,44 @@ def wez_kandydatow(ile: int = 1) -> list[dict[str, Any]]:
     for tresc, wzorzec in blizniaki:
         print("  [indeks] blizniak zostaje w banku: %s (juz biore: %s)"
               % (tresc[:64], wzorzec[:64]), flush=True)
+    # DRUGIE PRZEJSCIE: ROZNORODNOSC TAK, GLODZENIE NIE.
+    #
+    # TO JEST POPRAWKA DO POPRAWKI, i powod jest swiezy. 7 wrzesnia zapora
+    # „ta sama nazwa wlasna" udusila konto do ZERA NOTEK w jednej dobie: osiem
+    # kandydatow ze spizarni, wszystkie odrzucone, dzien skonczony. Limit na
+    # host ma dokladnie ten sam ksztalt i moglby zrobic to samo, gdy bank jest
+    # skoncentrowany — a wlasnie zmierzylem, ze swieze szukania wracaja
+    # z czterech blogow.
+    #
+    # Zlapane testem, nie rozumowaniem: `test_kotwica_przezywa_zapis` i
+    # `test_indeks_kandydatow` oddaly partie po JEDNEJ pozycji zamiast trzech,
+    # bo ich atrapy stoja na jednym hoscie.
+    #
+    # Wiec: roznorodnosc jest PREFERENCJA, nie bramka. Gdy po odsianiu partia
+    # jest za krotka, dobieramy z pominietych — lepiej dwa fakty z jednego
+    # bloga niz jedna notka zamiast trzech.
+    if z_tego_hosta and len(wziete) < max(0, ile):
+        _brakuje = max(0, ile) - len(wziete)
+        _wzieci = {id(w) for w in wziete}
+        _dobrani = 0
+        for k, _ in swiezi:
+            if _dobrani >= _brakuje:
+                break
+            if id(k) in _wzieci or _po_terminie(k):
+                continue
+            wziete.append(k)
+            porownanie.append(k)
+            _wzieci.add(id(k))
+            _dobrani += 1
+        if _dobrani:
+            print("  [indeks] partia byla za krotka po odsianiu hostow —"
+                  " dobieram %d (roznorodnosc nie moze glodzic)" % _dobrani,
+                  flush=True)
+
+    # TAK SAMO GLOSNO. Partia przycieta bez slowa wyglada jak kompletna.
+    for _h, _tresc in z_tego_hosta:
+        print("  [indeks] drugi fakt z `%s` zostaje w banku: %s"
+              % (_h, _tresc[:58]), flush=True)
 
     # --- KATY: JEDEN FAKT MOZE ODDAC KILKA NOTEK ----------------------------
     #

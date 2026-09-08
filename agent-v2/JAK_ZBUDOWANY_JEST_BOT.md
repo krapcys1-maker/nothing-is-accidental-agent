@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **26 plików**, 34 234 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **26 plików**, 34 347 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -114,7 +114,7 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
 się testować bez przeglądarki i bez pieniędzy**. 169 zestawów
-testów, 4396 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+testów, 4413 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -177,7 +177,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-9836 wierszy, 155 funkcji na poziomie modułu, 0 klas
+9949 wierszy, 156 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -263,6 +263,7 @@ wiec nie da sie go rozjechac z kodem.
 | `_o_tym_samym(a, b, min_wspolnych, prog)` *(wewn.)* | Czy dwa teksty mowia o tej samej rzeczy. |
 | `teksty_ostatnich_notek(ile)` | Tresci ostatnich notek — do porownania po NAZWACH WLASNYCH. |
 | `_fakt_do_pisarza(fakt)` *(wewn.)* | Wpis banku obciety do tego, co jest dowodem. |
+| `_host_faktu(fakt)` *(wewn.)* | Host zrodla, bez `www.` — do pilnowania ROZNORODNOSCI ZRODEL. |
 | `_tematy_zrodel()` *(wewn.)* | Tematy z korpusu kanalow — drugi mianownik dla rzadkosci nazw. |
 | `wybierz_material(zapas, unikaj, wczesniej, teksty, korpus_zrodel)` | Bierze fakt, ktory NIE jest o tym samym, co juz dzis wystawiamy. |
 | `notki_dnia(conn, run_id, dzien_artykulu, karta, ciekawostki, link_artykulu, ile, od)` | Do pieciu notek z dziennego planu, kazda z innego materialu. |
@@ -9124,7 +9125,7 @@ visible either way:
 
 #### `prompts/ciekawostki.md`
 
-**445 wierszy.** Pola wejsciowe: `dziedziny`, `dzis`, `generatory`, `ile`, `ile_z_obszarow`, `jak_uzywac_obszarow`, `marka`, `miesiac`, `premiera`, `stan_modeli`, `uzyte`, `w_reku`, `wydarzenia`, `zaczyn_kanalow`, `zamowienia`
+**462 wierszy.** Pola wejsciowe: `dziedziny`, `dzis`, `generatory`, `ile`, `ile_z_obszarow`, `jak_uzywac_obszarow`, `marka`, `miesiac`, `premiera`, `stan_modeli`, `uzyte`, `w_reku`, `wyczerpane_zrodla`, `wydarzenia`, `zaczyn_kanalow`, `zamowienia`
 
 ````markdown
 Find {ile} documented facts worth stopping a stranger mid-scroll.
@@ -9277,6 +9278,23 @@ monotonous, and the reader notices the sameness long before they notice the
 repetition.
 
 {ile_z_obszarow}
+
+## Sources this publication has already drained
+
+Below is every source we already hold four or more facts from. This is not
+a rule, it is a fact about what we already hold — the same way you are told which
+openings we have already used.
+
+{wyczerpane_zrodla}
+
+A reader who follows any of those has already seen what we would find there
+today. Going back to them is not wrong, it is *redundant*: you would be
+spending a paid search to fetch something we already have.
+
+Prefer a source not on that list. The document you want is usually one step
+further out than the blog that summarised it — the filing itself, the paper
+itself, the court's own page, the regulator's own notice, the hospital
+trust's own report.
 
 ## WHAT SHAPE to look for — apply each pattern to each area
 

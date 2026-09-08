@@ -33,9 +33,9 @@
 {{"targets": [{{"index": <number>, "worth_it": true|false, "what_i_would_add": "<one concrete sentence, or empty when worth_it is false>", "why_not": "<one sentence, only when worth_it is false>"}}]}}
 ```
 
-#### `ciekawostki.md` (445 wierszy)
+#### `ciekawostki.md` (462 wierszy)
 
-**Pola wejściowe:** `dziedziny`, `dzis`, `generatory`, `ile`, `ile_z_obszarow`, `jak_uzywac_obszarow`, `marka`, `miesiac`, `premiera`, `stan_modeli`, `uzyte`, `w_reku`, `wydarzenia`, `zaczyn_kanalow`, `zamowienia`
+**Pola wejściowe:** `dziedziny`, `dzis`, `generatory`, `ile`, `ile_z_obszarow`, `jak_uzywac_obszarow`, `marka`, `miesiac`, `premiera`, `stan_modeli`, `uzyte`, `w_reku`, `wyczerpane_zrodla`, `wydarzenia`, `zaczyn_kanalow`, `zamowienia`
 
 **Kontrakt wyjścia:**
 
