@@ -141,3 +141,55 @@ bierze to, co da się udokumentować.
 **Dźwignia jest w źródłach, nie w słowach.** Kolejny krok, jeśli będzie:
 ograniczyć albo skierować hosty, w których wolno szukać — i zmierzyć to tym
 samym przyrządem, który właśnie się skalibrował.
+
+---
+
+# Trzeci pomiar — po naprawie promptu. Ruszyło się nieznacznie.
+
+Pięć szukań, **0,1966 USD**, bank nietknięty, opublikowanych 0. Te same warunki
+co poprzednio: doba nieparzysta, więc wszystkie szukania **bez zaczynu**.
+
+| | przed naprawą | po naprawie |
+|---|---|---|
+| różnych źródeł | 4 na 32 | **7 na 35** |
+| dotyczy zadanych dziedzin | 25% | **37%** |
+
+## Dlaczego to nie jest sukces
+
+**Te same cztery blogi to nadal 32 z 35 faktów — 91%:**
+
+```
+pytorch.org            10
+latent.space            9
+simonwillison.net       7
+importai.substack.com   6
+deepmind.google         1
+arxiv.org               1
+```
+
+Dwa nowe źródła dały po jednym fakcie. Koncentracja praktycznie się nie
+zmieniła.
+
+A 37% jest **kruche**: 17%, 0%, 25%, 25% i **100%**. Bez tego jednego
+odstającego szukania zostaje **19% — gorzej niż przed zmianą**.
+
+## Co to ostatecznie rozstrzyga
+
+Trzy rzeczy sprawdzone i wykluczone jako przyczyna: **zaczyn z kanałów**,
+**lista dziedzin**, **słowa w prompcie**. Ostatnia właśnie oblała pomiar,
+mimo że była napisana wprost i mocno („nie więcej niż dwa fakty z jednego
+źródła").
+
+To jest czwarty raz, gdy w tym projekcie potwierdza się ta sama zasada:
+**prośba w prompcie nie jest bramką.**
+
+## Czego nie ma w kodzie
+
+Sprawdzone: **nie istnieje żaden limit faktów na źródło** — ani przy szukaniu,
+ani przy zapisie do banku. Wyszukiwanie DeepSeeka na `/responses` przyjmuje
+`{"type": "web_search"}` bez parametru domen, więc przy zapytaniu ograniczyć
+się nie da.
+
+Zostaje jedno miejsce, w którym da się to wyegzekwować kodem: **odsiew przy
+zapisie do banku**. Z ceną, którą trzeba nazwać wprost — odrzuca fakty już
+opłacone.
