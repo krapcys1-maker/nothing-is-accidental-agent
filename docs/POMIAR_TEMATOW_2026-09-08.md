@@ -72,3 +72,72 @@ w nią tydzień i tłumaczył sobie skład banku czymkolwiek innym.
 Przy pierwszym uruchomieniu sam miał wadę tej samej klasy, którą miał wykrywać:
 zameldował „branża 0%, świat 0%" przy **zerze płatnych wywołań** — ciszę jako
 pomiar. Teraz drukuje pełne wyjście szukania, gdy nic nie oddało.
+
+---
+
+# Drugi pomiar — przyrządem sprawdzalnym
+
+Ten sam dzień, po przebudowie przyrządu. Pięć szukań, **0,2310 USD**, bank
+nietknięty, opublikowanych 0. Fakty zapisane do `/tmp/proba_tematow_fakty.json`
+(52 KB) — dalsza analiza jest darmowa.
+
+## Dlaczego stary podział trafił do kosza
+
+Podział branża/świat sprawdziłem na **czternastu faktach oznaczonych ręcznie**,
+których nie użyłem do strojenia:
+
+| | zgodność |
+|---|---|
+| stary klasyfikator | 10/14 (71%) |
+| mój przepisany | 9/14 (64%) |
+
+**Przebudowałem go i wyszedł gorszy.** Powód jest strukturalny: każdy fakt jest
+o AI, a konto celowo ubiera skutek w język ludzki, więc prawie wszystko wygląda
+jak „oba". Liczby **70/6 i 73/2 nigdy nie były wiarygodne.**
+
+## Nowa miara i jej skala
+
+Nie pyta, czy temat jest ludzki. Pyta, **czy model odpowiedział na to, o co go
+zapytano**. Słowo rozróżnia, gdy jest rzadkie w korpusie; rzadkość liczona
+z częstości w banku, nie z mojej oceny.
+
+Skalibrowana na 131 faktach banku:
+
+```
+60%  fakt wobec WŁASNEJ dziedziny (model sam ją nadał)   ← sufit
+14%  poziom przypadku przy pięciu dziedzinach
+ 3%  fakt wobec CUDZEJ, losowej dziedziny                 ← podłoga
+```
+
+## Wynik
+
+```
+8 z 32 faktów dotyczy zadanych dziedzin  =  25%
+```
+
+**Przy przypadku, nie przy suficie.** Rozkład po szukaniach: 50%, **0%**, 25%,
+17%, 20%. Pierwsze było odstające.
+
+## Co widać bez żadnego przyrządu
+
+| zamówiono | oddano |
+|---|---|
+| EU AI Act, struktura białek, matematyka i dowód | open-source governance, AEO ×2, coding |
+| co firma AI sprzedaje, struktura białek, łańcuch dostaw | **agentic search ×3**, open-source infrastructure ×2 |
+| multimodal, **ludzie etykietujący dane i ile im płacą** | open-source infrastructure, AEO, kartografia |
+| fine-tuning, cykl hype'u, **chatboty jako terapeuci** | open-source infrastructure, chip supply chain |
+
+Cztery tematy wracają w **każdym** szukaniu: open-source infrastructure,
+product recommendations/AEO, AI safety/governance, chip supply chain.
+W jednym szukaniu ten sam temat wrócił **trzy razy**.
+
+## Diagnoza
+
+Wszystkie pięć szukań poszło **bez zaczynu z kanałów**, więc to nie zaczyn.
+Lista dziedzin jest zbalansowana, więc to nie ona. Zostaje samo szukanie:
+model pyta sieć, a sieć **dziś** jest pełna prasy branżowej AI — i model
+bierze to, co da się udokumentować.
+
+**Dźwignia jest w źródłach, nie w słowach.** Kolejny krok, jeśli będzie:
+ograniczyć albo skierować hosty, w których wolno szukać — i zmierzyć to tym
+samym przyrządem, który właśnie się skalibrował.
