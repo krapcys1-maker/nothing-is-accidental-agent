@@ -922,16 +922,33 @@ def plan_tygodnia(dzien_artykulu: int = 6) -> list[dict[str, Any]]:
     return plan
 
 
+# TOZSAMOSC W KOMUNIKATACH SYSTEMOWYCH — ujednolicona 8 wrzesnia 2026.
+#
+# SKAD TO SIE WZIELO. Drugi agent (inne konto, to samo repo w zarysie) zglosil
+# u siebie commitem `21a8039`: „Artykul pisala »anonymous editorial brand«,
+# a notki pisala NIA". Sprawdzilem, czy mamy to samo — MAMY, i to szerzej.
+#
+# Prompty UZYTKOWNIKA znaly marke od 7 wrzesnia (pole `{marka}`), ale piec
+# komunikatow SYSTEMOWYCH nadal mowilo bezimiennie „an anonymous editorial
+# brand". Najgorszy przypadek to `NOTE_SYSTEM`: pisarz notek — czyli glowny
+# glos konta — dostawal identyfikacje slabsza niz skaut, ktory w tym samym
+# pliku wie, ze pisze dla „a publication about artificial intelligence: what
+# these systems do, how they are built, and who decides what they are allowed
+# to do".
+#
+# CZEGO TO NIE NAPRAWIA: monotonii tematow. To jest spojnosc, nie tresc.
 NOTE_SYSTEM = (
-    "You write very short Substack Notes for an anonymous editorial brand. "
+    "You write very short Substack Notes for %s, a publication about "
+    "artificial intelligence: what these systems do, how they are built, "
+    "and who decides what they are allowed to do. " % config.MARKA +
     "Every fact comes from the supplied evidence, never from your own memory. "
     "Return only valid JSON."
 )
 
 
 IMAGE_SYSTEM = (
-    "You write image briefs for the header illustrations of an anonymous "
-    "editorial publication. The visual style is fixed and not yours to change. "
+    "You write image briefs for the header illustrations of %s. " % config.MARKA +
+    "The visual style is fixed and not yours to change. "
     "Return only valid JSON."
 )
 
@@ -1305,8 +1322,8 @@ def zapisz_zuzyte(nowe: list[Any]) -> None:
 
 
 TARGETS_SYSTEM = (
-    "You decide which posts an anonymous editorial publication should comment "
-    "on. Silence is the normal answer. Return only valid JSON."
+    "You decide which posts %s should comment on. " % config.MARKA +
+    "Silence is the normal answer. Return only valid JSON."
 )
 
 
@@ -1362,8 +1379,8 @@ def wybierz_cele(
 # Przegladu 25 promptow to nie objelo, bo ten tekst siedzi w KODZIE, nie w
 # pliku promptu. Znalazl go dopiero audyt.
 CURIOSITY_SYSTEM = (
-    "You find documented facts about artificial intelligence for an anonymous "
-    "editorial brand: what these systems do, how they are built, who decides "
+    "You find documented facts about artificial intelligence for %s: " % config.MARKA +
+    "what these systems do, how they are built, who decides "
     "what they may do, and what that arrangement hands the people who built "
     "them. You search before you answer and you never state a fact you cannot "
     "put a source against. Return only valid JSON."
@@ -4916,8 +4933,8 @@ def _otwarcie_formulka(zdanie: str) -> bool:
 # padlo slowo „aphorism". Zapora wstrzykniecia i podlogi z pamieci nie odpalily
 # w tym czasie ANI RAZU (0 na 588), wiec cisza nie chronila przed niczym.
 COMMENT_SYSTEM = (
-    "You write comments under other people's Substack posts as an anonymous "
-    "editorial brand. The post has already been chosen and a note already "
+    "You write comments under other people's Substack posts as %s. " % config.MARKA +
+    "The post has already been chosen and a note already "
     "exists saying what to add; you write that comment. You return no comment "
     "only in the five narrow cases the instructions name. Return only valid JSON."
 )

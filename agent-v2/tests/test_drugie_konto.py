@@ -198,5 +198,31 @@ finally:
     importlib.reload(config)
 
 print()
+print("=== 8. KOMUNIKATY SYSTEMOWE TEZ ZNAJA MARKE ===")
+# ZNALEZIONE PRZEZ DRUGIEGO AGENTA U SIEBIE (`21a8039`: „Artykul pisala
+# »anonymous editorial brand«, a notki pisala NIA"), sprawdzone u nas —
+# i u nas bylo szerzej. Prompty UZYTKOWNIKA znaly marke od 7 wrzesnia, ale
+# PIEC komunikatow systemowych nadal mowilo bezimiennie. Najgorszy przypadek:
+# `NOTE_SYSTEM`, czyli glowny glos konta, mial identyfikacje slabsza niz
+# skaut, ktory w tym samym pliku wie, o czym jest publikacja.
+import stages as _st   # noqa: E402
+
+_SYSTEMOWE = ("NOTE_SYSTEM", "IMAGE_SYSTEM", "TARGETS_SYSTEM",
+              "CURIOSITY_SYSTEM", "COMMENT_SYSTEM", "SCOUT_SYSTEM",
+              "WRITER_SYSTEM")
+for _n in _SYSTEMOWE:
+    _s = getattr(_st, _n, "")
+    sprawdz("%-17s niesie marke" % _n, bool(_s) and config.MARKA in _s,
+            _s[:70])
+# I ZE NIE ZOSTALA GDZIES BEZIMIENNA FORMULKA. Samo „an anonymous editorial
+# brand" w komunikacie systemowym znaczy, ze ten tor nie wie, dla kogo pisze.
+_zr = pathlib.Path("agent-v2/stages.py").read_text(encoding="utf-8")
+_bezimienne = [w.strip()[:66] for w in _zr.splitlines()
+               if "an anonymous editorial" in w and "config.MARKA" not in w
+               and not w.lstrip().startswith("#")]
+sprawdz("zaden komunikat systemowy nie jest juz bezimienny",
+        not _bezimienne, _bezimienne[:3])
+
+print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))
 sys.exit(1 if oblane else 0)
