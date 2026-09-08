@@ -3979,7 +3979,17 @@ def nazwy_wlasne(tekst: str, z_niepewnymi: bool = False):
     # `nobody`, `under`, `difference`. To nie sa nazwy niczego — to wyrazy
     # rozpoczynajace zdanie.
     tekst = str(tekst or "")
-    po_kropce = {m.end() for m in re.finditer(r"(?:^|[.!?]\s+)", tekst)}
+    # POCZATEK ZDANIA TO NIE TYLKO KROPKA. Zmierzone 8 wrzesnia 2026 na 94
+    # opublikowanych notkach: wsrod 142 „nazw wlasnych" siedzialy `i've` (3x),
+    # `first`, `quick`, `time`, `start`, `light`, `facts`, `critical`. To sa
+    # wyrazy zaczynajace zdanie po nowym wierszu, po cudzyslowie albo po
+    # dwukropku — a wzorzec `[.!?]\s+` widzial wylacznie kropke ze spacja.
+    #
+    # `critical` zablokowalo notke w przebiegu 11:21 tego dnia: konto napisalo
+    # 1 notke zamiast 2, bo trzy kandydatury odpadly na „tej samej nazwie",
+    # a jedna z tych nazw byla zwyklym przymiotnikiem.
+    po_kropce = {m.end() for m in re.finditer(
+        r"(?:^|[.!?:;]\s+|[\n\r]\s*|[\"'“‘(\[]\s*)", tekst)}
     wynik = set()
     niepewne = set()
     for m in re.finditer(r"[A-Za-z][A-Za-z0-9'’.-]*", tekst):
@@ -4020,6 +4030,25 @@ def nazwy_wlasne(tekst: str, z_niepewnymi: bool = False):
                     and not (ma_cyfre or wewnetrzna_wielka))
         # Myslnik i kropka znikaja, zeby `glm-5.3-flash` i `glm 5.3 flash`
         # byly tym samym. Same cyfry odpadaja — „2026" nie jest nazwa.
+        # DOPELNIACZ TO TA SAMA NAZWA. Dopisane 8 wrzesnia 2026 po pomiarze
+        # na zywym banku: ze 131 wolnych faktow 94 odpadalo na „tej samej
+        # nazwie", a w czolowce blokujacych staly wylacznie formy dzierzawcze
+        # firm — `openai's` 14, `minimax's` 7, `nvidia's` 6, `anthropic's` 4,
+        # `astra's` 2, `huawei's` 1. Razem 34 blokady z 94.
+        #
+        # Mechanizm: zwolnienie z korpusu zrodel dziala na `openai`, bo tak
+        # pisza serwisy („OpenAI launches"), ale nasze notki pisza „OpenAI's
+        # model" i dla zapory bylo to INNE slowo — rzadkie, wiec blokujace.
+        # Zwolnienie omijalo dokladnie te nazwy, dla ktorych powstalo.
+        #
+        # Ucinamy tylko apostrof z `s` na koncu; `athens` czy `analysis`
+        # zostaja nietkniete, bo nie maja apostrofu.
+        for _ogon in ("'s", "’s"):
+            if rdzen.endswith(_ogon):
+                rdzen = rdzen[:-len(_ogon)]
+                break
+        if len(rdzen) < 4:
+            continue
         plaska = "".join(c for c in rdzen if c not in ".-")
         if not plaska or plaska.isdigit():
             continue
@@ -4110,6 +4139,42 @@ def wspolna_nazwa(a: str, b: str, korpus: list[str] | None = None,
             maks_czestosc = len(korpus) + 1
         else:
             maks_czestosc = max(4, len(korpus) // 20)
+    # SLOWO, KTORE W KORPUSIE PADA TEZ MALA LITERA, NIE JEST NAZWA WLASNA.
+    #
+    # Reguly nie da sie zapisac w `nazwy_wlasne`, bo ona widzi JEDEN tekst,
+    # a to jest wlasnosc CALEGO korpusu. Tutaj korpus juz jest.
+    #
+    # ZMIERZONE 8 wrzesnia na 94 notkach: z 142 rzekomych nazw DZIEWIETNASCIE
+    # pada w naszych wlasnych tekstach takze mala litera — `code` (16 razy
+    # mala, raz wielka), `first` (11/1), `time` (6/1), `gauge`, `standard`,
+    # `federal`, `drug`, `copyright`, `program`, `insurance`, `artificial`,
+    # `index`, `cosmetics`, `parliament`, `start`, `rogue`, `railways`,
+    # `flood`, `face`.
+    #
+    # Zaden z nich niczego nie nazywa. Kazdy blokowal.
+    #
+    # DLACZEGO Z DANYCH, A NIE Z LISTY. Reczna lista wyjatkow rozjezdza sie
+    # z korpusem i trzeba ja pamietac; ta regula liczy sie sama i dziala
+    # takze dla slow, ktorych bym nie przewidzial.
+    _mala = set()
+    for tekst in korpus:
+        for _m in re.finditer(r"[a-z][A-Za-z0-9'’.-]*", str(tekst or "")):
+            _w = _m.group(0)
+            if _w[:1].islower():
+                _r = "".join(c for c in _w.strip(".-'’").lower()
+                             if c not in ".-")
+                if len(_r) >= 4:
+                    _mala.add(_r)
+
+    # ODSIEWAMY ZE ZBIORU WSPOLNYCH, A NIE Z LICZNIKA CZESTOSCI. Pierwsza
+    # wersja tej reguly pomijala takie slowa przy liczeniu czestosci — czyli
+    # dawala im czestosc ZERO, a zero znaczy „rzadka", czyli „blokuje".
+    # Regula przeciwko falszywym blokadom dzialala wiec dokladnie odwrotnie
+    # do wlasnego celu.
+    wspolne = {n for n in wspolne if n not in _mala}
+    if not wspolne:
+        return ""
+
     czestosc: dict[str, int] = {}
     for tekst in korpus:
         for nazwa in nazwy_wlasne(tekst):
@@ -4341,11 +4406,18 @@ def _tematy_zrodel() -> list[str]:
         return []
 
 
+# Ile razy w JEDNYM wyborze materialu wolno zapytac model, czy wspolna nazwa
+# wlasna oznacza powtorke. Uzasadnienie i pomiar — w ciele `wybierz_material`.
+MAKS_PYTAN_O_POWTORKE = 5
+
+
 def wybierz_material(zapas: list[dict[str, Any]],
                      unikaj: list[str],
                      wczesniej: list[Any] | None = None,
                      teksty: list[str] | None = None,
-                     korpus_zrodel: list[str] | None = None
+                     korpus_zrodel: list[str] | None = None,
+                     conn: sqlite3.Connection | None = None,
+                     run_id: int | None = None,
                      ) -> dict[str, Any] | None:
     """Bierze fakt, ktory NIE jest o tym samym, co juz dzis wystawiamy.
 
@@ -4391,6 +4463,9 @@ def wybierz_material(zapas: list[dict[str, Any]],
     teksty_wczesniej += [u for u in (wczesniej or []) if isinstance(u, str) and u]
     wczesniej_rdzenie = [u if isinstance(u, (set, frozenset)) else _slowa(u)
                          for u in (wczesniej or []) if u]
+    # Licznik platnych pytan o powtorke w tym jednym wyborze — sufit opisany
+    # przy `MAKS_PYTAN_O_POWTORKE`. Lista, bo zmienia sie w petli nizej.
+    pytan = [0]
     for i, f in enumerate(zapas):
         temat = _slowa("%s %s" % (f.get("domain") or "", f.get("fact") or ""))
         if any(_zderzenie(temat, u) for u in unikaj_rdzenie):
@@ -4470,14 +4545,73 @@ def wybierz_material(zapas: list[dict[str, Any]],
         if teksty_wczesniej and not f.get("kat_nr"):
             fakt_tekst = "%s %s" % (f.get("domain") or "", f.get("fact") or "")
             korpus = opublikowane_teksty() or teksty_wczesniej
-            wspolna = next(
-                (n for u in teksty_wczesniej
-                 if (n := wspolna_nazwa(fakt_tekst, u, korpus,
-                                       korpus_zrodel=korpus_zrodel))), "")
+            # PRZERYWAMY NA TRZECIEJ KOLIZJI, a nie przegladamy calej pamieci.
+            # `wspolna_nazwa` przy kazdym wywolaniu liczy nazwy calego korpusu
+            # opublikowanych notek i 341 tematow zrodlowych; wersja bez
+            # przerwania robila to 40 razy na kandydata zamiast raz.
+            zderzone: list[str] = []
+            wspolna = ""
+            for u in teksty_wczesniej:
+                n = wspolna_nazwa(fakt_tekst, u, korpus,
+                                  korpus_zrodel=korpus_zrodel)
+                if n:
+                    wspolna = wspolna or n
+                    zderzone.append(u)
+                    if len(zderzone) == 3:
+                        break
             if wspolna:
-                print("  [notki] pomijam — ta sama nazwa co w juz wystawionej"
-                      " notce: %s" % wspolna, flush=True)
-                continue
+                # WSPOLNA NAZWA TO POWOD DO PYTANIA, NIE WYROK — od 8 wrzesnia
+                # 2026. Zmierzone na zywym banku: ze 131 wolnych faktow 88
+                # odpadalo tutaj, a firma nie jest tematem. Google kupujace
+                # systemy upadlych linii lotniczych i Google trenujace model
+                # to dwie rozne wiadomosci; blokowaly tez `anthropic` 13 razy,
+                # `nvidia` 11, `hugging` 12.
+                #
+                # SZUKALEM PROGU STATYSTYCZNEGO I NIE MA GO. Cztery sposoby
+                # sprawdzone na tych samych danych, kazdy obalony pomiarem:
+                #
+                #   czestosc w banku      glm53flash 7 = minimax 7 = claude 7
+                #   pokrycie slowami      trojka GLM ma 1-3 rdzenie, czyli
+                #                         MNIEJ niz falszywe blokady (2-4)
+                #   czestosc w zrodlach   glm53 4, miedzy google 2 a anthro 5
+                #   udzial nazw wspolnych GLM 0.33, falszywe 0.12-1.00,
+                #                         mediana 0.71 — GLM w srodku
+                #
+                # Zadna statystyka nazwy nie odroznia firmy-aktora od modelu-
+                # tematu, bo roznica jest w ZNACZENIU, nie w liczbach.
+                #
+                # Znaczenie umie ocenic model i JUZ TO U NAS ROBI: bank pyta
+                # `_powtorka_wg_modelu` przy kazdym wejsciu kandydata. Tu pada
+                # to samo pytanie tym samym przyrzadem, tylko wobec notek juz
+                # wystawionych. Pytamy WYLACZNIE gdy zapora nazw zadziala,
+                # czyli okolo raz-dwa na przebieg, na DeepSeeku po 400 tokenow.
+                #
+                # ZAWODZI NA „TO NIE POWTORKA", tak jak wersja przy banku:
+                # bez polaczenia albo po nieudanym wywolaniu material
+                # przechodzi. Doktryna liczy koszt — przepuszczona powtorka
+                # kosztuje jedna notke, odrzucony material kosztuje cale
+                # wyszukiwanie. Bez `conn` (testy, wywolania bez bazy)
+                # zostaje samo zdanie zapory nazw.
+                # SUFIT PYTAN NA JEDEN WYBOR. Wybor przeglada zapas do skutku,
+                # wiec bez sufitu dzien z bankiem pelnym jednej firmy zadalby
+                # tyle pytan, ilu kandydatow — a produkcja miesci sie w dobowym
+                # suficie z zapasem rzedu 20%. Piec pytan po 400 tokenow na
+                # DeepSeeku to grosze; po piatym wraca zdanie zapory nazw,
+                # czyli zachowanie sprzed zmiany.
+                if conn is None or pytan[0] >= MAKS_PYTAN_O_POWTORKE:
+                    print("  [notki] pomijam — ta sama nazwa co w juz"
+                          " wystawionej notce: %s" % wspolna, flush=True)
+                    continue
+                pytan[0] += 1
+                nr, powod = _powtorka_wg_modelu(
+                    fakt_tekst, zderzone, conn, run_id)
+                if nr:
+                    print("  [notki] pomijam — model potwierdza powtorke"
+                          " (nazwa %s): %s" % (wspolna, powod[:70]),
+                          flush=True)
+                    continue
+                print("  [notki] wspolna nazwa %s, ale model nie widzi"
+                      " powtorki — przepuszczam" % wspolna, flush=True)
         return zapas.pop(i)
     # Wszystko zderza sie z tym, co juz mamy. NIE jest to jeszcze koniec dnia:
     # `notki_dnia` dobiera wtedy nowy material — powtorzyc nie wolno, ale
@@ -4732,7 +4866,8 @@ def notki_dnia(
                     _kandydaci = list(_prop["kandydaci"])
                     fakt = wybierz_material(_kandydaci, juz_o_tym, wczesniejsze,
                                             teksty=teksty_notek,
-                                            korpus_zrodel=_tematy_zrodel())
+                                            korpus_zrodel=_tematy_zrodel(),
+                                            conn=conn, run_id=run_id)
                     if fakt is None:
                         print("  [seria] \"%s\" część %d czeka — cały materiał"
                               " na ten temat zderza się z tym, co już poszło"
@@ -4751,7 +4886,8 @@ def notki_dnia(
             if fakt is None:
                 fakt = wybierz_material(zapas, juz_o_tym, wczesniejsze,
                                         teksty=teksty_notek,
-                                        korpus_zrodel=_tematy_zrodel())
+                                        korpus_zrodel=_tematy_zrodel(),
+                                        conn=conn, run_id=run_id)
             if fakt is None and not dobrano_nowy:
                 # DZIEN NIE MOZE SIE ZAGLODZIC. Do 25 sierpnia to bylo `break`:
                 # cala pula zderzona = koniec dnia. Przy oknie dwunastu zdarzalo
@@ -4774,7 +4910,8 @@ def notki_dnia(
                     zapas = nowe + zapas
                     fakt = wybierz_material(zapas, juz_o_tym, wczesniejsze,
                                     teksty=teksty_notek,
-                                    korpus_zrodel=_tematy_zrodel())
+                                    korpus_zrodel=_tematy_zrodel(),
+                                    conn=conn, run_id=run_id)
             if fakt is None:
                 print("  [notki] został tylko materiał o tym samym, co już dziś"
                       " wystawiamy — kończę dzień krócej", flush=True)
