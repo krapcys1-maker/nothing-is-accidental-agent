@@ -1957,12 +1957,69 @@ def znajdz_ciekawostki(
         "dlatego, ze jest swieza.)")
     print("  [ciekawostki] zaczyn z kanalow: %s"
           % ("TAK" if _z_zaczynem else "NIE — dzis sama siatka"), flush=True)
+
+    # INSTRUKCJA O OBSZARACH MUSI ISC ZA ZACZYNEM — inaczej przeczy sama sobie.
+    #
+    # ZMIERZONE 8 wrzesnia 2026 i to byla MOJA wczorajsza wada. Zdjalem zaczyn
+    # co druga dobe, ale zostawilem w `ciekawostki.md` zdanie „The live subjects
+    # above are the material. These areas are the LENS you look through, not
+    # a second place to go shopping" oraz „three quarters start from the list
+    # above". W dobie BEZ zaczynu model dostawal wiec polecenie „zacznij od
+    # listy", ktorej nie ma — i szedl po zrodla, ktore zna najlepiej.
+    #
+    # SKUTEK, POLICZONY NA 32 SWIEZYCH FAKTACH Z PIECIU SZUKAN: wszystkie
+    # pochodzily z CZTERECH hostow (latent.space 11, pytorch.org 10,
+    # simonwillison.net 6, importai.substack.com 5). Bank narastajacy
+    # tygodniami ma 88 roznych hostow na 131 faktow. Szukanie zapadlo sie do
+    # czterech blogow branzowych.
+    #
+    # CZEGO NIE WOLNO ZROBIC: skasowac tej instrukcji. Prompt zapisuje pomiar,
+    # ktory za nia stoi — gdy brzmiala „take your facts from these areas and no
+    # others", wyszly zrodla z 2024, 2022 i 1992 roku. Wiec nie kasujemy jej,
+    # tylko dajemy DRUGA WERSJE na doby bez zaczynu, z ta sama ochrona przed
+    # staroscia.
+    if _z_zaczynem:
+        _jak_obszary = (
+            "**The live subjects above are the material. These areas are the "
+            "LENS you look through, not a second place to go shopping.**")
+        _ile_obszary = (
+            "**The last quarter of your facts may come from these areas "
+            "alone**, with no live subject behind them — that is what the "
+            "quarter is for. The other three quarters start from the list "
+            "above.")
+    else:
+        _jak_obszary = (
+            "**There is no live list this time, and that is deliberate. These "
+            "areas ARE the material — go to them directly.**"
+            + NOWA_LINIA + NOWA_LINIA +
+            "This is the harder run, and the failure mode is specific: with "
+            "nothing live to anchor to, it is tempting to fall back on the "
+            "handful of sources you know best. Measured on five runs that did "
+            "exactly that: thirty-two facts, FOUR distinct sources, all of "
+            "them developer blogs. A reader who follows any of those four has "
+            "already seen everything you found."
+            + NOWA_LINIA + NOWA_LINIA +
+            "So the rule for this run is about WHERE, not what: no more than "
+            "two facts may share a source, and a personal blog or a company's "
+            "own newsroom counts as one source. Go to the filing, the paper, "
+            "the court record, the regulator's page, the hospital trust's "
+            "report, the union's statement.")
+        _ile_obszary = (
+            "**Every fact this run comes from the areas above** — there is no "
+            "live list to start from. The age rules below still hold in full: "
+            "an area is not a licence to reach back years. When this section "
+            "read \"take your facts from these areas and no others\" and said "
+            "nothing about age, a clean run came back with sources from 2024, "
+            "2022 and 1992. The areas tell you WHERE to look, the dates tell "
+            "you WHETHER it counts.")
     prompt = _prompt(
         "ciekawostki.md", ile=ile,
         dziedziny=NOWA_LINIA.join(f"- {d}" for d in dziedziny),
         generatory=NOWA_LINIA.join(
             f"**{g}** — {config.GENERATORY[g]}" for g in generatory),
         zaczyn_kanalow=_zaczyn,
+        jak_uzywac_obszarow=_jak_obszary,
+        ile_z_obszarow=_ile_obszary,
         # ZAMOWIENIE Z BANKU — patrz `zamowienia_z_banku`. Bank juz wie, czego
         # brakuje do napisania katow, ktore sam wymyslil; bez tego wiersza
         # szukacz zaczyna za kazdym razem od zera i przynosi to, co mamy.

@@ -447,7 +447,7 @@ visible either way:
 
 #### `prompts/ciekawostki.md`
 
-**448 wierszy.** Pola wejsciowe: `dziedziny`, `dzis`, `generatory`, `ile`, `marka`, `miesiac`, `premiera`, `stan_modeli`, `uzyte`, `w_reku`, `wydarzenia`, `zaczyn_kanalow`, `zamowienia`
+**445 wierszy.** Pola wejsciowe: `dziedziny`, `dzis`, `generatory`, `ile`, `ile_z_obszarow`, `jak_uzywac_obszarow`, `marka`, `miesiac`, `premiera`, `stan_modeli`, `uzyte`, `w_reku`, `wydarzenia`, `zaczyn_kanalow`, `zamowienia`
 
 ````markdown
 Find {ile} documented facts worth stopping a stranger mid-scroll.
@@ -579,8 +579,7 @@ solid facts beat eight you never got to write down.
 
 ## Where to look this time
 
-**The live subjects above are the material. These areas are the LENS you look
-through, not a second place to go shopping.**
+{jak_uzywac_obszarow}
 
 That order matters and it was wrong until now. This section used to say "take
 your facts from these areas and no others", which is a categorical instruction,
@@ -600,9 +599,7 @@ a different fact. Going back to the areas you find easiest is how a feed turns
 monotonous, and the reader notices the sameness long before they notice the
 repetition.
 
-**The last quarter of your facts may come from these areas alone**, with no live
-subject behind them — that is what the quarter is for. The other three quarters
-start from the list above.
+{ile_z_obszarow}
 
 ## WHAT SHAPE to look for — apply each pattern to each area
 

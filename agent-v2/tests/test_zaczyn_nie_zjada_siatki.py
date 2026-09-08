@@ -153,5 +153,42 @@ sprawdz("i zadna ze stron nie ma przewagi wiekszej niz dwukrotna",
         max(_b, _s) <= 2 * max(1, min(_b, _s)), (_b, _s))
 
 print()
+print("=== 8. INSTRUKCJA O OBSZARACH IDZIE ZA ZACZYNEM ===")
+# TO BYLA MOJA WADA Z 7 WRZESNIA. Zdjalem zaczyn co druga dobe, ale zostawilem
+# w `ciekawostki.md` zdanie „The live subjects above are the material. These
+# areas are the LENS you look through" oraz „three quarters start from the list
+# above". W dobie BEZ zaczynu model dostawal polecenie „zacznij od listy",
+# ktorej nie ma — i szedl po zrodla, ktore zna najlepiej.
+#
+# ZMIERZONE NA 32 SWIEZYCH FAKTACH z pieciu szukan: WSZYSTKIE z CZTERECH
+# hostow (latent.space 11, pytorch.org 10, simonwillison.net 6,
+# importai.substack.com 5). Bank narastajacy tygodniami ma 88 roznych hostow
+# na 131 faktow.
+sprawdz("prompt nie ma juz wpisanej na stale reguly „areas are the LENS\"",
+        "areas are the LENS you look through" not in _p)
+sprawdz("i nie ma wpisanego na stale „three quarters start from the list\"",
+        "three quarters start from the list" not in _p)
+sprawdz("obie sa teraz polami", "{jak_uzywac_obszarow}" in _p
+        and "{ile_z_obszarow}" in _p)
+sprawdz("`stages` podaje oba pola", "jak_uzywac_obszarow=_jak_obszary" in _zr
+        and "ile_z_obszarow=_ile_obszary" in _zr)
+
+# OBIE WERSJE MUSZA ISTNIEC — jedna dla doby z zaczynem, druga bez.
+sprawdz("wersja Z zaczynem zachowuje regule „LENS\"",
+        "areas are the LENS you look through" in _zr)
+sprawdz("wersja BEZ zaczynu mowi, ze obszary SA materialem",
+        "areas ARE the material" in _zr)
+sprawdz("i nazywa zmierzona wade po imieniu (cztery zrodla)",
+        "FOUR distinct sources" in _zr)
+sprawdz("i stawia wymog o ZRODLACH, nie o tresci",
+        "no more than " in _zr and "share a source" in _zr)
+
+# NAJWAZNIEJSZE: wersja bez zaczynu NIE MOZE zgubic ochrony przed staroscia.
+# Gdy ta sekcja brzmiala „take your facts from these areas and no others",
+# czysty przebieg oddal zrodla z 2024, 2022 i 1992 roku.
+sprawdz("wersja BEZ zaczynu zachowuje ochrone przed staroscia",
+        "2022 and 1992" in _zr or "age rules below still hold" in _zr)
+
+print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))
 sys.exit(1 if oblane else 0)
