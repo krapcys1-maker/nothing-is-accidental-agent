@@ -136,6 +136,37 @@ def zaszereguj(fakt):
     return "OBA" if b and s else "BRANZA" if b else "SWIAT" if s else "ZADNE"
 
 
+def host(url):
+    """Sam host adresu, bez `www.` — do liczenia RÓZNORODNOSCI ZRODEL."""
+    from urllib.parse import urlparse
+    try:
+        return (urlparse(str(url or "")).netloc or "").lower().replace("www.", "")
+    except ValueError:
+        return ""
+
+
+def zrodla(nazwa, fakty):
+    """Ile ROZNYCH hostow — najostrzejsza i najtansza miara monotonii.
+
+    ZMIERZONE 8 wrzesnia 2026 i to bylo znalezisko dnia: 32 swieze fakty
+    z pieciu szukan pochodzily z CZTERECH hostow (latent.space 11,
+    pytorch.org 10, simonwillison.net 6, importai.substack.com 5), podczas gdy
+    bank narastajacy tygodniami ma 88 roznych hostow na 131 faktow.
+    Czytelnik sledzacy ktorykolwiek z tych czterech widzial juz wszystko.
+
+    Ta miara nie wymaga zadnej mojej listy slow ani osadu, co jest „o swiecie".
+    Liczy hosty.
+    """
+    lic = collections.Counter(host(f.get("url")) for f in fakty)
+    n = max(1, len(fakty))
+    naj = lic.most_common(1)[0][1] if lic else 0
+    print("  %-22s ROZNYCH ZRODEL: %2d na %2d faktow   najczestsze: %d (%.0f%%)"
+          % (nazwa, len(lic), len(fakty), naj, 100.0 * naj / n))
+    for h, k in lic.most_common(6):
+        print("      %-40s %d" % (h or "(brak url)", k))
+    return len(lic)
+
+
 def odcisk(sciezka):
     p = pathlib.Path(sciezka)
     return hashlib.sha256(p.read_bytes()).hexdigest() if p.exists() else "brak"
@@ -184,6 +215,7 @@ def main():
     except (OSError, ValueError):
         _wolne = []
     podsumuj("bank (%d wolnych)" % len(_wolne), _wolne)
+    zrodla("bank", _wolne)
     print("      (podzial branza/swiat zgadza sie z recznym oznaczeniem tylko"
           " w 64-71% — patrz komentarz wyzej. Traktowac jako TLO, nie pomiar.)")
 
@@ -308,6 +340,12 @@ def main():
     conn.close()
 
     PO = odcisk(INDEKS)
+    print()
+    print("=== ROZNORODNOSC ZRODEL — najostrzejsza miara monotonii ===")
+    zrodla("%d faktow z %d szukan" % (len(wszystkie), a.ile), wszystkie)
+    print("      punkt odniesienia z 8 wrzesnia: 4 ZRODLA na 32 fakty.")
+    print("      bank narastajacy tygodniami: 88 zrodel na 131 faktow.")
+
     print()
     print("=== CZY MODEL ODPOWIADAL NA ZADANE PYTANIE ===")
     if dopasowania:

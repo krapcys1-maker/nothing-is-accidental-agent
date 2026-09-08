@@ -192,5 +192,25 @@ sprawdz("kazdy fakt niesie, o jakie dziedziny pytano",
         "_dziedziny_zamowione" in ZR)
 
 print()
+print("=== 11. MIARA ROZNORODNOSCI ZRODEL ===")
+# Najostrzejsza i najtansza z trzech miar, jakie ma to narzedzie: nie wymaga
+# ani mojej listy slow, ani osadu, co jest „o swiecie". Liczy hosty.
+sprawdz("`host` istnieje", callable(getattr(_pt, "host", None)))
+sprawdz("`zrodla` istnieje", callable(getattr(_pt, "zrodla", None)))
+for adres, oczek in (("https://www.latent.space/p/x", "latent.space"),
+                     ("https://pytorch.org/blog/y", "pytorch.org"),
+                     ("", ""), (None, "")):
+    sprawdz("host(%r) -> %r" % (adres, oczek), _pt.host(adres) == oczek,
+            _pt.host(adres))
+# ZACHOWANIEM: cztery fakty z dwoch hostow to dwa zrodla, nie cztery.
+_f = [{"url": "https://a.com/1"}, {"url": "https://a.com/2"},
+      {"url": "https://b.org/1"}, {"url": "https://www.b.org/2"}]
+sprawdz("cztery fakty z dwoch hostow liczy jako DWA zrodla",
+        _pt.zrodla("proba", _f) == 2)
+sprawdz("zapisany punkt odniesienia: 4 zrodla na 32 fakty",
+        "4 ZRODLA na 32 fakty" in ZR)
+sprawdz("i porownanie z bankiem (88 zrodel)", "88 zrodel" in ZR)
+
+print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))
 sys.exit(1 if oblane else 0)
