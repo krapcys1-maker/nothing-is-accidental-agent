@@ -136,6 +136,31 @@ def main():
         zebrane.append(list(kandydaci or []))
         return {"dopisane": 0, "proba": True}
 
+    # DWIE BRAMKI PRODUKCYJNE TRZEBA OBEJSC — i to jest wlasciwe, nie sprytne.
+    #
+    # `znajdz_ciekawostki` odmawia szukania, gdy (a) dzis juz dobieralismy do
+    # banku, albo (b) bank jest pelny. Obie decyzje sa poprawne w produkcji
+    # i obie nie maja nic wspolnego z tym, co to narzedzie mierzy: JAKIE fakty
+    # wychodza, gdy szukanie sie odbedzie.
+    #
+    # ZLAPANE PRZY PIERWSZYM URUCHOMIENIU: dziesiec „szukan" oddalo po zero
+    # faktow, ZERO platnych wywolan i komunikat „(nie znalazlem)" przy
+    # dziedzinach. Narzedzie meldowalo 0% branzy i 0% swiata — czyli liczbe,
+    # ktora wygladala na pomiar, a byla cisza. Dlatego nizej jest nie tylko
+    # obejscie, ale i JAWNY MELDUNEK, gdy szukanie mimo to odmowi.
+    #
+    # Obejscie jest bezpieczne, bo narzedzie nic nie dopisuje do banku
+    # (`_nie_zapisuj`) i sprawdza to odciskiem pliku.
+    _stary_sufit = config.BANK_MAKS_WOLNYCH
+    _stare_proby = config.SZUKANIE_BANKU_MAKS_PROB
+    _stare_na_dobe = config.SZUKANIE_BANKU_NA_DOBE
+    config.BANK_MAKS_WOLNYCH = 10 ** 6      # „bank nigdy nie jest pelny"
+    config.SZUKANIE_BANKU_MAKS_PROB = 10 ** 6
+    config.SZUKANIE_BANKU_NA_DOBE = 10 ** 6
+    print()
+    print("  (bramki „bank pelny\" i „raz na dobe\" zdjete NA CZAS PROBY —")
+    print("   narzedzie mierzy WYNIK szukania, nie decyzje o szukaniu)")
+
     conn = db.connect()
     run_id = db.start_run(conn, "proba-tematow", tryb="test")
     wszystkie = []
@@ -161,6 +186,14 @@ def main():
             print("  dziedziny: %s" % dziedziny_uzyte[-1][:96])
             print("  zaczyn z kanalow: %s" % z_zaczynem[-1])
             fakty = fakty or []
+            # ZERO FAKTOW TO NIE JEST WYNIK — to jest cisza, i ma sie czytac
+            # jak cisza. Pierwsze uruchomienie tego narzedzia zameldowalo
+            # „0% branzy, 0% swiata" przy zerze platnych wywolan; wygladalo
+            # jak pomiar, a bylo odmowa szukania.
+            if not fakty:
+                print("  SZUKANIE NIC NIE ODDALO — pelne wyjscie ponizej:")
+                for _l in (wyjscie or "(nic nie wypisalo)").splitlines()[-12:]:
+                    print("      | %s" % _l[:110])
             wszystkie.extend(fakty)
             podsumuj("to szukanie (%d)" % len(fakty), fakty)
             for f in fakty[:3]:
@@ -172,6 +205,9 @@ def main():
         raise
     finally:
         stages.dopisz_kandydatow = oryginal
+        config.BANK_MAKS_WOLNYCH = _stary_sufit
+        config.SZUKANIE_BANKU_MAKS_PROB = _stare_proby
+        config.SZUKANIE_BANKU_NA_DOBE = _stare_na_dobe
 
     print()
     print("=== RAZEM ===")
