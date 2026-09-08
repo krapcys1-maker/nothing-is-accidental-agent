@@ -137,5 +137,60 @@ sprawdz("pusty fakt nie wywala klasyfikatora",
         _pt.zaszereguj({}) == "ZADNE" and _pt.zaszereguj(None) == "ZADNE")
 
 print()
+print("=== 8. MIARA: CZY FAKT DOTYCZY DZIEDZINY ===")
+# Zastapila podzial branza/swiat, bo tamten zgadzal sie z recznym oznaczeniem
+# tylko w 64-71% — za malo, zeby na tym budowac. Ta miara nie pyta, CZY temat
+# jest ludzki; pyta, czy model odpowiedzial na to, o co go zapytano.
+sprawdz("`dotyczy` istnieje", callable(getattr(_pt, "dotyczy", None)))
+sprawdz("`czestosci` istnieje", callable(getattr(_pt, "czestosci", None)))
+
+# ZACHOWANIEM: budujemy maly korpus i sprawdzamy, ze miara ODROZNIA.
+_KORPUS = [
+    "A model was trained on tokens and the price per million fell.",
+    "The classroom tablet flagged a pupil for cheating on an exam.",
+    "A court in Delhi ruled on training data and copyright.",
+    "The megawatt draw of one data centre in Ireland rose again.",
+    "Benchmarks measure resemblance, not a resolved case.",
+    "A nurse in a clinic waited for the screening result.",
+]
+_df, _n = _pt.czestosci(_KORPUS)
+sprawdz("czestosci policzone z korpusu", _n == len(_KORPUS) and len(_df) > 10,
+        (_n, len(_df)))
+sprawdz("fakt o klasie DOTYCZY dziedziny o szkole",
+        _pt.dotyczy("The classroom tablet flagged a pupil", "exams in the classroom",
+                    _df, _n) is True)
+sprawdz("i NIE dotyczy dziedziny o megawatach",
+        _pt.dotyczy("The classroom tablet flagged a pupil",
+                    "megawatt draw of a data centre", _df, _n) is False)
+# KONTRDOWOD: gdyby miara patrzyla na slowa CZESTE, wszystko pasowaloby
+# do wszystkiego. Slowo obecne w kazdym tekscie nie moze niczego wskazac.
+_wspolny = ["the model does a thing"] * 8
+_df2, _n2 = _pt.czestosci(_wspolny)
+sprawdz("KONTRDOWOD: slowo obecne wszedzie nie jest kluczem",
+        _pt.dotyczy("the model does a thing", "the model does a thing",
+                    _df2, _n2) is None,
+        "dziedzina bez rzadkich slow ma oddawac None, nie True")
+sprawdz("dziedzina bez rzadkich slow oddaje None, a nie falszywe TAK",
+        _pt.dotyczy("x", "", _df, _n) is None)
+
+print()
+print("=== 9. KALIBRACJA JEST ZAPISANA PRZY KODZIE ===")
+# Miara bez skali nie mowi nic: 30% to duzo czy malo?
+for co in ("60%", "14%", "3%"):
+    sprawdz("zapisany punkt skali %s" % co, co in ZR, co)
+sprawdz("i zrodlo kalibracji (zywy bank)", "SKALIBROWANE NA ZYWYM BANKU" in ZR)
+sprawdz("zapisane, ze stary podzial mial 64-71% zgodnosci",
+        "64-71%" in ZR)
+
+print()
+print("=== 10. FAKTY SA ZAPISYWANE, ZEBY NIE PLACIC DWA RAZY ===")
+# Pierwsze uruchomienie ich nie zapisalo i cala analiza przepadla razem
+# z 0,38 USD.
+sprawdz("narzedzie zapisuje fakty na dysk", "proba_tematow_fakty.json" in ZR)
+sprawdz("i mowi, gdzie", "kolejna analiza jest darmowa" in ZR)
+sprawdz("kazdy fakt niesie, o jakie dziedziny pytano",
+        "_dziedziny_zamowione" in ZR)
+
+print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))
 sys.exit(1 if oblane else 0)

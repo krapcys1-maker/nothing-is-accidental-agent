@@ -43,6 +43,7 @@ URUCHAMIANIE, z korzenia repozytorium:
     python agent-v2/tests/platne/proba_tematow.py --live --ile 10
 """
 import argparse
+import collections
 import hashlib
 import io
 import json
@@ -66,6 +67,65 @@ SWIAT = re.compile(
     r"(patient|doctor|hospital|school|student|teacher|court|judge|law|worker|"
     r"job|employee|climate|weather|drug|disease|farm|city|police|election|"
     r"child|nurse|prison|housing|energy bill|welfare)", re.I)
+
+
+# --- CZY FAKT DOTYCZY DZIEDZINY, O KTORA PYTALISMY -------------------------
+#
+# DLACZEGO TA MIARA ZASTEPUJE PODZIAL BRANZA/SWIAT. Tamten podzial sprawdzilem
+# 8 wrzesnia na czternastu faktach oznaczonych recznie: stary klasyfikator
+# zgadzal sie ze mna w 71%, moj przepisany w 64%. Za malo, zeby cokolwiek na
+# tym budowac — i powod jest strukturalny, nie do zalatania slowami: KAZDY fakt
+# jest o AI, a konto celowo ubiera skutek w jezyk ludzki („twoj rachunek",
+# „klasa twojego dziecka"), wiec prawie wszystko wyglada jak „oba".
+#
+# Ta miara nie pyta, CZY temat jest ludzki. Pyta, czy model odpowiedzial na to,
+# o co go zapytano — a to jest sprawdzalne bez zadnej mojej listy slow.
+#
+# ZASADA: slowo rozroznia, gdy jest RZADKIE w naszym korpusie. „model", „data",
+# „AI" sa wszedzie i nie znacza nic; „classroom", „megawatt", „pelican" znacza.
+# Rzadkosc liczona Z DANYCH (czestosc w faktach banku), nie z mojej oceny.
+#
+# SKALIBROWANE NA ZYWYM BANKU (131 faktow, 8 wrzesnia):
+#     fakt pasuje do WLASNEJ dziedziny (tej, ktora model sam mu nadal):  60%
+#     fakt pasuje do CUDZEJ, losowej:                                     3%
+# To jest sufit i podloga tego przyrzadu. Przy pieciu dziedzinach naraz poziom
+# przypadku wynosi okolo 14% (piec szans po 3%). Wynik bliski 14% znaczy, ze
+# dziedziny sa ignorowane; wynik bliski 60% — ze sa realizowane.
+STOP = set("""a an the and or of to in on for with by from as at is are was were
+be been being that this these those it its it's not no than then so such which
+who whom whose what when where how why can could will would may might must
+you your yours we our us they their them he she his her i me my one two three
+new now more most less least own same other another each every all any some
+about into over under after before between during without within across
+""".split())
+
+
+def slowa(tekst):
+    return [w for w in re.findall(r"[a-z][a-z'\-]{2,}", (tekst or "").lower())
+            if w not in STOP]
+
+
+def czestosci(korpus):
+    """Ile RÓZNYCH tekstow zawiera dane slowo. Liczone z danych, nie z glowy."""
+    df = collections.Counter()
+    for t in korpus:
+        for w in set(slowa(t)):
+            df[w] += 1
+    return df, len(korpus)
+
+
+def rzadkie(tekst, df, ile_tekstow, prog=0.10):
+    """Slowa z tekstu, ktore wystepuja w mniej niz `prog` czesci korpusu."""
+    return {w for w in set(slowa(tekst))
+            if df.get(w, 0) < max(2, prog * ile_tekstow)}
+
+
+def dotyczy(fakt_tekst, dziedzina, df, ile_tekstow):
+    kluczowe = rzadkie(dziedzina, df, ile_tekstow)
+    if not kluczowe:
+        return None            # dziedzina bez rzadkich slow — nie orzekamy
+    wf = set(slowa(fakt_tekst))
+    return bool(kluczowe & wf)
 
 
 def zaszereguj(fakt):
@@ -124,7 +184,17 @@ def main():
     except (OSError, ValueError):
         _wolne = []
     podsumuj("bank (%d wolnych)" % len(_wolne), _wolne)
-    print("      (7 wrzesnia tym samym przyrzadem: branza 70%, swiat 6%)")
+    print("      (podzial branza/swiat zgadza sie z recznym oznaczeniem tylko"
+          " w 64-71% — patrz komentarz wyzej. Traktowac jako TLO, nie pomiar.)")
+
+    # CZESTOSCI SLOW Z BANKU — podstawa miary „czy fakt dotyczy dziedziny".
+    # Liczone raz, z produkcyjnego banku, zeby „rzadkosc" znaczyla to samo
+    # przy kazdym uruchomieniu.
+    _korpus = [" ".join(str(f.get(k) or "") for k in
+                        ("fact", "consequence", "actually")) for f in _wolne]
+    DF, ILE_TEKSTOW = czestosci(_korpus)
+    print("      korpus do miary dopasowania: %d faktow, %d roznych slow"
+          % (ILE_TEKSTOW, len(DF)))
 
     # ZAPIS DO BANKU PRZECHWYCONY. Bez tego kazde sprawdzenie zasmiecaloby
     # zbior, ktory bada — a fakty z proby nie przeszly przez zadna z bramek,
@@ -164,6 +234,7 @@ def main():
     conn = db.connect()
     run_id = db.start_run(conn, "proba-tematow", tryb="test")
     wszystkie = []
+    dopasowania = []
     dziedziny_uzyte = []
     z_zaczynem = []
     try:
@@ -196,6 +267,24 @@ def main():
                     print("      | %s" % _l[:110])
             wszystkie.extend(fakty)
             podsumuj("to szukanie (%d)" % len(fakty), fakty)
+            # CZY MODEL ODPOWIEDZIAL NA TO, O CO GO ZAPYTANO.
+            _lista_dziedzin = [d.strip() for d in
+                               (dziedziny_uzyte[-1] or "").split(",") if d.strip()]
+            if fakty and _lista_dziedzin:
+                _trafione = 0
+                for _f in fakty:
+                    _tf = " ".join(str(_f.get(k) or "") for k in
+                                   ("domain", "fact", "consequence", "actually"))
+                    if any(dotyczy(_tf, _d, DF, ILE_TEKSTOW) for _d in _lista_dziedzin):
+                        _trafione += 1
+                dopasowania.append((_trafione, len(fakty)))
+                print("  DOTYCZY PODANYCH DZIEDZIN: %d z %d (%.0f%%)"
+                      % (_trafione, len(fakty), 100.0 * _trafione / len(fakty)))
+            # FAKTY ZAPISANE NA DYSK, zeby nie placic drugi raz za te same dane.
+            # Pierwsze uruchomienie ich nie zapisalo i cala analiza przepadla.
+            for _f in fakty:
+                _f["_dziedziny_zamowione"] = dziedziny_uzyte[-1]
+                _f["_szukanie"] = nr + 1
             for f in fakty[:3]:
                 print("      [%-6s] %s" % (zaszereguj(f),
                                            str(f.get("domain") or "")[:58]))
@@ -219,6 +308,30 @@ def main():
     conn.close()
 
     PO = odcisk(INDEKS)
+    print()
+    print("=== CZY MODEL ODPOWIADAL NA ZADANE PYTANIE ===")
+    if dopasowania:
+        _t = sum(x for x, _ in dopasowania)
+        _w = sum(y for _, y in dopasowania)
+        print("  DOTYCZY PODANYCH DZIEDZIN: %d z %d (%.0f%%)"
+              % (_t, _w, 100.0 * _t / max(1, _w)))
+        print("  skala tego przyrzadu, zmierzona na banku:")
+        print("     ~60%%  = dziedziny sa realizowane (fakt wobec WLASNEJ dziedziny)")
+        print("     ~14%%  = poziom przypadku przy pieciu dziedzinach")
+        print("     ~ 3%%  = fakt wobec CUDZEJ, losowej dziedziny")
+    else:
+        print("  (brak danych — zadne szukanie nic nie oddalo)")
+
+    _plik = pathlib.Path("/tmp/proba_tematow_fakty.json")
+    try:
+        _plik.write_text(json.dumps(wszystkie, ensure_ascii=False, indent=1),
+                         encoding="utf-8")
+        print()
+        print("  fakty zapisane do %s (%d szt.) — kolejna analiza jest darmowa"
+              % (_plik, len(wszystkie)))
+    except OSError as exc:
+        print("  nie zapisalem faktow: %r" % exc)
+
     print()
     print("=== CZY NICZEGO NIE ZEPSULEM ===")
     print("  bank NIETKNIETY: %s" % ("TAK" if PRZED == PO else "NIE!!!"))
