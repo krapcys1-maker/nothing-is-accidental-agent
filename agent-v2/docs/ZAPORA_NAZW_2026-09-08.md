@@ -2,8 +2,7 @@
 
 ## Co sie stalo
 
-W przebiegu 11:21 UTC konto wystawilo JEDNA notke zamiast dwoch. Trzej
-kandydaci odpadli na jednym komunikacie:
+W przebiegu 11:21 UTC trzej kandydaci odpadli na jednym komunikacie:
 
     pomijam — ta sama nazwa co w juz wystawionej notce: critical
     pomijam — ta sama nazwa co w juz wystawionej notce: astra's

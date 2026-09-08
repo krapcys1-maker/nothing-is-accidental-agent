@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 """Wspolna nazwa wlasna to POWOD DO PYTANIA, a nie wyrok.
 
-DLACZEGO TEN TEST ISTNIEJE. 8 wrzesnia 2026 konto wystawilo JEDNA notke zamiast
-dwoch w przebiegu 11:21 — trzej kandydaci odpadli na komunikacie „ta sama nazwa
-co w juz wystawionej notce". Pomiar na zywym banku pokazal skale: ze 131 wolnych
+DLACZEGO TEN TEST ISTNIEJE. 8 wrzesnia 2026 w przebiegu 11:21 trzej kandydaci
+odpadli na komunikacie „ta sama nazwa co w juz wystawionej notce". Sam przebieg
+norme wykonal (plan 1, wydane 1), wiec kosztu NIE BYLO WIDAC po liczbie notek —
+widac go dopiero po banku. Pomiar na zywym banku pokazal skale: ze 131 wolnych
 faktow 88 (67%) odpadalo na tej jednej zaporze, a w czolowce blokujacych staly
 firmy, nie tematy:
 
