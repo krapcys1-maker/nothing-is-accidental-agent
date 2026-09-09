@@ -6041,9 +6041,23 @@ def napraw_obalone(
 
     slow = len(nowy.split())
     if not (min_slow <= slow <= max_slow):
-        print("    [naprawa] ODRZUCONA: %d slow, poza %d-%d — zostaje oryginal"
-              % (slow, min_slow, max_slow), flush=True)
-        return None
+        # NAJPIERW SKRACAMY, DOPIERO POTEM ODRZUCAMY — dopisane 9 wrzesnia
+        # 2026, ta sama wada trzeci raz tego dnia. Poprawka wyszla na 135 slow
+        # przy suficie 120 i zostala wyrzucona, wiec OBALONE TWIERDZENIE
+        # ZOSTALO W NOTCE, ktora poszla w swiat z zastrzezeniem w logu.
+        #
+        # To gorsze niz notka o pietnascie slow za dluga: tam czytelnik dostaje
+        # rozwlekly tekst, tu dostaje nieprawde, ktora sami wykrylismy
+        # i sami naprawilismy, a potem wyrzucilismy poprawke na liczniku slow.
+        _krotszy = dopasuj_dlugosc(conn, run_id, nowy, min_slow=min_slow,
+                                   max_slow=max_slow, kontekst=kontekst)
+        if _krotszy:
+            nowy = _krotszy["tekst"]
+            slow = _krotszy["slow"]
+        else:
+            print("    [naprawa] ODRZUCONA: %d slow, poza %d-%d —"
+                  " zostaje oryginal" % (slow, min_slow, max_slow), flush=True)
+            return None
 
     # ZAPORY OD NOWA. Naprawiony tekst to SWIEZE wyjscie modelu i nie przeszlo
     # niczego, co przeszedl oryginal. Bez tego naprawa bylaby furtka wpuszczajaca

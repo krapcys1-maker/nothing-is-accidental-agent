@@ -189,6 +189,22 @@ sprawdz("i doszedl do sprawdzenia faktow, czyli nie wypadl wczesniej",
         "factcheck" in etapy, "etapy=%r" % etapy)
 
 print()
+print("=== 4b. poprawka faktyczna tez jest skracana, a nie wyrzucana ===")
+# Zmierzone platna proba 9 wrzesnia: sprawdzanie faktow obalilo twierdzenie,
+# naprawa je przepisala i wyszla na 135 slow przy suficie 120 — po czym
+# zostala WYRZUCONA. Obalone twierdzenie zostalo w notce, ktora poszla
+# w swiat. To gorsze niz notka o pietnascie slow za dluga: czytelnik dostaje
+# nieprawde, ktora sami wykrylismy i sami naprawilismy.
+_st = pathlib.Path("agent-v2/stages.py").read_text(encoding="utf-8")
+_i = _st.find("[naprawa] ODRZUCONA")
+_przed = _st[max(0, _i - 1200):_i]
+sprawdz("naprawa siega po skracanie, zanim odrzuci",
+        "dopasuj_dlugosc(conn, run_id, nowy" in _przed,
+        "poprawka faktyczna nadal ginie na liczniku slow")
+sprawdz("i odrzuca dopiero, gdy skracanie zawiedzie",
+        "else:" in _przed.split("dopasuj_dlugosc")[-1])
+
+print()
 print("=== 5. pusty tekst to jedyna bramka, jaka zostaje ===")
 wynik, _ = napisz({"note": {"note": "", "words": 0}})
 kand = [k for k in ((wynik or {}).get("candidates") or [])
