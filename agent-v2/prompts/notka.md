@@ -62,6 +62,14 @@ number matters. The evidence block tells you what it is. Go and read it there.
 Where it matters to the note, saying it plainly is better than covering it:
 "the report does not say who checked it" is a real sentence and a rare one.
 
+**The take-apart does not buy you extra words.** It is longer than the note
+will ever be, and that is deliberate: it is there so you can CHOOSE, not so you
+can include. Most of it will not appear in the note at all. The length limit
+above is unchanged and a note that misses it is thrown away whole — the first
+note written with a take-apart came out at 128 words against a ceiling of 120
+and nothing was published that run. Pick the one question worth answering and
+leave the other four out.
+
 If the take-apart is missing, write from the evidence as before.
 
 **If the evidence carries `kat_wziety`, that is your assignment, not a

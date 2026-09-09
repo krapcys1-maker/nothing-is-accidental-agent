@@ -114,7 +114,7 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
 się testować bez przeglądarki i bez pieniędzy**. 171 zestawów
-testów, 4455 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+testów, 4456 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -10546,7 +10546,7 @@ Return only:
 
 #### `prompts/notka.md`
 
-**231 wierszy.** Pola wejsciowe: `evidence`, `form_brief`, `language`, `marka`, `max_words`, `min_words`, `note_form`, `note_type`, `ostatnie_otwarcia_json`, `ostatnie_zakonczenia_json`, `rozbior`, `type_brief`
+**239 wierszy.** Pola wejsciowe: `evidence`, `form_brief`, `language`, `marka`, `max_words`, `min_words`, `note_form`, `note_type`, `ostatnie_otwarcia_json`, `ostatnie_zakonczenia_json`, `rozbior`, `type_brief`
 
 ````markdown
 Write one Substack Note for {marka}, an anonymous publication
@@ -10612,6 +10612,14 @@ number matters. The evidence block tells you what it is. Go and read it there.
 `czego_nie_wiadomo` is what this material cannot settle. Do not write past it.
 Where it matters to the note, saying it plainly is better than covering it:
 "the report does not say who checked it" is a real sentence and a rare one.
+
+**The take-apart does not buy you extra words.** It is longer than the note
+will ever be, and that is deliberate: it is there so you can CHOOSE, not so you
+can include. Most of it will not appear in the note at all. The length limit
+above is unchanged and a note that misses it is thrown away whole — the first
+note written with a take-apart came out at 128 words against a ceiling of 120
+and nothing was published that run. Pick the one question worth answering and
+leave the other four out.
 
 If the take-apart is missing, write from the evidence as before.
 

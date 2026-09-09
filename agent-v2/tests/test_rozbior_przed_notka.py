@@ -205,6 +205,11 @@ sprawdz("sad nazwany sadem, nie faktem",
 sprawdz("i zakaz podawania go jako liczby albo zdarzenia",
         "never state it as" in _zr)
 _ro = pathlib.Path("agent-v2/prompts/rozbior.md").read_text(encoding="utf-8")
+sprawdz("rozbior nie kupuje dodatkowych slow",
+        "does not buy you extra words" in _zr,
+        "bez tej reguly pisarz dokladal material z rozbioru i przekraczal"
+        " okno — pierwsza notka z rozbiorem miala 128 slow przy suficie 120"
+        " i przebieg 11:20 nie wystawil nic")
 sprawdz("liczby wolno brac WYLACZNIE z materialu dowodowego",
         "Every number in the note comes from the evidence block" in _zr,
         "bez tej reguly notka przepisuje liczby z rozbioru, a przepisana"

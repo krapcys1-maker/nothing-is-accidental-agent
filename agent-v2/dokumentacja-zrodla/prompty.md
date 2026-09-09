@@ -123,7 +123,7 @@
 {{"text": "the full corrected text", "co_zmienione": "one line: what you changed and what evidence you changed it to"}}
 ```
 
-#### `notka.md` (231 wierszy)
+#### `notka.md` (239 wierszy)
 
 **Pola wejściowe:** `evidence`, `form_brief`, `language`, `marka`, `max_words`, `min_words`, `note_form`, `note_type`, `ostatnie_otwarcia_json`, `ostatnie_zakonczenia_json`, `rozbior`, `type_brief`
 
