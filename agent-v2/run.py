@@ -2355,10 +2355,22 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
                   flush=True)
             stages.zapomnij_niewystawiony()
             return
+        # PO SUFICIE ALARMUJEMY, ALE NIE PRZESTAJEMY PROBOWAC — 9 wrzesnia 2026.
+        #
+        # Stalo tu `return`: po dwunastu nieudanych probach artykul zostawal
+        # na dysku NA ZAWSZE, oplacony i nigdy niewystawiony, a kazdy kolejny
+        # przebieg tylko potwierdzal rezygnacje. Polecenie wlasciciela: „ma
+        # dzialac za wszelka cene, zadnego blokowania (…) artykulow".
+        #
+        # Awaria przegladarki bywa PRZEJSCIOWA — inny uklad strony, zerwana
+        # sesja, chwilowy blad Substacka. Rezygnacja po dwunastu probach
+        # zamieniala usterke godzinowa w trwala strate tekstu.
+        #
+        # Alarm zostaje i idzie DALEJ przy kazdej probie ponad sufitem, bo o to
+        # w nim chodzi: zawiadomic czlowieka. Ale proba idzie takze.
         if int(zaleg.get("proby", 0)) >= config.PROB_ZALEGLEGO_ARTYKULU:
-            print("  [zalegly] %d prob i nadal nie wychodzi — PRZESTAJE"
-                  " PROBOWAC, tekst i znacznik zostaja" % zaleg["proby"],
-                  flush=True)
+            print("  [zalegly] %d prob i nadal nie wychodzi — alarmuje"
+                  " i PROBUJE DALEJ" % zaleg["proby"], flush=True)
             try:
                 import alarm
                 alarm.wyslij(
@@ -2371,7 +2383,6 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
             except Exception as exc:
                 print("  (alarm nie poszedl: %s)" % type(exc).__name__,
                       flush=True)
-            return
         if not wyslij:
             print("  (wystawilbym zalegly artykul: %s)" % sciezka, flush=True)
             return

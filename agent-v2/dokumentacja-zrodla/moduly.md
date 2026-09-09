@@ -1,7 +1,7 @@
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-3149 wierszy, 27 funkcji na poziomie modułu, 1 klas
+3160 wierszy, 27 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -35,7 +35,7 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-10363 wierszy, 159 funkcji na poziomie modułu, 0 klas
+10549 wierszy, 161 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -143,6 +143,8 @@
 | `_slowa_zarzutu(c)` *(wewn.)* | Slowa trescioweko z samego twierdzenia — drugi sygnal tozsamosci. |
 | `_adres_zarzutu(c)` *(wewn.)* | — |
 | `_ten_sam_zarzut(a, b)` *(wewn.)* | Czy dwa zarzuty mowia o tym samym fakcie. ZACHOWAWCZO, i to celowo. |
+| `_wytnij_zdania(tekst, wzorzec)` *(wewn.)* | Usuwa zdania, w ktorych trafia wzorzec. Zapasowa droga, bez modelu. |
+| `przepisz_bez_wady(conn, run_id, tekst)` | Wycina z tekstu jedna rzecz, ktora nie ma prawa wyjsc. Nie kasuje tekstu. |
 | `dopasuj_dlugosc(conn, run_id, tekst)` | Skraca albo dopelnia notke do okna. Nie odrzuca jej. |
 | `napraw_obalone(conn, run_id, tekst, audyt)` | Poprawia zdanie, ktoremu zapis przeczy. Nie wycina go i nie blokuje tekstu. |
 | `comment_on(conn, run_id, post, fakty)` | Komentarz do cudzego posta — do szuflady. |
@@ -442,7 +444,7 @@
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-3588 wierszy, 33 funkcji na poziomie modułu, 0 klas
+3594 wierszy, 33 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|

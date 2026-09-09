@@ -13,6 +13,16 @@
 {{"kolejnosc": [<id>, <id>, ...],
 ```
 
+#### `bez_wady.md` (33 wierszy)
+
+**Pola wejściowe:** `tekst`, `wada`, `wyjasnienie`
+
+**Kontrakt wyjścia:**
+
+```json
+{{"text": "the text with that thing removed, or an empty string", "co_zmienione": "one line: what you took out"}}
+```
+
 #### `bibliotekarz.md` (57 wierszy)
 
 **Pola wejściowe:** `bank`

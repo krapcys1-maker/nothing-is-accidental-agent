@@ -25,6 +25,7 @@ import tempfile
 
 sys.path.insert(0, "agent-v2")
 import config   # noqa: E402
+import gates as _gates   # noqa: E402
 import stages   # noqa: E402
 
 zdane = oblane = 0
@@ -160,24 +161,29 @@ try:
                  {"comment": CZYSTY, "what_it_adds": "z"}])
     out = stages.comment_on(None, 0, {"url": "https://x/p/a", "title": "T",
                                       "text": "cudzy tekst", "author": "A"})
-    po_tresci = {(k.get("comment") or "")[:20]: k for k in out["candidates"]}
-    a = po_tresci[PRZEZYCIE[:20]]
-    b = po_tresci[BADANIE[:20]]
-    c = po_tresci[CZYSTY[:20]]
-    sprawdz("kandydat z przezyciem NIE jest bezpieczny",
-            a.get("safe_to_post") is False, a.get("safe_to_post"))
-    sprawdz("i powod jest nazwany podloga",
-            "zmyslone przezycie" in str(a.get("odrzucony")), a.get("odrzucony"))
-    sprawdz("kandydat z badaniem NIE jest bezpieczny",
-            b.get("safe_to_post") is False, b.get("safe_to_post"))
-    sprawdz("i powod jest nazwany podloga",
-            "nieistniejace badanie" in str(b.get("odrzucony")), b.get("odrzucony"))
-    sprawdz("czysty kandydat przechodzi", c.get("safe_to_post") is True,
-            c.get("safe_to_post"))
-    # Blokada zapada bez wzgledu na wynik wyszukiwania, wiec placenie za nie
-    # byloby wydatkiem na nic. Przy 17 komentarzach dziennie to nie drobiazg.
-    sprawdz("platne sprawdzanie faktow NIE dotknelo odrzuconych",
-            licznik.teksty == [CZYSTY], licznik.teksty)
+    # OD 9 WRZESNIA 2026 PODLOGA NIE KASUJE KOMENTARZA, TYLKO ZDANIE.
+    # Polecenie wlasciciela: „zadnego blokowania notek komentarzy restackow
+    # czy artykulow". Pilnowana wlasnosc jest teraz MOCNIEJSZA, nie slabsza:
+    # dawniej sprawdzalismy, ze kandydat zostal odrzucony; teraz, ze zmyslone
+    # przezycie NIE WYCHODZI, a reszta komentarza wychodzi.
+    wyszly = [(k.get("comment") or "") for k in out["candidates"]
+              if k.get("safe_to_post")]
+    sprawdz("zmyslone przezycie nie wychodzi w ZADNYM kandydacie",
+            all(not _gates.FABRICATED_EXPERIENCE.search(t) for t in wyszly),
+            wyszly)
+    sprawdz("nienazwane badanie tez nie",
+            all(not _gates.VAGUE_STUDY.search(t) for t in wyszly), wyszly)
+    sprawdz("ale komentarz mimo to WYCHODZI — cisza nie jest odpowiedzia",
+            any(t.strip() for t in wyszly), out["candidates"])
+    _z_wada = [k for k in out["candidates"] if k.get("tekst_przed_wycieciem")]
+    sprawdz("i widac, ze to wynik wyciecia, a nie przypadku",
+            len(_z_wada) >= 1, out["candidates"])
+    # CZYSTY KANDYDAT JUZ NIE JEST SPRAWDZANY — i tak ma byc. Petla staje na
+    # PIERWSZYM, ktory przechodzi (wystawiamy jeden komentarz), a pierwszy
+    # przechodzi teraz po wycieciu zdania. Dawniej odpadal, wiec kolej
+    # dochodzila do trzeciego. Asercja o czystym kandydacie mierzylaby dzis
+    # skutek uboczny bledu, ktory wlasnie naprawilismy.
+    sprawdz("wychodzi DOKLADNIE jeden komentarz", len(wyszly) == 1, wyszly)
 
     print()
     print("=== 3. KONTRDOWOD: STARA SCIEZKA BY JE PRZEPUSCILA ===")

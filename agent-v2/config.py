@@ -188,6 +188,10 @@ MODEL_FOR = {
     # mechaniczne (wytnij jedna calosc, nie przepisuj), wiec najtanszy model.
     # Pada rzadko: w 14 dniach poza okno wyszly 2 notki na 55.
     "dlugosc": DEEPSEEK,
+    # WYCIECIE WADY Z GOTOWEGO TEKSTU — wstrzykniecie, zmyslone przezycie,
+    # nienazwane badanie. Zadanie mechaniczne (usun jedno, reszte przepisz),
+    # wiec najtanszy model; pada rzadko (6 razy w 30 dniach).
+    "bez_wady": DEEPSEEK,
     # PAROWANIE — JEDYNE PYTANIE O ZBIOR, NIE O POZYCJE.
     #
     # Wszystko inne w tym potoku patrzy na fakt osobno: bramka swiezosci,
@@ -1186,6 +1190,8 @@ MAX_TOKENS = {
     "rozbior": _tokens_for(2600),
     # Cala notka jeszcze raz plus jedno zdanie o tym, co wycieto.
     "dlugosc": _tokens_for(700),
+    # Caly tekst jeszcze raz plus jedno zdanie o tym, co wycieto.
+    "bez_wady": _tokens_for(900),
     # Parowanie oddaje same identyfikatory i jedno zdanie uzasadnienia na
     # grupe — krotko, ale przy dwudziestu faktach grup moze byc kilka.
     "parowanie": 8000,
