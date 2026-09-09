@@ -283,48 +283,6 @@ kept — so a code you cannot honestly pick is a candidate you are not deleting.
 
 ---
 
-#### `prompts/bez_wady.md`
-
-**33 wierszy.** Pola wejsciowe: `tekst`, `wada`, `wyjasnienie`
-
-````markdown
-A text is written and about to be published. One specific thing in it must not
-go out. Take that thing out and hand back the rest.
-
-# WHAT MUST GO
-
-{wada}
-
-{wyjasnienie}
-
-# HOW
-
-Remove it. Do not argue with it, do not soften it, do not replace it with a
-vaguer version of itself — a hedged version of the thing is still the thing.
-
-Everything else comes back word for word. This is an excision, not a rewrite:
-the opening was checked against our recent texts, the rhythm was chosen, the
-facts were verified. You are removing one thing from a finished text.
-
-If the offending part is the whole point of a sentence, drop the whole
-sentence. If what remains needs one short bridge to read properly, write that
-bridge and nothing more — and build it only from what is already in the text.
-
-**Invent nothing to fill the gap.** No new facts, no new numbers, no new
-claims, and above all no new personal experience: you have none. A shorter
-text is the correct outcome. If removing it leaves nothing worth publishing,
-return an empty string and say so.
-
-# THE TEXT
-
-{tekst}
-
-Return only:
-{{"text": "the text with that thing removed, or an empty string", "co_zmienione": "one line: what you took out"}}
-````
-
----
-
 #### `prompts/bibliotekarz.md`
 
 **57 wierszy.** Pola wejsciowe: `bank`
@@ -954,59 +912,6 @@ word is what tilted the whole feed towards courtrooms and statutes: it is the
 only shape a law reliably has. A finding with no author still passes now, and
 should — the generator UNBIDDEN literally asks for things nobody specified,
 and under the old test every one of them failed the contract on the way out.
-````
-
----
-
-#### `prompts/dlugosc.md`
-
-**44 wierszy.** Pola wejsciowe: `kontekst`, `max_slow`, `min_slow`, `slow`, `tekst`
-
-````markdown
-A note is written and about to go out. It is {slow} words and the window is
-{min_slow} to {max_slow}. Bring it inside the window.
-
-This is the ONLY thing wrong with it. Do not improve it, do not re-angle it,
-do not fix anything you personally would have written differently.
-
-# IF IT IS TOO LONG
-
-Cut. Do not compress by making sentences denser — a note squeezed into fewer,
-heavier words is worse than the one you started with, and the reader pays for
-it. Take out a whole thing instead:
-
-- an aside that explains something the note does not turn on
-- the second example, when the first one already lands it
-- a sentence that restates the point in different words
-- qualifiers doing no work: "in effect", "it is worth noting", "essentially"
-
-Cutting one whole sentence beats trimming six.
-
-# IF IT IS TOO SHORT
-
-Add the missing explanation, not more adjectives. The likeliest gap is that
-something is named but never explained in ordinary words. Fill that. Every
-added fact must already be in the text or in the context below — invent
-nothing to reach a word count.
-
-# WHAT MUST SURVIVE
-
-- **The opening line, word for word.** It was checked against our recent notes
-  so the account does not start every note the same way. Changing it undoes a
-  check that already ran.
-- Every number, name and date, exactly as written.
-- The point the note is making, and the note's own voice. If your version
-  reads more neutral than the original, you have rewritten rather than cut.
-- The ending's move. If it closed on a judgement, it still closes on a
-  judgement; if it closed on something in the reader's own life, likewise.
-
-CONTEXT: {kontekst}
-
---- THE NOTE ---
-{tekst}
-
-Return only:
-{{"text": "the full note, inside the window", "co_zmienione": "one line: what you took out or added"}}
 ````
 
 ---

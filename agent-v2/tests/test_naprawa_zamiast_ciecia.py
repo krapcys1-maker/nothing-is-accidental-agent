@@ -185,7 +185,19 @@ sprawdz("odrzucona PRZED platnym sprawdzeniem", "factcheck" not in licznik,
         "blokada zapada tak czy owak, wiec placenie za nia jest bez sensu")
 
 print()
-print("=== 5. NAPRAWA POZA DLUGOSCIA -> ODRZUCONA, TEZ PRZED OPLATA ===")
+print("=== 5. NAPRAWA POZA DLUGOSCIA -> I TAK WCHODZI ===")
+# ZMIENIONE 9 WRZESNIA 2026, decyzja wlasciciela: „zadnego blokowania (…) nic
+# nie ma wycinac".
+#
+# Stalo tu, ze poprawka poza oknem dlugosci jest odrzucana. Zmierzone platna
+# proba tego samego dnia: sprawdzanie faktow obalilo twierdzenie, naprawa
+# przepisala je POPRAWNIE i wyszla na 135 slow przy suficie 120 — po czym
+# zostala wyrzucona. OBALONE TWIERDZENIE ZOSTALO W NOTCE, ktora poszla
+# w swiat.
+#
+# Czytelnik dostawal nieprawde, ktora sami wykrylismy i sami naprawilismy,
+# a potem wyrzucilismy poprawke na liczniku slow. Dlugosc nie uniewaznia
+# poprawki faktu.
 licznik = []
 llm.call = stub({
     "naprawa": json.dumps({"text": "Ninety-four times.", "co_zmienione": "x"}),
@@ -193,8 +205,9 @@ llm.call = stub({
 }, licznik)
 stages._NAPRAW_ZUZYTE.clear()
 r = stages.napraw_obalone(CONN, 5, ORYGINAL, audyt(ZARZUT), **naprawa_notki())
-sprawdz("za krotka naprawa odrzucona", r is None)
-sprawdz("odrzucona przed platnym sprawdzeniem", "factcheck" not in licznik)
+sprawdz("za krotka naprawa NIE jest odrzucana", r is not None, repr(r))
+sprawdz("i niesie poprawiony tekst",
+        r and r.get("tekst") == "Ninety-four times.", repr(r))
 
 print()
 print("=== 6. ZARZUT, KTORY NIE ZNIKA -> ZOSTAJE ORYGINAL ===")

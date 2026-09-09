@@ -161,29 +161,29 @@ try:
                  {"comment": CZYSTY, "what_it_adds": "z"}])
     out = stages.comment_on(None, 0, {"url": "https://x/p/a", "title": "T",
                                       "text": "cudzy tekst", "author": "A"})
-    # OD 9 WRZESNIA 2026 PODLOGA NIE KASUJE KOMENTARZA, TYLKO ZDANIE.
-    # Polecenie wlasciciela: „zadnego blokowania notek komentarzy restackow
-    # czy artykulow". Pilnowana wlasnosc jest teraz MOCNIEJSZA, nie slabsza:
-    # dawniej sprawdzalismy, ze kandydat zostal odrzucony; teraz, ze zmyslone
-    # przezycie NIE WYCHODZI, a reszta komentarza wychodzi.
+    # PODLOGA JEST LOGIEM — decyzja wlasciciela z 9 wrzesnia 2026, powtorzona
+    # dwa razy tego samego dnia: „zadnego blokowania notek komentarzy
+    # restackow czy artykulow", a po wersji wycinajacej zdanie: „nic nie ma
+    # wycinac".
+    #
+    # Ten plik pilnowal wczesniej, ze zmyslone przezycie NIE WYCHODZI. Dzis
+    # wychodzi, i tak ma byc — to swiadoma decyzja wlasciela konta, nie
+    # przeoczenie. Pilnujemy wiec dwoch rzeczy, ktore z niej wynikaja:
+    # podloga ma nadal WIDZIEC wade (wykrywacz zyje) i ma ja ZAPISAC przy
+    # kandydacie (da sie policzyc, jak czesto pada).
     wyszly = [(k.get("comment") or "") for k in out["candidates"]
               if k.get("safe_to_post")]
-    sprawdz("zmyslone przezycie nie wychodzi w ZADNYM kandydacie",
-            all(not _gates.FABRICATED_EXPERIENCE.search(t) for t in wyszly),
-            wyszly)
-    sprawdz("nienazwane badanie tez nie",
-            all(not _gates.VAGUE_STUDY.search(t) for t in wyszly), wyszly)
-    sprawdz("ale komentarz mimo to WYCHODZI — cisza nie jest odpowiedzia",
+    sprawdz("komentarz WYCHODZI — cisza nie jest odpowiedzia",
             any(t.strip() for t in wyszly), out["candidates"])
-    _z_wada = [k for k in out["candidates"] if k.get("tekst_przed_wycieciem")]
-    sprawdz("i widac, ze to wynik wyciecia, a nie przypadku",
-            len(_z_wada) >= 1, out["candidates"])
-    # CZYSTY KANDYDAT JUZ NIE JEST SPRAWDZANY — i tak ma byc. Petla staje na
-    # PIERWSZYM, ktory przechodzi (wystawiamy jeden komentarz), a pierwszy
-    # przechodzi teraz po wycieciu zdania. Dawniej odpadal, wiec kolej
-    # dochodzila do trzeciego. Asercja o czystym kandydacie mierzylaby dzis
-    # skutek uboczny bledu, ktory wlasnie naprawilismy.
     sprawdz("wychodzi DOKLADNIE jeden komentarz", len(wyszly) == 1, wyszly)
+    _z_podloga = [k for k in out["candidates"] if k.get("podloga")]
+    sprawdz("ale podloga ZOBACZYLA wade i zapisala ja przy kandydacie",
+            len(_z_podloga) >= 1, out["candidates"])
+    sprawdz("i nazwala ja po imieniu",
+            any("przezycie" in str(k.get("podloga")) for k in _z_podloga),
+            [k.get("podloga") for k in _z_podloga])
+    sprawdz("tekst wyszedl NIETKNIETY, bez wycinania",
+            all(not k.get("tekst_przed_wycieciem") for k in out["candidates"]))
 
     print()
     print("=== 3. KONTRDOWOD: STARA SCIEZKA BY JE PRZEPUSCILA ===")

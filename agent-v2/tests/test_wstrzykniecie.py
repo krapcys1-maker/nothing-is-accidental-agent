@@ -71,9 +71,23 @@ sprawdz("komentarz przechodzi przez zapore", zrodlo.count("bez_wstrzykniecia(tex
 sprawdz("odpowiedz przechodzi przez zapore", "bez_wstrzykniecia(text)" in zrodlo)
 sprawdz("zapora jest PRZED platnym sprawdzeniem faktow",
         zrodlo.index("bez_wstrzykniecia(text)") < zrodlo.rindex("audyt = zweryfikuj"))
-sprawdz("odrzucony kandydat NIE jest bezpieczny do wystawienia",
-        'data["safe_to_post"] = False' in zrodlo)
-sprawdz("odrzucona odpowiedz ma wyczyszczona tresc", 'data["reply"] = None' in zrodlo)
+# OD 9 WRZESNIA 2026 ZAPORA JEST LOGIEM, NIE BRAMKA — decyzja wlasciciela,
+# powtorzona dwa razy: „zadnego blokowania (…) masz usunac wszelkie blokady",
+# a po wersji wycinajacej fragment: „nic nie ma wycinac".
+#
+# Stalo tu, ze odrzucony kandydat ma `safe_to_post = False`, a odrzucona
+# odpowiedz ma wyczyszczona tresc. Dzis tekst wychodzi taki, jaki napisal
+# model. Pilnowana wlasnosc zmienia sie wiec z „nie wyszlo" na „ZOSTALO
+# ZAPISANE, ze zapora to widziala" — bo bez zapisu nie da sie policzyc, jak
+# czesto by zadzialala, a to jedyny sposob, zeby zauwazyc, gdyby cos zaczelo
+# przechodzic masowo.
+sprawdz("werdykt zapory jest ZAPISYWANY przy notce",
+        'data["czysty"] = czysty' in zrodlo)
+sprawdz("i przy odpowiedzi oraz komentarzu",
+        zrodlo.count('data["zapora_wstrzykniecia"] = powod') >= 2,
+        zrodlo.count('data["zapora_wstrzykniecia"] = powod'))
+sprawdz("a tekst mimo to idzie — zadnego kasowania tresci",
+        'data["reply"] = None' not in zrodlo)
 
 print()
 print("=== 4. PROMPTY MOWIA, ZE CUDZY TEKST TO DANE — I MOWIA TO NA CZAS ===")

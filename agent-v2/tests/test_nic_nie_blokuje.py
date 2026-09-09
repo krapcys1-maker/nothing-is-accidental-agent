@@ -92,18 +92,29 @@ for rodzaj in ("wystaw_notke", "wystaw_komentarz", "wystaw_odpowiedz",
 
 print()
 print("=== 3. ILE JEST ZAPOR ODBIERAJACYCH PRAWO DO PUBLIKACJI ===")
-# Trzy zapory sprzed 2 wrzesnia 2026 plus werdykt samej bramki faktow.
-# Werdykt jest NADPISYWANY przez wolajacych na `True` — patrz `note` i
-# `comment_on` — wiec nie zatrzymuje niczego; liczy sie tu, bo jest
-# przypisaniem do tego samego pola.
+# ZOSTALA JEDNA, I TO NIE JEST ZAPORA — 9 wrzesnia 2026.
+#
+# Bylo cztery: zapora wstrzykniecia przy notce, te same przy komentarzu wraz
+# z podloga z pamieci, plus werdykt samej bramki faktow. Trzy pierwsze zdjete
+# decyzja wlasciciela, powtorzona dwa razy tego samego dnia: „zadnego
+# blokowania notek komentarzy restackow czy artykulow, masz usunac wszelkie
+# blokady", a po wersji wycinajacej wadliwy fragment: „nic nie ma wycinac".
+#
+# Wszystkie trzy sa teraz LOGIEM: zapisuja przy kandydacie, co zobaczyly
+# (`czysty`, `zapora_wstrzykniecia`, `podloga`), i tekst mimo to wychodzi.
+# Pilnuje tego `test_nic_nie_blokuje_i_nie_wycina`.
+#
+# Czwarte przypisanie zostaje, bo nie jest zapora: `zweryfikuj` zapisuje swoj
+# werdykt, a wolajacy (`note`, `comment_on`) nadpisuja go na `True`. Liczy sie
+# tutaj wylacznie dlatego, ze siega po to samo pole.
 zapory = bramki.wstrzymania_publikacji()
 opis = ["%s:%d %s" % (z["plik"], z["linia"], z["funkcja"]) for z in zapory]
-sprawdz("dokladnie cztery przypisania `safe_to_post` inne niz True",
-        len(zapory) == 4, opis)
+sprawdz("zostalo JEDNO przypisanie `safe_to_post` inne niz True",
+        len(zapory) == 1, opis)
 
 funkcje = sorted(z["funkcja"] for z in zapory)
-sprawdz("i stoja tam, gdzie stac maja",
-        funkcje == ["comment_on", "comment_on", "note", "zweryfikuj"], funkcje)
+sprawdz("i jest nim sam werdykt sprawdzania faktow, nie zapora",
+        funkcje == ["zweryfikuj"], funkcje)
 
 print()
 print("=== 4. KONTRDOWOD: WYKRYWACZ NAPRAWDE BY ZLAPAL NOWA BRAMKE ===")
