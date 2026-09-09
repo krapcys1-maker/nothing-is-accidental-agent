@@ -123,9 +123,9 @@
 {{"text": "the full corrected text", "co_zmienione": "one line: what you changed and what evidence you changed it to"}}
 ```
 
-#### `notka.md` (154 wierszy)
+#### `notka.md` (223 wierszy)
 
-**Pola wejściowe:** `evidence`, `form_brief`, `language`, `marka`, `max_words`, `min_words`, `note_form`, `note_type`, `ostatnie_otwarcia_json`, `type_brief`
+**Pola wejściowe:** `evidence`, `form_brief`, `language`, `marka`, `max_words`, `min_words`, `note_form`, `note_type`, `ostatnie_otwarcia_json`, `ostatnie_zakonczenia_json`, `rozbior`, `type_brief`
 
 **Kontrakt wyjścia:**
 
@@ -195,6 +195,16 @@
 
 ```json
 {{"restack": true|false, "reason": "<one sentence: why this is or is not worth passing on>", "sentence": "<your sentence, or empty string if restack is false>", "mechanism_named": "<the other place this same logic runs, or empty string>"}}
+```
+
+#### `rozbior.md` (105 wierszy)
+
+**Pola wejściowe:** `evidence`, `language`, `marka`
+
+**Kontrakt wyjścia:**
+
+```json
+{{"w_prostych_slowach": "<what this is, plainly>",
 ```
 
 #### `skaut.md` (661 wierszy)

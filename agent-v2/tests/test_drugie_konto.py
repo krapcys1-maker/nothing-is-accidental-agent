@@ -99,7 +99,7 @@ print("=== 4. PODMIANA MARKI NAPRAWDE DOCHODZI DO PROMPTU ===")
 
 def _notka():
     return stages._prompt(
-        "notka.md", language=config.ARTICLE_LANGUAGE, min_words=33,
+        "notka.md", rozbior="(brak — pisz z samego materialu)", ostatnie_zakonczenia_json="[]", language=config.ARTICLE_LANGUAGE, min_words=33,
         max_words=120, note_type="CIEKAWOSTKA", type_brief="x",
         note_form="PROSTA", form_brief="y", evidence="{}",
         ostatnie_otwarcia_json="[]")

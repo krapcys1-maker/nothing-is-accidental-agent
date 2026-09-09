@@ -51,7 +51,7 @@ print()
 print("=== 3. PROMPT SIE RENDERUJE I NIESIE OTWARCIA ===")
 try:
     gotowy = stages._prompt(
-        "notka.md", language="English", min_words=33, max_words=64,
+        "notka.md", rozbior="(brak — pisz z samego materialu)", ostatnie_zakonczenia_json="[]", language="English", min_words=33, max_words=64,
         note_type="CIEKAWOSTKA", type_brief="x", note_form="LICZBA",
         form_brief="y", evidence="{}",
         ostatnie_otwarcia_json=json.dumps(["six", "washing", "your"]))
@@ -68,7 +68,7 @@ print("=== 4. POMINIECIE OTWARC JEST BLEDEM, NIE CICHYM PRZEJSCIEM ===")
 # Kontrdowod: gdyby pole bylo opcjonalne, ktos usunalby je przy nastepnej
 # zmianie i jeden wariant zostalby bez ochrony.
 try:
-    stages._prompt("notka.md", language="English", min_words=33, max_words=64,
+    stages._prompt("notka.md", rozbior="(brak — pisz z samego materialu)", ostatnie_zakonczenia_json="[]", language="English", min_words=33, max_words=64,
                    note_type="CIEKAWOSTKA", type_brief="x", note_form="LICZBA",
                    form_brief="y", evidence="{}")
     sprawdz("brak otwarc wywala prompt", False, "przeszlo bez otwarc")

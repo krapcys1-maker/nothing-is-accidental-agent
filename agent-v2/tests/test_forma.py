@@ -141,7 +141,7 @@ sprawdz("prompt odradza otwieranie od 'The'",
 # Szablon musi sie faktycznie sformatowac wszystkimi polami, ktore podaje kod.
 try:
     gotowy = stages._prompt(
-        "notka.md", language="English", min_words=config.NOTE_MIN_WORDS,
+        "notka.md", rozbior="(brak — pisz z samego materialu)", ostatnie_zakonczenia_json="[]", language="English", min_words=config.NOTE_MIN_WORDS,
         max_words=config.NOTE_MAX_WORDS, note_type="CIEKAWOSTKA",
         type_brief=config.NOTE_TYPES["CIEKAWOSTKA"], note_form="LISTA",
         form_brief=config.NOTE_FORMS["LISTA"], evidence="{}",

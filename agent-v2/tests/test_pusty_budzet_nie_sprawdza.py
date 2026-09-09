@@ -255,7 +255,39 @@ def para(wersja):
     # Notki i otwarcia z dysku/bazy nie maja tu nic do rzeczy — zerujemy je,
     # zeby test nie zalezal od tego, co konto wystawilo wczoraj.
     st.ostatnie_otwarcia = lambda *a, **k: []
+    st.ostatnie_zakonczenia = lambda *a, **k: []
     st.teksty_ostatnich_notek = lambda *a, **k: []
+    # ROZBIOR TEZ WYCISZONY, i z tego samego powodu co powyzsze. Od 9 wrzesnia
+    # 2026 `note` zaczyna od platnego przepytania materialu (`stages.rozbior`),
+    # ktore przy pustym budzecie albo przy wylaczniku przerywa CALY bieg —
+    # slusznie, ale WCZESNIEJ niz miejsce, ktorego dowodzi ten test. Kontrdowod
+    # przestal wtedy odtwarzac stary swiat: notka nie wychodzila nie dlatego,
+    # ze sprawdzanie faktow bylo pominiete, tylko dlatego, ze bieg padal
+    # pietro wyzej. Test ma mierzyc jedna rzecz, wiec rozbior wychodzi z kadru.
+    #
+    # Ze budzet i wylacznik NAPRAWDE zatrzymuja rozbior, pilnuje osobno
+    # `test_rozbior_przed_notka.py`.
+    st.rozbior = lambda *a, **k: {}
+
+    # I JESZCZE JEDNO SPRZEZENIE, MNIEJ OCZYWISTE: drzewo „PRZED" to STARY KOD
+    # uruchamiany na DZISIEJSZYCH plikach promptow. `notka.md` dostala 9 wrzesnia
+    # dwa nowe pola (`rozbior`, `ostatnie_zakonczenia_json`), a pisarz sprzed
+    # naprawy ich nie podaje — wiec skladanie promptu konczylo sie `KeyError`
+    # i notka nie wychodzila. Kontrdowod pokazywalby wtedy „nic nie poszlo"
+    # z powodu, ktorego nie bada.
+    #
+    # Uzupelniamy braki, a nie nadpisujemy: `fields` maja pierwszenstwo, wiec
+    # drzewo „teraz" nadal podaje swoje wlasne wartosci i jest sprawdzane
+    # naprawde.
+    _prompt_drzewa = st._prompt
+
+    def _prompt_zgodny(name, **fields):
+        if name == "notka.md":
+            fields = {"rozbior": "(brak — pisz z samego materialu)",
+                      "ostatnie_zakonczenia_json": "[]", **fields}
+        return _prompt_drzewa(name, **fields)
+
+    st._prompt = _prompt_zgodny
     stary = sys.modules.get("stages")
     sys.modules["stages"] = st
     try:

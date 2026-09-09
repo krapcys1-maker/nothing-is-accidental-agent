@@ -2461,6 +2461,157 @@ def ostatnie_otwarcia(rodzaj: str = "notka", ile: int = 8) -> list[str]:
     return otwarcia[-ile:]
 
 
+def ostatnie_zakonczenia(rodzaj: str = "notka", ile: int = 8) -> list[str]:
+    """Ostatnie zdania ostatnich notek — zeby kolejna nie konczyla sie tak samo.
+
+    BLIZNIAK `ostatnie_otwarcia`, dopisany 9 wrzesnia 2026 z tego samego
+    powodu i tym samym sposobem: model chwyta rytm, bo material jest podobny,
+    a lekarstwem nie jest prosba o roznorodnosc, tylko PODANIE MU INFORMACJI,
+    ktorej nie ma — jak konczyly sie poprzednie.
+
+    Zmierzone na 96 opublikowanych notkach, zanim to powstalo: slowo `count`
+    w 17 z nich, `this week` w 8, `next time` w 3 — bo regula 4 promptu kazala
+    kazda notke zamykac czyms, co czytelnik moze dzis obejrzec, POLICZYC albo
+    porownac. Regula jest dobra, ale jako JEDYNE zakonczenie zrobila z konta
+    nauczyciela rozdajacego cwiczenia. Wlasciciel nazwal to tablica ogloszen.
+
+    Bierzemy CALE ostatnie zdanie, nie pierwsze slowo: powtarza sie tu nie
+    slowo, tylko ruch („policz swoje…", „nastepnym razem potraktuj to jak…").
+    """
+    plik = config.DATA_DIR / "dziennik.jsonl"
+    if not plik.exists():
+        return []
+    konce: list[str] = []
+    try:
+        for linia in plik.read_text(encoding="utf-8").splitlines():
+            linia = linia.strip()
+            if not linia:
+                continue
+            try:
+                w = json.loads(linia)
+            except ValueError:
+                continue
+            if not isinstance(w, dict) or w.get("rodzaj") != rodzaj:
+                continue
+            tekst = " ".join((w.get("tekst") or "").split())
+            if not tekst:
+                continue
+            zdania = [z for z in re.split(r"(?<=[.!?])\s", tekst) if z.strip()]
+            # Notka promujaca artykul konczy sie adresem — liczy sie zdanie
+            # PRZED nim, bo to ono jest zakonczeniem tekstu.
+            while zdania and zdania[-1].lower().startswith("http"):
+                zdania.pop()
+            if zdania:
+                konce.append(zdania[-1][:160])
+    except OSError:
+        return []
+    return konce[-ile:]
+
+
+ROZBIOR_SYSTEM = (
+    "You take apart the evidence behind a note for %s before it is written: "
+    "what the thing actually is, how big it is, what a reader would ask, and "
+    "what you make of it. " % config.MARKA +
+    "Every factual claim comes from the supplied material, never from your "
+    "own memory, and you have no personal experience of anything. "
+    "Return only valid JSON."
+)
+
+
+@_na_kanal("notka")
+def rozbior(
+    conn: sqlite3.Connection | None, run_id: int | None,
+    evidence: dict[str, Any] | list[Any],
+) -> dict[str, Any]:
+    """Przepytanie materialu, ZANIM powstanie notka.
+
+    DLACZEGO ISTNIEJE — decyzja wlasciciela z 9 wrzesnia 2026, po przeczytaniu
+    wlasnego konta: „chcialbym zeby model jak przeczyta info na jakis temat
+    zadal sobie pytania na jego temat i odpowiedzial sobie na nie, wyciagnal
+    wnioski (…) a nie tylko wystawil suchy fakt".
+
+    Przyklad, ktory podal: lab oglasza rozwiazanie zagadki milenijnej. Wersja
+    sucha stwierdza to i idzie dalej. Wersja warta czytania pyta, na czym
+    zagadka polegala, co znaczy tu „rozwiazane", czy to maszyna robiaca
+    matematyke, czy maszyna pomagajaca matematykowi, i co musialoby byc
+    prawda, zeby to znaczylo tyle, ile obiecuje naglowek.
+
+    CO TO ZMIENIA W POTOKU. Dotad miedzy „mamy fakt" a „piszemy notke" nie
+    bylo ETAPU MYSLENIA — karta faktu jest bogata (fakt, falszywe przekonanie,
+    co naprawde, decyzja, skutek, kontrola zrodla), ale kazde z tych pol
+    OPISUJE material. Zadne go nie ocenia. Pisarz dostawal wiec komplet danych
+    i zadnego zdania na ich temat, wiec pisal jedyne, co da sie napisac bez
+    zdania: wyjasnienie.
+
+    ZAWODZI NA PUSTO, NIE NA BLAD. Bez polaczenia albo po nieudanym wywolaniu
+    oddaje pusty slownik, a `napisz_notke` pisze notke tak jak dotad. Doktryna:
+    lepiej niech wyjdzie notka slabsza niz zadna. Rozbior JEST ulepszeniem
+    notki, a nie warunkiem jej powstania — i tak ma zostac.
+
+    GRANICA WYMYSLANIA. Prompt dzieli odpowiedzi na `z_dowodu` (z materialu)
+    i reszte (rozumowanie). `notka.md` wolno wypowiedziec rozumowanie JAKO
+    zdanie konta, nigdy jako fakt. Bez tego podzialu ten etap bylby maszynka
+    do wymyslania liczb, bo model pytany „jak duze to jest" zawsze cos odpowie.
+    """
+    if conn is None:
+        return {}
+    try:
+        raw = llm.call(
+            "rozbior", ROZBIOR_SYSTEM,
+            _prompt("rozbior.md",
+                    language=config.ARTICLE_LANGUAGE,
+                    evidence=json.dumps(evidence, ensure_ascii=False,
+                                        indent=2)[:9000]),
+            conn=conn, run_id=run_id)
+        dane = llm.parse_json(raw)
+    except (llm.BudgetExceeded, llm.PreflightFailed):
+        # TE DWA MUSZA LECIEC DALEJ, i to nie jest ostroznosc — pierwsza wersja
+        # lapala je razem z reszta i przez to OBCHODZILA ZAPORE BUDZETU:
+        # przy wyczerpanym budzecie rozbior wypisywal linijke i notka szla
+        # dalej, jakby nic sie nie stalo. To samo dotyczy `KILL_SWITCH`, ktory
+        # zglasza sie wlasnie jako `PreflightFailed`. Zlapane przez
+        # `test_pusty_budzet_nie_sprawdza`, nie przez czytanie kodu.
+        raise
+    except Exception as e:                                    # noqa: BLE001
+        # POWOD, NIE SAM TYP WYJATKU. Pierwsza wersja drukowala samo
+        # `PreflightFailed` i diagnoza stala w miejscu — a `_preflight` mowi
+        # dokladnie, czego brakuje (klucza, sufitu tokenow, zgody na platne
+        # wywolanie). Log, ktory zjada powod, kosztuje wiecej niz zajmuje.
+        print("  [rozbior] nie odpowiedzial (%s: %s) — pisze bez niego"
+              % (type(e).__name__, e), flush=True)
+        return {}
+    if not isinstance(dane, dict):
+        return {}
+    pytania = [p for p in (dane.get("pytania") or [])
+               if isinstance(p, dict) and p.get("pytanie") and p.get("odpowiedz")]
+    # KAZDE POLE, O KTORE PROSI PROMPT, JEST TU CZYTANE I PRZYCINANE. Nie dla
+    # ozdoby: `test_martwe_sygnaly` pilnuje, zeby prompt nie zamawial pola,
+    # ktorego kod nigdy nie oglada — ten projekt zlapal juz szesc razy sygnal
+    # policzony i wyrzucony. Przyciecie ma tez drugi sens: te pola ida wprost
+    # do promptu pisarza, wiec model, ktory odda tu esej, zjadlby miejsce
+    # materialowi dowodowemu.
+    dane = {
+        "w_prostych_slowach": str(dane.get("w_prostych_slowach") or "")[:600],
+        "skala": str(dane.get("skala") or "")[:400],
+        "pytania": [{"pytanie": str(p.get("pytanie"))[:200],
+                     "odpowiedz": str(p.get("odpowiedz"))[:400],
+                     "z_dowodu": bool(p.get("z_dowodu"))}
+                    for p in pytania[:5]],
+        "jesli_sie_utrzyma": str(dane.get("jesli_sie_utrzyma") or "")[:400],
+        "gdzie_by_peklo": str(dane.get("gdzie_by_peklo") or "")[:400],
+        "co_o_tym_sadze": str(dane.get("co_o_tym_sadze") or "")[:300],
+        "czego_nie_wiadomo": [str(x)[:200]
+                              for x in (dane.get("czego_nie_wiadomo") or [])][:5],
+    }
+    print("  [rozbior] pytan: %d (z dowodu %d), skala: %s, stanowisko: %s"
+          % (len(dane["pytania"]),
+             sum(1 for p in dane["pytania"] if p.get("z_dowodu")),
+             "jest" if str(dane.get("skala") or "").strip() else "BRAK",
+             str(dane.get("co_o_tym_sadze") or "")[:60] or "BRAK"),
+          flush=True)
+    return dane
+
+
 def wiek_zrodla_w_dniach(data_zrodla: str, teraz=None) -> int | None:
     """Ile dni ma zrodlo. None, gdy daty nie da sie odczytac.
 
@@ -3274,8 +3425,21 @@ def note(
     odpadalaby wtedy za to, ze posluchala.
     """
     _min_slow, _maks_slow = config.zakres_slow(note_form)
+    # ROZBIOR IDZIE PRZED PISANIEM, nie po. Pisarz, ktory dostaje sam material,
+    # napisze wyjasnienie, bo bez zdania o materiale nie da sie napisac nic
+    # innego. Patrz `rozbior` — zawodzi na pusto, wiec notka powstaje takze
+    # wtedy, gdy ten etap milczy.
+    _rozbior = rozbior(conn, run_id, evidence)
     prompt = _prompt(
         "notka.md",
+        rozbior=(json.dumps(_rozbior, ensure_ascii=False, indent=2)[:4000]
+                 if _rozbior else "(brak — pisz z samego materialu)"),
+        # KONCOWKI TAK SAMO JAK OTWARCIA. Ten sam mechanizm, ta sama przyczyna:
+        # model nie wie, czym konczyly sie poprzednie notki, wiec konczy je tak
+        # samo. Zmierzone na 96 notkach: `count` w 17, `this week` w 8.
+        ostatnie_zakonczenia_json=json.dumps(
+            ostatnie_zakonczenia() or ["(zadnych jeszcze nie ma)"],
+            ensure_ascii=False),
         language=config.ARTICLE_LANGUAGE,
         min_words=_min_slow,
         max_words=_maks_slow,

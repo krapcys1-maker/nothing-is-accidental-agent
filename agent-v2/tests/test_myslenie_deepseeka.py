@@ -81,11 +81,26 @@ def _atrapa_post(url, headers=None, json=None, timeout=None):
     return _Odpowiedz()
 
 
-print("=== 1. DOMYSLNIE NIC SIE NIE ZMIENIA ===")
-# To jest najwazniejsza asercja w tym pliku. Mechanizm ma byc BEZCZYNNY,
-# dopoki ktos swiadomie nie doda etapu.
-sprawdz("tablica `DEEPSEEK_MYSLENIE` jest pusta",
-        config.DEEPSEEK_MYSLENIE == {}, config.DEEPSEEK_MYSLENIE)
+print("=== 1. WLACZONE TYLKO TAM, GDZIE KTOS TAK POSTANOWIL ===")
+# Ta asercja brzmiala „tablica jest PUSTA" i byla najwazniejsza w pliku:
+# mechanizm mial byc bezczynny, dopoki ktos swiadomie nie doda etapu.
+#
+# 9 wrzesnia 2026 ktos dodal etap swiadomie. `rozbior` (patrz `stages.rozbior`)
+# to jedyne miejsce w potoku, w ktorym ROZUMOWANIE JEST PRODUKTEM: model pyta
+# o material i sam sobie odpowiada, zanim pisarz cokolwiek napisze. Wszedzie
+# indziej rozumowanie to rachunek za tokeny, ktorych nikt nie czyta.
+#
+# Pytanie pilnowane zostaje wiec to samo, tylko postawione ostrzej: nie „czy
+# tablica jest pusta", ale „czy nie wlaczylo sie samo tam, gdzie nikt tego nie
+# chcial". Lista jest jawna i kazdy dopisek do niej ma tu upasc.
+DOZWOLONE_Z_MYSLENIEM = {"rozbior"}
+sprawdz("rozumowanie wlaczone WYLACZNIE dla etapow z jawnej listy",
+        set(config.DEEPSEEK_MYSLENIE) == DOZWOLONE_Z_MYSLENIEM,
+        "wlaczone: %s" % sorted(config.DEEPSEEK_MYSLENIE))
+sprawdz("etapy pisania i odsiewu NADAL bez rozumowania",
+        all(config.myslenie_deepseek(e) is None
+            for e in ("note", "comment", "powtorka", "parowanie", "classify",
+                      "bank", "curiosity", "factcheck")))
 sprawdz("nieznany etap nie dostaje ustawienia",
         config.myslenie_deepseek("cokolwiek") is None,
         config.myslenie_deepseek("cokolwiek"))

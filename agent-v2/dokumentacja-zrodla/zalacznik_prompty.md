@@ -1866,7 +1866,7 @@ Return only:
 
 #### `prompts/notka.md`
 
-**154 wierszy.** Pola wejsciowe: `evidence`, `form_brief`, `language`, `marka`, `max_words`, `min_words`, `note_form`, `note_type`, `ostatnie_otwarcia_json`, `type_brief`
+**223 wierszy.** Pola wejsciowe: `evidence`, `form_brief`, `language`, `marka`, `max_words`, `min_words`, `note_form`, `note_type`, `ostatnie_otwarcia_json`, `ostatnie_zakonczenia_json`, `rozbior`, `type_brief`
 
 ````markdown
 Write one Substack Note for {marka}, an anonymous publication
@@ -1897,6 +1897,36 @@ follow has failed even at thirty words.
 
 {evidence}
 
+## The take-apart — what you worked out about this material before writing
+
+{rozbior}
+
+This is not more evidence. It is the thinking that happened on the material
+above, and it exists because notes built from the evidence alone came out
+correct and forgettable: they stated the fact, explained the term it turned on,
+and stopped.
+
+**Use it to have something to say.** `co_o_tym_sadze` is a position, and this
+publication is allowed a position. `gdzie_by_peklo` is where the story is
+likely thinner than it reads — an account that says so is worth reading, and an
+account that never does is a press release. `pytania` are what a reader wants
+answered next; the good ones belong in the note, answered.
+
+**Two hard limits.**
+
+Anything in `pytania` marked `z_dowodu: false`, and everything in
+`jesli_sie_utrzyma`, `gdzie_by_peklo` and `co_o_tym_sadze`, is **judgement,
+not fact**. You may say it as what this publication thinks — "this looks
+narrower than the announcement suggests" — and you may never state it as
+something that happened or as a number. Facts come from the evidence block and
+nowhere else.
+
+`czego_nie_wiadomo` is what this material cannot settle. Do not write past it.
+Where it matters to the note, saying it plainly is better than covering it:
+"the report does not say who checked it" is a real sentence and a rare one.
+
+If the take-apart is missing, write from the evidence as before.
+
 **If the evidence carries `kat_wziety`, that is your assignment, not a
 suggestion.** It holds two fields. `kat` says what to lead with. `lamie` is the
 belief this note has to break — and that is why the field exists: the same fact
@@ -1921,6 +1951,20 @@ So: **write like a person explaining something interesting to a friend over
 coffee** — not like a paper, not like a press release, not like a lecture.
 Plain sentences. Ordinary words. The tone of somebody who finds this genuinely
 interesting and wants you to get it, not somebody proving they understand it.
+
+**And you are allowed to think something.** For a long time this section
+described only an explainer — somebody who makes a thing clear and gets out of
+the way. Explainers have no view, and 96 notes written that way came out
+correct and interchangeable: in all of them the account never once called
+anything strange, never asked why, and never said a claim looked thin.
+
+A publication is a person with a position. When the take-apart below hands you
+one, use it: say the announcement looks smaller than its headline, say the
+interesting part is not the reported part, say the number is real but proves
+less than it is being made to prove. Say it flatly, in your own plain voice, as
+a judgement about the material — never as a fact you invented, never as
+personal experience you do not have, and never as sneering. Being unimpressed
+is a position; being snide is a tell.
 
 Two ways to fail, and both have happened here:
 
@@ -1958,11 +2002,36 @@ what a benchmark score means before a number from one lands.
 3. **Say what it means only after the reader knows what you are talking
    about.** Meaning first and event second is the order that strands everybody
    who does not already follow the story.
-4. **Close with something already in the reader's own life** they can look at,
-   count or compare today: the answer an assistant gave them this week, the app
-   that updated itself, the price on their own statement. Sending them to read
-   a policy or open a model card is homework, and nobody does homework from a
-   feed.
+4. **Land it. How you land it must change from note to note.**
+
+   For a long time this rule said one thing: close with something in the
+   reader's own life they can look at, count or compare today. That ending is
+   good and it stays available — but as the *only* ending it turned the account
+   into a teacher handing out exercises. Measured across 96 published notes:
+   the word "count" in 17 of them, "this week" in 8. The owner read the profile
+   and said it looked like a noticeboard.
+
+   So pick the landing this particular note has earned, and do not pick the one
+   the notes below just used:
+
+   {ostatnie_zakonczenia_json}
+
+   The endings available to you:
+
+   - **Something already in the reader's own life** — what they can look at,
+     count or compare today. Still the best ending when the note is about a
+     thing they actually touch.
+   - **What you make of it** — your own read, in one flat sentence. Allowed,
+     and often the strongest ending, when the take-apart gave you a position.
+   - **The part nobody is reporting** — when the interesting thing is beside
+     the headline, end by naming it.
+   - **What would have to be true** — when the claim rests on something
+     unchecked, end on that condition rather than on a verdict.
+   - **Just stop.** When the last fact is the point, one more sentence weakens
+     it. A note may end on its hardest line and nothing else.
+
+   Never close by sending them to read a policy, open a model card or check a
+   document. That is homework, and nobody does homework from a feed.
 5. **Invent nothing.** Every fact, number, date and name is in the evidence
    above. You have no personal experience and must not write as if you had one.
 
@@ -3126,6 +3195,120 @@ Author: {autor}
 Return only valid JSON, shaped exactly as:
 
 {{"restack": true|false, "reason": "<one sentence: why this is or is not worth passing on>", "sentence": "<your sentence, or empty string if restack is false>", "mechanism_named": "<the other place this same logic runs, or empty string>"}}
+````
+
+---
+
+#### `prompts/rozbior.md`
+
+**105 wierszy.** Pola wejsciowe: `evidence`, `language`, `marka`
+
+````markdown
+You are about to write a short Note for {marka} about the material below.
+Before you write a single sentence of it, take the material apart.
+
+Answer in {language}.
+
+# WHY THIS STEP EXISTS
+
+The account has published dozens of notes that were correct and forgettable.
+They stated the fact, explained the term the fact turned on, and stopped. A
+reader finished them knowing one more thing and feeling nothing, because
+nobody in the chain had asked the obvious question: **so what is this,
+actually — and how big is it?**
+
+Take the real example the owner raised. A lab announces it has settled a
+Millennium Prize problem. The dry version says so and moves on. The version
+worth reading asks what the problem was, why it stood open for decades, what
+"settled" means here (a proof? a proof nobody has checked? a special case?),
+whether this is a machine doing mathematics or a machine assisting a
+mathematician, and what would have to be true for it to matter as much as the
+headline implies. Same fact. One of them is a noticeboard, the other is a
+publication.
+
+So: you are not summarising. You are working out what you actually think,
+from this material only, so that the note can say something.
+
+# THE MATERIAL
+
+{evidence}
+
+# WHAT TO PRODUCE
+
+## 1. In plain words
+
+What is this, for a reader who has never heard of any of it? Name the thing,
+say what it does, and say it without a single term you would not use out loud.
+If the material turns on something the reader cannot be assumed to know — a
+prize, a benchmark, a clause, a technique — that is the thing to unpack here.
+
+## 2. How big
+
+Big compared to **what**? Find the comparison inside the material: the number
+before it, the same measure elsewhere, the ordinary case this departs from.
+
+A comparison you supply from your own memory is worthless here and worse than
+none, because the note may end up standing on it. **If the material carries no
+comparison, say so in `czego_nie_wiadomo` and leave `skala` empty.** An empty
+`skala` is a good answer. An invented one is the failure this whole step is
+supposed to prevent.
+
+## 3. The questions a reader would actually ask
+
+Three to five. Not questions that sound thoughtful — questions somebody who
+just read the first sentence would genuinely want answered next. Cover, if the
+material allows it:
+
+- what exactly happened, as opposed to what the phrasing suggests happened
+- who decided it, and what they get out of it
+- what it would take for this to be **less** than it sounds
+- what changes for someone who will never work on any of this
+
+Answer each one. Mark `z_dowodu` true only when the answer is in the material.
+When it is your reasoning about the material, mark it false — that is allowed
+and useful, but the note is not permitted to state it as fact.
+
+## 4. If it holds
+
+What follows if this is exactly as reported? One or two steps down the chain,
+no further. Prophecy is not analysis, and the third step is always invention.
+
+## 5. Where it would break
+
+The honest deflation. What is the most likely way this turns out to be
+narrower, slower or more ordinary than it reads? Name the specific thing that
+would have to be true — a caveat in the material, an unchecked claim, a
+special case, an interested party. If the material genuinely gives you nothing
+to deflate, say that; it is a real answer and it is rare.
+
+## 6. What you make of it
+
+One sentence. Not a summary, not a hedge — the thing you would say if somebody
+asked you across a table what you think about this, having read only this
+material. It may be flat scepticism. It may be that this is bigger than the
+coverage suggests. It may be that the interesting part is not the part being
+reported. It must be a position somebody could disagree with.
+
+# THE ONE HARD RULE
+
+Every factual claim comes from the material above. You have no memory to draw
+on here, and you have no personal experience: not with these systems, not with
+these companies, not with anything. Where you are reasoning rather than
+reporting, say so through `z_dowodu` and through the fields that are marked as
+judgement. A judgement grounded in the material is the point of this step. A
+fact you supplied yourself is the one thing that can get the account caught.
+
+# OUTPUT
+
+Return only valid JSON:
+
+{{"w_prostych_slowach": "<what this is, plainly>",
+ "skala": "<how big, against a comparison FROM THE MATERIAL, or empty>",
+ "pytania": [{{"pytanie": "<question>", "odpowiedz": "<answer>", "z_dowodu": true}}],
+ "jesli_sie_utrzyma": "<what follows if it holds>",
+ "gdzie_by_peklo": "<the most likely way this is smaller than it reads>",
+ "co_o_tym_sadze": "<one sentence, a position>",
+ "czego_nie_wiadomo": ["<what this material cannot settle>"]}}
 ````
 
 ---

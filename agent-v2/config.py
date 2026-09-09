@@ -178,6 +178,12 @@ MODEL_FOR = {
     # ktore dziela z kandydatem NAZWE albo LICZBE, wiec pytanie jest krotkie
     # i zadawane rzadko. Najtanszy model, bo to rozstrzygniecie tak/nie.
     "powtorka": DEEPSEEK,
+    # ROZBIOR MATERIALU PRZED NOTKA — jedyny etap, w ktorym ROZUMOWANIE
+    # JEST PRODUKTEM, a nie kosztem ubocznym. Model pyta o material i sam
+    # sobie odpowiada, zanim pisarz cokolwiek napisze; patrz `stages.rozbior`.
+    # DEEPSEEK_PRO, bo tanszy wariant oddaje streszczenie zamiast sadu —
+    # a streszczenie mamy juz w karcie faktu.
+    "rozbior": DEEPSEEK_PRO,
     # PAROWANIE — JEDYNE PYTANIE O ZBIOR, NIE O POZYCJE.
     #
     # Wszystko inne w tym potoku patrzy na fakt osobno: bramka swiezosci,
@@ -374,7 +380,13 @@ DEEPSEEK_EFFORT = "low"
 # ruszał bez bardzo mocnego powodu.
 #
 # Brak etapu w tej tablicy = zero zmian wobec tego, co konto robiło do dziś.
-DEEPSEEK_MYSLENIE: dict[str, dict[str, str]] = {}
+DEEPSEEK_MYSLENIE: dict[str, dict[str, str]] = {
+    # JEDYNY ETAP Z WLACZONYM ROZUMOWANIEM — i jedyny, w ktorym ono cos daje.
+    # Wszedzie indziej rozumowanie to rachunek za tokeny, ktorych nikt nie
+    # czyta; tutaj pytanie brzmi „co z tego wynika", wiec droga do odpowiedzi
+    # JEST odpowiedzia. Patrz `stages.rozbior`.
+    "rozbior": {"type": "enabled"},
+}
 
 
 def myslenie_deepseek(etap: str) -> dict[str, str] | None:
@@ -1165,6 +1177,9 @@ MAX_TOKENS = {
     ),
     # Odpowiedz to jedna liczba i jedno zdanie uzasadnienia.
     "powtorka": _tokens_for(400),
+    # Siedem pol, w tym do pieciu par pytanie-odpowiedz. Nie esej, ale tez
+    # nie jedno zdanie — to material do pisania, nie werdykt.
+    "rozbior": _tokens_for(2600),
     # Parowanie oddaje same identyfikatory i jedno zdanie uzasadnienia na
     # grupe — krotko, ale przy dwudziestu faktach grup moze byc kilka.
     "parowanie": 8000,

@@ -35,7 +35,7 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-10086 wierszy, 156 funkcji na poziomie modułu, 0 klas
+10250 wierszy, 158 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -86,6 +86,8 @@
 | `kuplet_korygujacy(tekst)` | Czy tekst uzywa ruchu „nie X. Y." — zaprzeczenie, potem poprawka. |
 | `zdania_z_tikiem(tekst)` | TE SAME trzy postacie tiku, ale oddane jako ZDANIA, nie jako „tak/nie". |
 | `ostatnie_otwarcia(rodzaj, ile)` | Pierwsze slowa ostatnich notek — zeby kolejna nie zaczela sie tak samo. |
+| `ostatnie_zakonczenia(rodzaj, ile)` | Ostatnie zdania ostatnich notek — zeby kolejna nie konczyla sie tak samo. |
+| `rozbior(conn, run_id, evidence)` | Przepytanie materialu, ZANIM powstanie notka. |
 | `wiek_zrodla_w_dniach(data_zrodla, teraz)` | Ile dni ma zrodlo. None, gdy daty nie da sie odczytac. |
 | `nazywa_wersje(tekst)` | Czy zdanie nazywa konkretna wersje produktu. Zwraca ja albo pusty napis. |
 | `swiezosc_karty(card, teraz)` | Ile lat ma material, na ktorym stanie artykul. Zwraca uwagi, nie werdykt. |
@@ -439,7 +441,7 @@
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-3567 wierszy, 33 funkcji na poziomie modułu, 0 klas
+3582 wierszy, 33 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
