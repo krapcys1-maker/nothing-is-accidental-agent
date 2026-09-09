@@ -205,6 +205,11 @@ sprawdz("sad nazwany sadem, nie faktem",
 sprawdz("i zakaz podawania go jako liczby albo zdarzenia",
         "never state it as" in _zr)
 _ro = pathlib.Path("agent-v2/prompts/rozbior.md").read_text(encoding="utf-8")
+sprawdz("liczby wolno brac WYLACZNIE z materialu dowodowego",
+        "Every number in the note comes from the evidence block" in _zr,
+        "bez tej reguly notka przepisuje liczby z rozbioru, a przepisana"
+        " liczba drazy — zmierzone: 720p zamiast 480p, obalone przez"
+        " sprawdzanie faktow")
 sprawdz("rozbior zabrania porownan z pamieci modelu",
         "comparison you supply from your own memory" in _ro)
 sprawdz("pusta skala jest DOZWOLONA jako odpowiedz",

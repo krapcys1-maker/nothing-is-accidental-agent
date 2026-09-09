@@ -50,6 +50,14 @@ narrower than the announcement suggests" — and you may never state it as
 something that happened or as a number. Facts come from the evidence block and
 nowhere else.
 
+**Every number in the note comes from the evidence block. Never from here.**
+Not from an answer, not from `skala`, not even from an answer marked
+`z_dowodu: true`. The take-apart restates figures in its own words and a
+restated figure drifts: in testing, a note built from one of these opened on
+"five seconds of 720p video in under three seconds" and the fact-checker
+refuted it, because the source said 480p. The take-apart tells you which
+number matters. The evidence block tells you what it is. Go and read it there.
+
 `czego_nie_wiadomo` is what this material cannot settle. Do not write past it.
 Where it matters to the note, saying it plainly is better than covering it:
 "the report does not say who checked it" is a real sentence and a rare one.

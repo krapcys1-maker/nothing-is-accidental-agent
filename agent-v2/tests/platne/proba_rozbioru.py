@@ -86,19 +86,32 @@ def napisz(z_rozbiorem):
         stages.rozbior = oryginal
 
 
+def pokaz(wynik):
+    """Kandydaci `note` trzymaja tekst pod kluczem `note`, nie `tekst`."""
+    kand = (wynik or {}).get("candidates") or []
+    if not kand:
+        print("(zaden kandydat nie przeszedl)")
+        return
+    for k in kand:
+        print(k.get("note") or "(pusty)")
+        print("   [slow=%d  bezpieczna=%s  odrzucona=%s]"
+              % (len((k.get("note") or "").split()),
+                 k.get("safe_to_post"), k.get("odrzucony") or "nie"))
+
+
 print()
 print("=" * 78)
 print("A — NOTKA BEZ ROZBIORU (jak dotad)")
 print("=" * 78)
 a = napisz(False)
-print((a or {}).get("note") or "(brak)")
+pokaz(a)
 
 print()
 print("=" * 78)
 print("B — NOTKA Z ROZBIOREM")
 print("=" * 78)
 b = napisz(True)
-print((b or {}).get("note") or "(brak)")
+pokaz(b)
 
 po = hashlib.sha256(plik.read_bytes()).hexdigest()
 print()
