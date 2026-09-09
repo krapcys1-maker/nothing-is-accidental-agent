@@ -43,6 +43,16 @@
 {{"facts": [{{"fact": "<one or two sentences, the fact itself, specific and checkable>", "wrong_belief": "<what most people believe, written as a plain sentence they would say out loud>", "actually": "<what is true instead, one sentence>", "decision": "<WHAT MAKES IT SO: a decision (who signed it and when), a measurement (who tested it and what came back), a constraint (what about the design or the mathematics forces it), or a trade-off (what is given up and by whom). Not necessarily a person or an institution. Empty string only if you cannot name any of the four>", "consequence": "<the thing the reader can touch, hold, see or wait for because of that decision>", "url": "<source that states it>", "source_date": "<the date THAT SOURCE was published, as YYYY-MM-DD. Not the date of the event it describes. Empty string only if the page genuinely carries no date>", "control_date": "<YYYY-MM-DD of the newest document that GOVERNS this claim — see \"The control document\" above. Not necessarily newer than source_date>", "control_url": "<url of that document>", "control_verdict": "CONFIRMS"|"MODIFIES"|"ENDS", "control_fact": "<one clause. For MODIFIES, the qualifier the writer must carry. For CONFIRMS, what you checked and found unchanged>", "domain": "<where this belongs — a part of the AI stack, OR a place in the world where it lands: a clinic, a classroom, a court, a job, a street, a bill somebody pays>"}}]}}
 ```
 
+#### `dlugosc.md` (44 wierszy)
+
+**Pola wejściowe:** `kontekst`, `max_slow`, `min_slow`, `slow`, `tekst`
+
+**Kontrakt wyjścia:**
+
+```json
+{{"text": "the full note, inside the window", "co_zmienione": "one line: what you took out or added"}}
+```
+
 #### `dyskoveria.md` (117 wierszy)
 
 **Pola wejściowe:** `blocked_hosts`, `max_results`, `max_searches`, `min_primary`, `min_why`, `ostatnie_domeny`, `question`

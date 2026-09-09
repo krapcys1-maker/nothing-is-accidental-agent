@@ -184,6 +184,10 @@ MODEL_FOR = {
     # DEEPSEEK_PRO, bo tanszy wariant oddaje streszczenie zamiast sadu —
     # a streszczenie mamy juz w karcie faktu.
     "rozbior": DEEPSEEK_PRO,
+    # DOPASOWANIE DLUGOSCI — skracanie gotowej notki do okna. Zadanie jest
+    # mechaniczne (wytnij jedna calosc, nie przepisuj), wiec najtanszy model.
+    # Pada rzadko: w 14 dniach poza okno wyszly 2 notki na 55.
+    "dlugosc": DEEPSEEK,
     # PAROWANIE — JEDYNE PYTANIE O ZBIOR, NIE O POZYCJE.
     #
     # Wszystko inne w tym potoku patrzy na fakt osobno: bramka swiezosci,
@@ -1180,6 +1184,8 @@ MAX_TOKENS = {
     # Siedem pol, w tym do pieciu par pytanie-odpowiedz. Nie esej, ale tez
     # nie jedno zdanie — to material do pisania, nie werdykt.
     "rozbior": _tokens_for(2600),
+    # Cala notka jeszcze raz plus jedno zdanie o tym, co wycieto.
+    "dlugosc": _tokens_for(700),
     # Parowanie oddaje same identyfikatory i jedno zdanie uzasadnienia na
     # grupe — krotko, ale przy dwudziestu faktach grup moze byc kilka.
     "parowanie": 8000,

@@ -1370,8 +1370,17 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
                 if n.get("fakt_wpis"):
                     niewydane.append(n["fakt_wpis"])
                 break
-            gotowe = [k for k in n["candidates"]
-                      if k.get("safe_to_post") and k.get("length_ok")]
+            # DRUGA BRAMKA NA DLUGOSC, ZDJETA 9 WRZESNIA 2026. Stalo tu
+            # `and k.get("length_ok")` — czyli notka za dluga odpadala TU
+            # jeszcze raz, po tym jak odpadla juz w `stages.note`. Kandydat
+            # jest jeden, wiec kazde z tych dwoch miejsc samo wystarczalo,
+            # zeby przebieg skonczyl sie cisza; 11:21 tego dnia skonczyl sie
+            # nia przy notce o osiem slow za dlugiej.
+            #
+            # Dlugosc jest teraz naprawiana (`stages.dopasuj_dlugosc`), a gdy
+            # sie nie da — notka wychodzi za dluga i log to mowi.
+            # `safe_to_post` ZOSTAJE: to zapora czystosci, nie miara stylu.
+            gotowe = [k for k in n["candidates"] if k.get("safe_to_post")]
             if not gotowe:
                 # Notka promujaca nie ma wlasnych faktow — streszcza artykul.
                 # Gdy odpadla na sprawdzeniu, zakwestionowany jest ARTYKUL, i

@@ -3619,6 +3619,18 @@ def note(
             continue
         text = (data.get("note") or "").strip()
         words = len(text.split())
+        # POZA OKNEM ZNACZY „SKROC", NIE „WYRZUC". Patrz `dopasuj_dlugosc`:
+        # do 9 wrzesnia 2026 jedno slowo za duzo konczylo caly przebieg cisza.
+        if text and not (_min_slow <= words <= _maks_slow):
+            _dop = dopasuj_dlugosc(conn, run_id, text,
+                                   min_slow=_min_slow, max_slow=_maks_slow,
+                                   kontekst=str(evidence)[:400])
+            if _dop:
+                data["tekst_przed_dlugoscia"] = text
+                data["dlugosc"] = _dop["co_zmienione"]
+                text = _dop["tekst"]
+                data["note"] = text
+                words = _dop["slow"]
         data["words_actual"] = words
         in_range = _min_slow <= words <= _maks_slow
         data["length_ok"] = in_range
@@ -3714,8 +3726,25 @@ def note(
 
     for data in candidates:
         text = (data.get("note") or "").strip()
-        if not text or not data.get("length_ok"):
+        # PUSTY TEKST ZOSTAJE BRAMKA — nie ma czego wystawic. DLUGOSC NIE.
+        #
+        # Stalo tu `not data.get("length_ok")` i to bylo odrzucenie w przebraniu
+        # pomiaru: kandydat jest jeden, wiec `continue` konczylo dzien cisza,
+        # a linijka wyzej komentarz oglaszal „POMIAR, NIE BRAMKA". 9 wrzesnia
+        # 2026 przebieg 11:21 nie wystawil nic, bo notka miala 128 slow przy
+        # suficie 120. Wlasciciel: „nie ma takiej mozliwosci, ze cos nie idzie,
+        # jest odrzucone i juz".
+        #
+        # Notka poza oknem idzie teraz przez `dopasuj_dlugosc` wyzej, a jesli
+        # i to nie pomoze — wychodzi za dluga. Osiem slow ponad sufit kosztuje
+        # mniej niz dzien bez notki.
+        if not text:
             continue
+        if not data.get("length_ok"):
+            print("    UWAGA: %d slow, poza %d-%d, nie dala sie dopasowac"
+                  " (notka i tak idzie)"
+                  % (data.get("words_actual") or 0, _min_slow, _maks_slow),
+                  flush=True)
         if not data.get("czysty", True):
             data["safe_to_post"] = False
             print("    ODRZUCONA PRZED SPRAWDZENIEM: %s" % data.get("odrzucony"),
@@ -5831,6 +5860,76 @@ def _ten_sam_zarzut(a: dict[str, Any], b: dict[str, Any]) -> bool:
         return True
     ua, ub = _adres_zarzutu(a), _adres_zarzutu(b)
     return bool(ua and ua == ub and (la & lb))
+
+
+DLUGOSC_SYSTEM = (
+    "You bring a finished note inside its word window by cutting or adding "
+    "whole things, never by rewriting it. Return only valid JSON."
+)
+
+
+def dopasuj_dlugosc(
+    conn: sqlite3.Connection | None,
+    run_id: int | None,
+    tekst: str,
+    *,
+    min_slow: int,
+    max_slow: int,
+    kontekst: str = "",
+) -> dict[str, Any] | None:
+    """Skraca albo dopelnia notke do okna. Nie odrzuca jej.
+
+    DLACZEGO POWSTAL — polecenie wlasciciela z 9 wrzesnia 2026, po tym jak
+    przebieg 11:21 nie wystawil NICZEGO: „nie ma takiej mozliwosci, ze cos nie
+    idzie, jest odrzucone i juz".
+
+    Mial racje, i to nie w sprawie tolerancji dla dlugosci, tylko w sprawie
+    doktryny. Przy notce stalo napisane „POMIAR, NIE BRAMKA", a dlugosc byla
+    bramka w DWOCH miejscach naraz: `note` pomijalo kandydata przed
+    sprawdzeniem faktow, a `run.py` odsiewalo go drugi raz przy wysylce.
+    Kandydat jest JEDEN (`NOTE_CANDIDATES = 1`), wiec jedno slowo za duzo
+    kosztowalo caly przebieg — 128 slow przy suficie 120 i cisza w dzienniku.
+    Komentarz opisywal zamiar, kod robil co innego, a rozjazdu nikt nie
+    widzial, bo notka znikala bez sladu poza jedna linijka „POZA".
+
+    TRZECIA DROGA, ta sama co przy sprawdzaniu faktow (`napraw_obalone`):
+    ani bramka, ani milczenie — poprawka. Tutaj zadanie jest jeszcze wezsze,
+    bo z tekstem nie jest nic nie tak poza liczba slow.
+
+    ZAWODZI NA ORYGINAL. Gdy wywolanie sie nie uda albo wynik dalej jest poza
+    oknem, oddajemy None i notka idzie TAKA, JAKA BYLA. Notka o osiem slow za
+    dluga jest lepsza niz brak notki — a to wlasnie bylo do wyboru.
+    """
+    slow = len((tekst or "").split())
+    if not tekst or min_slow <= slow <= max_slow or conn is None:
+        return None
+    try:
+        raw = llm.call(
+            "dlugosc", DLUGOSC_SYSTEM,
+            _prompt("dlugosc.md", tekst=tekst, slow=slow,
+                    min_slow=min_slow, max_slow=max_slow,
+                    kontekst=kontekst[:600]),
+            conn=conn, run_id=run_id)
+        dane = llm.parse_json(raw)
+    except (llm.BudgetExceeded, llm.PreflightFailed):
+        # Pusty budzet i wylacznik leca dalej — patrz `rozbior`, gdzie
+        # polkniecie ich obchodzilo zapore budzetu.
+        raise
+    except Exception as e:                                    # noqa: BLE001
+        print("  [dlugosc] nie odpowiedziala (%s: %s) — zostaje oryginal"
+              % (type(e).__name__, e), flush=True)
+        return None
+    nowy = str((dane or {}).get("text") or "").strip()
+    ile = len(nowy.split())
+    if not nowy or not (min_slow <= ile <= max_slow):
+        print("  [dlugosc] poprawka ma %d slow, poza %d-%d — zostaje oryginal"
+              % (ile, min_slow, max_slow), flush=True)
+        return None
+    print("  [dlugosc] %d -> %d slow: %s"
+          % (slow, ile, str((dane or {}).get("co_zmienione") or "")[:70]),
+          flush=True)
+    return {"tekst": nowy, "slow": ile,
+            "co_zmienione": str((dane or {}).get("co_zmienione") or "")[:200]}
 
 
 def napraw_obalone(
