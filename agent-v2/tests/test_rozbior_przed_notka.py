@@ -247,8 +247,13 @@ sprawdz("model widzi, czym konczyly sie poprzednie notki",
         "{ostatnie_zakonczenia_json}" in _zr)
 sprawdz("zakaz zadawania pracy domowej zostal",
         "nobody does homework from a feed" in _zr)
-sprawdz("konto ma prawo miec zdanie",
-        "you are allowed to think something" in _zr.lower())
+# Zdanie „you are allowed to think something" zastapione 9 wrzesnia 2026 cala
+# sekcja o tym, KTO pisze — po ocenie wlasciciela, ze notki to „podawanie
+# faktow, news room jakich tysiace". Pozwolenie okazalo sie za slabe: model
+# z niego nie korzystal. Pilnuje tego teraz `test_notka_ma_glos`; tutaj
+# sprawdzamy tylko, ze prawo do zdania nie zniknelo przy okazji.
+sprawdz("konto ma prawo miec zdanie i wie, kim jest",
+        "# WHO IS WRITING" in _zr and "Take a position" in _zr)
 
 print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))

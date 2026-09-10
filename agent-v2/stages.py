@@ -172,9 +172,22 @@ def _prompt(name: str, **fields: Any) -> str:
     return text
 
 
-# Prompty krotkich tekstow pisanych do ludzi. Do nich dokleja sie `po_ludzku.md`
-# — patrz `_prompt`. Artykul ma wlasny, obszerniejszy opis glosu w `pisarz.md`.
-Z_PO_LUDZKU = frozenset({"notka.md", "komentarz.md", "odpowiedz.md"})
+# Do tych promptow dokleja sie `po_ludzku.md` — patrz `_prompt`.
+#
+# TYLKO NOTKA, i to jest sedno wady. Naglowek `po_ludzku.md` wymienia trzy
+# prompty: komentarz, odpowiedz i notke. Sprawdzone 9 wrzesnia 2026:
+# `komentarz.md` i `odpowiedz.md` maja te rady WKLEJONE W TRESC (wiersze 206
+# i 259 oraz 153 i 164) — ktos je tam przepisal recznie. `notka.md` nie ma ich
+# w ogole, a plik zrodlowy nie byl czytany przez zaden kod.
+#
+# Czyli: dwa prompty na trzy dostaly glos przez kopiowanie, trzeci nie dostal
+# go wcale. Widac to bylo na koncie golym okiem — komentarze brzmialy zywiej
+# niz notki, a wlasciciel o notkach: „to nie jest pisanie, to jest podawanie
+# faktow".
+#
+# Doklejanie do wszystkich trzech dublowaloby tekst tam, gdzie juz jest.
+# Artykul ma wlasny, obszerniejszy opis glosu w `pisarz.md` (527 wierszy).
+Z_PO_LUDZKU = frozenset({"notka.md"})
 
 
 def _juz_w_domu(ile_banku: int = 25, ile_notek: int = 25) -> list[str]:

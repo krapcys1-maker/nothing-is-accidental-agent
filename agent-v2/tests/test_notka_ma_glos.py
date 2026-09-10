@@ -90,33 +90,35 @@ print("=== 1. `po_ludzku.md` DOCIERA do promptow krotkich tekstow ===")
 # Przez pol roku lezal i nie docieral nigdzie.
 _n = notka()
 for opis, fragment in (
-    ("rada o zmiennej dlugosci zdan", "Vary it, hard"),
+    ("rada o zmiennej dlugosci zdan", "Length: vary it, hard"),
     ("polecenie zajecia stanowiska", "Take a position"),
     ("lista slow zdradzajacych maszyne", "delve, moreover"),
-    ("zakaz zamykania ukłonem", "No summary, no “overall”"),
+    ("zakaz zamykania uklonem", "No summary, no \"overall\", no bow"),
 ):
     sprawdz("notka niesie: %s" % opis, fragment in _n, "brak %r" % fragment)
 
 print()
-print("=== 2. te same rady docieraja do komentarza i odpowiedzi ===")
-# Naglowek pliku wymienia trzy prompty. Sprawdzamy wszystkie trzy, bo
-# dopisanie jednego i zapomnienie dwoch jest dokladnie tym rodzajem wady,
-# ktora ten plik ilustruje.
-for plik, pola in (
-    ("komentarz.md", None),
-    ("odpowiedz.md", None),
-):
-    try:
-        tresc = (config.PROMPTS_DIR / plik).read_text(encoding="utf-8")
-        # Skladamy bez podstawiania pol — interesuje nas sam doklejony ogon.
-        sprawdz("%s jest na liscie doklejania" % plik,
-                plik in stages.Z_PO_LUDZKU, sorted(stages.Z_PO_LUDZKU))
-        sprawdz("%s nie ma tych rad juz w tresci (wiec ogon cos wnosi)" % plik,
-                "Take a position" not in tresc)
-    except OSError as e:
-        sprawdz("%s da sie odczytac" % plik, False, str(e))
+print("=== 2. komentarz i odpowiedz MAJA te rady, ale wklejone w tresc ===")
+# I to jest sedno wady. Naglowek `po_ludzku.md` wymienia trzy prompty. Dwa
+# dostaly te rady przez RECZNE PRZEPISANIE do wlasnej tresci, trzeci — notka —
+# nie dostal ich wcale, bo pliku zrodlowego nikt nie czytal. Doklejanie do
+# wszystkich trzech dublowaloby tekst tam, gdzie juz jest.
+for plik in ("komentarz.md", "odpowiedz.md"):
+    tresc = (config.PROMPTS_DIR / plik).read_text(encoding="utf-8")
+    sprawdz("%s ma rady WLASNE, wiec nie doklejamy" % plik,
+            "Take a position" in tresc and plik not in stages.Z_PO_LUDZKU,
+            "ma rady: %s, na liscie: %s"
+            % ("Take a position" in tresc, plik in stages.Z_PO_LUDZKU))
+sprawdz("doklejamy WYLACZNIE do notki",
+        stages.Z_PO_LUDZKU == frozenset({"notka.md"}),
+        sorted(stages.Z_PO_LUDZKU))
+# Sprawdzamy fragment, ktorego notka NIE ma we wlasnej tresci — inaczej
+# asercja mierzylaby sama siebie: sekcja „WHO IS WRITING" tez mowi „Take
+# a position", wiec ten napis niczego by nie dowodzil o doklejaniu.
+sprawdz("ogon wnosi do notki cos, czego ona sama nie ma",
+        "delve, moreover" not in
+        (config.PROMPTS_DIR / "notka.md").read_text(encoding="utf-8"))
 
-print()
 print("=== 3. artykul NIE dostaje tego ogona ===")
 # Ma wlasny opis glosu w `pisarz.md`, 527 wierszy. Doklejenie drugiego
 # zestawu rad o tym samym rozjezdzalo by sie z nim przy pierwszej zmianie.
@@ -144,7 +146,7 @@ sprawdz("jest osobna sekcja o piszacym", "# WHO IS WRITING" in _n)
 sprawdz("piszacy jest w srodku sprawy, nie ponad nia",
         "You are inside this, not above it" in _n)
 sprawdz("ma powtarzalne odkrycie, po ktore wraca czytelnik",
-        "stranger and simpler than the story" in _n)
+        "stranger and simpler" in _n)
 sprawdz("jest trudny do zaimponowania, ale nie kwasny",
         "hard to impress and you are not sour" in _n)
 
