@@ -145,9 +145,36 @@ def _prompt(name: str, **fields: Any) -> str:
     platnego przebiegu.
 
     Podane `fields` maja pierwszenstwo, zeby dalo sie je nadpisac w tescie.
+
+    `po_ludzku.md` DOKLEJANY TU, bo przez pol roku nie byl doklejany nigdzie.
+    Jego wlasny naglowek mowi: „Ten fragment jest dolaczany do promptow
+    komentarza, odpowiedzi i notki". Nie byl. Zaden kod nie czytal tego pliku —
+    wlasna dokumentacja projektu wymienia go jako wade numer 10 („cztery pliki
+    w `prompts/` nie sa czytane przez zaden kod") i uznaje za notatki
+    wlasciciela.
+
+    Skutek zmierzony 9 wrzesnia 2026 na 96 opublikowanych notkach: `strange` 0,
+    `funny` 0, `absurd` 0, a wlasciciel o koncie: „kanal stal sie news roomem
+    jakich tysiace". W niedoklejonym pliku stalo dokladnie to, czego brakowalo:
+    „Vary it, hard", „Sometimes answer in one short sentence", „Take a
+    position. Where the honest reaction is blunt, be blunt", i lista slow
+    zdradzajacych maszyne.
+
+    Doklejamy TUTAJ, a nie przez pole w kazdym z trzech plikow, dokladnie z
+    tego samego powodu co `marka` wyzej: pole trzeba pamietac w kazdym miejscu
+    wywolania, a pierwsze zapomniane oznacza, ze prompt cicho traci glos.
     """
     text = (config.PROMPTS_DIR / name).read_text(encoding="utf-8")
-    return text.format(**{"marka": config.MARKA, **fields})
+    text = text.format(**{"marka": config.MARKA, **fields})
+    if name in Z_PO_LUDZKU:
+        text += "\n\n" + (config.PROMPTS_DIR / "po_ludzku.md").read_text(
+            encoding="utf-8")
+    return text
+
+
+# Prompty krotkich tekstow pisanych do ludzi. Do nich dokleja sie `po_ludzku.md`
+# — patrz `_prompt`. Artykul ma wlasny, obszerniejszy opis glosu w `pisarz.md`.
+Z_PO_LUDZKU = frozenset({"notka.md", "komentarz.md", "odpowiedz.md"})
 
 
 def _juz_w_domu(ile_banku: int = 25, ile_notek: int = 25) -> list[str]:
