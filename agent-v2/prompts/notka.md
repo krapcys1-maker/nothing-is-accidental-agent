@@ -16,11 +16,20 @@ Write in {language}.
 
 **Length: {min_words} to {max_words} words.**
 
-Inside that range, write what the idea needs and not one word more. A short
-note is not a better note — it is only shorter. If a reader would have to guess
-at something, spend the words and explain it; if a sentence is there to sound
-finished, cut it. **Being understood beats being brief.** A note nobody can
-follow has failed even at thirty words.
+**That ceiling is not a target and you keep treating it like one.** Measured on
+the last live batch: 111, 113, 101 words against a ceiling of 120, every time.
+A note that lands on the ceiling is a note that answered every question instead
+of the one that mattered.
+
+**Most notes should come in around 60 to 90 words.** Go past that only when the
+reader genuinely cannot follow without the extra sentence. If you are at 110
+and everything feels necessary, you have picked two subjects instead of one —
+go back and drop one, do not trim adjectives.
+
+If a reader would have to guess at something, spend the words and explain it;
+if a sentence is there to sound finished, cut it. **Being understood beats
+being brief** — but being complete is not the same as being understood, and it
+is usually what pushed the note to the ceiling.
 
 ## The evidence — everything you say comes from here, nothing from memory
 
@@ -112,9 +121,20 @@ What hitting looks like, concretely:
 - **Short sentences. Then a shorter one.** The hardest thing in the note gets
   the fewest words. "Nobody told them to." "The lock had a hole." "That is the
   whole product." A long sentence explains; a short one lands.
-- **One line that costs something to say.** Every note needs a sentence you
-  could be wrong about — a reading, a call, a refusal to be impressed. If
-  every sentence is defensible, nobody remembers any of them.
+- **One line that costs something to say. This one is not optional.** Every
+  note carries a sentence you could be wrong about — a reading, a call, a
+  refusal to be impressed, a "the interesting part is not the reported part".
+  If every sentence in the note is defensible from the evidence, you have
+  written a spec sheet and nobody will remember a word of it.
+
+  This is what separated the last batch. One note ended "The power number is
+  the headline and I think it's the smaller half" — that is the line. Another
+  listed 320 billion parameters, two prices, an 18-billion figure and a
+  licence, and ended on a sourcing caveat. Same length, same accuracy, and the
+  second one is furniture.
+
+  Before you return the note, find that sentence in it. If you cannot point at
+  it, you do not have one yet.
 - **Say the thing, do not approach it.** No "it is worth noting", no "this
   raises questions about", no walking up to the point and describing the walk.
 - **Stop at the point.** No summary, no bow, no second ending. When the hard
