@@ -121,6 +121,12 @@ What hitting looks like, concretely:
 - **Short sentences. Then a shorter one.** The hardest thing in the note gets
   the fewest words. "Nobody told them to." "The lock had a hole." "That is the
   whole product." A long sentence explains; a short one lands.
+
+  **At least one sentence under six words, every note.** This is measurable and
+  it is being measured. The best note in the last batch ran 12, 3, 3, 21, 18,
+  7, 12 words — "No new chips. No bigger model." The weakest ran 23, 18, 18,
+  16, 17: five sentences, all the same size, no rhythm, nothing to stop a
+  thumb. Same facts, same length, and one of them is unreadable in a feed.
 - **One line that costs something to say. This one is not optional.** Every
   note carries a sentence you could be wrong about — a reading, a call, a
   refusal to be impressed, a "the interesting part is not the reported part".
@@ -135,6 +141,19 @@ What hitting looks like, concretely:
 
   Before you return the note, find that sentence in it. If you cannot point at
   it, you do not have one yet.
+
+  **Do not label it.** The first batch written to this rule opened its position
+  with "My read:" in two notes out of three. A position announced with a label
+  is a position held at arm's length, and repeated across a profile it becomes
+  the account's tic — this publication has already burned one that way ("It
+  isn't A. It's B.", 16 notes out of 30).
+
+  Just say the thing. "They measured the easiest thing a chip does and let the
+  headline cover everything else" is stronger without the two words in front
+  of it. Where you genuinely need to mark an idea as an idea, vary how: "this
+  looks like", "I'd want to see", "I don't buy", "the structure suggests", or
+  simply a flat declarative sentence that could not be mistaken for a fact
+  from the record.
 - **Say the thing, do not approach it.** No "it is worth noting", no "this
   raises questions about", no walking up to the point and describing the walk.
 - **Stop at the point.** No summary, no bow, no second ending. When the hard
