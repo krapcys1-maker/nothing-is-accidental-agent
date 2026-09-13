@@ -305,7 +305,7 @@
 
 ### `llm.py` — JEDYNA warstwa dostępu do modeli i liczenia kosztu
 
-906 wierszy, 15 funkcji na poziomie modułu, 3 klas
+911 wierszy, 15 funkcji na poziomie modułu, 3 klas
 
 | funkcja | co robi |
 |---|---|
@@ -441,7 +441,7 @@
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-3860 wierszy, 42 funkcji na poziomie modułu, 0 klas
+3884 wierszy, 43 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -457,6 +457,7 @@
 | `pora_na_publikacje(kiedy)` | Czy teraz wolno wystawiac NOTKI — wg zegara CZYTELNIKOW, nie serwera. |
 | `w_szczycie(kiedy)` | Czy teraz obowiazuje droga taryfa. |
 | `narzedzie_wyszukiwania(model)` | Nazwa narzedzia wyszukiwania i ewentualne ostrzezenie. |
+| `wymus_szukanie(etap, model)` | Czy wywolanie z siecia ma dostac `tool_choice: any`. |
 | `szuka_naprawde(model, kiedy)` | Czy wywolanie `model` z `web_search` naprawde przeszuka siec. |
 | `model_do_szukania(etap)` | Kto dostaje wywolanie z siecia, gdy model etapu nie szuka. |
 | `max_szukan(etap)` | Limit wyszukiwan jednego wywolania Claude dla etapu. |

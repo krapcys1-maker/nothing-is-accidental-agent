@@ -137,3 +137,23 @@ Haiku, zmniejszyć limit wyszukiwań do 2 albo podnieść sufit październikowy.
 DeepSeek zapowiada „wygaszanie" V4 Pro i przejście na V4.1 Pro, bez daty.
 Kiedy ten nastąpi, `nowe_modele.py` przestawi rolę Pro sam, a próba wyszukiwania
 zdecyduje, czy wywołania z siecią zostaną na DeepSeeku.
+
+## 7. Pierwszy przebieg produkcyjny: Haiku potrafi nie szukać
+
+Przebieg 202, 13 września 17:01–17:38 UTC, zakończony, notka opublikowana.
+Weryfikacja tej notki (o wpisie Simona Willisona) poszła na Haiku i **nie zrobiła
+ani jednego wyszukiwania**: 4983 tokeny wejścia, $0,0077. Prompt `weryfikacja.md`
+mówi „Search for each factual claim it makes".
+
+Przyczyna, sprawdzona na tej samej notce: bez rekordu źródłowego w kontekście
+Haiku szuka sam, 3 wyszukiwania. Z rekordem uznaje go za wystarczający. Weryfikacja
+szuka jednak także tego, czy źródło jest aktualne, a tego rekord o sobie nie powie.
+
+Poprawka: etapy, których prompt każe szukać zawsze (fakty, ciekawostki, lista
+modeli, odkrywanie źródeł), dostają na Haiku `tool_choice: any`, czyli co najmniej
+jedno wyszukiwanie. Na tej samej notce: 3 wyszukiwania, bez błędu API. Odpowiedzi
+nie są zmuszane, bo szukają tylko z powodu. Tylko Haiku, bo wymuszenie narzędzia
+nie działa z rozszerzonym myśleniem, a Opus 5 myśli domyślnie.
+
+Weryfikacje komentarzy w tym przebiegu szły bez sieci na Flashu i to jest zamierzone
+(`test_komentarz_nie_szuka_bez_powodu`).

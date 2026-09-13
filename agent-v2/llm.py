@@ -278,6 +278,11 @@ def _call_claude(
             "name": "web_search",
             "max_uses": config.max_szukan(purpose),
         }]
+        # CO NAJMNIEJ JEDNO WYSZUKIWANIE tam, gdzie prompt kaze szukac zawsze.
+        # Bez tego Haiku z rekordem w kontekscie weryfikowal notke bez sieci.
+        # Patrz `config.WYMUSZ_SZUKANIE`.
+        if config.wymus_szukanie(purpose, model):
+            kwargs["tool_choice"] = {"type": "any"}
 
     # Strumień zawsze: sufity są duże, a myślenie na Opusie 5 jest domyślnie
     # włączone i liczy się jak wyjście, więc bez strumienia grozi timeout HTTP.

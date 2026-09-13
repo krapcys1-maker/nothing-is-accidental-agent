@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **27 plików**, 35 560 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **27 plików**, 35 589 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -114,7 +114,7 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
 się testować bez przeglądarki i bez pieniędzy**. 175 zestawów
-testów, 4560 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+testów, 4566 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -447,7 +447,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `llm.py` — JEDYNA warstwa dostępu do modeli i liczenia kosztu
 
-906 wierszy, 15 funkcji na poziomie modułu, 3 klas
+911 wierszy, 15 funkcji na poziomie modułu, 3 klas
 
 | funkcja | co robi |
 |---|---|
@@ -583,7 +583,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-3860 wierszy, 42 funkcji na poziomie modułu, 0 klas
+3884 wierszy, 43 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -599,6 +599,7 @@ wiec nie da sie go rozjechac z kodem.
 | `pora_na_publikacje(kiedy)` | Czy teraz wolno wystawiac NOTKI — wg zegara CZYTELNIKOW, nie serwera. |
 | `w_szczycie(kiedy)` | Czy teraz obowiazuje droga taryfa. |
 | `narzedzie_wyszukiwania(model)` | Nazwa narzedzia wyszukiwania i ewentualne ostrzezenie. |
+| `wymus_szukanie(etap, model)` | Czy wywolanie z siecia ma dostac `tool_choice: any`. |
 | `szuka_naprawde(model, kiedy)` | Czy wywolanie `model` z `web_search` naprawde przeszuka siec. |
 | `model_do_szukania(etap)` | Kto dostaje wywolanie z siecia, gdy model etapu nie szuka. |
 | `max_szukan(etap)` | Limit wyszukiwan jednego wywolania Claude dla etapu. |
@@ -13559,6 +13560,7 @@ wartosc i komentarz stojacy bezposrednio nad definicja.
 | `SZUKANIE_POTWIERDZONE` | `frozenset({"deepseek-v4-pro"})` | Modele DeepSeeka, ktorych wyszukiwanie POTWIERDZONO na zywo. Nieznany DeepSeek domyslnie nie szuka; te tak, dopoki proba z `nowe_modele.py`  |
 | `MODEL_DO_SZUKANIA_DOMYSLNY` | `HAIKU` | Zastepca dla wywolan z siecia. Haiku 4.5 zmierzony na tym samym poscie co DeepSeek V4 Pro: 6,2 centa wobec 5,5, osiem faktow w obu, adresy z |
 | `MAX_SZUKAN_NA_ETAP` | `{"factcheck": 3, "curiosity": 3, "aktualne_m` | Ile wyszukiwan wolno zastepcy na jedno wywolanie. Bez limitu Claude robil 17, potem 31 rund. Trzy daly komplet osmiu faktow w pomiarze z 13  |
+| `WYMUSZ_SZUKANIE` | `frozenset({"factcheck", "curiosity", "aktual` | ETAPY, KTORYCH PROMPT KAZE SZUKAC ZAWSZE. Zastepca dostaje dla nich `tool_choice: any`, czyli co najmniej jedno wyszukiwanie. ZMIERZONE 13 w |
 | `WEB_SEARCH_USD_PER_1K` | `10.00` | Wyszukiwanie po stronie Anthropic: USD za 1000 zapytań. |
 | `_DZIS_UTC` | `_dt_sufit.datetime.now(_dt_sufit.timezone.ut` | — |
 | `SUFIT_PODNIESIONY_NA` | `"2026-08-30"` | — |

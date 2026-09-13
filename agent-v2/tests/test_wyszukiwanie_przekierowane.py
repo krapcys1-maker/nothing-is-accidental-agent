@@ -214,5 +214,69 @@ sprawdz("nowy DeepSeek spoza cennika: stawka rodziny Pro, niepotwierdzona",
         usd > 0 and potwierdzona is False, (usd, potwierdzona))
 
 print()
+print("=== 5. HAIKU MUSI SZUKAC TAM, GDZIE PROMPT KAZE — sprawdzone na tym, co idzie do API ===")
+# Przebieg 202, 13 wrzesnia: weryfikacja notki na Haiku bez jednego wyszukiwania,
+# bo rekord zrodlowy w kontekscie wystarczyl mu za siec.
+zapisane = []
+
+
+class _Uzycie:
+    input_tokens, output_tokens = 10, 5
+    server_tool_use = type("S", (), {"web_search_requests": 1})()
+
+
+class _Wiadomosc:
+    stop_reason = "end_turn"
+    usage = _Uzycie()
+    content = [type("B", (), {"type": "text", "text": '{"claims": []}'})()]
+
+
+class _Strumien:
+    def __init__(self, **kwargs):
+        zapisane.append(kwargs)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def get_final_message(self):
+        return _Wiadomosc()
+
+
+class _Klient:
+    def __init__(self, **kwargs):
+        self.messages = type("M", (), {"stream": staticmethod(lambda **kw: _Strumien(**kw))})()
+
+
+_anthropic = llm.anthropic.Anthropic
+_wymus = config.WYMUSZ_SZUKANIE
+try:
+    llm.anthropic.Anthropic = _Klient
+    llm._call_claude("factcheck", "s", "u", True, model=config.HAIKU)
+    llm._call_claude("reply", "s", "u", True, model=config.HAIKU)
+    llm._call_claude("discovery", "s", "u", True, model=config.CLAUDE)
+    llm._call_claude("factcheck", "s", "u", False, model=config.HAIKU)
+    sprawdz("weryfikacja faktow na Haiku: tool_choice any",
+            zapisane[0].get("tool_choice") == {"type": "any"}, zapisane[0].get("tool_choice"))
+    sprawdz("i limit trzech wyszukiwan", zapisane[0]["tools"][0]["max_uses"] == 3, zapisane[0]["tools"])
+    sprawdz("odpowiedz NIE jest zmuszana do szukania", "tool_choice" not in zapisane[1])
+    sprawdz("Opus nie dostaje wymuszenia — z mysleniem skonczyloby sie bledem API",
+            "tool_choice" not in zapisane[2])
+    sprawdz("wywolanie bez sieci nie dostaje ani narzedzia, ani wymuszenia",
+            "tools" not in zapisane[3] and "tool_choice" not in zapisane[3])
+
+    # KONTRDOWOD: stan z przebiegu 202 — bez listy etapow wymuszajacych.
+    zapisane.clear()
+    config.WYMUSZ_SZUKANIE = frozenset()
+    llm._call_claude("factcheck", "s", "u", True, model=config.HAIKU)
+    sprawdz("KONTRDOWOD: bez wymuszenia Haiku sam decyduje, czy szukac — test to widzi",
+            "tool_choice" not in zapisane[0])
+finally:
+    llm.anthropic.Anthropic = _anthropic
+    config.WYMUSZ_SZUKANIE = _wymus
+
+print()
 print("wynik: %d OK, %d BLAD" % (zdane, oblane))
 sys.exit(1 if oblane else 0)

@@ -57,6 +57,7 @@
 | `SZUKANIE_POTWIERDZONE` | `frozenset({"deepseek-v4-pro"})` | Modele DeepSeeka, ktorych wyszukiwanie POTWIERDZONO na zywo. Nieznany DeepSeek domyslnie nie szuka; te tak, dopoki proba z `nowe_modele.py`  |
 | `MODEL_DO_SZUKANIA_DOMYSLNY` | `HAIKU` | Zastepca dla wywolan z siecia. Haiku 4.5 zmierzony na tym samym poscie co DeepSeek V4 Pro: 6,2 centa wobec 5,5, osiem faktow w obu, adresy z |
 | `MAX_SZUKAN_NA_ETAP` | `{"factcheck": 3, "curiosity": 3, "aktualne_m` | Ile wyszukiwan wolno zastepcy na jedno wywolanie. Bez limitu Claude robil 17, potem 31 rund. Trzy daly komplet osmiu faktow w pomiarze z 13  |
+| `WYMUSZ_SZUKANIE` | `frozenset({"factcheck", "curiosity", "aktual` | ETAPY, KTORYCH PROMPT KAZE SZUKAC ZAWSZE. Zastepca dostaje dla nich `tool_choice: any`, czyli co najmniej jedno wyszukiwanie. ZMIERZONE 13 w |
 | `WEB_SEARCH_USD_PER_1K` | `10.00` | Wyszukiwanie po stronie Anthropic: USD za 1000 zapytań. |
 | `_DZIS_UTC` | `_dt_sufit.datetime.now(_dt_sufit.timezone.ut` | — |
 | `SUFIT_PODNIESIONY_NA` | `"2026-08-30"` | — |

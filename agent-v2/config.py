@@ -820,6 +820,30 @@ MODEL_DO_SZUKANIA: dict[str, str] = {}
 # potem 31 rund. Trzy daly komplet osmiu faktow w pomiarze z 13 wrzesnia.
 MAX_SZUKAN_NA_ETAP = {"factcheck": 3, "curiosity": 3, "aktualne_modele": 4, "reply": 2}
 
+# ETAPY, KTORYCH PROMPT KAZE SZUKAC ZAWSZE. Zastepca dostaje dla nich
+# `tool_choice: any`, czyli co najmniej jedno wyszukiwanie.
+#
+# ZMIERZONE 13 wrzesnia 2026, pierwszy przebieg produkcyjny po przestawieniu
+# (przebieg 202): weryfikacja notki o Simonie Willisonie poszla na Haiku
+# i NIE SZUKALA ANI RAZU — 4983 tokeny wejscia, $0,0077. `weryfikacja.md` mowi
+# „Search for each factual claim it makes". Ta sama notka bez rekordu
+# zrodlowego w kontekscie: 3 wyszukiwania. Z rekordem Haiku uznaje go za
+# wystarczajacy i sieci nie pyta — a weryfikacja szuka miedzy innymi tego, czy
+# zrodlo jest AKTUALNE, czego rekord sam o sobie nie powie. Wymuszenie na tej
+# samej notce: 3 wyszukiwania, bez bledu API.
+#
+# `reply` TU NIE MA: odpowiedz szuka tylko z powodu (patrz
+# `test_komentarz_nie_szuka_bez_powodu`).
+#
+# TYLKO HAIKU. Wymuszenie narzedzia nie dziala z rozszerzonym mysleniem, a Opus 5
+# mysli domyslnie — na nim konczyloby sie bledem API w srodku platnej sciezki.
+WYMUSZ_SZUKANIE = frozenset({"factcheck", "curiosity", "aktualne_modele", "discovery"})
+
+
+def wymus_szukanie(etap: str, model: str) -> bool:
+    """Czy wywolanie z siecia ma dostac `tool_choice: any`."""
+    return etap in WYMUSZ_SZUKANIE and "haiku" in str(model)
+
 # Wyniki prob wyszukiwania z `nowe_modele.py`: {model: {"dziala": bool, "kiedy": iso}}.
 PROBY_WYSZUKIWANIA: dict[str, dict] = {
     str(m): w for m, w in ((_STAN_WYBORU.get("wyszukiwanie") or {}).items())
