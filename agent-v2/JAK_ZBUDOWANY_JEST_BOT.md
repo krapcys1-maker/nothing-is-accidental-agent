@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **27 plików**, 35 589 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **27 plików**, 35 560 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -114,7 +114,7 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
 się testować bez przeglądarki i bez pieniędzy**. 175 zestawów
-testów, 4566 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+testów, 4564 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -447,7 +447,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `llm.py` — JEDYNA warstwa dostępu do modeli i liczenia kosztu
 
-911 wierszy, 15 funkcji na poziomie modułu, 3 klas
+913 wierszy, 15 funkcji na poziomie modułu, 3 klas
 
 | funkcja | co robi |
 |---|---|
@@ -583,7 +583,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-3884 wierszy, 43 funkcji na poziomie modułu, 0 klas
+3854 wierszy, 42 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -599,7 +599,6 @@ wiec nie da sie go rozjechac z kodem.
 | `pora_na_publikacje(kiedy)` | Czy teraz wolno wystawiac NOTKI — wg zegara CZYTELNIKOW, nie serwera. |
 | `w_szczycie(kiedy)` | Czy teraz obowiazuje droga taryfa. |
 | `narzedzie_wyszukiwania(model)` | Nazwa narzedzia wyszukiwania i ewentualne ostrzezenie. |
-| `wymus_szukanie(etap, model)` | Czy wywolanie z siecia ma dostac `tool_choice: any`. |
 | `szuka_naprawde(model, kiedy)` | Czy wywolanie `model` z `web_search` naprawde przeszuka siec. |
 | `model_do_szukania(etap)` | Kto dostaje wywolanie z siecia, gdy model etapu nie szuka. |
 | `max_szukan(etap)` | Limit wyszukiwan jednego wywolania Claude dla etapu. |
@@ -735,7 +734,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `nowe_modele.py` — nowe modele wchodzą same: w tej samej rodzinie i dopiero po próbie
 
-467 wierszy, 18 funkcji na poziomie modułu, 0 klas
+466 wierszy, 18 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -6511,11 +6510,19 @@ def call(
     # zmiana dostawcy w logu nie dala sie przeoczyc, ale go nie zalala.
     if web_search and not config.szuka_naprawde(model):
         zastepca = config.model_do_szukania(purpose)
-        if purpose not in _SZUKANIE_PRZEKIEROWANE:
+        if config.szuka_naprawde(zastepca):
+            if purpose not in _SZUKANIE_PRZEKIEROWANE:
+                _SZUKANIE_PRZEKIEROWANE.add(purpose)
+                print(f"  [szukanie] {purpose}: {model} nie szuka w sieci — "
+                      f"wywolania z wyszukiwaniem ida na {zastepca}", flush=True)
+            model = zastepca
+        elif purpose not in _SZUKANIE_PRZEKIEROWANE:
+            # ZASTEPCA TEZ NIE SZUKA. Nie przelaczamy na dostawce spoza
+            # DeepSeeka (decyzja wlasciciela), wiec wywolanie idzie jak dotad —
+            # ale GLOSNO, bo 10 wrzesnia ta sama sytuacja trwala trzy dni po cichu.
             _SZUKANIE_PRZEKIEROWANE.add(purpose)
-            print(f"  [szukanie] {purpose}: {model} nie szuka w sieci — "
-                  f"wywolania z wyszukiwaniem ida na {zastepca}", flush=True)
-        model = zastepca
+            print(f"  [szukanie] UWAGA {purpose}: ani {model}, ani {zastepca} nie "
+                  f"szuka w sieci — to wywolanie sprawdzi tekst BEZ sieci", flush=True)
 
     _preflight(purpose, conn, run_id, model=model)
     provider = dostawca(model)
@@ -6628,8 +6635,7 @@ def _cost(model: str, tokens_in: int, tokens_out: int, web_searches: int,
     # zapis finansowy, a zmyślonej kwoty w księgach być nie może.
     #
     # KAZDY MODEL ANTHROPIC, nie lista dwoch. Bylo `model in (CLAUDE, SONNET)`,
-    # wiec wyszukiwania na Fable i Haiku szly do ksiegi za darmo — a Haiku
-    # od 13 wrzesnia 2026 robi ich kilkadziesiat dziennie.
+    # wiec wyszukiwania na Fable szly do ksiegi za darmo.
     if dostawca(model) == "anthropic":
         usd += web_searches / 1_000 * config.WEB_SEARCH_USD_PER_1K
     return round(usd, 6), bool(price["verified"])
@@ -13534,11 +13540,10 @@ wartosc i komentarz stojacy bezposrednio nad definicja.
 | `SONNET` | `"claude-sonnet-5"` | — |
 | `FABLE_5` | `"claude-fable-5"` | PISARZ ARTYKULOW. Fable 5.1 wyszedl 1 wrzesnia 2026 i od 3 wrzesnia pisze artykuly; poprzednik zostaje pod wlasna nazwa, bo pod nia stoi cal |
 | `FABLE` | `"claude-fable-5-1"` | — |
-| `HAIKU` | `"claude-haiku-4-5-20251001"` | SZUKAJACY ZASTEPCA. Nie pisze niczego sam — dostaje wylacznie te wywolania, ktore potrzebuja sieci, gdy model ich etapu przestal szukac. Pat |
 | `DEEPSEEK` | `"deepseek-flash"` | DEEPSEEK V4.1 FLASH, OD 10 WRZESNIA 2026. Stara nazwa `deepseek-v4-flash` jest u DeepSeeka juz tylko przekierowaniem: model V4 Flash wycofan |
 | `DEEPSEEK_V4_FLASH` | `"deepseek-v4-flash"` | — |
 | `DEEPSEEK_PRO` | `"deepseek-v4-pro"` | V4 PRO ZOSTAJE. Ogloszenie z 10 wrzesnia zapowiadalo przekierowanie tej nazwy na V4.1 Flash od 14 wrzesnia 04:00 UTC, ale DeepSeek sie wycof |
-| `ROLE_MODELI` | `("CLAUDE", "SONNET", "HAIKU", "FABLE", "DEEP` | — |
+| `ROLE_MODELI` | `("CLAUDE", "SONNET", "FABLE", "DEEPSEEK", "D` | — |
 | `MODELE_Z_KODU` | `{rola: globals()[rola] for rola in ROLE_MODE` | — |
 | `_STAN_WYBORU` | `{} if _w_tescie_wczesnie() else _wybor_model` | — |
 | `MODEL_FOR` | `{ "scout": DEEPSEEK_PRO, "feasibility": DEEP` | Decyzja wlasciciela 2026-08-15 zaczela od DeepSeeka poza pisaniem. Po pozniejszych testach artykuly trafily do Fable 5, notki do Opusa 5, a  |
@@ -13558,9 +13563,8 @@ wartosc i komentarz stojacy bezposrednio nad definicja.
 | `NAJNOWSZE_WYSZUKIWANIE` | `"web_search_20260209"` | Wersja narzedzia wyszukiwania dla modelu Anthropic, z galezia awaryjna. |
 | `SZUKANIE_PADLO_OD` | `{ "deepseek-flash": "2026-09-10T04:00:00+00:` | --- kto NAPRAWDE szuka w sieci ----------------------------------------------- ZMIERZONE 13 WRZESNIA 2026, i to jest cale uzasadnienie tej s |
 | `SZUKANIE_POTWIERDZONE` | `frozenset({"deepseek-v4-pro"})` | Modele DeepSeeka, ktorych wyszukiwanie POTWIERDZONO na zywo. Nieznany DeepSeek domyslnie nie szuka; te tak, dopoki proba z `nowe_modele.py`  |
-| `MODEL_DO_SZUKANIA_DOMYSLNY` | `HAIKU` | Zastepca dla wywolan z siecia. Haiku 4.5 zmierzony na tym samym poscie co DeepSeek V4 Pro: 6,2 centa wobec 5,5, osiem faktow w obu, adresy z |
-| `MAX_SZUKAN_NA_ETAP` | `{"factcheck": 3, "curiosity": 3, "aktualne_m` | Ile wyszukiwan wolno zastepcy na jedno wywolanie. Bez limitu Claude robil 17, potem 31 rund. Trzy daly komplet osmiu faktow w pomiarze z 13  |
-| `WYMUSZ_SZUKANIE` | `frozenset({"factcheck", "curiosity", "aktual` | ETAPY, KTORYCH PROMPT KAZE SZUKAC ZAWSZE. Zastepca dostaje dla nich `tool_choice: any`, czyli co najmniej jedno wyszukiwanie. ZMIERZONE 13 w |
+| `MODEL_DO_SZUKANIA_DOMYSLNY` | `DEEPSEEK_PRO` | ZASTEPCA DLA WYWOLAN Z SIECIA: DeepSeek V4 Pro, czyli model, ktory bot i tak ma w routingu (komentarze, odpowiedzi, rozbior). Tylko DeepSeek |
+| `MAX_SZUKAN_NA_ETAP` | `{"factcheck": 3, "curiosity": 3, "aktualne_m` | Ile wyszukiwan wolno jednemu wywolaniu Claude, gdy etap chodzi na Claude (np. dyskoveria w trybie tanim). Bez limitu Claude robil 17, potem  |
 | `WEB_SEARCH_USD_PER_1K` | `10.00` | Wyszukiwanie po stronie Anthropic: USD za 1000 zapytań. |
 | `_DZIS_UTC` | `_dt_sufit.datetime.now(_dt_sufit.timezone.ut` | — |
 | `SUFIT_PODNIESIONY_NA` | `"2026-08-30"` | — |

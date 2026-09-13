@@ -1,4 +1,4 @@
-"""Wywolanie z siecia idzie do modelu, ktory NAPRAWDE szuka — i kosztuje tyle, ile kosztuje.
+"""Wywolanie z siecia idzie do modelu DeepSeeka, ktory NAPRAWDE szuka — i kosztuje tyle, ile kosztuje.
 
 DLACZEGO TO POWSTALO. 10 wrzesnia 2026 DeepSeek przestawil `deepseek-v4-flash`
 na V4.1 Flash, a ten przez `/responses` nie ma narzedzia wyszukiwania. Zmierzone
@@ -8,17 +8,17 @@ na V4.1 Flash, a ten przez `/responses` nie ma narzedzia wyszukiwania. Zmierzone
     curiosity         15 z 44                   ->  0 z 5
     aktualne_modele    6 z 6                    ->  0 z 5
 
-Wywolania konczyly sie sukcesem, tylko dziesiec razy taniej — wiec sprawdzanie
+Wywolania konczyly sie sukcesem, tylko dziesiec razy taniej — wiec weryfikacja
 faktow przed publikacja (`stages.zweryfikuj`: notki, komentarze, artykuly) przez
 trzy dni sprawdzala tekst pamiecia modelu, a nie siecia.
 
-Tego samego dnia DeepSeek najpierw zapowiedzial, ze od 14 wrzesnia `deepseek-v4-pro`
-tez trafi do V4.1 Flash, a potem sie z tego wycofal (nota w cenniku). Pierwsza
-wersja tej naprawy uwierzyla ogloszeniu; sekcje 1, 3 i 4 pilnuja stanu z cennika.
-
-Ten plik pilnuje czterech rzeczy: kto szuka, dokad idzie wywolanie z siecia,
-co trafia do ksiegi i po jakiej stawce DeepSeek liczy przekierowane nazwy.
+PODZIAL PO NAPRAWIE: V4.1 Flash robi wszystko, co nie wymaga sieci; wywolania
+z siecia ida na DeepSeek V4 Pro, ktory szuka. Tylko DeepSeek — przez jedno
+popoludnie zastepca byl Claude Haiku, a wlasciciel: „my nie uzywamy zadnego
+haiku". Sekcja 5 pilnuje, zeby nie wrocil.
 """
+import contextlib
+import io
 import pathlib
 import sys
 import tempfile
@@ -44,25 +44,21 @@ def sprawdz(nazwa, warunek, szczegol=""):
 
 T = datetime.fromisoformat
 
-print("=== 1. KTO SZUKA — daty z pomiaru 13 wrzesnia 2026 ===")
+print("=== 1. KTO SZUKA — pomiary z 13 wrzesnia 2026 ===")
 sprawdz("V4.1 Flash nie szuka", not config.szuka_naprawde("deepseek-flash", T("2026-09-13T12:00:00+00:00")))
 sprawdz("stara nazwa Flash po 10.09 tez nie",
         not config.szuka_naprawde("deepseek-v4-flash", T("2026-09-11T12:00:00+00:00")))
 sprawdz("stara nazwa Flash SZUKALA przed 10.09",
         config.szuka_naprawde("deepseek-v4-flash", T("2026-09-09T12:00:00+00:00")))
-sprawdz("V4 Pro szuka jeszcze 13.09",
+sprawdz("V4 Pro szuka 13.09",
         config.szuka_naprawde("deepseek-v4-pro", T("2026-09-13T12:00:00+00:00")))
 sprawdz("V4 Pro szuka takze po 14.09 — DeepSeek zostawil model",
         config.szuka_naprawde("deepseek-v4-pro", T("2026-09-15T12:00:00+00:00")))
 sprawdz("nieznany DeepSeek nie szuka, dopoki proba nie potwierdzi",
         not config.szuka_naprawde("deepseek-pro", T("2026-09-20T12:00:00+00:00")))
-sprawdz("Claude szuka", config.szuka_naprawde(config.HAIKU, T("2026-09-13T12:00:00+00:00")))
-sprawdz("zastepca dla faktow to Haiku", config.model_do_szukania("factcheck") == config.HAIKU)
-# Opus kosztowal w dyskoverii do $1,65 przy suficie przebiegu artykulu $2,20.
-sprawdz("odkrywanie zrodel do artykulu tez na Haiku, nie na Opusie",
-        config.model_do_szukania("discovery") == config.HAIKU)
-sprawdz("Haiku ma wpis narzedzia wyszukiwania bez ostrzezenia",
-        config.narzedzie_wyszukiwania(config.HAIKU) == ("web_search_20250305", ""))
+sprawdz("zastepca dla weryfikacji faktow to DeepSeek V4 Pro",
+        config.model_do_szukania("factcheck") == config.DEEPSEEK_PRO)
+sprawdz("V4.1 Flash zostaje modelem etapu weryfikacji", config.MODEL_FOR["factcheck"] == config.DEEPSEEK)
 
 print()
 print("=== 2. PROBA Z nowe_modele MA PIERWSZENSTWO — ale tylko pozniejsza niz awaria ===")
@@ -85,7 +81,7 @@ finally:
     config.PROBY_WYSZUKIWANIA.update(_proby)
 
 print()
-print("=== 3. llm.call: z siecia do zastepcy, bez sieci zostaje na etapie ===")
+print("=== 3. llm.call: z siecia do V4 Pro, bez sieci zostaje na V4.1 Flash ===")
 wywolania = []
 
 
@@ -96,7 +92,7 @@ def falszywy_claude(purpose, system, user, web_search, model=None):
 
 def falszywy_responses(purpose, system, user, model=None):
     wywolania.append(("deepseek-responses", purpose, model, True))
-    return '{"facts": []}', 100, 10, 0, []
+    return '{"facts": []}', 100, 10, 3, ["https://example.org/b"]
 
 
 def falszywy_deepseek(purpose, system, user):
@@ -130,30 +126,34 @@ try:
     llm.call("factcheck", "s", "u", conn=conn, run_id=None, web_search=True)
     llm.call("factcheck", "s", "u", conn=conn, run_id=None, web_search=False)
     llm.call("discovery", "s", "u", conn=conn, run_id=None, web_search=True)
-    sprawdz("factcheck z siecia: Haiku przez sciezke Claude",
-            wywolania[0] == ("claude", "factcheck", config.HAIKU, True), wywolania[0])
-    sprawdz("factcheck bez sieci: zostaje na modelu etapu",
-            wywolania[1] == ("deepseek", "factcheck", config.MODEL_FOR["factcheck"], False), wywolania[1])
-    sprawdz("discovery 15.09 zostaje na V4 Pro przez /responses — Pro szuka",
+    sprawdz("weryfikacja z siecia: DeepSeek V4 Pro przez /responses",
+            wywolania[0] == ("deepseek-responses", "factcheck", config.DEEPSEEK_PRO, True), wywolania[0])
+    sprawdz("weryfikacja bez sieci: V4.1 Flash",
+            wywolania[1] == ("deepseek", "factcheck", config.DEEPSEEK, False), wywolania[1])
+    sprawdz("odkrywanie zrodel: zostaje na V4 Pro, ktory szuka",
             wywolania[2] == ("deepseek-responses", "discovery", config.DEEPSEEK_PRO, True), wywolania[2])
+    sprawdz("zadne wywolanie nie poszlo do Claude", not any(w[0] == "claude" for w in wywolania), wywolania)
 
-    wiersze = [dict(w) for w in conn.execute(
-        "select model, provider, web_searches, cost_usd from calls order by id")]
+    wiersz = dict(conn.execute("select model, provider, web_searches, cost_usd from calls order by id limit 1").fetchone())
     sprawdz("ksiega zapisuje model, ktory NAPRAWDE odpowiedzial",
-            wiersze[0]["model"] == config.HAIKU and wiersze[0]["provider"] == "anthropic", wiersze[0])
-    sprawdz("koszt Haiku z oplata za dwa wyszukiwania",
-            abs(wiersze[0]["cost_usd"] - round(100 / 1e6 * 1.0 + 10 / 1e6 * 5.0 + 2 * 0.01, 6)) < 1e-9,
-            wiersze[0])
+            wiersz["model"] == config.DEEPSEEK_PRO and wiersz["provider"] == "deepseek", wiersz)
+    sprawdz("wyszukiwania DeepSeeka bez doplaty za sztuke — mieszcza sie w tokenach",
+            abs(wiersz["cost_usd"] - llm._cost(config.DEEPSEEK_PRO, 100, 10, 0)[0]) < 1e-9, wiersz)
 
-    # Pro, ktory przestal szukac wedlug proby: jego wywolania z siecia ida do Haiku.
+    # V4 Pro traci narzedzie wedlug proby: nie ma zastepcy spoza DeepSeeka —
+    # wywolanie idzie jak dotad, ale GLOSNO.
     wywolania.clear()
+    llm._SZUKANIE_PRZEKIEROWANE.discard("curiosity")
     _proby3 = dict(config.PROBY_WYSZUKIWANIA)
     config.PROBY_WYSZUKIWANIA["deepseek-v4-pro"] = {"dziala": False, "kiedy": "2026-09-14T00:00:00+00:00"}
-    llm.call("discovery", "s", "u", conn=conn, run_id=None, web_search=True)
+    wydruk = io.StringIO()
+    with contextlib.redirect_stdout(wydruk):
+        llm.call("curiosity", "s", "u", conn=conn, run_id=None, web_search=True)
     config.PROBY_WYSZUKIWANIA.clear()
     config.PROBY_WYSZUKIWANIA.update(_proby3)
-    sprawdz("discovery na Pro, ktory stracil narzedzie: Haiku",
-            wywolania[0] == ("claude", "discovery", config.HAIKU, True), wywolania[0])
+    sprawdz("gdy nikt nie szuka: wywolanie zostaje na modelu etapu, bez przeskoku do Claude",
+            wywolania[0] == ("deepseek-responses", "curiosity", config.MODEL_FOR["curiosity"], True), wywolania[0])
+    sprawdz("i mowi o tym glosno", "UWAGA curiosity" in wydruk.getvalue(), wydruk.getvalue())
 
     # KONTRDOWOD: stan sprzed naprawy — kazdy model uznany za szukajacy.
     wywolania.clear()
@@ -190,7 +190,7 @@ try:
 finally:
     config.PRZEKIEROWANIA_DEEPSEEK = _przek
 s = config.stawka_deepseek("deepseek-v4-pro", T("2026-09-13T12:00:00+00:00"))
-sprawdz("V4 Pro 13.09 jeszcze po swojej stawce", (s["in"], s["out"]) == (0.66, 1.98), s)
+sprawdz("V4 Pro 13.09 po swojej stawce", (s["in"], s["out"]) == (0.66, 1.98), s)
 s = config.stawka_deepseek("deepseek-v4-flash", T("2026-09-11T12:00:00+00:00"))
 sprawdz("stara nazwa Flash po 10.09 po stawce V4.1", s["in"] == 0.15 and s["model"] == "deepseek-flash", s)
 s = config.stawka_deepseek("deepseek-v4-flash", T("2026-09-09T12:00:00+00:00"))
@@ -202,8 +202,6 @@ sprawdz("niedziela o 07:00 to NIE szczyt", s["in"] == 0.15 and not s["szczyt"], 
 sprawdz("KONTRDOWOD: stara regula (sama godzina) uznalaby niedziele 07:00 za szczyt",
         T("2026-09-13T07:00:00+00:00").hour in config.GODZINY_SZCZYTU_UTC)
 
-usd, _ = llm._cost("claude-haiku-4-5-20251001", 1_000_000, 0, 10)
-sprawdz("Haiku: milion tokenow wejscia plus dziesiec wyszukiwan", abs(usd - 1.10) < 1e-9, usd)
 usd, _ = llm._cost("claude-fable-5-1", 0, 0, 100)
 sprawdz("Fable: wyszukiwania juz nie ida do ksiegi za darmo", abs(usd - 1.0) < 1e-9, usd)
 usd, potwierdzona = llm._cost("claude-opus-5-1", 1_000_000, 0, 0)
@@ -214,68 +212,25 @@ sprawdz("nowy DeepSeek spoza cennika: stawka rodziny Pro, niepotwierdzona",
         usd > 0 and potwierdzona is False, (usd, potwierdzona))
 
 print()
-print("=== 5. HAIKU MUSI SZUKAC TAM, GDZIE PROMPT KAZE — sprawdzone na tym, co idzie do API ===")
-# Przebieg 202, 13 wrzesnia: weryfikacja notki na Haiku bez jednego wyszukiwania,
-# bo rekord zrodlowy w kontekscie wystarczyl mu za siec.
-zapisane = []
+print("=== 5. HAIKU NIE WRACA — decyzja wlasciciela ===")
+import nowe_modele  # noqa: E402
 
-
-class _Uzycie:
-    input_tokens, output_tokens = 10, 5
-    server_tool_use = type("S", (), {"web_search_requests": 1})()
-
-
-class _Wiadomosc:
-    stop_reason = "end_turn"
-    usage = _Uzycie()
-    content = [type("B", (), {"type": "text", "text": '{"claims": []}'})()]
-
-
-class _Strumien:
-    def __init__(self, **kwargs):
-        zapisane.append(kwargs)
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *a):
-        return False
-
-    def get_final_message(self):
-        return _Wiadomosc()
-
-
-class _Klient:
-    def __init__(self, **kwargs):
-        self.messages = type("M", (), {"stream": staticmethod(lambda **kw: _Strumien(**kw))})()
-
-
-_anthropic = llm.anthropic.Anthropic
-_wymus = config.WYMUSZ_SZUKANIE
+wszystkie = set(config.MODEL_FOR.values()) | {config.model_do_szukania(e) for e in config.MODEL_FOR}
+sprawdz("zaden etap ani zastepca nie wskazuje Haiku", not any("haiku" in m for m in wszystkie), sorted(wszystkie))
+sprawdz("brak roli HAIKU w konfiguracji", "HAIKU" not in config.ROLE_MODELI and not hasattr(config, "HAIKU"))
+sprawdz("automatyczna zamiana nie ma rodziny haiku",
+        all(rodzina != "haiku" for _, rodzina in nowe_modele.ROLE.values()))
+_llm_src = pathlib.Path("agent-v2/llm.py").read_text(encoding="utf-8")
+sprawdz("brak wymuszania narzedzia pisanego pod Haiku", "wymus_szukanie" not in _llm_src)
+# KONTRDOWOD: przyrzad sekcji widzi Haiku, gdy ktos go podstawi.
+_zast = config.MODEL_DO_SZUKANIA_DOMYSLNY
 try:
-    llm.anthropic.Anthropic = _Klient
-    llm._call_claude("factcheck", "s", "u", True, model=config.HAIKU)
-    llm._call_claude("reply", "s", "u", True, model=config.HAIKU)
-    llm._call_claude("discovery", "s", "u", True, model=config.CLAUDE)
-    llm._call_claude("factcheck", "s", "u", False, model=config.HAIKU)
-    sprawdz("weryfikacja faktow na Haiku: tool_choice any",
-            zapisane[0].get("tool_choice") == {"type": "any"}, zapisane[0].get("tool_choice"))
-    sprawdz("i limit trzech wyszukiwan", zapisane[0]["tools"][0]["max_uses"] == 3, zapisane[0]["tools"])
-    sprawdz("odpowiedz NIE jest zmuszana do szukania", "tool_choice" not in zapisane[1])
-    sprawdz("Opus nie dostaje wymuszenia — z mysleniem skonczyloby sie bledem API",
-            "tool_choice" not in zapisane[2])
-    sprawdz("wywolanie bez sieci nie dostaje ani narzedzia, ani wymuszenia",
-            "tools" not in zapisane[3] and "tool_choice" not in zapisane[3])
-
-    # KONTRDOWOD: stan z przebiegu 202 — bez listy etapow wymuszajacych.
-    zapisane.clear()
-    config.WYMUSZ_SZUKANIE = frozenset()
-    llm._call_claude("factcheck", "s", "u", True, model=config.HAIKU)
-    sprawdz("KONTRDOWOD: bez wymuszenia Haiku sam decyduje, czy szukac — test to widzi",
-            "tool_choice" not in zapisane[0])
+    config.MODEL_DO_SZUKANIA_DOMYSLNY = "claude-haiku-4-5-20251001"
+    wszystkie = {config.model_do_szukania(e) for e in config.MODEL_FOR}
+    sprawdz("KONTRDOWOD: podstawiony Haiku jako zastepca — przyrzad go widzi",
+            any("haiku" in m for m in wszystkie))
 finally:
-    llm.anthropic.Anthropic = _anthropic
-    config.WYMUSZ_SZUKANIE = _wymus
+    config.MODEL_DO_SZUKANIA_DOMYSLNY = _zast
 
 print()
 print("wynik: %d OK, %d BLAD" % (zdane, oblane))

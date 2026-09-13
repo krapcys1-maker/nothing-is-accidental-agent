@@ -1,5 +1,7 @@
 # Modele i wyszukiwanie — 13 września 2026
 
+> **Stan końcowy: sekcja 8.** Zastępcą dla wywołań z siecią jest DeepSeek V4 Pro, nie Claude Haiku. Sekcje 4–7 opisują drogę do tej decyzji.
+
 Przegląd konta na prośbę właściciela: „czy wszystko jest ok, czy wychodzą notki,
 komentarze" plus „wyszedł DeepSeek V4.1 Flash, może warto zmienić" i „może warto
 dopisać coś, żeby automatycznie zmieniało się na nowe modele".
@@ -157,3 +159,35 @@ nie działa z rozszerzonym myśleniem, a Opus 5 myśli domyślnie.
 
 Weryfikacje komentarzy w tym przebiegu szły bez sieci na Flashu i to jest zamierzone
 (`test_komentarz_nie_szuka_bez_powodu`).
+
+## 8. Stan końcowy: tylko DeepSeek, bez Haiku
+
+Właściciel: „my nie używamy żadnego haiku", a potem „weź deepseeka v4.1 flash".
+Haiku wszedł wyłącznie dlatego, że ogłoszenie DeepSeeka zapowiadało wyłączenie
+V4 Pro — skoro V4 Pro zostaje i szuka, powód zniknął.
+
+V4.1 Flash nie może przejąć wywołań z siecią, bo nie ma narzędzia wyszukiwania
+(sekcja 3). Podział jest więc taki:
+
+| co | model |
+|---|---|
+| wszystko bez sieci na dotychczasowym modelu Flash | DeepSeek V4.1 Flash |
+| wywołania z siecią, gdy model etapu nie szuka | DeepSeek V4 Pro |
+| notki | Claude Opus 5, bez zmian |
+| artykuły | Claude Fable 5.1, bez zmian |
+
+Pomiar V4 Pro na notce, przy której Haiku nie szukał, ta sama funkcja
+`stages.zweryfikuj`:
+
+| wariant | wyszukiwań | koszt | czas |
+|---|---|---|---|
+| z rekordem w kontekście, jak produkcja | 5 | $0,0250 | 32 s |
+| bez rekordu | 4 | $0,0220 | 27 s |
+
+Taniej niż Haiku i bez wymuszania narzędzia. Wymuszenie `tool_choice` pisane pod
+Haiku usunięte. Gdy V4 Pro też straci wyszukiwanie, nie ma przeskoku do innego
+dostawcy: `llm.call` wypisuje głośne ostrzeżenie, a `nowe_modele.py` zapisuje
+zmianę w dzienniku działań.
+
+Koszt: weryfikacja z siecią to około 2–3 centów na wywołanie, więc dopłata
+z sekcji 6 spada mniej więcej o połowę.

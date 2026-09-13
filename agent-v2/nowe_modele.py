@@ -54,7 +54,6 @@ WAZNE_GODZIN = 24
 ROLE = {
     "CLAUDE": ("anthropic", "opus"),
     "SONNET": ("anthropic", "sonnet"),
-    "HAIKU": ("anthropic", "haiku"),
     "FABLE": ("anthropic", "fable"),
     "DEEPSEEK": ("deepseek", "flash"),
     "DEEPSEEK_PRO": ("deepseek", "pro"),
@@ -75,7 +74,7 @@ def wersja(identyfikator: str) -> tuple[int, ...]:
     """Numery wersji z identyfikatora. Data wydania (8 cyfr) nie jest wersja.
 
         claude-fable-5-1           -> (5, 1)
-        claude-haiku-4-5-20251001  -> (4, 5)
+        claude-opus-4-5-20251101   -> (4, 5)
         deepseek-v4.1-pro          -> (4, 1)
         deepseek-flash             -> ()
     """

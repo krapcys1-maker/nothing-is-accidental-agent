@@ -37,7 +37,7 @@ for ident, oczekiwana in (
     ("claude-fable-5-1", (5, 1)),
     ("claude-opus-5", (5,)),
     ("claude-opus-4-8", (4, 8)),
-    ("claude-haiku-4-5-20251001", (4, 5)),
+    ("claude-opus-4-5-20251101", (4, 5)),
     ("claude-3-5-sonnet-20241022", (3, 5)),
     ("deepseek-v4-pro", (4,)),
     ("deepseek-v4.1-pro", (4, 1)),
@@ -60,8 +60,7 @@ ANTHROPIC = {
 }
 DEEPSEEK = {"deepseek-flash": None, "deepseek-v4-pro": None}
 STAN_10_13_WRZESNIA = {
-    "CLAUDE": "claude-opus-5", "SONNET": "claude-sonnet-5",
-    "HAIKU": "claude-haiku-4-5-20251001", "FABLE": "claude-fable-5-1",
+    "CLAUDE": "claude-opus-5", "SONNET": "claude-sonnet-5", "FABLE": "claude-fable-5-1",
     "DEEPSEEK": "deepseek-v4-flash", "DEEPSEEK_PRO": "deepseek-v4-pro",
 }
 
@@ -108,7 +107,7 @@ dane = {"zamiany": {
     "CLAUDE": {"na": "claude-opus-5-1"},
     "NIEZNANA_ROLA": {"na": "claude-opus-9"},
     "SONNET": {"na": "claude sonnet; rm -rf"},
-    "HAIKU": {"na": "deepseek-flash"},
+    "FABLE": {"na": "deepseek-flash"},
 }}
 wynik = config.zamiany_z_danych(dane)
 sprawdz("przyjete dwie poprawne", wynik == {"DEEPSEEK": "deepseek-flash", "CLAUDE": "claude-opus-5-1"}, wynik)

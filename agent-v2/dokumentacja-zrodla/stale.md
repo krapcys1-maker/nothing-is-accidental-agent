@@ -31,11 +31,10 @@
 | `SONNET` | `"claude-sonnet-5"` | — |
 | `FABLE_5` | `"claude-fable-5"` | PISARZ ARTYKULOW. Fable 5.1 wyszedl 1 wrzesnia 2026 i od 3 wrzesnia pisze artykuly; poprzednik zostaje pod wlasna nazwa, bo pod nia stoi cal |
 | `FABLE` | `"claude-fable-5-1"` | — |
-| `HAIKU` | `"claude-haiku-4-5-20251001"` | SZUKAJACY ZASTEPCA. Nie pisze niczego sam — dostaje wylacznie te wywolania, ktore potrzebuja sieci, gdy model ich etapu przestal szukac. Pat |
 | `DEEPSEEK` | `"deepseek-flash"` | DEEPSEEK V4.1 FLASH, OD 10 WRZESNIA 2026. Stara nazwa `deepseek-v4-flash` jest u DeepSeeka juz tylko przekierowaniem: model V4 Flash wycofan |
 | `DEEPSEEK_V4_FLASH` | `"deepseek-v4-flash"` | — |
 | `DEEPSEEK_PRO` | `"deepseek-v4-pro"` | V4 PRO ZOSTAJE. Ogloszenie z 10 wrzesnia zapowiadalo przekierowanie tej nazwy na V4.1 Flash od 14 wrzesnia 04:00 UTC, ale DeepSeek sie wycof |
-| `ROLE_MODELI` | `("CLAUDE", "SONNET", "HAIKU", "FABLE", "DEEP` | — |
+| `ROLE_MODELI` | `("CLAUDE", "SONNET", "FABLE", "DEEPSEEK", "D` | — |
 | `MODELE_Z_KODU` | `{rola: globals()[rola] for rola in ROLE_MODE` | — |
 | `_STAN_WYBORU` | `{} if _w_tescie_wczesnie() else _wybor_model` | — |
 | `MODEL_FOR` | `{ "scout": DEEPSEEK_PRO, "feasibility": DEEP` | Decyzja wlasciciela 2026-08-15 zaczela od DeepSeeka poza pisaniem. Po pozniejszych testach artykuly trafily do Fable 5, notki do Opusa 5, a  |
@@ -55,9 +54,8 @@
 | `NAJNOWSZE_WYSZUKIWANIE` | `"web_search_20260209"` | Wersja narzedzia wyszukiwania dla modelu Anthropic, z galezia awaryjna. |
 | `SZUKANIE_PADLO_OD` | `{ "deepseek-flash": "2026-09-10T04:00:00+00:` | --- kto NAPRAWDE szuka w sieci ----------------------------------------------- ZMIERZONE 13 WRZESNIA 2026, i to jest cale uzasadnienie tej s |
 | `SZUKANIE_POTWIERDZONE` | `frozenset({"deepseek-v4-pro"})` | Modele DeepSeeka, ktorych wyszukiwanie POTWIERDZONO na zywo. Nieznany DeepSeek domyslnie nie szuka; te tak, dopoki proba z `nowe_modele.py`  |
-| `MODEL_DO_SZUKANIA_DOMYSLNY` | `HAIKU` | Zastepca dla wywolan z siecia. Haiku 4.5 zmierzony na tym samym poscie co DeepSeek V4 Pro: 6,2 centa wobec 5,5, osiem faktow w obu, adresy z |
-| `MAX_SZUKAN_NA_ETAP` | `{"factcheck": 3, "curiosity": 3, "aktualne_m` | Ile wyszukiwan wolno zastepcy na jedno wywolanie. Bez limitu Claude robil 17, potem 31 rund. Trzy daly komplet osmiu faktow w pomiarze z 13  |
-| `WYMUSZ_SZUKANIE` | `frozenset({"factcheck", "curiosity", "aktual` | ETAPY, KTORYCH PROMPT KAZE SZUKAC ZAWSZE. Zastepca dostaje dla nich `tool_choice: any`, czyli co najmniej jedno wyszukiwanie. ZMIERZONE 13 w |
+| `MODEL_DO_SZUKANIA_DOMYSLNY` | `DEEPSEEK_PRO` | ZASTEPCA DLA WYWOLAN Z SIECIA: DeepSeek V4 Pro, czyli model, ktory bot i tak ma w routingu (komentarze, odpowiedzi, rozbior). Tylko DeepSeek |
+| `MAX_SZUKAN_NA_ETAP` | `{"factcheck": 3, "curiosity": 3, "aktualne_m` | Ile wyszukiwan wolno jednemu wywolaniu Claude, gdy etap chodzi na Claude (np. dyskoveria w trybie tanim). Bez limitu Claude robil 17, potem  |
 | `WEB_SEARCH_USD_PER_1K` | `10.00` | Wyszukiwanie po stronie Anthropic: USD za 1000 zapytań. |
 | `_DZIS_UTC` | `_dt_sufit.datetime.now(_dt_sufit.timezone.ut` | — |
 | `SUFIT_PODNIESIONY_NA` | `"2026-08-30"` | — |

@@ -135,10 +135,6 @@ SONNET = "claude-sonnet-5"
 # 8 wrzesnia, wiec wyszloby to dopiero za piec dni.
 FABLE_5 = "claude-fable-5"          # poprzednik, zostaje dla historii i porownan
 FABLE = "claude-fable-5-1"  # najmocniejszy, dwa razy droższy od Opusa
-# SZUKAJACY ZASTEPCA. Nie pisze niczego sam — dostaje wylacznie te wywolania,
-# ktore potrzebuja sieci, gdy model ich etapu przestal szukac. Patrz
-# `szuka_naprawde` i `model_do_szukania` nizej.
-HAIKU = "claude-haiku-4-5-20251001"
 
 # DEEPSEEK V4.1 FLASH, OD 10 WRZESNIA 2026. Stara nazwa `deepseek-v4-flash`
 # jest u DeepSeeka juz tylko przekierowaniem: model V4 Flash wycofano, a jego
@@ -174,7 +170,7 @@ def plik_wyboru_modeli() -> Path:
     return DATA_DIR / "wybor_modeli.json"
 
 
-ROLE_MODELI = ("CLAUDE", "SONNET", "HAIKU", "FABLE", "DEEPSEEK", "DEEPSEEK_PRO")
+ROLE_MODELI = ("CLAUDE", "SONNET", "FABLE", "DEEPSEEK", "DEEPSEEK_PRO")
 MODELE_Z_KODU = {rola: globals()[rola] for rola in ROLE_MODELI}
 
 
@@ -525,8 +521,6 @@ BEZ_TOKENOW = {"obraz"}
 PRICING = {
     "claude-opus-5": {"in": 5.00, "out": 25.00, "verified": True},
     "claude-sonnet-5": {"in": 3.00, "out": 15.00, "verified": True},
-    # HAIKU 4.5: stawka z cennika Anthropic, jeszcze nie z naszej faktury.
-    "claude-haiku-4-5-20251001": {"in": 1.00, "out": 5.00, "verified": False},
     # STAWKA FABLE 5.1 NIEPOTWIERDZONA. Wpisana z ceny poprzednika, bo model
     # wyszedl 1 wrzesnia i nie ma go jeszcze na zadnej naszej fakturze.
     # `verified: False` sprawia, ze kazde takie wywolanie zapisuje sie
@@ -560,8 +554,7 @@ PRICING = {
 # najdrozsza stawke dostawcy, bo zanizony koszt oslepia straznika budzetu,
 # a zawyzony najwyzej zatrzyma przebieg wczesniej.
 RODZINY_CEN = {
-    "opus": "claude-opus-5", "sonnet": "claude-sonnet-5",
-    "haiku": "claude-haiku-4-5-20251001", "fable": "claude-fable-5-1",
+    "opus": "claude-opus-5", "sonnet": "claude-sonnet-5", "fable": "claude-fable-5-1",
     "flash": "deepseek-flash", "pro": "deepseek-v4-pro",
 }
 
@@ -724,10 +717,6 @@ WEB_SEARCH_TOOL = {
     # wczesniejszych etapow.
     FABLE: "web_search_20260209",
     FABLE_5: "web_search_20260209",
-    # Haiku 4.5 nie ma filtrowania dynamicznego — dostaje pierwsza wersje
-    # narzedzia. Sprawdzone na zywo 13 wrzesnia 2026: 3 wyszukiwania, 8 faktow,
-    # 7 z 8 adresow naprawde zwroconych przez wyszukiwarke.
-    HAIKU: "web_search_20250305",
 }
 
 # Wersja narzedzia wyszukiwania dla modelu Anthropic, z galezia awaryjna.
@@ -748,13 +737,10 @@ def narzedzie_wyszukiwania(model: str) -> tuple[str, str]:
     """
     if model in WEB_SEARCH_TOOL:
         return WEB_SEARCH_TOOL[model], ""
-    # Nowy Haiku, ktory wszedl automatycznie: pierwsza wersja narzedzia dziala
-    # na calej rodzinie, a najnowsza na Haiku 4.5 nie istnieje.
-    wersja = "web_search_20250305" if "haiku" in str(model) else NAJNOWSZE_WYSZUKIWANIE
-    return wersja, (
+    return NAJNOWSZE_WYSZUKIWANIE, (
         "model %s nie ma wpisu w WEB_SEARCH_TOOL — biore %s. "
         "Dopisz go, zanim ktos zmieni MODEL_FOR."
-        % (model, wersja))
+        % (model, NAJNOWSZE_WYSZUKIWANIE))
 
 
 # --- kto NAPRAWDE szuka w sieci -----------------------------------------------
@@ -797,52 +783,36 @@ SZUKANIE_PADLO_OD = {
 # 10 wrzesnia etap `reply` szukal w 3 z 26 wywolan.
 SZUKANIE_POTWIERDZONE = frozenset({"deepseek-v4-pro"})
 
-# Zastepca dla wywolan z siecia. Haiku 4.5 zmierzony na tym samym poscie co
-# DeepSeek V4 Pro: 6,2 centa wobec 5,5, osiem faktow w obu, adresy z wyszukiwarki
-# 7 z 8 wobec 6 z 8. Sonnet 5 kosztowal 31 centow i nie oddal ani jednego faktu.
+# ZASTEPCA DLA WYWOLAN Z SIECIA: DeepSeek V4 Pro, czyli model, ktory bot i tak
+# ma w routingu (komentarze, odpowiedzi, rozbior). Tylko DeepSeek — decyzja
+# wlasciciela 13 wrzesnia 2026: „my nie uzywamy zadnego haiku".
 #
+# HAIKU BYL TU PRZEZ JEDNO POPOLUDNIE i to jest zapis, dlaczego odpadl, zeby nie
+# wrocil. Wszedl, bo ogloszenie DeepSeeka zapowiadalo wylaczenie V4 Pro od 14.09
+# — co okazalo sie nieaktualne. Na produkcji (przebieg 202) Haiku zweryfikowal
+# notke o Simonie Willisonie BEZ ANI JEDNEGO wyszukiwania, bo rekord zrodlowy
+# w kontekscie uznal za wystarczajacy, choc `weryfikacja.md` kaze szukac kazdego
+# twierdzenia.
 #
-# ODKRYWANIE ZRODEL DO ARTYKULU TEZ NA HAIKU, i to jest decyzja z pomiaru.
-# W sierpniu zapisano, ze Haiku przy prompcie dyskoverii „nie wywoluje
-# wyszukiwania w ogole". Dostawal wtedy narzedzie `web_search_20260209`,
-# ktorego na Haiku nie ma. Z `web_search_20250305`, prawdziwa funkcja
-# `stages.discovery`, 13 wrzesnia: 6 wyszukiwan, 46 wynikow, 4 zrodla po
-# filtrze, $0,0917. DeepSeek V4 Pro dawal tu 17 wyszukiwan za $0,154.
+# V4 Pro na tej samej notce, ta sama funkcja `stages.zweryfikuj`, 13 wrzesnia:
+#     z rekordem w kontekscie (jak produkcja)   5 wyszukiwan  $0,0250  32 s
+#     bez rekordu                                4 wyszukiwania $0,0220  27 s
+# Taniej niz Haiku ($0,0455 z wymuszonym szukaniem) i bez wymuszania.
 #
-# Opusa NIE, choc szuka dobrze: kosztowal tu od $0,46 do $1,65, a przebieg
-# artykulu ma sufit $2,20 przy samym pisaniu Fable $0,66. Gorny kraniec Opusa
-# zabilby artykul PO oplaconym researchu. Chudy wynik Haiku ma za to gotowe
-# lekarstwo: druga runde dyskoverii przy korpusie ponizej progu.
-MODEL_DO_SZUKANIA_DOMYSLNY = HAIKU
+# V4.1 FLASH SIE TU NIE NADAJE — nie ma narzedzia wyszukiwania (patrz wyzej).
+# Dlatego podzial: V4.1 Flash robi wszystko, co nie wymaga sieci; V4 Pro
+# dostaje wylacznie wywolania z siecia.
+#
+# Gdy V4 Pro tez przestanie szukac (DeepSeek zapowiada jego wygaszanie), nie ma
+# zastepcy spoza DeepSeeka: `llm.call` mowi to glosno, a `nowe_modele.py`
+# zapisuje zmiane w dzienniku dzialan.
+MODEL_DO_SZUKANIA_DOMYSLNY = DEEPSEEK_PRO
 MODEL_DO_SZUKANIA: dict[str, str] = {}
 
-# Ile wyszukiwan wolno zastepcy na jedno wywolanie. Bez limitu Claude robil 17,
-# potem 31 rund. Trzy daly komplet osmiu faktow w pomiarze z 13 wrzesnia.
+# Ile wyszukiwan wolno jednemu wywolaniu Claude, gdy etap chodzi na Claude
+# (np. dyskoveria w trybie tanim). Bez limitu Claude robil 17, potem 31 rund.
+# DeepSeek takiego limitu nie przyjmuje — patrz `_call_deepseek_responses`.
 MAX_SZUKAN_NA_ETAP = {"factcheck": 3, "curiosity": 3, "aktualne_modele": 4, "reply": 2}
-
-# ETAPY, KTORYCH PROMPT KAZE SZUKAC ZAWSZE. Zastepca dostaje dla nich
-# `tool_choice: any`, czyli co najmniej jedno wyszukiwanie.
-#
-# ZMIERZONE 13 wrzesnia 2026, pierwszy przebieg produkcyjny po przestawieniu
-# (przebieg 202): weryfikacja notki o Simonie Willisonie poszla na Haiku
-# i NIE SZUKALA ANI RAZU — 4983 tokeny wejscia, $0,0077. `weryfikacja.md` mowi
-# „Search for each factual claim it makes". Ta sama notka bez rekordu
-# zrodlowego w kontekscie: 3 wyszukiwania. Z rekordem Haiku uznaje go za
-# wystarczajacy i sieci nie pyta — a weryfikacja szuka miedzy innymi tego, czy
-# zrodlo jest AKTUALNE, czego rekord sam o sobie nie powie. Wymuszenie na tej
-# samej notce: 3 wyszukiwania, bez bledu API.
-#
-# `reply` TU NIE MA: odpowiedz szuka tylko z powodu (patrz
-# `test_komentarz_nie_szuka_bez_powodu`).
-#
-# TYLKO HAIKU. Wymuszenie narzedzia nie dziala z rozszerzonym mysleniem, a Opus 5
-# mysli domyslnie — na nim konczyloby sie bledem API w srodku platnej sciezki.
-WYMUSZ_SZUKANIE = frozenset({"factcheck", "curiosity", "aktualne_modele", "discovery"})
-
-
-def wymus_szukanie(etap: str, model: str) -> bool:
-    """Czy wywolanie z siecia ma dostac `tool_choice: any`."""
-    return etap in WYMUSZ_SZUKANIE and "haiku" in str(model)
 
 # Wyniki prob wyszukiwania z `nowe_modele.py`: {model: {"dziala": bool, "kiedy": iso}}.
 PROBY_WYSZUKIWANIA: dict[str, dict] = {

@@ -226,8 +226,7 @@ def _cost(model: str, tokens_in: int, tokens_out: int, web_searches: int,
     # zapis finansowy, a zmyślonej kwoty w księgach być nie może.
     #
     # KAZDY MODEL ANTHROPIC, nie lista dwoch. Bylo `model in (CLAUDE, SONNET)`,
-    # wiec wyszukiwania na Fable i Haiku szly do ksiegi za darmo — a Haiku
-    # od 13 wrzesnia 2026 robi ich kilkadziesiat dziennie.
+    # wiec wyszukiwania na Fable szly do ksiegi za darmo.
     if dostawca(model) == "anthropic":
         usd += web_searches / 1_000 * config.WEB_SEARCH_USD_PER_1K
     return round(usd, 6), bool(price["verified"])
@@ -278,11 +277,6 @@ def _call_claude(
             "name": "web_search",
             "max_uses": config.max_szukan(purpose),
         }]
-        # CO NAJMNIEJ JEDNO WYSZUKIWANIE tam, gdzie prompt kaze szukac zawsze.
-        # Bez tego Haiku z rekordem w kontekscie weryfikowal notke bez sieci.
-        # Patrz `config.WYMUSZ_SZUKANIE`.
-        if config.wymus_szukanie(purpose, model):
-            kwargs["tool_choice"] = {"type": "any"}
 
     # Strumień zawsze: sufity są duże, a myślenie na Opusie 5 jest domyślnie
     # włączone i liczy się jak wyjście, więc bez strumienia grozi timeout HTTP.
@@ -609,11 +603,19 @@ def call(
     # zmiana dostawcy w logu nie dala sie przeoczyc, ale go nie zalala.
     if web_search and not config.szuka_naprawde(model):
         zastepca = config.model_do_szukania(purpose)
-        if purpose not in _SZUKANIE_PRZEKIEROWANE:
+        if config.szuka_naprawde(zastepca):
+            if purpose not in _SZUKANIE_PRZEKIEROWANE:
+                _SZUKANIE_PRZEKIEROWANE.add(purpose)
+                print(f"  [szukanie] {purpose}: {model} nie szuka w sieci — "
+                      f"wywolania z wyszukiwaniem ida na {zastepca}", flush=True)
+            model = zastepca
+        elif purpose not in _SZUKANIE_PRZEKIEROWANE:
+            # ZASTEPCA TEZ NIE SZUKA. Nie przelaczamy na dostawce spoza
+            # DeepSeeka (decyzja wlasciciela), wiec wywolanie idzie jak dotad —
+            # ale GLOSNO, bo 10 wrzesnia ta sama sytuacja trwala trzy dni po cichu.
             _SZUKANIE_PRZEKIEROWANE.add(purpose)
-            print(f"  [szukanie] {purpose}: {model} nie szuka w sieci — "
-                  f"wywolania z wyszukiwaniem ida na {zastepca}", flush=True)
-        model = zastepca
+            print(f"  [szukanie] UWAGA {purpose}: ani {model}, ani {zastepca} nie "
+                  f"szuka w sieci — to wywolanie sprawdzi tekst BEZ sieci", flush=True)
 
     _preflight(purpose, conn, run_id, model=model)
     provider = dostawca(model)
