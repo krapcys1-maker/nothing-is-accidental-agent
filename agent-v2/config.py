@@ -149,9 +149,13 @@ HAIKU = "claude-haiku-4-5-20251001"
 # w ktorym przekierowanie zniknie. Wtedy stanelyby dziewiec etapow naraz.
 DEEPSEEK = "deepseek-flash"
 DEEPSEEK_V4_FLASH = "deepseek-v4-flash"  # stara nazwa: historia kosztow i rozliczen
-# OD 14 WRZESNIA 2026 04:00 UTC TA NAZWA TRAFIA DO V4.1 FLASH, az wyjdzie V4.1 Pro
-# (ogloszenie DeepSeeka z 10 wrzesnia). Nazwa zostaje, bo `nowe_modele.py`
-# przestawi ja sam, gdy na liscie dostawcy pojawi sie nastepca z tej rodziny.
+# V4 PRO ZOSTAJE. Ogloszenie z 10 wrzesnia zapowiadalo przekierowanie tej nazwy
+# na V4.1 Flash od 14 wrzesnia 04:00 UTC, ale DeepSeek sie wycofal. Cennik,
+# sprawdzony 13 wrzesnia po poludniu: „In response to user demand, we have
+# decided to continue providing API services for DeepSeek V4 Pro after
+# September 14, 2026, with the billing method remaining unchanged". Samo
+# ogloszenie z 10 wrzesnia nie zostalo poprawione — zrodla DeepSeeka mowily
+# tego dnia dwie rozne rzeczy, i rozstrzyga strona, z ktorej wynika rachunek.
 DEEPSEEK_PRO = "deepseek-v4-pro"
 
 # --- automatyczna zamiana modeli ---------------------------------------------
@@ -588,16 +592,18 @@ STAWKI_PRZED_PODWYZKA = {
 }
 
 # PRZEKIEROWANIA U DOSTAWCY: stara nazwa przyjmowana dalej, ale rozliczana po
-# stawce modelu, na ktory DeepSeek ja przestawil. Ogloszenie z 10 wrzesnia 2026:
-#   - `deepseek-v4-flash` od 10.09 04:00 UTC obsluguje V4.1 Flash po cenie Flash,
-#   - `deepseek-v4-pro` od 14.09 04:00 UTC trafia do V4.1 Flash po cenie Flash,
-#     az wyjdzie V4.1 Pro.
-# Bez tego od 14 wrzesnia liczylibysmy etapy Pro ponad cztery razy za drogo
-# (wejscie 0,66 zamiast 0,15), a straznik budzetu hamowalby przebieg za
-# pieniadze, ktorych nikt nie wydal.
+# stawce modelu, na ktory DeepSeek ja przestawil. Od 10.09 04:00 UTC
+# `deepseek-v4-flash` obsluguje V4.1 Flash po cenie Flash.
+#
+# `deepseek-v4-pro` TU NIE MA, i to jest poprawka tego samego dnia. Pierwsza
+# wersja wpisala go z datą 14.09 04:00 UTC za ogloszeniem z 10 wrzesnia.
+# DeepSeek sie z tego wycofal (patrz `DEEPSEEK_PRO`), a wpis liczylby od jutra
+# etapy Pro po stawce Flash, czyli ponad CZTERY RAZY ZA TANIO — straznik
+# budzetu widzialby czwarta czesc prawdziwego rachunku. Zle w te strone jest
+# gorzej niz w druga: zawyzony koszt zatrzymuje przebieg, zanizony pozwala
+# przebiec sufit.
 PRZEKIEROWANIA_DEEPSEEK = (
     (DEEPSEEK_V4_FLASH, "2026-09-10T04:00:00+00:00", "deepseek-flash"),
-    ("deepseek-v4-pro", "2026-09-14T04:00:00+00:00", "deepseek-flash"),
 )
 
 
@@ -769,19 +775,27 @@ def narzedzie_wyszukiwania(model: str) -> tuple[str, str]:
 # dokladnie to, przed czym istnieje. Nic nie krzyczalo, bo
 # wywolanie konczylo sie sukcesem, tylko dziesiec razy taniej.
 #
-# A od 14 wrzesnia 04:00 UTC `deepseek-v4-pro` tez trafia do V4.1 Flash, wiec
-# bez tej sekcji konto traci wyszukiwanie calkowicie: odpowiedzi i odkrywanie
-# zrodel do artykulu.
+# `deepseek-v4-pro` SZUKA I ZOSTAJE. DeepSeek wycofal sie z przekierowania go na
+# V4.1 Flash (patrz `DEEPSEEK_PRO`), wiec odpowiedzi i odkrywanie zrodel zostaja
+# na Pro. Pierwsza wersja tej sekcji wpisala mu awarie na 14.09 04:00 UTC za
+# ogloszeniem, ktore tego samego dnia przestalo obowiazywac.
 #
 # DLATEGO ZDOLNOSC, NIE ETAP. Wywolanie z `web_search=True`, ktorego model nie
 # szuka, idzie do zastepcy; to samo wywolanie bez sieci zostaje na tanim
-# modelu etapu. `nowe_modele.py` zapisuje wynik proby wyszukiwania, wiec gdy
-# DeepSeek znow zacznie szukac (np. V4.1 Pro), wywolania wroca same.
+# modelu etapu. `nowe_modele.py` codziennie PROBUJE wyszukiwania na kazdym
+# modelu DeepSeeka w uzyciu — tym, ktory nie szuka, zeby wywolania wrocily,
+# gdy zacznie, i tym, ktory szuka, zeby cicha utrata narzedzia nie trwala
+# znowu trzy dni.
 SZUKANIE_PADLO_OD = {
     "deepseek-flash": "2026-09-10T04:00:00+00:00",
     DEEPSEEK_V4_FLASH: "2026-09-10T04:00:00+00:00",
-    "deepseek-v4-pro": "2026-09-14T04:00:00+00:00",
 }
+
+# Modele DeepSeeka, ktorych wyszukiwanie POTWIERDZONO na zywo. Nieznany DeepSeek
+# domyslnie nie szuka; te tak, dopoki proba z `nowe_modele.py` nie powie inaczej.
+# `deepseek-v4-pro` 13.09.2026: 17 i 12 wyszukiwan w probie, a na produkcji po
+# 10 wrzesnia etap `reply` szukal w 3 z 26 wywolan.
+SZUKANIE_POTWIERDZONE = frozenset({"deepseek-v4-pro"})
 
 # Zastepca dla wywolan z siecia. Haiku 4.5 zmierzony na tym samym poscie co
 # DeepSeek V4 Pro: 6,2 centa wobec 5,5, osiem faktow w obu, adresy z wyszukiwarki
@@ -836,6 +850,8 @@ def szuka_naprawde(model: str, kiedy=None) -> bool:
             return bool(proba["dziala"])
     if padlo:
         return kiedy < datetime.fromisoformat(padlo)
+    if model in SZUKANIE_POTWIERDZONE:
+        return True
     return not str(model).startswith("deepseek")
 
 

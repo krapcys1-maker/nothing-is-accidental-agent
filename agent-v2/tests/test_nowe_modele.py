@@ -210,11 +210,15 @@ try:
     sprawdz("plik zamian czyta sie z powrotem jako ta sama zamiana",
             config.zamiany_z_danych(stan) == {"DEEPSEEK": "deepseek-flash"}, stan.get("zamiany"))
     sprawdz("lista dostawcow zapisana obok", stan["u_dostawcow"]["deepseek"] == ["deepseek-flash", "deepseek-v4-pro"])
-    sprawdz("proba wyszukiwania zrobiona dla DeepSeeka, ktory dzis nie szuka",
-            ("szukanie", "deepseek-flash") in wolane
+    sprawdz("proba wyszukiwania na KAZDYM DeepSeeku w uzyciu, takze na szukajacym Pro",
+            ("szukanie", "deepseek-flash") in wolane and ("szukanie", "deepseek-v4-pro") in wolane
             and stan["wyszukiwanie"]["deepseek-flash"]["dziala"] is False, wolane)
+    # Atrapa mowi, ze Pro nie szuka — tak wygladalaby cicha utrata z 10 wrzesnia.
+    sprawdz("KONTRDOWOD: Pro, ktory przestal szukac, od razu schodzi z wyszukiwania",
+            not config.szuka_naprawde("deepseek-v4-pro"))
     dziennik = (config.DATA_DIR / "dziennik.jsonl").read_text(encoding="utf-8")
     sprawdz("zamiana w dzienniku dzialan", '"rodzaj": "zmiana_modelu"' in dziennik)
+    sprawdz("utrata wyszukiwania tez w dzienniku", "PRZESTAL szukac" in dziennik)
     wiersze = conn.execute("select model, purpose from calls where purpose='nowe_modele'").fetchall()
     sprawdz("proby zapisane w ksiedze kosztow pod wlasnym etapem", len(wiersze) >= 2, [tuple(w) for w in wiersze])
 

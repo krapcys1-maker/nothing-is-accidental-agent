@@ -5,7 +5,9 @@ i przekierowal jego nazwe na nowy model. Konto chodzilo na nowym modelu trzy dni
 nie wiedzac o tym, bo wywolania dalej konczyly sie sukcesem. Wyszlo przy
 przegladzie konta 13 wrzesnia, i to w najgorszej postaci: V4.1 Flash nie ma
 narzedzia wyszukiwania, wiec weryfikacja faktow przed publikacja przez trzy dni
-oddawalo fakty z pamieci. A dzien pozniej ta sama zmiana czekala `deepseek-v4-pro`.
+sprawdzala tekst pamiecia modelu. Tego samego dnia DeepSeek najpierw zapowiedzial
+przestawienie `deepseek-v4-pro` na V4.1 Flash, a potem sie z tego wycofal — dwie
+strony jego dokumentacji mowily rozne rzeczy naraz. Nazwy nie wystarcza.
 
 Wlasciciel: „moze warto dopisac cos takiego, zeby automatycznie sie zmienialo na
 nowe modele, jak wychodza". Ten modul to robi — ale na dowodach, nie na nazwach.
@@ -20,8 +22,9 @@ JAK DZIALA, raz na dobe:
     3. proba: nowy model musi odpowiedziec poprawnym JSON-em. Kilka tokenow.
     4. zamiana zapisana w `data/wybor_modeli.json`; `config` stosuje ja przy
        kazdym starcie, a tu dziala od razu, w biezacym przebiegu.
-    5. proba wyszukiwania dla modeli DeepSeeka, ktore dzis nie szukaja. Gdy
-       zaczna — wywolania z siecia wroca do nich same (`config.szuka_naprawde`).
+    5. proba wyszukiwania na kazdym modelu DeepSeeka w uzyciu. Gdy model zacznie
+       szukac, wywolania z siecia wroca do niego same; gdy przestanie — pojda
+       do zastepcy juz w nastepnym przebiegu (`config.szuka_naprawde`).
 
 CZEGO TU CELOWO NIE MA.
 
@@ -408,26 +411,34 @@ def sprawdz(conn=None, run_id: int | None = None, wymus: bool = False) -> dict[s
             print("  [nowe modele] bez zamiany %s: %s -> %s — %s"
                   % (decyzja["rola"], decyzja["z"], decyzja["na"], decyzja["dlaczego"]), flush=True)
 
-        # PROBY WYSZUKIWANIA: tylko modele DeepSeeka w uzyciu, ktore dzis nie szukaja.
+        # PROBY WYSZUKIWANIA NA KAZDYM MODELU DEEPSEEKA W UZYCIU — takze na tym,
+        # ktory dzis szuka. 10 wrzesnia narzedzie zniknelo po cichu i trwalo to
+        # trzy dni; proba raz na dobe skraca to do jednego przebiegu. Na modelu,
+        # ktory nie szuka, kosztuje ulamek centa, na szukajacym Pro okolo 3 centy.
         wyszukiwanie = dict(stan.get("wyszukiwanie") or {})
         modele_deepseeka = sorted({getattr(config, r) for r, (d, _) in ROLE.items()
                                    if d == "deepseek"})
         for model in modele_deepseeka:
-            if config.szuka_naprawde(model):
-                continue
             ostatnia = wyszukiwanie.get(model) or {}
             if not wymus and _mlodsze_niz(ostatnia.get("kiedy"), WAZNE_GODZIN):
                 continue
             if _wolno_placic(conn, run_id, model):
                 continue
+            szukal_dotad = config.szuka_naprawde(model)
             dziala, szukan, tin, tout, opis = proba_wyszukiwania(model)
             _zapisz_koszt(conn, run_id, "deepseek", model, tin, tout, szukan, True, opis)
             wyszukiwanie[model] = {"dziala": dziala, "kiedy": teraz, "szukan": szukan, "opis": opis}
             config.PROBY_WYSZUKIWANIA[model] = wyszukiwanie[model]
             print("  [nowe modele] wyszukiwanie na %s: %s" % (model, opis), flush=True)
-            if dziala:
-                _do_dziennika("zmiana_modelu", udane=True, rola="wyszukiwanie", z="zastepca",
-                              na=model, powod="proba potwierdzila, ze model znow szuka")
+            if dziala != szukal_dotad:
+                powod = ("proba potwierdzila, ze model znow szuka — wywolania z siecia wracaja"
+                         if dziala else
+                         "model PRZESTAL szukac — wywolania z siecia ida do zastepcy")
+                _do_dziennika("zmiana_modelu", udane=True, rola="wyszukiwanie",
+                              z=model if not dziala else config.model_do_szukania("factcheck"),
+                              na=config.model_do_szukania("factcheck") if not dziala else model,
+                              powod=powod)
+                print("  [nowe modele] WYSZUKIWANIE %s: %s" % (model, powod), flush=True)
 
         historia = list(stan.get("historia") or [])[-50:]
         if wykonane or odrzucone:

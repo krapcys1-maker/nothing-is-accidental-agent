@@ -10,7 +10,11 @@ na V4.1 Flash, a ten przez `/responses` nie ma narzedzia wyszukiwania. Zmierzone
 
 Wywolania konczyly sie sukcesem, tylko dziesiec razy taniej — wiec sprawdzanie
 faktow przed publikacja (`stages.zweryfikuj`: notki, komentarze, artykuly) przez
-trzy dni sprawdzala tekst pamiecia modelu, a nie siecia. A 14 wrzesnia o 04:00 UTC to samo czekalo `deepseek-v4-pro`.
+trzy dni sprawdzala tekst pamiecia modelu, a nie siecia.
+
+Tego samego dnia DeepSeek najpierw zapowiedzial, ze od 14 wrzesnia `deepseek-v4-pro`
+tez trafi do V4.1 Flash, a potem sie z tego wycofal (nota w cenniku). Pierwsza
+wersja tej naprawy uwierzyla ogloszeniu; sekcje 1, 3 i 4 pilnuja stanu z cennika.
 
 Ten plik pilnuje czterech rzeczy: kto szuka, dokad idzie wywolanie z siecia,
 co trafia do ksiegi i po jakiej stawce DeepSeek liczy przekierowane nazwy.
@@ -48,8 +52,8 @@ sprawdz("stara nazwa Flash SZUKALA przed 10.09",
         config.szuka_naprawde("deepseek-v4-flash", T("2026-09-09T12:00:00+00:00")))
 sprawdz("V4 Pro szuka jeszcze 13.09",
         config.szuka_naprawde("deepseek-v4-pro", T("2026-09-13T12:00:00+00:00")))
-sprawdz("V4 Pro nie szuka od 14.09 04:00 UTC",
-        not config.szuka_naprawde("deepseek-v4-pro", T("2026-09-14T04:00:00+00:00")))
+sprawdz("V4 Pro szuka takze po 14.09 — DeepSeek zostawil model",
+        config.szuka_naprawde("deepseek-v4-pro", T("2026-09-15T12:00:00+00:00")))
 sprawdz("nieznany DeepSeek nie szuka, dopoki proba nie potwierdzi",
         not config.szuka_naprawde("deepseek-pro", T("2026-09-20T12:00:00+00:00")))
 sprawdz("Claude szuka", config.szuka_naprawde(config.HAIKU, T("2026-09-13T12:00:00+00:00")))
@@ -69,9 +73,13 @@ try:
             config.szuka_naprawde("deepseek-flash", T("2026-09-21T00:00:00+00:00")))
     sprawdz("ale nie wstecz: przed proba dalej nie szuka",
             not config.szuka_naprawde("deepseek-flash", T("2026-09-19T00:00:00+00:00")))
-    config.PROBY_WYSZUKIWANIA["deepseek-v4-pro"] = {"dziala": True, "kiedy": "2026-09-13T12:00:00+00:00"}
+    config.PROBY_WYSZUKIWANIA["deepseek-v4-flash"] = {"dziala": True, "kiedy": "2026-09-09T12:00:00+00:00"}
     sprawdz("proba sprzed daty awarii nie przykrywa awarii",
-            not config.szuka_naprawde("deepseek-v4-pro", T("2026-09-15T00:00:00+00:00")))
+            not config.szuka_naprawde("deepseek-v4-flash", T("2026-09-11T00:00:00+00:00")))
+    # CICHA UTRATA NA MODELU, KTORY SZUKAL — dokladnie przypadek z 10 wrzesnia.
+    config.PROBY_WYSZUKIWANIA["deepseek-v4-pro"] = {"dziala": False, "kiedy": "2026-09-20T12:00:00+00:00"}
+    sprawdz("proba mowiaca, ze Pro przestal szukac, zdejmuje go z wyszukiwania",
+            not config.szuka_naprawde("deepseek-v4-pro", T("2026-09-21T00:00:00+00:00")))
 finally:
     config.PROBY_WYSZUKIWANIA.clear()
     config.PROBY_WYSZUKIWANIA.update(_proby)
@@ -126,8 +134,8 @@ try:
             wywolania[0] == ("claude", "factcheck", config.HAIKU, True), wywolania[0])
     sprawdz("factcheck bez sieci: zostaje na modelu etapu",
             wywolania[1] == ("deepseek", "factcheck", config.MODEL_FOR["factcheck"], False), wywolania[1])
-    sprawdz("discovery od 14.09: Haiku, bo V4 Pro stracil wyszukiwanie",
-            wywolania[2] == ("claude", "discovery", config.HAIKU, True), wywolania[2])
+    sprawdz("discovery 15.09 zostaje na V4 Pro przez /responses — Pro szuka",
+            wywolania[2] == ("deepseek-responses", "discovery", config.DEEPSEEK_PRO, True), wywolania[2])
 
     wiersze = [dict(w) for w in conn.execute(
         "select model, provider, web_searches, cost_usd from calls order by id")]
@@ -136,6 +144,16 @@ try:
     sprawdz("koszt Haiku z oplata za dwa wyszukiwania",
             abs(wiersze[0]["cost_usd"] - round(100 / 1e6 * 1.0 + 10 / 1e6 * 5.0 + 2 * 0.01, 6)) < 1e-9,
             wiersze[0])
+
+    # Pro, ktory przestal szukac wedlug proby: jego wywolania z siecia ida do Haiku.
+    wywolania.clear()
+    _proby3 = dict(config.PROBY_WYSZUKIWANIA)
+    config.PROBY_WYSZUKIWANIA["deepseek-v4-pro"] = {"dziala": False, "kiedy": "2026-09-14T00:00:00+00:00"}
+    llm.call("discovery", "s", "u", conn=conn, run_id=None, web_search=True)
+    config.PROBY_WYSZUKIWANIA.clear()
+    config.PROBY_WYSZUKIWANIA.update(_proby3)
+    sprawdz("discovery na Pro, ktory stracil narzedzie: Haiku",
+            wywolania[0] == ("claude", "discovery", config.HAIKU, True), wywolania[0])
 
     # KONTRDOWOD: stan sprzed naprawy — kazdy model uznany za szukajacy.
     wywolania.clear()
@@ -157,10 +175,20 @@ finally:
 
 print()
 print("=== 4. STAWKI: przekierowania DeepSeeka, weekend, oplata za wyszukiwanie ===")
-s = config.stawka_deepseek("deepseek-v4-pro", T("2026-09-14T05:00:00+00:00"))
-sprawdz("V4 Pro od 14.09 rozliczany po stawce V4.1 Flash",
-        (s["in"], s["out"], s["cache"]) == (0.15, 0.6, 0.003), s)
-sprawdz("i nie udaje stawki potwierdzonej faktura", s["verified"] is False, s)
+s = config.stawka_deepseek("deepseek-v4-pro", T("2026-09-14T11:00:00+00:00"))
+sprawdz("V4 Pro po 14.09 dalej po swojej stawce — DeepSeek zostawil model i rozliczenie",
+        (s["in"], s["out"], s["cache"]) == (0.66, 1.98, 0.022) and s["verified"], s)
+# KONTRDOWOD: pierwsza wersja naprawy miala wpis przekierowania Pro na Flash
+# od 14.09 04:00 UTC. Z tym wpisem ta sama stawka spada ponad cztery razy.
+_przek = config.PRZEKIEROWANIA_DEEPSEEK
+try:
+    config.PRZEKIEROWANIA_DEEPSEEK = _przek + (
+        ("deepseek-v4-pro", "2026-09-14T04:00:00+00:00", "deepseek-flash"),)
+    zla = config.stawka_deepseek("deepseek-v4-pro", T("2026-09-14T11:00:00+00:00"))
+    sprawdz("KONTRDOWOD: z wpisem z pierwszej wersji Pro liczylby sie po 0,15 — test to lapie",
+            zla["in"] == 0.15, zla)
+finally:
+    config.PRZEKIEROWANIA_DEEPSEEK = _przek
 s = config.stawka_deepseek("deepseek-v4-pro", T("2026-09-13T12:00:00+00:00"))
 sprawdz("V4 Pro 13.09 jeszcze po swojej stawce", (s["in"], s["out"]) == (0.66, 1.98), s)
 s = config.stawka_deepseek("deepseek-v4-flash", T("2026-09-11T12:00:00+00:00"))

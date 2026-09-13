@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **27 plików**, 35 533 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **27 plików**, 35 560 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -114,7 +114,7 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
 się testować bez przeglądarki i bez pieniędzy**. 175 zestawów
-testów, 4556 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+testów, 4560 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -583,7 +583,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-3844 wierszy, 42 funkcji na poziomie modułu, 0 klas
+3860 wierszy, 42 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -734,7 +734,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `nowe_modele.py` — nowe modele wchodzą same: w tej samej rodzinie i dopiero po próbie
 
-456 wierszy, 18 funkcji na poziomie modułu, 0 klas
+467 wierszy, 18 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -13536,7 +13536,7 @@ wartosc i komentarz stojacy bezposrednio nad definicja.
 | `HAIKU` | `"claude-haiku-4-5-20251001"` | SZUKAJACY ZASTEPCA. Nie pisze niczego sam — dostaje wylacznie te wywolania, ktore potrzebuja sieci, gdy model ich etapu przestal szukac. Pat |
 | `DEEPSEEK` | `"deepseek-flash"` | DEEPSEEK V4.1 FLASH, OD 10 WRZESNIA 2026. Stara nazwa `deepseek-v4-flash` jest u DeepSeeka juz tylko przekierowaniem: model V4 Flash wycofan |
 | `DEEPSEEK_V4_FLASH` | `"deepseek-v4-flash"` | — |
-| `DEEPSEEK_PRO` | `"deepseek-v4-pro"` | OD 14 WRZESNIA 2026 04:00 UTC TA NAZWA TRAFIA DO V4.1 FLASH, az wyjdzie V4.1 Pro (ogloszenie DeepSeeka z 10 wrzesnia). Nazwa zostaje, bo `no |
+| `DEEPSEEK_PRO` | `"deepseek-v4-pro"` | V4 PRO ZOSTAJE. Ogloszenie z 10 wrzesnia zapowiadalo przekierowanie tej nazwy na V4.1 Flash od 14 wrzesnia 04:00 UTC, ale DeepSeek sie wycof |
 | `ROLE_MODELI` | `("CLAUDE", "SONNET", "HAIKU", "FABLE", "DEEP` | — |
 | `MODELE_Z_KODU` | `{rola: globals()[rola] for rola in ROLE_MODE` | — |
 | `_STAN_WYBORU` | `{} if _w_tescie_wczesnie() else _wybor_model` | — |
@@ -13548,7 +13548,7 @@ wartosc i komentarz stojacy bezposrednio nad definicja.
 | `PRICING` | `{ "claude-opus-5": {"in": 5.00, "out": 25.00` | KLUCZEM JEST NAZWA MODELU, NIE STALA. Do 13 wrzesnia 2026 slownik byl zbudowany na stalych (`CLAUDE: {...}`) i przy nazwach wpisanych na szt |
 | `RODZINY_CEN` | `{ "opus": "claude-opus-5", "sonnet": "claude` | NAJTANSZY I NAJDROZSZY WPIS KAZDEJ RODZINY — stawka dla modelu, ktorego nie ma w cenniku, bo wszedl automatycznie. Rodzina, nie „jakikolwiek |
 | `STAWKI_PRZED_PODWYZKA` | `{ "deepseek-v4-flash": {"in": 0.14, "out": 0` | --- taryfa szczytowa DeepSeeka ----------------------------------------------- Od 2026-08-16 16:00 UTC DeepSeek wprowadza ceny szczytowe i p |
-| `PRZEKIEROWANIA_DEEPSEEK` | `( (DEEPSEEK_V4_FLASH, "2026-09-10T04:00:00+0` | PRZEKIEROWANIA U DOSTAWCY: stara nazwa przyjmowana dalej, ale rozliczana po stawce modelu, na ktory DeepSeek ja przestawil. Ogloszenie z 10  |
+| `PRZEKIEROWANIA_DEEPSEEK` | `( (DEEPSEEK_V4_FLASH, "2026-09-10T04:00:00+0` | PRZEKIEROWANIA U DOSTAWCY: stara nazwa przyjmowana dalej, ale rozliczana po stawce modelu, na ktory DeepSeek ja przestawil. Od 10.09 04:00 U |
 | `TARYFA_SZCZYTOWA_OD` | `"2026-08-16T16:00:00+00:00"` | — |
 | `GODZINY_SZCZYTU_UTC` | `frozenset(range(1, 4)) | frozenset(range(6, ` | — |
 | `MNOZNIK_SZCZYT` | `2.0` | Mnozniki wzgledem stawek wyzej, po wejsciu nowej taryfy. Szczyt to DOKLADNIE dwukrotnosc bazy, jednakowo dla wejscia, wyjscia i cache. Spraw |
@@ -13556,6 +13556,7 @@ wartosc i komentarz stojacy bezposrednio nad definicja.
 | `WEB_SEARCH_TOOL` | `{ CLAUDE: "web_search_20260209", SONNET: "we` | Filtrowanie dynamiczne (`_20260209`) jest na Opusie i Sonnecie 5. |
 | `NAJNOWSZE_WYSZUKIWANIE` | `"web_search_20260209"` | Wersja narzedzia wyszukiwania dla modelu Anthropic, z galezia awaryjna. |
 | `SZUKANIE_PADLO_OD` | `{ "deepseek-flash": "2026-09-10T04:00:00+00:` | --- kto NAPRAWDE szuka w sieci ----------------------------------------------- ZMIERZONE 13 WRZESNIA 2026, i to jest cale uzasadnienie tej s |
+| `SZUKANIE_POTWIERDZONE` | `frozenset({"deepseek-v4-pro"})` | Modele DeepSeeka, ktorych wyszukiwanie POTWIERDZONO na zywo. Nieznany DeepSeek domyslnie nie szuka; te tak, dopoki proba z `nowe_modele.py`  |
 | `MODEL_DO_SZUKANIA_DOMYSLNY` | `HAIKU` | Zastepca dla wywolan z siecia. Haiku 4.5 zmierzony na tym samym poscie co DeepSeek V4 Pro: 6,2 centa wobec 5,5, osiem faktow w obu, adresy z |
 | `MAX_SZUKAN_NA_ETAP` | `{"factcheck": 3, "curiosity": 3, "aktualne_m` | Ile wyszukiwan wolno zastepcy na jedno wywolanie. Bez limitu Claude robil 17, potem 31 rund. Trzy daly komplet osmiu faktow w pomiarze z 13  |
 | `WEB_SEARCH_USD_PER_1K` | `10.00` | Wyszukiwanie po stronie Anthropic: USD za 1000 zapytań. |
