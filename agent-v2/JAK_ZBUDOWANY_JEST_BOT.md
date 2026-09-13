@@ -49,14 +49,14 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **26 plików**, 34 760 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **27 plików**, 35 533 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
 | jedno polecenie uruchamiające | `python agent-v2/run.py` | dotrzymane |
 | pełna autonomia, zero pytań | brak interaktywnych promptów | dotrzymane |
 
-**WADA — 26 plików zamiast dziesięciu.** Najbliższe usunięciu:
+**WADA — 27 plików zamiast dziesięciu.** Najbliższe usunięciu:
 `style.py` (127 wierszy, wołany tylko z `stages.py`) i
 `kopia_subskrybentow.py` (203 wierszy, narzędzie ręczne poza
 przebiegiem). Scalenie któregokolwiek przywraca zgodność z mandatem.
@@ -113,8 +113,8 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 > w głównej ścieżce artykułu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
-się testować bez przeglądarki i bez pieniędzy**. 173 zestawów
-testów, 4482 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+się testować bez przeglądarki i bez pieniędzy**. 175 zestawów
+testów, 4556 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -143,7 +143,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-3160 wierszy, 27 funkcji na poziomie modułu, 1 klas
+3174 wierszy, 27 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -447,18 +447,18 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `llm.py` — JEDYNA warstwa dostępu do modeli i liczenia kosztu
 
-865 wierszy, 15 funkcji na poziomie modułu, 3 klas
+906 wierszy, 15 funkcji na poziomie modułu, 3 klas
 
 | funkcja | co robi |
 |---|---|
 | `dostawca(model)` | Kto wystawia rachunek za ten model. |
-| `_preflight(purpose, conn, run_id)` *(wewn.)* | Warunki, które decydują, czy wywołanie może się w ogóle udać. |
+| `_preflight(purpose, conn, run_id, model)` *(wewn.)* | Warunki, które decydują, czy wywołanie może się w ogóle udać. |
 | `_narzedzie_wyszukiwania(model)` *(wewn.)* | Nazwa narzedzia wyszukiwania; ostrzega RAZ NA PROCES o braku wpisu. |
 | `_cost(model, tokens_in, tokens_out, web_searches, cache_hit)` *(wewn.)* | — |
 | `_log(purpose, model, tin, tout, searches, usd, verified)` *(wewn.)* | — |
-| `_call_claude(purpose, system, user, web_search)` *(wewn.)* | — |
-| `_call_deepseek_responses(purpose, system, user)` *(wewn.)* | DeepSeek przez /responses z server-side `web_search`. |
-| `_deepseek_pick_from_urls(purpose, system, user, urls)` *(wewn.)* | Drugie, tanie wywołanie: wybierz z adresów, które wyszukiwanie już zwróciło. |
+| `_call_claude(purpose, system, user, web_search, model)` *(wewn.)* | — |
+| `_call_deepseek_responses(purpose, system, user, model)` *(wewn.)* | DeepSeek przez /responses z server-side `web_search`. |
+| `_deepseek_pick_from_urls(purpose, system, user, urls, model)` *(wewn.)* | Drugie, tanie wywołanie: wybierz z adresów, które wyszukiwanie już zwróciło. |
 | `_call_deepseek(purpose, system, user)` *(wewn.)* | — |
 | `przejsciowy(exc)` | Czy ten błąd ma szansę minąć sam. |
 | `call(purpose, system, user)` | Woła model właściwy dla etapu i zapisuje koszt. Zwraca tekst odpowiedzi. |
@@ -583,16 +583,25 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-3582 wierszy, 33 funkcji na poziomie modułu, 0 klas
+3844 wierszy, 42 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
 | `_env(name, default)` *(wewn.)* | — |
+| `plik_wyboru_modeli()` | Sciezka stanu zamian. Funkcja, nie stala: `uzyj_katalogu_danych` przestawia |
+| `_wybor_modeli_z_pliku(sciezka)` *(wewn.)* | Stan zapisany przez `nowe_modele.py`. Pusty slownik, gdy nie ma albo zepsuty. |
+| `zamiany_z_danych(dane)` | Zamiany, ktore wolno zastosowac: znana rola i nazwa o ksztalcie identyfikatora. |
+| `_w_tescie_wczesnie()` *(wewn.)* | To samo co `_w_darmowym_tescie` nizej, ale bez wyjatku dla testow platnych. |
 | `myslenie_deepseek(etap)` | Ustawienie `thinking` dla etapu, albo None = nie wysyłaj parametru. |
+| `stawka_modelu(model)` | Wpis cennika dla modelu; dla nieznanego — stawka rodziny, niepotwierdzona. |
+| `model_rozliczeniowy(model, kiedy)` | Model, po ktorego stawce dostawca liczy wywolanie `model` w chwili `kiedy`. |
 | `stawka_deepseek(model, kiedy)` | Stawka DeepSeeka z uwzglednieniem pory doby po wejsciu nowej taryfy. |
 | `pora_na_publikacje(kiedy)` | Czy teraz wolno wystawiac NOTKI — wg zegara CZYTELNIKOW, nie serwera. |
 | `w_szczycie(kiedy)` | Czy teraz obowiazuje droga taryfa. |
 | `narzedzie_wyszukiwania(model)` | Nazwa narzedzia wyszukiwania i ewentualne ostrzezenie. |
+| `szuka_naprawde(model, kiedy)` | Czy wywolanie `model` z `web_search` naprawde przeszuka siec. |
+| `model_do_szukania(etap)` | Kto dostaje wywolanie z siecia, gdy model etapu nie szuka. |
+| `max_szukan(etap)` | Limit wyszukiwan jednego wywolania Claude dla etapu. |
 | `sufit_dnia(dzien)` | Sufit obowiazujacy W TYM DNIU, nie dzisiaj. |
 | `_sufit_dobowy_z_miesiecznego(dzis)` *(wewn.)* | Sufit dobowy LICZONY Z MIESIECZNEGO, a nie wpisany na sztywno. |
 | `_env_float(nazwa, domyslnie)` *(wewn.)* | Liczba ze srodowiska, z bezpiecznym powrotem do wartosci domyslnej. |
@@ -722,6 +731,31 @@ wiec nie da sie go rozjechac z kodem.
 | `wczytaj()` | Ostatnia zapisana odpowiedz. Pusty slownik, gdy nie ma albo jest zepsuta. |
 | `pobierz(conn, run_id, wymus)` | Aktualny stan modeli. Z pliku, gdy swiezy; inaczej pyta na nowo. |
 | `jako_tekst(dane)` | Stan modeli w postaci, ktora wchodzi do promptu. |
+
+### `nowe_modele.py` — nowe modele wchodzą same: w tej samej rodzinie i dopiero po próbie
+
+456 wierszy, 18 funkcji na poziomie modułu, 0 klas
+
+| funkcja | co robi |
+|---|---|
+| `wersja(identyfikator)` | Numery wersji z identyfikatora. Data wydania (8 cyfr) nie jest wersja. |
+| `w_rodzinie(identyfikator, dostawca, rodzina)` | Czy identyfikator nalezy do rodziny u tego dostawcy i nie jest proba. |
+| `najlepszy_w_rodzinie(dostawca, rodzina, lista)` | Najlepszy kandydat rodziny z listy dostawcy `{identyfikator: data_wydania}`. |
+| `zdecyduj(obecne, listy)` | Zamiany do sprawdzenia proba. Nic tu nie wola sieci. |
+| `odpowiedz_jest_ok(tekst)` | Czy odpowiedz proby to obiekt JSON z `ok: true`. |
+| `zastosuj_w_procesie(rola, stary, nowy)` | Zamiana dziala od razu, bez czekania na nastepny start procesu. |
+| `_naglowki_anthropic()` *(wewn.)* | — |
+| `_naglowki_deepseek()` *(wewn.)* | — |
+| `lista_modeli()` | Spis modeli u dostawcow. `None` przy bledzie albo pustej liscie. |
+| `proba_odpowiedzi(dostawca, model)` | Czy model odpowiada poprawnym JSON-em. (ok, opis, tokeny_wej, tokeny_wyj). |
+| `proba_wyszukiwania(model)` | Czy model DeepSeeka NAPRAWDE wywoluje wyszukiwarke przez `/responses`. |
+| `wczytaj()` | — |
+| `zapisz(stan)` | — |
+| `_mlodsze_niz(kiedy, godzin)` *(wewn.)* | — |
+| `_do_dziennika(rodzaj, **pola)` *(wewn.)* | Wpis do dziennika dzialan. Nigdy nie przerywa przebiegu. |
+| `_wolno_placic(conn, run_id, model)` *(wewn.)* | Pusty napis, gdy budzet i wylacznik pozwalaja na probe; inaczej powod. |
+| `_zapisz_koszt(conn, run_id, dostawca, model, tin, tout, szukan, ok, opis)` *(wewn.)* | — |
+| `sprawdz(conn, run_id, wymus)` | Raz na dobe: lista, decyzje, proby, zapis. Nigdy nie wywala przebiegu. |
 
 ### `artykul_z_puli.py` — artykuł bierze temat z tej samej puli, co notki
 
@@ -6460,8 +6494,29 @@ def call(
     `collect_urls`, jeśli podane, zostanie wypełnione adresami, które realnie
     zwróciła wyszukiwarka — do sprawdzenia, czy model nie zmyślił URL-a.
     """
-    _preflight(purpose, conn, run_id)
     model = config.MODEL_FOR[purpose]
+
+    # WYWOLANIE Z SIECIA IDZIE DO MODELU, KTORY NAPRAWDE SZUKA.
+    #
+    # 10 wrzesnia 2026 DeepSeek przestawil `deepseek-v4-flash` na V4.1 Flash,
+    # a ten przez `/responses` nie ma narzedzia wyszukiwania. Wywolania dalej
+    # konczyly sie sukcesem — tylko bez jednego wyszukiwania i dziesiec razy
+    # taniej — wiec weryfikacja faktow przed publikacja (`stages.zweryfikuj`:
+    # notki, komentarze, artykuly) przez trzy dni sprawdzala tekst pamiecia
+    # modelu, a nie siecia. Patrz `config.szuka_naprawde`.
+    #
+    # Przekierowujemy WYWOLANIE, nie etap: ten sam etap bez sieci zostaje na
+    # swoim tanim modelu. I mowimy o tym raz na proces na etap — tak, zeby
+    # zmiana dostawcy w logu nie dala sie przeoczyc, ale go nie zalala.
+    if web_search and not config.szuka_naprawde(model):
+        zastepca = config.model_do_szukania(purpose)
+        if purpose not in _SZUKANIE_PRZEKIEROWANE:
+            _SZUKANIE_PRZEKIEROWANE.add(purpose)
+            print(f"  [szukanie] {purpose}: {model} nie szuka w sieci — "
+                  f"wywolania z wyszukiwaniem ida na {zastepca}", flush=True)
+        model = zastepca
+
+    _preflight(purpose, conn, run_id, model=model)
     provider = dostawca(model)
 
     # STALA, KTORA WYGLADA JAK USTAWIENIE. Wpis w EFFORT czyta sie jak decyzja
@@ -6492,11 +6547,11 @@ def call(
         try:
             if provider == "anthropic":
                 text, tin, tout, searches, urls = _call_claude(
-                    purpose, system, user, web_search)
+                    purpose, system, user, web_search, model=model)
                 cache_hit = 0
             elif web_search:
                 text, tin, tout, searches, urls = _call_deepseek_responses(
-                    purpose, system, user)
+                    purpose, system, user, model=model)
                 cache_hit = 0
             else:
                 text, tin, tout, searches, cache_hit = _call_deepseek(
@@ -6556,9 +6611,12 @@ def _cost(model: str, tokens_in: int, tokens_out: int, web_searches: int,
         # nic sie nie zmienilo. Blad zglosilem jako naprawiony, a nie byl.
         price = {"in": stawka["in"], "out": stawka["out"],
                  "cache": stawka["cache"],
-                 "verified": config.PRICING[model]["verified"]}
+                 "verified": stawka["verified"]}
     else:
-        price = config.PRICING[model]
+        # `stawka_modelu`, nie `PRICING[model]`: model, ktory wszedl
+        # automatycznie, nie ma wpisu w cenniku, a KeyError w tym miejscu
+        # wypadalby PO oplaconym wywolaniu i gubil jego zapis.
+        price = config.stawka_modelu(model)
     # Trafienia w cache platne osobno i ~120x taniej. `tokens_in` liczymy jako
     # miss, bo tak podaje je dostawca po odjeciu trafien.
     usd = (tokens_in / 1_000_000 * price["in"]
@@ -6567,14 +6625,19 @@ def _cost(model: str, tokens_in: int, tokens_out: int, web_searches: int,
     # Osobna opłata za wyszukiwanie jest cennikiem Anthropic. U DeepSeeka
     # wyszukiwanie mieści się w tokenach — doliczanie tu $10/1000 zawyżałoby
     # zapis finansowy, a zmyślonej kwoty w księgach być nie może.
-    if model in (config.CLAUDE, config.SONNET):
+    #
+    # KAZDY MODEL ANTHROPIC, nie lista dwoch. Bylo `model in (CLAUDE, SONNET)`,
+    # wiec wyszukiwania na Fable i Haiku szly do ksiegi za darmo — a Haiku
+    # od 13 wrzesnia 2026 robi ich kilkadziesiat dziennie.
+    if dostawca(model) == "anthropic":
         usd += web_searches / 1_000 * config.WEB_SEARCH_USD_PER_1K
     return round(usd, 6), bool(price["verified"])
 ```
 
 <!--KOD:llm._preflight-->
 ```python
-def _preflight(purpose: str, conn: sqlite3.Connection, run_id: int | None) -> None:
+def _preflight(purpose: str, conn: sqlite3.Connection, run_id: int | None,
+               model: str | None = None) -> None:
     """Warunki, które decydują, czy wywołanie może się w ogóle udać.
 
     Sprawdzane ZANIM pójdą pieniądze. Jedno zaniedbanie tej zasady kosztowało
@@ -6624,7 +6687,10 @@ def _preflight(purpose: str, conn: sqlite3.Connection, run_id: int | None) -> No
     # i w `call`. Wczesniej `call` liczyl dostawce po swojemu
     # (`model.startswith("deepseek")`), a kontrola po liscie nazw — dwie regulty
     # o tym samym, wiec rozjazd byl kwestia czasu, nie przypadku.
-    model = config.MODEL_FOR[purpose]
+    # MODEL, KTORY NAPRAWDE DOSTANIE WYWOLANIE. Wywolanie z siecia moze pojsc do
+    # zastepcy innego dostawcy (`config.model_do_szukania`) — wtedy klucz trzeba
+    # sprawdzic u TEGO dostawcy, a nie u przypisanego etapowi.
+    model = model or config.MODEL_FOR[purpose]
     KLUCZ = {"anthropic": ("ANTHROPIC_API_KEY", config.ANTHROPIC_API_KEY),
              "deepseek": ("DEEPSEEK_API_KEY", config.DEEPSEEK_API_KEY),
              "openai": ("OPENAI_API_KEY", config.OPENAI_API_KEY)}
@@ -13467,21 +13533,31 @@ wartosc i komentarz stojacy bezposrednio nad definicja.
 | `SONNET` | `"claude-sonnet-5"` | — |
 | `FABLE_5` | `"claude-fable-5"` | PISARZ ARTYKULOW. Fable 5.1 wyszedl 1 wrzesnia 2026 i od 3 wrzesnia pisze artykuly; poprzednik zostaje pod wlasna nazwa, bo pod nia stoi cal |
 | `FABLE` | `"claude-fable-5-1"` | — |
-| `DEEPSEEK` | `"deepseek-v4-flash"` | — |
-| `DEEPSEEK_PRO` | `"deepseek-v4-pro"` | — |
+| `HAIKU` | `"claude-haiku-4-5-20251001"` | SZUKAJACY ZASTEPCA. Nie pisze niczego sam — dostaje wylacznie te wywolania, ktore potrzebuja sieci, gdy model ich etapu przestal szukac. Pat |
+| `DEEPSEEK` | `"deepseek-flash"` | DEEPSEEK V4.1 FLASH, OD 10 WRZESNIA 2026. Stara nazwa `deepseek-v4-flash` jest u DeepSeeka juz tylko przekierowaniem: model V4 Flash wycofan |
+| `DEEPSEEK_V4_FLASH` | `"deepseek-v4-flash"` | — |
+| `DEEPSEEK_PRO` | `"deepseek-v4-pro"` | OD 14 WRZESNIA 2026 04:00 UTC TA NAZWA TRAFIA DO V4.1 FLASH, az wyjdzie V4.1 Pro (ogloszenie DeepSeeka z 10 wrzesnia). Nazwa zostaje, bo `no |
+| `ROLE_MODELI` | `("CLAUDE", "SONNET", "HAIKU", "FABLE", "DEEP` | — |
+| `MODELE_Z_KODU` | `{rola: globals()[rola] for rola in ROLE_MODE` | — |
+| `_STAN_WYBORU` | `{} if _w_tescie_wczesnie() else _wybor_model` | — |
 | `MODEL_FOR` | `{ "scout": DEEPSEEK_PRO, "feasibility": DEEP` | Decyzja wlasciciela 2026-08-15 zaczela od DeepSeeka poza pisaniem. Po pozniejszych testach artykuly trafily do Fable 5, notki do Opusa 5, a  |
 | `DEEPSEEK_BASE_URL` | `"https://api.deepseek.com"` | — |
 | `DEEPSEEK_EFFORT` | `"low"` | Głębokość rozumowania DeepSeeka na /responses. Tokeny rozumowania liczą się do sufitu wyjścia, więc przy `high` model kończy budżet na szuka |
 | `CHEAP_MODE` | `_env("AGENT_V2_CHEAP", "0").lower() in {"1",` | Tryb tani: wszystko na DeepSeeku poza dyskoveria, ktora ten jawny override zostawia u Claude'a. Sluzy do testowania HYDRAULIKI — czy lancuch |
 | `BEZ_TOKENOW` | `{"obraz"}` | — |
-| `PRICING` | `{ CLAUDE: {"in": 5.00, "out": 25.00, "verifi` | — |
-| `STAWKI_PRZED_PODWYZKA` | `{ DEEPSEEK: {"in": 0.14, "out": 0.28, "cache` | --- taryfa szczytowa DeepSeeka ----------------------------------------------- Od 2026-08-16 16:00 UTC DeepSeek wprowadza ceny szczytowe i p |
+| `PRICING` | `{ "claude-opus-5": {"in": 5.00, "out": 25.00` | KLUCZEM JEST NAZWA MODELU, NIE STALA. Do 13 wrzesnia 2026 slownik byl zbudowany na stalych (`CLAUDE: {...}`) i przy nazwach wpisanych na szt |
+| `RODZINY_CEN` | `{ "opus": "claude-opus-5", "sonnet": "claude` | NAJTANSZY I NAJDROZSZY WPIS KAZDEJ RODZINY — stawka dla modelu, ktorego nie ma w cenniku, bo wszedl automatycznie. Rodzina, nie „jakikolwiek |
+| `STAWKI_PRZED_PODWYZKA` | `{ "deepseek-v4-flash": {"in": 0.14, "out": 0` | --- taryfa szczytowa DeepSeeka ----------------------------------------------- Od 2026-08-16 16:00 UTC DeepSeek wprowadza ceny szczytowe i p |
+| `PRZEKIEROWANIA_DEEPSEEK` | `( (DEEPSEEK_V4_FLASH, "2026-09-10T04:00:00+0` | PRZEKIEROWANIA U DOSTAWCY: stara nazwa przyjmowana dalej, ale rozliczana po stawce modelu, na ktory DeepSeek ja przestawil. Ogloszenie z 10  |
 | `TARYFA_SZCZYTOWA_OD` | `"2026-08-16T16:00:00+00:00"` | — |
 | `GODZINY_SZCZYTU_UTC` | `frozenset(range(1, 4)) | frozenset(range(6, ` | — |
 | `MNOZNIK_SZCZYT` | `2.0` | Mnozniki wzgledem stawek wyzej, po wejsciu nowej taryfy. Szczyt to DOKLADNIE dwukrotnosc bazy, jednakowo dla wejscia, wyjscia i cache. Spraw |
 | `MNOZNIK_POZA_SZCZYTEM` | `1.0` | — |
 | `WEB_SEARCH_TOOL` | `{ CLAUDE: "web_search_20260209", SONNET: "we` | Filtrowanie dynamiczne (`_20260209`) jest na Opusie i Sonnecie 5. |
 | `NAJNOWSZE_WYSZUKIWANIE` | `"web_search_20260209"` | Wersja narzedzia wyszukiwania dla modelu Anthropic, z galezia awaryjna. |
+| `SZUKANIE_PADLO_OD` | `{ "deepseek-flash": "2026-09-10T04:00:00+00:` | --- kto NAPRAWDE szuka w sieci ----------------------------------------------- ZMIERZONE 13 WRZESNIA 2026, i to jest cale uzasadnienie tej s |
+| `MODEL_DO_SZUKANIA_DOMYSLNY` | `HAIKU` | Zastepca dla wywolan z siecia. Haiku 4.5 zmierzony na tym samym poscie co DeepSeek V4 Pro: 6,2 centa wobec 5,5, osiem faktow w obu, adresy z |
+| `MAX_SZUKAN_NA_ETAP` | `{"factcheck": 3, "curiosity": 3, "aktualne_m` | Ile wyszukiwan wolno zastepcy na jedno wywolanie. Bez limitu Claude robil 17, potem 31 rund. Trzy daly komplet osmiu faktow w pomiarze z 13  |
 | `WEB_SEARCH_USD_PER_1K` | `10.00` | Wyszukiwanie po stronie Anthropic: USD za 1000 zapytań. |
 | `_DZIS_UTC` | `_dt_sufit.datetime.now(_dt_sufit.timezone.ut` | — |
 | `SUFIT_PODNIESIONY_NA` | `"2026-08-30"` | — |

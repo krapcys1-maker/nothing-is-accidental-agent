@@ -56,7 +56,8 @@ def dostawca(model: str) -> str:
     return "anthropic"
 
 
-def _preflight(purpose: str, conn: sqlite3.Connection, run_id: int | None) -> None:
+def _preflight(purpose: str, conn: sqlite3.Connection, run_id: int | None,
+               model: str | None = None) -> None:
     """Warunki, które decydują, czy wywołanie może się w ogóle udać.
 
     Sprawdzane ZANIM pójdą pieniądze. Jedno zaniedbanie tej zasady kosztowało
@@ -106,7 +107,10 @@ def _preflight(purpose: str, conn: sqlite3.Connection, run_id: int | None) -> No
     # i w `call`. Wczesniej `call` liczyl dostawce po swojemu
     # (`model.startswith("deepseek")`), a kontrola po liscie nazw — dwie regulty
     # o tym samym, wiec rozjazd byl kwestia czasu, nie przypadku.
-    model = config.MODEL_FOR[purpose]
+    # MODEL, KTORY NAPRAWDE DOSTANIE WYWOLANIE. Wywolanie z siecia moze pojsc do
+    # zastepcy innego dostawcy (`config.model_do_szukania`) — wtedy klucz trzeba
+    # sprawdzic u TEGO dostawcy, a nie u przypisanego etapowi.
+    model = model or config.MODEL_FOR[purpose]
     KLUCZ = {"anthropic": ("ANTHROPIC_API_KEY", config.ANTHROPIC_API_KEY),
              "deepseek": ("DEEPSEEK_API_KEY", config.DEEPSEEK_API_KEY),
              "openai": ("OPENAI_API_KEY", config.OPENAI_API_KEY)}
@@ -175,6 +179,9 @@ _EFFORT_BEZ_SKUTKU: set[str] = set()
 # Modele, o ktorych brakujacym wpisie w WEB_SEARCH_TOOL juz mowilismy.
 _WYSZUKIWANIE_BEZ_WPISU: set[str] = set()
 
+# Etapy, o ktorych juz powiedzielismy, ze ich wywolania z siecia ida do zastepcy.
+_SZUKANIE_PRZEKIEROWANE: set[str] = set()
+
 
 def _narzedzie_wyszukiwania(model: str) -> str:
     """Nazwa narzedzia wyszukiwania; ostrzega RAZ NA PROCES o braku wpisu."""
@@ -203,9 +210,12 @@ def _cost(model: str, tokens_in: int, tokens_out: int, web_searches: int,
         # nic sie nie zmienilo. Blad zglosilem jako naprawiony, a nie byl.
         price = {"in": stawka["in"], "out": stawka["out"],
                  "cache": stawka["cache"],
-                 "verified": config.PRICING[model]["verified"]}
+                 "verified": stawka["verified"]}
     else:
-        price = config.PRICING[model]
+        # `stawka_modelu`, nie `PRICING[model]`: model, ktory wszedl
+        # automatycznie, nie ma wpisu w cenniku, a KeyError w tym miejscu
+        # wypadalby PO oplaconym wywolaniu i gubil jego zapis.
+        price = config.stawka_modelu(model)
     # Trafienia w cache platne osobno i ~120x taniej. `tokens_in` liczymy jako
     # miss, bo tak podaje je dostawca po odjeciu trafien.
     usd = (tokens_in / 1_000_000 * price["in"]
@@ -214,7 +224,11 @@ def _cost(model: str, tokens_in: int, tokens_out: int, web_searches: int,
     # Osobna opłata za wyszukiwanie jest cennikiem Anthropic. U DeepSeeka
     # wyszukiwanie mieści się w tokenach — doliczanie tu $10/1000 zawyżałoby
     # zapis finansowy, a zmyślonej kwoty w księgach być nie może.
-    if model in (config.CLAUDE, config.SONNET):
+    #
+    # KAZDY MODEL ANTHROPIC, nie lista dwoch. Bylo `model in (CLAUDE, SONNET)`,
+    # wiec wyszukiwania na Fable i Haiku szly do ksiegi za darmo — a Haiku
+    # od 13 wrzesnia 2026 robi ich kilkadziesiat dziennie.
+    if dostawca(model) == "anthropic":
         usd += web_searches / 1_000 * config.WEB_SEARCH_USD_PER_1K
     return round(usd, 6), bool(price["verified"])
 
@@ -231,9 +245,10 @@ def _log(purpose: str, model: str, tin: int, tout: int, searches: int, usd: floa
 
 
 def _call_claude(
-    purpose: str, system: str, user: str, web_search: bool
+    purpose: str, system: str, user: str, web_search: bool,
+    model: str | None = None,
 ) -> tuple[str, int, int, int, list[str]]:
-    model = config.MODEL_FOR[purpose]
+    model = model or config.MODEL_FOR[purpose]
     client = anthropic.Anthropic(
         api_key=config.ANTHROPIC_API_KEY,
         timeout=config.timeout_for(config.MAX_TOKENS[purpose]),
@@ -254,10 +269,14 @@ def _call_claude(
         # wyszukiwania, a każda runda przesyła całą rozmowę od nowa jako wejście
         # — 164 411 tokenów wejścia i $1,33 za jeden etap. Ograniczona liczba
         # wyszukiwań i tak zwraca dziesięć źródeł.
+        #
+        # LIMIT NA ETAP, NIE JEDEN DLA WSZYSTKICH. Osiem wyszukiwan to miara
+        # odkrywania zrodel do artykulu; weryfikacja faktow przed publikacja ma
+        # komplet po trzech i robi sie kilkanascie razy na dobe.
         kwargs["tools"] = [{
             "type": _narzedzie_wyszukiwania(model),
             "name": "web_search",
-            "max_uses": config.DISCOVERY_MAX_SEARCHES,
+            "max_uses": config.max_szukan(purpose),
         }]
 
     # Strumień zawsze: sufity są duże, a myślenie na Opusie 5 jest domyślnie
@@ -299,7 +318,7 @@ def _call_claude(
 
 
 def _call_deepseek_responses(
-    purpose: str, system: str, user: str
+    purpose: str, system: str, user: str, model: str | None = None,
 ) -> tuple[str, int, int, int, list[str]]:
     """DeepSeek przez /responses z server-side `web_search`.
 
@@ -311,7 +330,7 @@ def _call_deepseek_responses(
         f"{config.DEEPSEEK_BASE_URL}/responses",
         headers={"Authorization": f"Bearer {config.DEEPSEEK_API_KEY}"},
         json={
-            "model": config.MODEL_FOR[purpose],
+            "model": model or config.MODEL_FOR[purpose],
             "instructions": system,
             "input": user,
             "tools": [{"type": "web_search"}],
@@ -382,7 +401,7 @@ def _call_deepseek_responses(
             f"z {len(set(urls))} znalezionych adresów drugim wywołaniem",
             flush=True,
         )
-        text, tin2, tout2 = _deepseek_pick_from_urls(purpose, system, user, urls)
+        text, tin2, tout2 = _deepseek_pick_from_urls(purpose, system, user, urls, model)
         return (
             text,
             int(usage.get("input_tokens", 0)) + tin2,
@@ -407,7 +426,7 @@ def _call_deepseek_responses(
 
 
 def _deepseek_pick_from_urls(
-    purpose: str, system: str, user: str, urls: list[str]
+    purpose: str, system: str, user: str, urls: list[str], model: str | None = None,
 ) -> tuple[str, int, int]:
     """Drugie, tanie wywołanie: wybierz z adresów, które wyszukiwanie już zwróciło.
 
@@ -421,7 +440,8 @@ def _deepseek_pick_from_urls(
             # MODEL Z ROUTINGU, nie zaszyta stala. Bylo tu config.DEEPSEEK, wiec
             # kazdy etap bez wyszukiwania jechal na flashu niezaleznie od tego,
             # co mowil MODEL_FOR — a koszt ksiegowalismy po stawce pro.
-            "model": config.MODEL_FOR[purpose],
+            # Ten sam model, ktory szukal: wybor z jego wynikow, nie z cudzych.
+            "model": model or config.MODEL_FOR[purpose],
             "max_tokens": config.MAX_TOKENS[purpose],
             "messages": [
                 {"role": "system", "content": system},
@@ -568,8 +588,29 @@ def call(
     `collect_urls`, jeśli podane, zostanie wypełnione adresami, które realnie
     zwróciła wyszukiwarka — do sprawdzenia, czy model nie zmyślił URL-a.
     """
-    _preflight(purpose, conn, run_id)
     model = config.MODEL_FOR[purpose]
+
+    # WYWOLANIE Z SIECIA IDZIE DO MODELU, KTORY NAPRAWDE SZUKA.
+    #
+    # 10 wrzesnia 2026 DeepSeek przestawil `deepseek-v4-flash` na V4.1 Flash,
+    # a ten przez `/responses` nie ma narzedzia wyszukiwania. Wywolania dalej
+    # konczyly sie sukcesem — tylko bez jednego wyszukiwania i dziesiec razy
+    # taniej — wiec weryfikacja faktow przed publikacja (`stages.zweryfikuj`:
+    # notki, komentarze, artykuly) przez trzy dni sprawdzala tekst pamiecia
+    # modelu, a nie siecia. Patrz `config.szuka_naprawde`.
+    #
+    # Przekierowujemy WYWOLANIE, nie etap: ten sam etap bez sieci zostaje na
+    # swoim tanim modelu. I mowimy o tym raz na proces na etap — tak, zeby
+    # zmiana dostawcy w logu nie dala sie przeoczyc, ale go nie zalala.
+    if web_search and not config.szuka_naprawde(model):
+        zastepca = config.model_do_szukania(purpose)
+        if purpose not in _SZUKANIE_PRZEKIEROWANE:
+            _SZUKANIE_PRZEKIEROWANE.add(purpose)
+            print(f"  [szukanie] {purpose}: {model} nie szuka w sieci — "
+                  f"wywolania z wyszukiwaniem ida na {zastepca}", flush=True)
+        model = zastepca
+
+    _preflight(purpose, conn, run_id, model=model)
     provider = dostawca(model)
 
     # STALA, KTORA WYGLADA JAK USTAWIENIE. Wpis w EFFORT czyta sie jak decyzja
@@ -600,11 +641,11 @@ def call(
         try:
             if provider == "anthropic":
                 text, tin, tout, searches, urls = _call_claude(
-                    purpose, system, user, web_search)
+                    purpose, system, user, web_search, model=model)
                 cache_hit = 0
             elif web_search:
                 text, tin, tout, searches, urls = _call_deepseek_responses(
-                    purpose, system, user)
+                    purpose, system, user, model=model)
                 cache_hit = 0
             else:
                 text, tin, tout, searches, cache_hit = _call_deepseek(

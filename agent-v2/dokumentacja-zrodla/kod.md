@@ -88,8 +88,29 @@ def call(
     `collect_urls`, jeśli podane, zostanie wypełnione adresami, które realnie
     zwróciła wyszukiwarka — do sprawdzenia, czy model nie zmyślił URL-a.
     """
-    _preflight(purpose, conn, run_id)
     model = config.MODEL_FOR[purpose]
+
+    # WYWOLANIE Z SIECIA IDZIE DO MODELU, KTORY NAPRAWDE SZUKA.
+    #
+    # 10 wrzesnia 2026 DeepSeek przestawil `deepseek-v4-flash` na V4.1 Flash,
+    # a ten przez `/responses` nie ma narzedzia wyszukiwania. Wywolania dalej
+    # konczyly sie sukcesem — tylko bez jednego wyszukiwania i dziesiec razy
+    # taniej — wiec weryfikacja faktow przed publikacja (`stages.zweryfikuj`:
+    # notki, komentarze, artykuly) przez trzy dni sprawdzala tekst pamiecia
+    # modelu, a nie siecia. Patrz `config.szuka_naprawde`.
+    #
+    # Przekierowujemy WYWOLANIE, nie etap: ten sam etap bez sieci zostaje na
+    # swoim tanim modelu. I mowimy o tym raz na proces na etap — tak, zeby
+    # zmiana dostawcy w logu nie dala sie przeoczyc, ale go nie zalala.
+    if web_search and not config.szuka_naprawde(model):
+        zastepca = config.model_do_szukania(purpose)
+        if purpose not in _SZUKANIE_PRZEKIEROWANE:
+            _SZUKANIE_PRZEKIEROWANE.add(purpose)
+            print(f"  [szukanie] {purpose}: {model} nie szuka w sieci — "
+                  f"wywolania z wyszukiwaniem ida na {zastepca}", flush=True)
+        model = zastepca
+
+    _preflight(purpose, conn, run_id, model=model)
     provider = dostawca(model)
 
     # STALA, KTORA WYGLADA JAK USTAWIENIE. Wpis w EFFORT czyta sie jak decyzja
@@ -120,11 +141,11 @@ def call(
         try:
             if provider == "anthropic":
                 text, tin, tout, searches, urls = _call_claude(
-                    purpose, system, user, web_search)
+                    purpose, system, user, web_search, model=model)
                 cache_hit = 0
             elif web_search:
                 text, tin, tout, searches, urls = _call_deepseek_responses(
-                    purpose, system, user)
+                    purpose, system, user, model=model)
                 cache_hit = 0
             else:
                 text, tin, tout, searches, cache_hit = _call_deepseek(
@@ -184,9 +205,12 @@ def _cost(model: str, tokens_in: int, tokens_out: int, web_searches: int,
         # nic sie nie zmienilo. Blad zglosilem jako naprawiony, a nie byl.
         price = {"in": stawka["in"], "out": stawka["out"],
                  "cache": stawka["cache"],
-                 "verified": config.PRICING[model]["verified"]}
+                 "verified": stawka["verified"]}
     else:
-        price = config.PRICING[model]
+        # `stawka_modelu`, nie `PRICING[model]`: model, ktory wszedl
+        # automatycznie, nie ma wpisu w cenniku, a KeyError w tym miejscu
+        # wypadalby PO oplaconym wywolaniu i gubil jego zapis.
+        price = config.stawka_modelu(model)
     # Trafienia w cache platne osobno i ~120x taniej. `tokens_in` liczymy jako
     # miss, bo tak podaje je dostawca po odjeciu trafien.
     usd = (tokens_in / 1_000_000 * price["in"]
@@ -195,14 +219,19 @@ def _cost(model: str, tokens_in: int, tokens_out: int, web_searches: int,
     # Osobna opłata za wyszukiwanie jest cennikiem Anthropic. U DeepSeeka
     # wyszukiwanie mieści się w tokenach — doliczanie tu $10/1000 zawyżałoby
     # zapis finansowy, a zmyślonej kwoty w księgach być nie może.
-    if model in (config.CLAUDE, config.SONNET):
+    #
+    # KAZDY MODEL ANTHROPIC, nie lista dwoch. Bylo `model in (CLAUDE, SONNET)`,
+    # wiec wyszukiwania na Fable i Haiku szly do ksiegi za darmo — a Haiku
+    # od 13 wrzesnia 2026 robi ich kilkadziesiat dziennie.
+    if dostawca(model) == "anthropic":
         usd += web_searches / 1_000 * config.WEB_SEARCH_USD_PER_1K
     return round(usd, 6), bool(price["verified"])
 ```
 
 <!--KOD:llm._preflight-->
 ```python
-def _preflight(purpose: str, conn: sqlite3.Connection, run_id: int | None) -> None:
+def _preflight(purpose: str, conn: sqlite3.Connection, run_id: int | None,
+               model: str | None = None) -> None:
     """Warunki, które decydują, czy wywołanie może się w ogóle udać.
 
     Sprawdzane ZANIM pójdą pieniądze. Jedno zaniedbanie tej zasady kosztowało
@@ -252,7 +281,10 @@ def _preflight(purpose: str, conn: sqlite3.Connection, run_id: int | None) -> No
     # i w `call`. Wczesniej `call` liczyl dostawce po swojemu
     # (`model.startswith("deepseek")`), a kontrola po liscie nazw — dwie regulty
     # o tym samym, wiec rozjazd byl kwestia czasu, nie przypadku.
-    model = config.MODEL_FOR[purpose]
+    # MODEL, KTORY NAPRAWDE DOSTANIE WYWOLANIE. Wywolanie z siecia moze pojsc do
+    # zastepcy innego dostawcy (`config.model_do_szukania`) — wtedy klucz trzeba
+    # sprawdzic u TEGO dostawcy, a nie u przypisanego etapowi.
+    model = model or config.MODEL_FOR[purpose]
     KLUCZ = {"anthropic": ("ANTHROPIC_API_KEY", config.ANTHROPIC_API_KEY),
              "deepseek": ("DEEPSEEK_API_KEY", config.DEEPSEEK_API_KEY),
              "openai": ("OPENAI_API_KEY", config.OPENAI_API_KEY)}

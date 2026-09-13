@@ -1060,6 +1060,20 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
 
     budzet = stages.budzet_dnia(conn)
 
+    # NOWE MODELE, RAZ NA DOBE. Przed etapami, zeby zamiana dzialala juz w tym
+    # przebiegu. 10 wrzesnia 2026 DeepSeek podmienil model pod nasza nazwa
+    # i trzy dni nikt tego nie widzial — patrz `nowe_modele.py`.
+    #
+    # Nie zatrzymuje dnia: sprawdzenie modeli nie jest warunkiem publikacji.
+    # Budzetu tez nie omija — kazda platna proba idzie przez `llm._preflight`
+    # i przy wyczerpanym suficie zostaje pominieta, a nie oplacona.
+    try:
+        import nowe_modele
+        nowe_modele.sprawdz(conn=conn, run_id=run_id)
+    except Exception as exc:
+        print("  [nowe modele] sprawdzenie nieudane (%s: %s) — zostaja obecne modele"
+              % (type(exc).__name__, str(exc)[:160]), flush=True)
+
     # ILE JUZ DZIS POSZLO — pytamy Substacka, nie wlasnej ksiegowosci.
     # Wlasciciel zauwazyl, ze dwie notki wyszly trzy minuty po sobie: caly
     # dzienny przydzial szedl w jednym ciagu, bo przebieg robil wszystko naraz.

@@ -62,6 +62,7 @@ MODULY = [
     ("korpus_kanalow.py", "o czym mówi się w tym tygodniu — zaczyn tematów, nigdy źródło"),
     ("tresc_zrodel.py", "treść źródeł z korpusu pobrana za darmo — spiżarnia przed zakupami"),
     ("aktualne_modele.py", "jakie modele istnieją DZIŚ; pytane na żywo, nie z pamięci"),
+    ("nowe_modele.py", "nowe modele wchodzą same: w tej samej rodzinie i dopiero po próbie"),
     ("artykul_z_puli.py", "artykuł bierze temat z tej samej puli, co notki"),
     ("seria.py", "serie tematyczne — cztery notki o jednym temacie, jedna na dobę; temat wybiera bank, nie plan"),
     ("norma.py", "licznik produkcji: ile agent wystawil wobec normy dziennej"),

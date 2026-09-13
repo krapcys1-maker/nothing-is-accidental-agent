@@ -135,8 +135,94 @@ SONNET = "claude-sonnet-5"
 # 8 wrzesnia, wiec wyszloby to dopiero za piec dni.
 FABLE_5 = "claude-fable-5"          # poprzednik, zostaje dla historii i porownan
 FABLE = "claude-fable-5-1"  # najmocniejszy, dwa razy droższy od Opusa
-DEEPSEEK = "deepseek-v4-flash"
-DEEPSEEK_PRO = "deepseek-v4-pro"  # ma server-side web_search przez /responses
+# SZUKAJACY ZASTEPCA. Nie pisze niczego sam — dostaje wylacznie te wywolania,
+# ktore potrzebuja sieci, gdy model ich etapu przestal szukac. Patrz
+# `szuka_naprawde` i `model_do_szukania` nizej.
+HAIKU = "claude-haiku-4-5-20251001"
+
+# DEEPSEEK V4.1 FLASH, OD 10 WRZESNIA 2026. Stara nazwa `deepseek-v4-flash`
+# jest u DeepSeeka juz tylko przekierowaniem: model V4 Flash wycofano, a jego
+# nazwa „tymczasowo" trafia do V4.1 Flash, bez daty konca. Sprawdzone 13 wrzesnia
+# na `GET /models`: lista ma DWIE pozycje, `deepseek-flash` i `deepseek-v4-pro`.
+# Starej nazwy na niej nie ma, choc wywolania wciaz przechodza — czyli od trzech
+# dni chodzilismy na V4.1, nie wiedzac o tym, i przestalibysmy chodzic w dniu,
+# w ktorym przekierowanie zniknie. Wtedy stanelyby dziewiec etapow naraz.
+DEEPSEEK = "deepseek-flash"
+DEEPSEEK_V4_FLASH = "deepseek-v4-flash"  # stara nazwa: historia kosztow i rozliczen
+# OD 14 WRZESNIA 2026 04:00 UTC TA NAZWA TRAFIA DO V4.1 FLASH, az wyjdzie V4.1 Pro
+# (ogloszenie DeepSeeka z 10 wrzesnia). Nazwa zostaje, bo `nowe_modele.py`
+# przestawi ja sam, gdy na liscie dostawcy pojawi sie nastepca z tej rodziny.
+DEEPSEEK_PRO = "deepseek-v4-pro"
+
+# --- automatyczna zamiana modeli ---------------------------------------------
+# Nowe modele wchodza SAME, ale nie z ogloszenia: `nowe_modele.py` raz na dobe
+# pyta dostawcow o liste, wybiera nastepce W TEJ SAMEJ RODZINIE (Opus na Opusa,
+# Flash na Flasha), robi probe i dopiero wtedy zapisuje zamiane do pliku.
+# Tutaj zamiany sa tylko ZASTOSOWANE — zanim zbudujemy z tych stalych routing
+# i cennik, wiec reszta pliku widzi juz nowe nazwy.
+#
+# Testy dostaja nazwy z kodu, nigdy z pliku produkcji: sprawdzaja konkretne
+# identyfikatory, a wynik testu nie moze zalezec od tego, co serwer wybral
+# wczoraj.
+def plik_wyboru_modeli() -> Path:
+    """Sciezka stanu zamian. Funkcja, nie stala: `uzyj_katalogu_danych` przestawia
+    `DATA_DIR`, a stala policzona przy imporcie zostalaby w katalogu produkcji."""
+    return DATA_DIR / "wybor_modeli.json"
+
+
+ROLE_MODELI = ("CLAUDE", "SONNET", "HAIKU", "FABLE", "DEEPSEEK", "DEEPSEEK_PRO")
+MODELE_Z_KODU = {rola: globals()[rola] for rola in ROLE_MODELI}
+
+
+def _wybor_modeli_z_pliku(sciezka: Path) -> dict:
+    """Stan zapisany przez `nowe_modele.py`. Pusty slownik, gdy nie ma albo zepsuty."""
+    import json as _json
+    try:
+        dane = _json.loads(Path(sciezka).read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    return dane if isinstance(dane, dict) else {}
+
+
+def zamiany_z_danych(dane: dict) -> dict[str, str]:
+    """Zamiany, ktore wolno zastosowac: znana rola i nazwa o ksztalcie identyfikatora.
+
+    Plik pisze nasz wlasny kod, ale czyta go KAZDY przebieg. Nazwa z bledem
+    wpisana tutaj podmienilaby model we wszystkich etapach naraz, wiec
+    przyjmujemy tylko to, co wyglada jak identyfikator modelu tego samego
+    dostawcy co rola.
+    """
+    import re as _re
+    wynik: dict[str, str] = {}
+    for rola, wpis in ((dane or {}).get("zamiany") or {}).items():
+        if rola not in ROLE_MODELI or not isinstance(wpis, dict):
+            continue
+        nowy = str(wpis.get("na") or "")
+        if not _re.fullmatch(r"[a-z0-9][a-z0-9.\-]{2,79}", nowy):
+            continue
+        z_kodu = MODELE_Z_KODU[rola]
+        if nowy.startswith("deepseek") != z_kodu.startswith("deepseek"):
+            continue
+        wynik[rola] = nowy
+    return wynik
+
+
+def _w_tescie_wczesnie() -> bool:
+    """To samo co `_w_darmowym_tescie` nizej, ale bez wyjatku dla testow platnych.
+
+    Potrzebne TU, zanim tamta funkcja zostanie zdefiniowana. Platne testy tez
+    dostaja nazwy z kodu: sprawdzaja zachowanie konkretnego modelu.
+    """
+    import sys as _sys
+    try:
+        return "tests" in [c.lower() for c in Path(_sys.argv[0]).resolve().parts]
+    except Exception:
+        return False
+
+
+_STAN_WYBORU = {} if _w_tescie_wczesnie() else _wybor_modeli_z_pliku(plik_wyboru_modeli())
+for _rola, _nowy in zamiany_z_danych(_STAN_WYBORU).items():
+    globals()[_rola] = _nowy
 
 # Decyzja wlasciciela 2026-08-15 zaczela od DeepSeeka poza pisaniem. Po
 # pozniejszych testach artykuly trafily do Fable 5, notki do Opusa 5, a etapy
@@ -426,16 +512,24 @@ BEZ_TOKENOW = {"obraz"}
 # rozliczeniem. Niepotwierdzonej ceny nie wolno podawać jako faktu — koszt liczony
 # taką stawką jest oznaczany w bazie (`calls.price_verified = 0`).
 
+# KLUCZEM JEST NAZWA MODELU, NIE STALA. Do 13 wrzesnia 2026 slownik byl
+# zbudowany na stalych (`CLAUDE: {...}`) i przy nazwach wpisanych na sztywno
+# to bylo to samo. Po automatycznej zamianie stala wskazuje nowy identyfikator,
+# a wpis zbudowany na stalej dalby mu stawke poprzednika z `verified: True`,
+# czyli zmyslona cene podana jako potwierdzona. Stad nazwy doslownie, a nowe
+# modele dostaja stawke przez `stawka_modelu`, jawnie niepotwierdzona.
 PRICING = {
-    CLAUDE: {"in": 5.00, "out": 25.00, "verified": True},
-    SONNET: {"in": 3.00, "out": 15.00, "verified": True},
+    "claude-opus-5": {"in": 5.00, "out": 25.00, "verified": True},
+    "claude-sonnet-5": {"in": 3.00, "out": 15.00, "verified": True},
+    # HAIKU 4.5: stawka z cennika Anthropic, jeszcze nie z naszej faktury.
+    "claude-haiku-4-5-20251001": {"in": 1.00, "out": 5.00, "verified": False},
     # STAWKA FABLE 5.1 NIEPOTWIERDZONA. Wpisana z ceny poprzednika, bo model
     # wyszedl 1 wrzesnia i nie ma go jeszcze na zadnej naszej fakturze.
     # `verified: False` sprawia, ze kazde takie wywolanie zapisuje sie
     # z `price_verified = 0` — czyli koszt artykulu bedzie widoczny jako
     # SZACUNEK, dopoki nie sprawdzimy go na rozliczeniu.
-    FABLE: {"in": 10.00, "out": 50.00, "verified": False},
-    FABLE_5: {"in": 10.00, "out": 50.00, "verified": True},
+    "claude-fable-5-1": {"in": 10.00, "out": 50.00, "verified": False},
+    "claude-fable-5": {"in": 10.00, "out": 50.00, "verified": True},
     # STAWKI POTWIERDZONE FAKTURA (15-19 sierpnia 2026). Dziesiec wierszy
     # rozliczenia odtworzonych co do centa, wiec `verified` znaczy tu wreszcie
     # to, co powinno: rozliczone z rachunkiem, nie przepisane z cennika.
@@ -448,9 +542,36 @@ PRICING = {
     #
     # "in" to stawka cache MISS; trafienia w cache licza sie osobno po "cache"
     # — dostawca podaje ich liczbe w kazdej odpowiedzi, wiec nie zgadujemy.
-    DEEPSEEK: {"in": 0.22, "out": 0.66, "cache": 0.007, "verified": True},
-    DEEPSEEK_PRO: {"in": 0.66, "out": 1.98, "cache": 0.022, "verified": True},
+    "deepseek-v4-flash": {"in": 0.22, "out": 0.66, "cache": 0.007, "verified": True},
+    "deepseek-v4-pro": {"in": 0.66, "out": 1.98, "cache": 0.022, "verified": True},
+    # V4.1 FLASH — stawki poza szczytem z cennika DeepSeeka, obowiazujace od
+    # 2026-09-10 04:00 UTC: wejscie 0,15 (miss), wyjscie 0,60, cache 0,003.
+    # Szczyt dalej dwukrotnosc. Z cennika, nie z faktury, wiec `verified: False`.
+    "deepseek-flash": {"in": 0.15, "out": 0.60, "cache": 0.003, "verified": False},
 }
+
+# NAJTANSZY I NAJDROZSZY WPIS KAZDEJ RODZINY — stawka dla modelu, ktorego nie ma
+# w cenniku, bo wszedl automatycznie. Rodzina, nie „jakikolwiek model": nowy
+# Opus kosztuje jak Opus, a nie jak Haiku. Poza rozpoznana rodzina bierzemy
+# najdrozsza stawke dostawcy, bo zanizony koszt oslepia straznika budzetu,
+# a zawyzony najwyzej zatrzyma przebieg wczesniej.
+RODZINY_CEN = {
+    "opus": "claude-opus-5", "sonnet": "claude-sonnet-5",
+    "haiku": "claude-haiku-4-5-20251001", "fable": "claude-fable-5-1",
+    "flash": "deepseek-flash", "pro": "deepseek-v4-pro",
+}
+
+
+def stawka_modelu(model: str) -> dict:
+    """Wpis cennika dla modelu; dla nieznanego — stawka rodziny, niepotwierdzona."""
+    if model in PRICING:
+        return PRICING[model]
+    nazwa = str(model).lower()
+    for rodzina, wzor in RODZINY_CEN.items():
+        if rodzina in nazwa and wzor.startswith("deepseek") == nazwa.startswith("deepseek"):
+            return {**PRICING[wzor], "verified": False}
+    wzor = "deepseek-v4-pro" if nazwa.startswith("deepseek") else "claude-fable-5-1"
+    return {**PRICING[wzor], "verified": False}
 
 # --- taryfa szczytowa DeepSeeka -----------------------------------------------
 # Od 2026-08-16 16:00 UTC DeepSeek wprowadza ceny szczytowe i pozaszczytowe:
@@ -462,9 +583,33 @@ PRICING = {
 # Stawki sprzed podwyzki z 16 sierpnia — trzymane, zeby dalo sie przeliczyc
 # historie i zeby bylo widac, o ile podrozalo.
 STAWKI_PRZED_PODWYZKA = {
-    DEEPSEEK: {"in": 0.14, "out": 0.28, "cache": 0.0028},
-    DEEPSEEK_PRO: {"in": 0.435, "out": 0.87, "cache": 0.003625},
+    "deepseek-v4-flash": {"in": 0.14, "out": 0.28, "cache": 0.0028},
+    "deepseek-v4-pro": {"in": 0.435, "out": 0.87, "cache": 0.003625},
 }
+
+# PRZEKIEROWANIA U DOSTAWCY: stara nazwa przyjmowana dalej, ale rozliczana po
+# stawce modelu, na ktory DeepSeek ja przestawil. Ogloszenie z 10 wrzesnia 2026:
+#   - `deepseek-v4-flash` od 10.09 04:00 UTC obsluguje V4.1 Flash po cenie Flash,
+#   - `deepseek-v4-pro` od 14.09 04:00 UTC trafia do V4.1 Flash po cenie Flash,
+#     az wyjdzie V4.1 Pro.
+# Bez tego od 14 wrzesnia liczylibysmy etapy Pro ponad cztery razy za drogo
+# (wejscie 0,66 zamiast 0,15), a straznik budzetu hamowalby przebieg za
+# pieniadze, ktorych nikt nie wydal.
+PRZEKIEROWANIA_DEEPSEEK = (
+    (DEEPSEEK_V4_FLASH, "2026-09-10T04:00:00+00:00", "deepseek-flash"),
+    ("deepseek-v4-pro", "2026-09-14T04:00:00+00:00", "deepseek-flash"),
+)
+
+
+def model_rozliczeniowy(model: str, kiedy=None) -> str:
+    """Model, po ktorego stawce dostawca liczy wywolanie `model` w chwili `kiedy`."""
+    from datetime import datetime, timezone
+
+    kiedy = kiedy or datetime.now(timezone.utc)
+    for stary, od, cel in PRZEKIEROWANIA_DEEPSEEK:
+        if model == stary and kiedy >= datetime.fromisoformat(od):
+            return cel
+    return model
 
 TARYFA_SZCZYTOWA_OD = "2026-08-16T16:00:00+00:00"
 GODZINY_SZCZYTU_UTC = frozenset(range(1, 4)) | frozenset(range(6, 10))
@@ -480,22 +625,27 @@ def stawka_deepseek(model: str, kiedy=None) -> dict[str, float]:
     """Stawka DeepSeeka z uwzglednieniem pory doby po wejsciu nowej taryfy."""
     from datetime import datetime, timezone
 
-    baza = PRICING[model]
     kiedy = kiedy or datetime.now(timezone.utc)
-    if kiedy < datetime.fromisoformat(TARYFA_SZCZYTOWA_OD):
+    rozliczany = model_rozliczeniowy(model, kiedy)
+    baza = stawka_modelu(rozliczany)
+    if kiedy < datetime.fromisoformat(TARYFA_SZCZYTOWA_OD) and model in STAWKI_PRZED_PODWYZKA:
         # Przed podwyzka. Zostawiamy do liczenia historii, nie do biezacych
         # wywolan — te i tak dzieja sie po tej dacie.
         stare = STAWKI_PRZED_PODWYZKA[model]
         return {"in": stare["in"], "out": stare["out"], "cache": stare["cache"],
-                "szczyt": None}
-    m = (MNOZNIK_SZCZYT if kiedy.hour in GODZINY_SZCZYTU_UTC
-         else MNOZNIK_POZA_SZCZYTEM)
+                "szczyt": None, "verified": True, "model": model}
+    szczyt = w_szczycie(kiedy)
+    m = MNOZNIK_SZCZYT if szczyt else MNOZNIK_POZA_SZCZYTEM
     # CACHE TEZ. Brak tego klucza sprawial, ze `_cost` siegalo po stawke
     # wejsciowa i liczylo trafienia w cache 45 razy drozej, niz sa — a to
     # najliczniejszy rodzaj tokenow, jaki mamy.
     return {"in": round(baza["in"] * m, 6), "out": round(baza["out"] * m, 6),
             "cache": round(baza["cache"] * m, 6),
-            "szczyt": kiedy.hour in GODZINY_SZCZYTU_UTC}
+            "szczyt": szczyt,
+            # POTWIERDZENIE BIERZEMY Z MODELU ROZLICZENIOWEGO. `deepseek-v4-pro`
+            # ma stawke z faktury, ale od 14 wrzesnia placimy za niego stawka
+            # V4.1 Flash, a ta jest dopiero z cennika.
+            "verified": bool(baza["verified"]), "model": rozliczany}
 
 
 def pora_na_publikacje(kiedy=None) -> tuple[bool, str]:
@@ -551,7 +701,11 @@ def w_szczycie(kiedy=None) -> bool:
     kiedy = kiedy or datetime.now(timezone.utc)
     if kiedy < datetime.fromisoformat(TARYFA_SZCZYTOWA_OD):
         return False
-    return kiedy.hour in GODZINY_SZCZYTU_UTC
+    # OD PONIEDZIALKU DO PIATKU. Cennik DeepSeeka, sprawdzony 13 wrzesnia 2026:
+    # „Peak hours are 01:00 - 04:00 and 06:00 - 10:00 UTC, Monday through
+    # Friday (all other hours are off-peak)". Bez dnia tygodnia sobota o 07:00
+    # liczyla sie podwojnie.
+    return kiedy.weekday() < 5 and kiedy.hour in GODZINY_SZCZYTU_UTC
 
 
 # Filtrowanie dynamiczne (`_20260209`) jest na Opusie i Sonnecie 5.
@@ -564,6 +718,10 @@ WEB_SEARCH_TOOL = {
     # wczesniejszych etapow.
     FABLE: "web_search_20260209",
     FABLE_5: "web_search_20260209",
+    # Haiku 4.5 nie ma filtrowania dynamicznego — dostaje pierwsza wersje
+    # narzedzia. Sprawdzone na zywo 13 wrzesnia 2026: 3 wyszukiwania, 8 faktow,
+    # 7 z 8 adresow naprawde zwroconych przez wyszukiwarke.
+    HAIKU: "web_search_20250305",
 }
 
 # Wersja narzedzia wyszukiwania dla modelu Anthropic, z galezia awaryjna.
@@ -584,10 +742,111 @@ def narzedzie_wyszukiwania(model: str) -> tuple[str, str]:
     """
     if model in WEB_SEARCH_TOOL:
         return WEB_SEARCH_TOOL[model], ""
-    return NAJNOWSZE_WYSZUKIWANIE, (
+    # Nowy Haiku, ktory wszedl automatycznie: pierwsza wersja narzedzia dziala
+    # na calej rodzinie, a najnowsza na Haiku 4.5 nie istnieje.
+    wersja = "web_search_20250305" if "haiku" in str(model) else NAJNOWSZE_WYSZUKIWANIE
+    return wersja, (
         "model %s nie ma wpisu w WEB_SEARCH_TOOL — biore %s. "
         "Dopisz go, zanim ktos zmieni MODEL_FOR."
-        % (model, NAJNOWSZE_WYSZUKIWANIE))
+        % (model, wersja))
+
+
+# --- kto NAPRAWDE szuka w sieci -----------------------------------------------
+# ZMIERZONE 13 WRZESNIA 2026, i to jest cale uzasadnienie tej sekcji.
+#
+# DeepSeek V4.1 Flash (10 wrzesnia) przez `/responses` z `web_search` NIE SZUKA.
+# Przy `tool_choice: auto` przepala 4000 tokenow i nie oddaje nic; przy
+# `required` wypisuje w tekscie udawane znaczniki `<search_web>` — narzedzia
+# po prostu nie ma. Ten sam test na `deepseek-v4-pro` tego dnia: 17 i 12
+# wyszukiwan, poprawna odpowiedz.
+#
+# Skutek na produkcji, z tabeli `calls`, przed i po 10 wrzesnia 04:00 UTC:
+#     factcheck        170 z 238 wywolan szukalo  ->  0 z 38
+#     curiosity         15 z 44                   ->  0 z 5
+#     aktualne_modele    6 z 6                    ->  0 z 5
+# Weryfikacja faktow przed publikacja (`stages.zweryfikuj` — notki, komentarze,
+# artykuly) przez trzy dni sprawdzala tekst pamiecia modelu, a nie siecia —
+# dokladnie to, przed czym istnieje. Nic nie krzyczalo, bo
+# wywolanie konczylo sie sukcesem, tylko dziesiec razy taniej.
+#
+# A od 14 wrzesnia 04:00 UTC `deepseek-v4-pro` tez trafia do V4.1 Flash, wiec
+# bez tej sekcji konto traci wyszukiwanie calkowicie: odpowiedzi i odkrywanie
+# zrodel do artykulu.
+#
+# DLATEGO ZDOLNOSC, NIE ETAP. Wywolanie z `web_search=True`, ktorego model nie
+# szuka, idzie do zastepcy; to samo wywolanie bez sieci zostaje na tanim
+# modelu etapu. `nowe_modele.py` zapisuje wynik proby wyszukiwania, wiec gdy
+# DeepSeek znow zacznie szukac (np. V4.1 Pro), wywolania wroca same.
+SZUKANIE_PADLO_OD = {
+    "deepseek-flash": "2026-09-10T04:00:00+00:00",
+    DEEPSEEK_V4_FLASH: "2026-09-10T04:00:00+00:00",
+    "deepseek-v4-pro": "2026-09-14T04:00:00+00:00",
+}
+
+# Zastepca dla wywolan z siecia. Haiku 4.5 zmierzony na tym samym poscie co
+# DeepSeek V4 Pro: 6,2 centa wobec 5,5, osiem faktow w obu, adresy z wyszukiwarki
+# 7 z 8 wobec 6 z 8. Sonnet 5 kosztowal 31 centow i nie oddal ani jednego faktu.
+#
+#
+# ODKRYWANIE ZRODEL DO ARTYKULU TEZ NA HAIKU, i to jest decyzja z pomiaru.
+# W sierpniu zapisano, ze Haiku przy prompcie dyskoverii „nie wywoluje
+# wyszukiwania w ogole". Dostawal wtedy narzedzie `web_search_20260209`,
+# ktorego na Haiku nie ma. Z `web_search_20250305`, prawdziwa funkcja
+# `stages.discovery`, 13 wrzesnia: 6 wyszukiwan, 46 wynikow, 4 zrodla po
+# filtrze, $0,0917. DeepSeek V4 Pro dawal tu 17 wyszukiwan za $0,154.
+#
+# Opusa NIE, choc szuka dobrze: kosztowal tu od $0,46 do $1,65, a przebieg
+# artykulu ma sufit $2,20 przy samym pisaniu Fable $0,66. Gorny kraniec Opusa
+# zabilby artykul PO oplaconym researchu. Chudy wynik Haiku ma za to gotowe
+# lekarstwo: druga runde dyskoverii przy korpusie ponizej progu.
+MODEL_DO_SZUKANIA_DOMYSLNY = HAIKU
+MODEL_DO_SZUKANIA: dict[str, str] = {}
+
+# Ile wyszukiwan wolno zastepcy na jedno wywolanie. Bez limitu Claude robil 17,
+# potem 31 rund. Trzy daly komplet osmiu faktow w pomiarze z 13 wrzesnia.
+MAX_SZUKAN_NA_ETAP = {"factcheck": 3, "curiosity": 3, "aktualne_modele": 4, "reply": 2}
+
+# Wyniki prob wyszukiwania z `nowe_modele.py`: {model: {"dziala": bool, "kiedy": iso}}.
+PROBY_WYSZUKIWANIA: dict[str, dict] = {
+    str(m): w for m, w in ((_STAN_WYBORU.get("wyszukiwanie") or {}).items())
+    if isinstance(w, dict) and "dziala" in w and "kiedy" in w
+}
+
+
+def szuka_naprawde(model: str, kiedy=None) -> bool:
+    """Czy wywolanie `model` z `web_search` naprawde przeszuka siec.
+
+    Kolejnosc dowodow: swieza proba z `nowe_modele.py` (jesli pozniejsza niz
+    zapisana data awarii), potem data awarii, potem rodzina. Nieznany DeepSeek
+    NIE szuka, dopoki proba tego nie potwierdzi — V4.1 Flash nauczyl, ze
+    nowa wersja potrafi zgubic narzedzie po cichu.
+    """
+    from datetime import datetime, timezone
+
+    kiedy = kiedy or datetime.now(timezone.utc)
+    padlo = SZUKANIE_PADLO_OD.get(model)
+    proba = PROBY_WYSZUKIWANIA.get(model)
+    if proba:
+        try:
+            kiedy_proby = datetime.fromisoformat(str(proba["kiedy"]))
+        except ValueError:
+            kiedy_proby = None
+        if kiedy_proby and kiedy_proby <= kiedy and (
+                not padlo or kiedy_proby >= datetime.fromisoformat(padlo)):
+            return bool(proba["dziala"])
+    if padlo:
+        return kiedy < datetime.fromisoformat(padlo)
+    return not str(model).startswith("deepseek")
+
+
+def model_do_szukania(etap: str) -> str:
+    """Kto dostaje wywolanie z siecia, gdy model etapu nie szuka."""
+    return MODEL_DO_SZUKANIA.get(etap, MODEL_DO_SZUKANIA_DOMYSLNY)
+
+
+def max_szukan(etap: str) -> int:
+    """Limit wyszukiwan jednego wywolania Claude dla etapu."""
+    return MAX_SZUKAN_NA_ETAP.get(etap, DISCOVERY_MAX_SEARCHES)
 
 # Wyszukiwanie po stronie Anthropic: USD za 1000 zapytań.
 WEB_SEARCH_USD_PER_1K = 10.00
@@ -1211,6 +1470,9 @@ MAX_TOKENS = {
     # Pytanie o stan modeli wraca lista kilkunastu pozycji z datami —
     # krotka odpowiedz, ale wyszukiwanie dokłada do wyjscia swoje rundy.
     "aktualne_modele": 16000,
+    # Proby nowych modeli: jedno zdanie JSON-u albo jedno wyszukiwanie.
+    # Wpis jest potrzebny `_preflight`, ktory pilnuje budzetu takze tych prob.
+    "nowe_modele": 1500,
     "curiosity": 24000,
     "grafika": 4000,
     "cele": 6000,

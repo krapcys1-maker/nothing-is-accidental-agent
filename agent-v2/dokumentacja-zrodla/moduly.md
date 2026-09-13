@@ -1,7 +1,7 @@
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-3160 wierszy, 27 funkcji na poziomie modułu, 1 klas
+3174 wierszy, 27 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -305,18 +305,18 @@
 
 ### `llm.py` — JEDYNA warstwa dostępu do modeli i liczenia kosztu
 
-865 wierszy, 15 funkcji na poziomie modułu, 3 klas
+906 wierszy, 15 funkcji na poziomie modułu, 3 klas
 
 | funkcja | co robi |
 |---|---|
 | `dostawca(model)` | Kto wystawia rachunek za ten model. |
-| `_preflight(purpose, conn, run_id)` *(wewn.)* | Warunki, które decydują, czy wywołanie może się w ogóle udać. |
+| `_preflight(purpose, conn, run_id, model)` *(wewn.)* | Warunki, które decydują, czy wywołanie może się w ogóle udać. |
 | `_narzedzie_wyszukiwania(model)` *(wewn.)* | Nazwa narzedzia wyszukiwania; ostrzega RAZ NA PROCES o braku wpisu. |
 | `_cost(model, tokens_in, tokens_out, web_searches, cache_hit)` *(wewn.)* | — |
 | `_log(purpose, model, tin, tout, searches, usd, verified)` *(wewn.)* | — |
-| `_call_claude(purpose, system, user, web_search)` *(wewn.)* | — |
-| `_call_deepseek_responses(purpose, system, user)` *(wewn.)* | DeepSeek przez /responses z server-side `web_search`. |
-| `_deepseek_pick_from_urls(purpose, system, user, urls)` *(wewn.)* | Drugie, tanie wywołanie: wybierz z adresów, które wyszukiwanie już zwróciło. |
+| `_call_claude(purpose, system, user, web_search, model)` *(wewn.)* | — |
+| `_call_deepseek_responses(purpose, system, user, model)` *(wewn.)* | DeepSeek przez /responses z server-side `web_search`. |
+| `_deepseek_pick_from_urls(purpose, system, user, urls, model)` *(wewn.)* | Drugie, tanie wywołanie: wybierz z adresów, które wyszukiwanie już zwróciło. |
 | `_call_deepseek(purpose, system, user)` *(wewn.)* | — |
 | `przejsciowy(exc)` | Czy ten błąd ma szansę minąć sam. |
 | `call(purpose, system, user)` | Woła model właściwy dla etapu i zapisuje koszt. Zwraca tekst odpowiedzi. |
@@ -441,16 +441,25 @@
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-3582 wierszy, 33 funkcji na poziomie modułu, 0 klas
+3844 wierszy, 42 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
 | `_env(name, default)` *(wewn.)* | — |
+| `plik_wyboru_modeli()` | Sciezka stanu zamian. Funkcja, nie stala: `uzyj_katalogu_danych` przestawia |
+| `_wybor_modeli_z_pliku(sciezka)` *(wewn.)* | Stan zapisany przez `nowe_modele.py`. Pusty slownik, gdy nie ma albo zepsuty. |
+| `zamiany_z_danych(dane)` | Zamiany, ktore wolno zastosowac: znana rola i nazwa o ksztalcie identyfikatora. |
+| `_w_tescie_wczesnie()` *(wewn.)* | To samo co `_w_darmowym_tescie` nizej, ale bez wyjatku dla testow platnych. |
 | `myslenie_deepseek(etap)` | Ustawienie `thinking` dla etapu, albo None = nie wysyłaj parametru. |
+| `stawka_modelu(model)` | Wpis cennika dla modelu; dla nieznanego — stawka rodziny, niepotwierdzona. |
+| `model_rozliczeniowy(model, kiedy)` | Model, po ktorego stawce dostawca liczy wywolanie `model` w chwili `kiedy`. |
 | `stawka_deepseek(model, kiedy)` | Stawka DeepSeeka z uwzglednieniem pory doby po wejsciu nowej taryfy. |
 | `pora_na_publikacje(kiedy)` | Czy teraz wolno wystawiac NOTKI — wg zegara CZYTELNIKOW, nie serwera. |
 | `w_szczycie(kiedy)` | Czy teraz obowiazuje droga taryfa. |
 | `narzedzie_wyszukiwania(model)` | Nazwa narzedzia wyszukiwania i ewentualne ostrzezenie. |
+| `szuka_naprawde(model, kiedy)` | Czy wywolanie `model` z `web_search` naprawde przeszuka siec. |
+| `model_do_szukania(etap)` | Kto dostaje wywolanie z siecia, gdy model etapu nie szuka. |
+| `max_szukan(etap)` | Limit wyszukiwan jednego wywolania Claude dla etapu. |
 | `sufit_dnia(dzien)` | Sufit obowiazujacy W TYM DNIU, nie dzisiaj. |
 | `_sufit_dobowy_z_miesiecznego(dzis)` *(wewn.)* | Sufit dobowy LICZONY Z MIESIECZNEGO, a nie wpisany na sztywno. |
 | `_env_float(nazwa, domyslnie)` *(wewn.)* | Liczba ze srodowiska, z bezpiecznym powrotem do wartosci domyslnej. |
@@ -580,6 +589,31 @@
 | `wczytaj()` | Ostatnia zapisana odpowiedz. Pusty slownik, gdy nie ma albo jest zepsuta. |
 | `pobierz(conn, run_id, wymus)` | Aktualny stan modeli. Z pliku, gdy swiezy; inaczej pyta na nowo. |
 | `jako_tekst(dane)` | Stan modeli w postaci, ktora wchodzi do promptu. |
+
+### `nowe_modele.py` — nowe modele wchodzą same: w tej samej rodzinie i dopiero po próbie
+
+456 wierszy, 18 funkcji na poziomie modułu, 0 klas
+
+| funkcja | co robi |
+|---|---|
+| `wersja(identyfikator)` | Numery wersji z identyfikatora. Data wydania (8 cyfr) nie jest wersja. |
+| `w_rodzinie(identyfikator, dostawca, rodzina)` | Czy identyfikator nalezy do rodziny u tego dostawcy i nie jest proba. |
+| `najlepszy_w_rodzinie(dostawca, rodzina, lista)` | Najlepszy kandydat rodziny z listy dostawcy `{identyfikator: data_wydania}`. |
+| `zdecyduj(obecne, listy)` | Zamiany do sprawdzenia proba. Nic tu nie wola sieci. |
+| `odpowiedz_jest_ok(tekst)` | Czy odpowiedz proby to obiekt JSON z `ok: true`. |
+| `zastosuj_w_procesie(rola, stary, nowy)` | Zamiana dziala od razu, bez czekania na nastepny start procesu. |
+| `_naglowki_anthropic()` *(wewn.)* | — |
+| `_naglowki_deepseek()` *(wewn.)* | — |
+| `lista_modeli()` | Spis modeli u dostawcow. `None` przy bledzie albo pustej liscie. |
+| `proba_odpowiedzi(dostawca, model)` | Czy model odpowiada poprawnym JSON-em. (ok, opis, tokeny_wej, tokeny_wyj). |
+| `proba_wyszukiwania(model)` | Czy model DeepSeeka NAPRAWDE wywoluje wyszukiwarke przez `/responses`. |
+| `wczytaj()` | — |
+| `zapisz(stan)` | — |
+| `_mlodsze_niz(kiedy, godzin)` *(wewn.)* | — |
+| `_do_dziennika(rodzaj, **pola)` *(wewn.)* | Wpis do dziennika dzialan. Nigdy nie przerywa przebiegu. |
+| `_wolno_placic(conn, run_id, model)` *(wewn.)* | Pusty napis, gdy budzet i wylacznik pozwalaja na probe; inaczej powod. |
+| `_zapisz_koszt(conn, run_id, dostawca, model, tin, tout, szukan, ok, opis)` *(wewn.)* | — |
+| `sprawdz(conn, run_id, wymus)` | Raz na dobe: lista, decyzje, proby, zapis. Nigdy nie wywala przebiegu. |
 
 ### `artykul_z_puli.py` — artykuł bierze temat z tej samej puli, co notki
 
