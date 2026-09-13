@@ -407,6 +407,10 @@ DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 # naprawde szuka w sieci — patrz sekcja „kto NAPRAWDE szuka w sieci".
 DEEPSEEK_ANTHROPIC_BASE_URL = "https://api.deepseek.com/anthropic"
 NARZEDZIE_WYSZUKIWANIA_DEEPSEEK = "web_search_20250305"
+# Znacznik drogi w wynikach prob wyszukiwania. Wynik zmierzony inna droga opisuje
+# co innego: 13 wrzesnia Flash „nie szukal" przez `/responses`, a przez ten
+# endpoint szukal — i stary wynik w pliku stanu trzymal go poza wyszukiwaniem.
+DROGA_WYSZUKIWANIA_DEEPSEEK = "anthropic"
 
 # Głębokość rozumowania DeepSeeka na /responses. Tokeny rozumowania liczą się
 # do sufitu wyjścia, więc przy `high` model kończy budżet na szukaniu i nie
@@ -817,6 +821,11 @@ def szuka_naprawde(model: str, kiedy=None) -> bool:
     kiedy = kiedy or datetime.now(timezone.utc)
     padlo = SZUKANIE_PADLO_OD.get(model)
     proba = PROBY_WYSZUKIWANIA.get(model)
+    # TYLKO PROBA TEJ SAMEJ DROGI, CO PRODUKCJA. Pierwsze wdrozenie nowej drogi
+    # dalej trzymalo Flasha poza wyszukiwaniem, bo w `data/wybor_modeli.json`
+    # lezal wynik z 13:12 zmierzony przez `/responses`: „nie wywoluje wyszukiwarki".
+    if proba and proba.get("droga") != DROGA_WYSZUKIWANIA_DEEPSEEK:
+        proba = None
     if proba:
         try:
             kiedy_proby = datetime.fromisoformat(str(proba["kiedy"]))

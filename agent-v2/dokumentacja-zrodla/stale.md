@@ -41,6 +41,7 @@
 | `DEEPSEEK_BASE_URL` | `"https://api.deepseek.com"` | — |
 | `DEEPSEEK_ANTHROPIC_BASE_URL` | `"https://api.deepseek.com/anthropic"` | Endpoint DeepSeeka zgodny z API Anthropic. JEDYNA droga, na ktorej V4.1 Flash naprawde szuka w sieci — patrz sekcja „kto NAPRAWDE szuka w si |
 | `NARZEDZIE_WYSZUKIWANIA_DEEPSEEK` | `"web_search_20250305"` | — |
+| `DROGA_WYSZUKIWANIA_DEEPSEEK` | `"anthropic"` | Znacznik drogi w wynikach prob wyszukiwania. Wynik zmierzony inna droga opisuje co innego: 13 wrzesnia Flash „nie szukal" przez `/responses` |
 | `DEEPSEEK_EFFORT` | `"low"` | Głębokość rozumowania DeepSeeka na /responses. Tokeny rozumowania liczą się do sufitu wyjścia, więc przy `high` model kończy budżet na szuka |
 | `CHEAP_MODE` | `_env("AGENT_V2_CHEAP", "0").lower() in {"1",` | Tryb tani: wszystko na DeepSeeku poza dyskoveria, ktora ten jawny override zostawia u Claude'a. Sluzy do testowania HYDRAULIKI — czy lancuch |
 | `BEZ_TOKENOW` | `{"obraz"}` | — |

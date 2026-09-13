@@ -56,14 +56,20 @@ print("=== 2. PROBA Z nowe_modele MA PIERWSZENSTWO ===")
 _proby = dict(config.PROBY_WYSZUKIWANIA)
 _padlo = dict(config.SZUKANIE_PADLO_OD)
 try:
-    config.PROBY_WYSZUKIWANIA["deepseek-flash"] = {"dziala": False, "kiedy": "2026-09-20T12:00:00+00:00"}
+    config.PROBY_WYSZUKIWANIA["deepseek-flash"] = {"dziala": False, "kiedy": "2026-09-20T12:00:00+00:00", "droga": "anthropic"}
     sprawdz("proba mowiaca, ze Flash przestal szukac, zdejmuje go z wyszukiwania",
             not config.szuka_naprawde("deepseek-flash", T("2026-09-21T00:00:00+00:00")))
     sprawdz("ale nie wstecz: przed proba dalej szuka",
             config.szuka_naprawde("deepseek-flash", T("2026-09-19T00:00:00+00:00")))
+    # KONTRDOWOD Z PRODUKCJI: wynik z 13:12 zmierzony przez `/responses`, bez pola
+    # `droga`. Pierwsze wdrozenie nowej drogi trzymalo przez niego Flasha poza siecia.
+    config.PROBY_WYSZUKIWANIA["deepseek-flash"] = {"dziala": False, "kiedy": "2026-09-13T13:12:02+00:00",
+                                                   "szukan": 0, "opis": "nie wywoluje wyszukiwarki"}
+    sprawdz("KONTRDOWOD: wynik proby innej drogi nie wylacza wyszukiwania Flasha",
+            config.szuka_naprawde("deepseek-flash", T("2026-09-13T20:00:00+00:00")))
     # Mechanizm daty awarii zostaje na nastepny raz — sprawdzamy, ze dziala.
     config.SZUKANIE_PADLO_OD["deepseek-v4-pro"] = "2026-09-25T00:00:00+00:00"
-    config.PROBY_WYSZUKIWANIA["deepseek-v4-pro"] = {"dziala": True, "kiedy": "2026-09-24T12:00:00+00:00"}
+    config.PROBY_WYSZUKIWANIA["deepseek-v4-pro"] = {"dziala": True, "kiedy": "2026-09-24T12:00:00+00:00", "droga": "anthropic"}
     sprawdz("proba sprzed daty awarii nie przykrywa awarii",
             not config.szuka_naprawde("deepseek-v4-pro", T("2026-09-26T00:00:00+00:00")))
 finally:
@@ -138,7 +144,7 @@ try:
     # Flash traci narzedzie wedlug proby: wywolania z siecia ida do V4 Pro.
     wywolania.clear()
     _proby3 = dict(config.PROBY_WYSZUKIWANIA)
-    config.PROBY_WYSZUKIWANIA["deepseek-flash"] = {"dziala": False, "kiedy": "2026-09-01T00:00:00+00:00"}
+    config.PROBY_WYSZUKIWANIA["deepseek-flash"] = {"dziala": False, "kiedy": "2026-09-01T00:00:00+00:00", "droga": "anthropic"}
     llm.call("curiosity", "s", "u", conn=conn, run_id=None, web_search=True)
     sprawdz("Flash bez narzedzia: wywolanie z siecia idzie do V4 Pro",
             wywolania[0] == ("deepseek-z-siecia", "curiosity", config.DEEPSEEK_PRO, True), wywolania[0])
@@ -146,7 +152,7 @@ try:
     # Zaden nie szuka: bez przeskoku do innego dostawcy, ale GLOSNO.
     wywolania.clear()
     llm._SZUKANIE_PRZEKIEROWANE.discard("aktualne_modele")
-    config.PROBY_WYSZUKIWANIA["deepseek-v4-pro"] = {"dziala": False, "kiedy": "2026-09-01T00:00:00+00:00"}
+    config.PROBY_WYSZUKIWANIA["deepseek-v4-pro"] = {"dziala": False, "kiedy": "2026-09-01T00:00:00+00:00", "droga": "anthropic"}
     wydruk = io.StringIO()
     with contextlib.redirect_stdout(wydruk):
         llm.call("aktualne_modele", "s", "u", conn=conn, run_id=None, web_search=True)

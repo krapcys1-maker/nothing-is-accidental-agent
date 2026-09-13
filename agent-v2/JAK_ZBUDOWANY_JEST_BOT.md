@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **27 plików**, 35 589 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **27 plików**, 35 601 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -114,7 +114,7 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
 się testować bez przeglądarki i bez pieniędzy**. 175 zestawów
-testów, 4568 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+testów, 4570 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -584,7 +584,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-3837 wierszy, 42 funkcji na poziomie modułu, 0 klas
+3846 wierszy, 42 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -735,7 +735,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `nowe_modele.py` — nowe modele wchodzą same: w tej samej rodzinie i dopiero po próbie
 
-458 wierszy, 18 funkcji na poziomie modułu, 0 klas
+461 wierszy, 18 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -13550,6 +13550,7 @@ wartosc i komentarz stojacy bezposrednio nad definicja.
 | `DEEPSEEK_BASE_URL` | `"https://api.deepseek.com"` | — |
 | `DEEPSEEK_ANTHROPIC_BASE_URL` | `"https://api.deepseek.com/anthropic"` | Endpoint DeepSeeka zgodny z API Anthropic. JEDYNA droga, na ktorej V4.1 Flash naprawde szuka w sieci — patrz sekcja „kto NAPRAWDE szuka w si |
 | `NARZEDZIE_WYSZUKIWANIA_DEEPSEEK` | `"web_search_20250305"` | — |
+| `DROGA_WYSZUKIWANIA_DEEPSEEK` | `"anthropic"` | Znacznik drogi w wynikach prob wyszukiwania. Wynik zmierzony inna droga opisuje co innego: 13 wrzesnia Flash „nie szukal" przez `/responses` |
 | `DEEPSEEK_EFFORT` | `"low"` | Głębokość rozumowania DeepSeeka na /responses. Tokeny rozumowania liczą się do sufitu wyjścia, więc przy `high` model kończy budżet na szuka |
 | `CHEAP_MODE` | `_env("AGENT_V2_CHEAP", "0").lower() in {"1",` | Tryb tani: wszystko na DeepSeeku poza dyskoveria, ktora ten jawny override zostawia u Claude'a. Sluzy do testowania HYDRAULIKI — czy lancuch |
 | `BEZ_TOKENOW` | `{"obraz"}` | — |

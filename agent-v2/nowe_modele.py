@@ -411,14 +411,17 @@ def sprawdz(conn=None, run_id: int | None = None, wymus: bool = False) -> dict[s
                                    if d == "deepseek"})
         for model in modele_deepseeka:
             ostatnia = wyszukiwanie.get(model) or {}
-            if not wymus and _mlodsze_niz(ostatnia.get("kiedy"), WAZNE_GODZIN):
+            # Wynik innej drogi nie jest swiezy, niezaleznie od daty.
+            if (not wymus and ostatnia.get("droga") == config.DROGA_WYSZUKIWANIA_DEEPSEEK
+                    and _mlodsze_niz(ostatnia.get("kiedy"), WAZNE_GODZIN)):
                 continue
             if _wolno_placic(conn, run_id, model):
                 continue
             szukal_dotad = config.szuka_naprawde(model)
             dziala, szukan, tin, tout, opis = proba_wyszukiwania(model)
             _zapisz_koszt(conn, run_id, "deepseek", model, tin, tout, szukan, True, opis)
-            wyszukiwanie[model] = {"dziala": dziala, "kiedy": teraz, "szukan": szukan, "opis": opis}
+            wyszukiwanie[model] = {"dziala": dziala, "kiedy": teraz, "szukan": szukan, "opis": opis,
+                                   "droga": config.DROGA_WYSZUKIWANIA_DEEPSEEK}
             config.PROBY_WYSZUKIWANIA[model] = wyszukiwanie[model]
             print("  [nowe modele] wyszukiwanie na %s: %s" % (model, opis), flush=True)
             if dziala != szukal_dotad:

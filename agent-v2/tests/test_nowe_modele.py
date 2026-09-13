@@ -212,6 +212,9 @@ try:
     sprawdz("proba wyszukiwania na KAZDYM DeepSeeku w uzyciu, takze na szukajacym Pro",
             ("szukanie", "deepseek-flash") in wolane and ("szukanie", "deepseek-v4-pro") in wolane
             and stan["wyszukiwanie"]["deepseek-flash"]["dziala"] is False, wolane)
+    sprawdz("wynik proby zapisuje droge, ktora go zmierzono",
+            stan["wyszukiwanie"]["deepseek-flash"].get("droga") == config.DROGA_WYSZUKIWANIA_DEEPSEEK,
+            stan["wyszukiwanie"]["deepseek-flash"])
     # Atrapa mowi, ze Pro nie szuka — tak wygladalaby cicha utrata z 10 wrzesnia.
     sprawdz("KONTRDOWOD: Pro, ktory przestal szukac, od razu schodzi z wyszukiwania",
             not config.szuka_naprawde("deepseek-v4-pro"))
