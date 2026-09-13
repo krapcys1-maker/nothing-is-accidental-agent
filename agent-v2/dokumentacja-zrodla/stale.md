@@ -39,6 +39,8 @@
 | `_STAN_WYBORU` | `{} if _w_tescie_wczesnie() else _wybor_model` | — |
 | `MODEL_FOR` | `{ "scout": DEEPSEEK_PRO, "feasibility": DEEP` | Decyzja wlasciciela 2026-08-15 zaczela od DeepSeeka poza pisaniem. Po pozniejszych testach artykuly trafily do Fable 5, notki do Opusa 5, a  |
 | `DEEPSEEK_BASE_URL` | `"https://api.deepseek.com"` | — |
+| `DEEPSEEK_ANTHROPIC_BASE_URL` | `"https://api.deepseek.com/anthropic"` | Endpoint DeepSeeka zgodny z API Anthropic. JEDYNA droga, na ktorej V4.1 Flash naprawde szuka w sieci — patrz sekcja „kto NAPRAWDE szuka w si |
+| `NARZEDZIE_WYSZUKIWANIA_DEEPSEEK` | `"web_search_20250305"` | — |
 | `DEEPSEEK_EFFORT` | `"low"` | Głębokość rozumowania DeepSeeka na /responses. Tokeny rozumowania liczą się do sufitu wyjścia, więc przy `high` model kończy budżet na szuka |
 | `CHEAP_MODE` | `_env("AGENT_V2_CHEAP", "0").lower() in {"1",` | Tryb tani: wszystko na DeepSeeku poza dyskoveria, ktora ten jawny override zostawia u Claude'a. Sluzy do testowania HYDRAULIKI — czy lancuch |
 | `BEZ_TOKENOW` | `{"obraz"}` | — |
@@ -52,9 +54,8 @@
 | `MNOZNIK_POZA_SZCZYTEM` | `1.0` | — |
 | `WEB_SEARCH_TOOL` | `{ CLAUDE: "web_search_20260209", SONNET: "we` | Filtrowanie dynamiczne (`_20260209`) jest na Opusie i Sonnecie 5. |
 | `NAJNOWSZE_WYSZUKIWANIE` | `"web_search_20260209"` | Wersja narzedzia wyszukiwania dla modelu Anthropic, z galezia awaryjna. |
-| `SZUKANIE_PADLO_OD` | `{ "deepseek-flash": "2026-09-10T04:00:00+00:` | --- kto NAPRAWDE szuka w sieci ----------------------------------------------- ZMIERZONE 13 WRZESNIA 2026, i to jest cale uzasadnienie tej s |
-| `SZUKANIE_POTWIERDZONE` | `frozenset({"deepseek-v4-pro"})` | Modele DeepSeeka, ktorych wyszukiwanie POTWIERDZONO na zywo. Nieznany DeepSeek domyslnie nie szuka; te tak, dopoki proba z `nowe_modele.py`  |
-| `MODEL_DO_SZUKANIA_DOMYSLNY` | `DEEPSEEK_PRO` | ZASTEPCA DLA WYWOLAN Z SIECIA: DeepSeek V4 Pro, czyli model, ktory bot i tak ma w routingu (komentarze, odpowiedzi, rozbior). Tylko DeepSeek |
+| `SZUKANIE_POTWIERDZONE` | `frozenset({"deepseek-flash", "deepseek-v4-pr` | Modele DeepSeeka, ktorych wyszukiwanie POTWIERDZONO na zywo nowa droga. Nieznany DeepSeek domyslnie nie szuka, dopoki proba nie potwierdzi. |
+| `MODEL_DO_SZUKANIA_DOMYSLNY` | `DEEPSEEK_PRO` | Zastepca, gdy model etapu przestanie szukac: DeepSeek V4 Pro, ktory bot i tak ma w routingu. Tylko DeepSeek. Gdy nie szuka zaden, `llm.call` |
 | `MAX_SZUKAN_NA_ETAP` | `{"factcheck": 3, "curiosity": 3, "aktualne_m` | Ile wyszukiwan wolno jednemu wywolaniu Claude, gdy etap chodzi na Claude (np. dyskoveria w trybie tanim). Bez limitu Claude robil 17, potem  |
 | `WEB_SEARCH_USD_PER_1K` | `10.00` | Wyszukiwanie po stronie Anthropic: USD za 1000 zapytań. |
 | `_DZIS_UTC` | `_dt_sufit.datetime.now(_dt_sufit.timezone.ut` | — |

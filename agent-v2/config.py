@@ -403,6 +403,10 @@ MODEL_FOR = {
 }
 
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
+# Endpoint DeepSeeka zgodny z API Anthropic. JEDYNA droga, na ktorej V4.1 Flash
+# naprawde szuka w sieci — patrz sekcja „kto NAPRAWDE szuka w sieci".
+DEEPSEEK_ANTHROPIC_BASE_URL = "https://api.deepseek.com/anthropic"
+NARZEDZIE_WYSZUKIWANIA_DEEPSEEK = "web_search_20250305"
 
 # Głębokość rozumowania DeepSeeka na /responses. Tokeny rozumowania liczą się
 # do sufitu wyjścia, więc przy `high` model kończy budżet na szukaniu i nie
@@ -746,72 +750,51 @@ def narzedzie_wyszukiwania(model: str) -> tuple[str, str]:
 # --- kto NAPRAWDE szuka w sieci -----------------------------------------------
 # ZMIERZONE 13 WRZESNIA 2026, i to jest cale uzasadnienie tej sekcji.
 #
-# DeepSeek V4.1 Flash (10 wrzesnia) przez `/responses` z `web_search` NIE SZUKA.
-# Przy `tool_choice: auto` przepala 4000 tokenow i nie oddaje nic; przy
-# `required` wypisuje w tekscie udawane znaczniki `<search_web>` — narzedzia
-# po prostu nie ma. Ten sam test na `deepseek-v4-pro` tego dnia: 17 i 12
-# wyszukiwan, poprawna odpowiedz.
-#
-# Skutek na produkcji, z tabeli `calls`, przed i po 10 wrzesnia 04:00 UTC:
+# DROGA MA ZNACZENIE, NIE TYLKO MODEL. DeepSeek V4.1 Flash (10 wrzesnia) przez
+# `/responses` z `web_search` NIE SZUKA: przy `tool_choice: auto` przepala 4000
+# tokenow i nie oddaje nic, przy `required` wypisuje udawane znaczniki
+# `<search_web>`. Skutek na produkcji, tabela `calls`, przed i po 10.09 04:00 UTC:
 #     factcheck        170 z 238 wywolan szukalo  ->  0 z 38
 #     curiosity         15 z 44                   ->  0 z 5
 #     aktualne_modele    6 z 6                    ->  0 z 5
 # Weryfikacja faktow przed publikacja (`stages.zweryfikuj` — notki, komentarze,
-# artykuly) przez trzy dni sprawdzala tekst pamiecia modelu, a nie siecia —
-# dokladnie to, przed czym istnieje. Nic nie krzyczalo, bo
-# wywolanie konczylo sie sukcesem, tylko dziesiec razy taniej.
+# artykuly) przez trzy dni sprawdzala tekst pamiecia modelu, a nie siecia.
 #
-# `deepseek-v4-pro` SZUKA I ZOSTAJE. DeepSeek wycofal sie z przekierowania go na
-# V4.1 Flash (patrz `DEEPSEEK_PRO`), wiec odpowiedzi i odkrywanie zrodel zostaja
-# na Pro. Pierwsza wersja tej sekcji wpisala mu awarie na 14.09 04:00 UTC za
-# ogloszeniem, ktore tego samego dnia przestalo obowiazywac.
+# TEN SAM V4.1 FLASH PRZEZ ENDPOINT ZGODNY Z API ANTHROPIC SZUKA — i to znalazl
+# dopiero wlasciciel pytaniem „deepseek 4.1 flash nie umie szukac w necie?".
+# Dokumentacja integracji z Claude Code: „The DeepSeek API natively supports the
+# Web Search feature". Zywe proby 13 wrzesnia, `DEEPSEEK_ANTHROPIC_BASE_URL`,
+# narzedzie `web_search_20250305`:
+#     pytanie o wydarzenie z 10.09        Flash 2 wyszukiwania, 4 s
+#     weryfikacja notki z rekordem         Flash 2 wyszukiwania, 14 s, ~$0,0035
+#     `stages.discovery` do artykulu       Flash 9 wyszukiwan, 8 zrodel, 28 s, $0,0124
+#                                          Pro   6 wyszukiwan, 9 zrodel, 54 s, $0,041
+# Dla porownania V4 Pro przez `/responses`: 17 wyszukiwan, 50 s. Nowa droga jest
+# szybsza i tansza, wiec KAZDE wywolanie DeepSeeka z siecia idzie teraz przez nia
+# (`llm._call_deepseek_z_siecia`).
 #
-# DLATEGO ZDOLNOSC, NIE ETAP. Wywolanie z `web_search=True`, ktorego model nie
-# szuka, idzie do zastepcy; to samo wywolanie bez sieci zostaje na tanim
-# modelu etapu. `nowe_modele.py` codziennie PROBUJE wyszukiwania na kazdym
-# modelu DeepSeeka w uzyciu — tym, ktory nie szuka, zeby wywolania wrocily,
-# gdy zacznie, i tym, ktory szuka, zeby cicha utrata narzedzia nie trwala
-# znowu trzy dni.
-SZUKANIE_PADLO_OD = {
-    "deepseek-flash": "2026-09-10T04:00:00+00:00",
-    DEEPSEEK_V4_FLASH: "2026-09-10T04:00:00+00:00",
-}
+# Przez jedno popoludnie zastepca byl Claude Haiku — odpadl decyzja wlasciciela
+# („my nie uzywamy zadnego haiku"), a na produkcji zweryfikowal notke bez
+# jednego wyszukiwania. Szczegoly: docs/MODELE_I_WYSZUKIWANIE_2026-09-13.md.
+#
+# DLATEGO ZDOLNOSC, NIE ETAP. `nowe_modele.py` codziennie probuje wyszukiwania na
+# kazdym modelu DeepSeeka w uzyciu, TA SAMA droga co produkcja. Gdy model
+# przestanie szukac, jego wywolania z siecia ida do zastepcy juz w nastepnym
+# przebiegu, a nie po trzech dniach ciszy.
+SZUKANIE_PADLO_OD: dict[str, str] = {}
 
-# Modele DeepSeeka, ktorych wyszukiwanie POTWIERDZONO na zywo. Nieznany DeepSeek
-# domyslnie nie szuka; te tak, dopoki proba z `nowe_modele.py` nie powie inaczej.
-# `deepseek-v4-pro` 13.09.2026: 17 i 12 wyszukiwan w probie, a na produkcji po
-# 10 wrzesnia etap `reply` szukal w 3 z 26 wywolan.
-SZUKANIE_POTWIERDZONE = frozenset({"deepseek-v4-pro"})
+# Modele DeepSeeka, ktorych wyszukiwanie POTWIERDZONO na zywo nowa droga.
+# Nieznany DeepSeek domyslnie nie szuka, dopoki proba nie potwierdzi.
+SZUKANIE_POTWIERDZONE = frozenset({"deepseek-flash", "deepseek-v4-pro"})
 
-# ZASTEPCA DLA WYWOLAN Z SIECIA: DeepSeek V4 Pro, czyli model, ktory bot i tak
-# ma w routingu (komentarze, odpowiedzi, rozbior). Tylko DeepSeek — decyzja
-# wlasciciela 13 wrzesnia 2026: „my nie uzywamy zadnego haiku".
-#
-# HAIKU BYL TU PRZEZ JEDNO POPOLUDNIE i to jest zapis, dlaczego odpadl, zeby nie
-# wrocil. Wszedl, bo ogloszenie DeepSeeka zapowiadalo wylaczenie V4 Pro od 14.09
-# — co okazalo sie nieaktualne. Na produkcji (przebieg 202) Haiku zweryfikowal
-# notke o Simonie Willisonie BEZ ANI JEDNEGO wyszukiwania, bo rekord zrodlowy
-# w kontekscie uznal za wystarczajacy, choc `weryfikacja.md` kaze szukac kazdego
-# twierdzenia.
-#
-# V4 Pro na tej samej notce, ta sama funkcja `stages.zweryfikuj`, 13 wrzesnia:
-#     z rekordem w kontekscie (jak produkcja)   5 wyszukiwan  $0,0250  32 s
-#     bez rekordu                                4 wyszukiwania $0,0220  27 s
-# Taniej niz Haiku ($0,0455 z wymuszonym szukaniem) i bez wymuszania.
-#
-# V4.1 FLASH SIE TU NIE NADAJE — nie ma narzedzia wyszukiwania (patrz wyzej).
-# Dlatego podzial: V4.1 Flash robi wszystko, co nie wymaga sieci; V4 Pro
-# dostaje wylacznie wywolania z siecia.
-#
-# Gdy V4 Pro tez przestanie szukac (DeepSeek zapowiada jego wygaszanie), nie ma
-# zastepcy spoza DeepSeeka: `llm.call` mowi to glosno, a `nowe_modele.py`
-# zapisuje zmiane w dzienniku dzialan.
+# Zastepca, gdy model etapu przestanie szukac: DeepSeek V4 Pro, ktory bot i tak
+# ma w routingu. Tylko DeepSeek. Gdy nie szuka zaden, `llm.call` mowi to glosno.
 MODEL_DO_SZUKANIA_DOMYSLNY = DEEPSEEK_PRO
 MODEL_DO_SZUKANIA: dict[str, str] = {}
 
 # Ile wyszukiwan wolno jednemu wywolaniu Claude, gdy etap chodzi na Claude
 # (np. dyskoveria w trybie tanim). Bez limitu Claude robil 17, potem 31 rund.
-# DeepSeek takiego limitu nie przyjmuje — patrz `_call_deepseek_responses`.
+# Ten sam limit idzie do DeepSeeka przez endpoint zgodny z API Anthropic.
 MAX_SZUKAN_NA_ETAP = {"factcheck": 3, "curiosity": 3, "aktualne_modele": 4, "reply": 2}
 
 # Wyniki prob wyszukiwania z `nowe_modele.py`: {model: {"dziala": bool, "kiedy": iso}}.

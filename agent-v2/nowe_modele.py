@@ -249,46 +249,38 @@ def proba_odpowiedzi(dostawca: str, model: str) -> tuple[bool, str, int, int]:
 
 
 def proba_wyszukiwania(model: str) -> tuple[bool, int, int, int, str]:
-    """Czy model DeepSeeka NAPRAWDE wywoluje wyszukiwarke przez `/responses`.
+    """Czy model DeepSeeka NAPRAWDE wyszukuje — TA SAMA droga co produkcja.
 
-    `tool_choice: required`, bo przy `auto` model moze uczciwie nie szukac —
-    a pytamy o zdolnosc, nie o decyzje. Liczymy bloki `web_search_call` w
-    odpowiedzi: V4.1 Flash przy `required` pisal udawane znaczniki w tekscie,
-    wiec sam tekst odpowiedzi niczego nie dowodzi.
+    Endpoint zgodny z API Anthropic (`config.DEEPSEEK_ANTHROPIC_BASE_URL`), bo
+    przez niego ida wywolania z siecia (`llm._call_deepseek_z_siecia`). Proba na
+    innej drodze niz produkcja mierzylaby cos innego niz to, na czym stoi konto:
+    13 wrzesnia V4.1 Flash nie szukal przez `/responses`, a przez ten endpoint tak.
+
+    Liczymy `usage.server_tool_use.web_search_requests` z odpowiedzi serwera,
+    nie tekst — model potrafi pisac udawane znaczniki wyszukiwania.
     """
     import httpx
 
     try:
-        odp = httpx.post("%s/responses" % config.DEEPSEEK_BASE_URL,
-                         headers=_naglowki_deepseek(), timeout=240,
-                         json={"model": model, "input": PYTANIE_SZUKANIA,
-                               "tools": [{"type": "web_search"}],
-                               "tool_choice": "required",
-                               "reasoning": {"effort": "low"},
-                               "max_output_tokens": 1500})
+        odp = httpx.post("%s/v1/messages" % config.DEEPSEEK_ANTHROPIC_BASE_URL,
+                         headers={"x-api-key": str(config.DEEPSEEK_API_KEY),
+                                  "anthropic-version": "2023-06-01",
+                                  "content-type": "application/json"},
+                         timeout=240,
+                         json={"model": model, "max_tokens": 1500,
+                               "messages": [{"role": "user", "content": PYTANIE_SZUKANIA}],
+                               "tools": [{"type": config.NARZEDZIE_WYSZUKIWANIA_DEEPSEEK,
+                                          "name": "web_search", "max_uses": 2}]})
         dane = odp.json()
         if odp.status_code != 200:
             return False, 0, 0, 0, "HTTP %s: %s" % (odp.status_code, str(dane.get("error"))[:160])
     except Exception as exc:
         return False, 0, 0, 0, "%s: %s" % (type(exc).__name__, str(exc)[:160])
 
-    szukan = 0
-
-    def licz(wezel: Any) -> None:
-        nonlocal szukan
-        if isinstance(wezel, dict):
-            if wezel.get("type") == "web_search_call":
-                szukan += 1
-            for wartosc in wezel.values():
-                licz(wartosc)
-        elif isinstance(wezel, list):
-            for wartosc in wezel:
-                licz(wartosc)
-
-    licz(dane.get("output", []))
     uzycie = dane.get("usage") or {}
-    return (szukan > 0, szukan, int(uzycie.get("input_tokens", 0)),
-            int(uzycie.get("output_tokens", 0)),
+    szukan = int((uzycie.get("server_tool_use") or {}).get("web_search_requests") or 0)
+    return (szukan > 0, szukan, int(uzycie.get("input_tokens") or 0),
+            int(uzycie.get("output_tokens") or 0),
             "szuka (%d wyszukiwan)" % szukan if szukan else "nie wywoluje wyszukiwarki")
 
 

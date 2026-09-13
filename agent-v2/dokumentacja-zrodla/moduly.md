@@ -305,7 +305,7 @@
 
 ### `llm.py` — JEDYNA warstwa dostępu do modeli i liczenia kosztu
 
-913 wierszy, 15 funkcji na poziomie modułu, 3 klas
+967 wierszy, 16 funkcji na poziomie modułu, 3 klas
 
 | funkcja | co robi |
 |---|---|
@@ -317,6 +317,7 @@
 | `_call_claude(purpose, system, user, web_search, model)` *(wewn.)* | — |
 | `_call_deepseek_responses(purpose, system, user, model)` *(wewn.)* | DeepSeek przez /responses z server-side `web_search`. |
 | `_deepseek_pick_from_urls(purpose, system, user, urls, model)` *(wewn.)* | Drugie, tanie wywołanie: wybierz z adresów, które wyszukiwanie już zwróciło. |
+| `_call_deepseek_z_siecia(purpose, system, user, model)` *(wewn.)* | DeepSeek z wyszukiwaniem przez endpoint zgodny z API Anthropic. |
 | `_call_deepseek(purpose, system, user)` *(wewn.)* | — |
 | `przejsciowy(exc)` | Czy ten błąd ma szansę minąć sam. |
 | `call(purpose, system, user)` | Woła model właściwy dla etapu i zapisuje koszt. Zwraca tekst odpowiedzi. |
@@ -441,7 +442,7 @@
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-3854 wierszy, 42 funkcji na poziomie modułu, 0 klas
+3837 wierszy, 42 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -592,7 +593,7 @@
 
 ### `nowe_modele.py` — nowe modele wchodzą same: w tej samej rodzinie i dopiero po próbie
 
-466 wierszy, 18 funkcji na poziomie modułu, 0 klas
+458 wierszy, 18 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -606,7 +607,7 @@
 | `_naglowki_deepseek()` *(wewn.)* | — |
 | `lista_modeli()` | Spis modeli u dostawcow. `None` przy bledzie albo pustej liscie. |
 | `proba_odpowiedzi(dostawca, model)` | Czy model odpowiada poprawnym JSON-em. (ok, opis, tokeny_wej, tokeny_wyj). |
-| `proba_wyszukiwania(model)` | Czy model DeepSeeka NAPRAWDE wywoluje wyszukiwarke przez `/responses`. |
+| `proba_wyszukiwania(model)` | Czy model DeepSeeka NAPRAWDE wyszukuje — TA SAMA droga co produkcja. |
 | `wczytaj()` | — |
 | `zapisz(stan)` | — |
 | `_mlodsze_niz(kiedy, godzin)` *(wewn.)* | — |

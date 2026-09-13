@@ -152,9 +152,8 @@ def call(
                     purpose, system, user, web_search, model=model)
                 cache_hit = 0
             elif web_search:
-                text, tin, tout, searches, urls = _call_deepseek_responses(
+                text, tin, tout, searches, urls, cache_hit = _call_deepseek_z_siecia(
                     purpose, system, user, model=model)
-                cache_hit = 0
             else:
                 text, tin, tout, searches, cache_hit = _call_deepseek(
                     purpose, system, user)

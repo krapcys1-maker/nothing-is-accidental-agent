@@ -1,6 +1,6 @@
 # Modele i wyszukiwanie — 13 września 2026
 
-> **Stan końcowy: sekcja 8.** Zastępcą dla wywołań z siecią jest DeepSeek V4 Pro, nie Claude Haiku. Sekcje 4–7 opisują drogę do tej decyzji.
+> **Stan końcowy: sekcja 9.** V4.1 Flash sam wyszukuje w sieci przez endpoint DeepSeeka zgodny z API Anthropic. Twierdzenie „V4.1 Flash nie umie szukać" z sekcji 3–8 było prawdziwe tylko dla drogi `/responses`.
 
 Przegląd konta na prośbę właściciela: „czy wszystko jest ok, czy wychodzą notki,
 komentarze" plus „wyszedł DeepSeek V4.1 Flash, może warto zmienić" i „może warto
@@ -191,3 +191,29 @@ zmianę w dzienniku działań.
 
 Koszt: weryfikacja z siecią to około 2–3 centów na wywołanie, więc dopłata
 z sekcji 6 spada mniej więcej o połowę.
+
+## 9. Stan końcowy: V4.1 Flash szuka sam, inną drogą
+
+Właściciel zapytał: „deepseek 4.1 flash nie umie szukać w necie?". Nie sprawdziłem
+wcześniej wszystkich dróg. Dokumentacja DeepSeeka przeczy sama sobie: przewodnik
+po Responses API oznacza wbudowane wyszukiwanie jako ignorowane, a strona
+integracji z Claude Code mówi „The DeepSeek API natively supports the Web Search
+feature". Ta druga droga to endpoint `https://api.deepseek.com/anthropic`
+z narzędziem `web_search_20250305`.
+
+Żywe próby na tej drodze, 13 września:
+
+| przypadek | model | wyszukiwań | źródeł | czas | koszt |
+|---|---|---|---|---|---|
+| pytanie o wydarzenie z 10.09 | V4.1 Flash | 2 | — | 4 s | — |
+| weryfikacja notki z rekordem | V4.1 Flash | 2 | — | 14 s | ~$0,0035 |
+| `stages.discovery` do artykułu | V4.1 Flash | 9 | 8 | 28 s | $0,0124 |
+| `stages.discovery` do artykułu | V4 Pro | 6 | 9 | 54 s | $0,041 |
+
+Zmiany: każde wywołanie DeepSeeka z siecią idzie przez `llm._call_deepseek_z_siecia`,
+V4.1 Flash robi je sam, V4 Pro zostaje zapasowym zastępcą. Próba wyszukiwania
+w `nowe_modele.py` używa tej samej drogi co produkcja. Stara funkcja
+`_call_deepseek_responses` nie jest już wołana; zostaje na tydzień do porównań.
+
+Koszt weryfikacji spada do ułamka centa, więc obawa o październikowy sufit
+z sekcji 6 odpada.

@@ -321,6 +321,11 @@ def _call_deepseek_responses(
 ) -> tuple[str, int, int, int, list[str]]:
     """DeepSeek przez /responses z server-side `web_search`.
 
+    OD 13 WRZESNIA 2026 `call` TU NIE KIERUJE. Wywolania z siecia ida przez
+    `_call_deepseek_z_siecia`, bo na tej drodze V4.1 Flash nie szuka. Funkcja
+    zostaje do porownan, dopoki nowa droga nie przejdzie tygodnia produkcji —
+    potem do usuniecia razem z `_deepseek_pick_from_urls`.
+
     Jedyny tani sposób na dyskoverię. Sprawdzone na żywo: realnie wykonuje
     wyszukiwania i zwraca prawdziwe adresy, w przeciwieństwie do Haiku i Sonneta,
     które wypisywały je z pamięci.
@@ -465,6 +470,56 @@ def _deepseek_pick_from_urls(
         int(usage.get("prompt_tokens", 0)),
         int(usage.get("completion_tokens", 0)),
     )
+
+
+def _call_deepseek_z_siecia(
+    purpose: str, system: str, user: str, model: str | None = None,
+) -> tuple[str, int, int, int, list[str], int]:
+    """DeepSeek z wyszukiwaniem przez endpoint zgodny z API Anthropic.
+
+    DLACZEGO NIE `/responses`. Tamta droga od 10 wrzesnia 2026 nie szuka na
+    V4.1 Flash — zero wywolan wyszukiwarki przy sukcesie HTTP. Ten sam model
+    przez ten endpoint szuka naprawde: weryfikacja notki 2 wyszukiwania w 14 s,
+    odkrywanie zrodel 9 wyszukiwan i 8 zrodel w 28 s. Pomiary w
+    `config` przy `SZUKANIE_POTWIERDZONE`.
+
+    Liczba wyszukiwan pochodzi z `usage.server_tool_use`, a adresy z blokow
+    `web_search_tool_result` — z odpowiedzi serwera, nie z tekstu modelu, bo
+    zmyslony adres wyglada w tekscie identycznie jak prawdziwy.
+    """
+    model = model or config.MODEL_FOR[purpose]
+    odpowiedz = httpx.post(
+        f"{config.DEEPSEEK_ANTHROPIC_BASE_URL}/v1/messages",
+        headers={"x-api-key": str(config.DEEPSEEK_API_KEY),
+                 "anthropic-version": "2023-06-01",
+                 "content-type": "application/json"},
+        json={
+            "model": model,
+            "max_tokens": config.MAX_TOKENS[purpose],
+            "system": system,
+            "messages": [{"role": "user", "content": user}],
+            "tools": [{"type": config.NARZEDZIE_WYSZUKIWANIA_DEEPSEEK,
+                       "name": "web_search",
+                       "max_uses": config.max_szukan(purpose)}],
+        },
+        timeout=config.timeout_for(config.MAX_TOKENS[purpose]),
+    )
+    odpowiedz.raise_for_status()
+    dane = odpowiedz.json()
+    if dane.get("stop_reason") == "max_tokens":
+        raise Truncated(
+            f"odpowiedź ucięta na suficie {config.MAX_TOKENS[purpose]} tokenów "
+            f"dla etapu {purpose!r}"
+        )
+    bloki = [b for b in (dane.get("content") or []) if isinstance(b, dict)]
+    tekst = "".join(b.get("text", "") for b in bloki if b.get("type") == "text")
+    uzycie = dane.get("usage") or {}
+    szukan = int((uzycie.get("server_tool_use") or {}).get("web_search_requests") or 0)
+    adresy = [w["url"] for b in bloki
+              if b.get("type") == "web_search_tool_result" and isinstance(b.get("content"), list)
+              for w in b["content"] if isinstance(w, dict) and isinstance(w.get("url"), str)]
+    return (tekst, int(uzycie.get("input_tokens") or 0), int(uzycie.get("output_tokens") or 0),
+            szukan, adresy, int(uzycie.get("cache_read_input_tokens") or 0))
 
 
 def _call_deepseek(purpose: str, system: str, user: str) -> tuple[str, int, int, int]:
@@ -651,9 +706,8 @@ def call(
                     purpose, system, user, web_search, model=model)
                 cache_hit = 0
             elif web_search:
-                text, tin, tout, searches, urls = _call_deepseek_responses(
+                text, tin, tout, searches, urls, cache_hit = _call_deepseek_z_siecia(
                     purpose, system, user, model=model)
-                cache_hit = 0
             else:
                 text, tin, tout, searches, cache_hit = _call_deepseek(
                     purpose, system, user)
