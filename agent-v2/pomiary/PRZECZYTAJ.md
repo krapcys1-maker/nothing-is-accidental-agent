@@ -12,6 +12,7 @@ testem, choćby nazywala sie `test_`.
 | plik | co mierzy | koszt |
 |---|---|---|
 | `korpus_fedreg.py` | ile ze stu przepisow Federal Register niesie spor | darmowe, ale kilka minut sieci |
+| `zrodla_ludzie.py` | ktore nowe zrodla tematow (praca, zdrowie, prawo…) dzialaja z serwera i ile maja o AI; sklad spizarni teraz; koszt wyboru tematu z 30 dni | darmowe, okolo minuty sieci; raport `docs/WYBOR_TEMATOW_2026-09-26.md` |
 
 ## Wynik ostatniego pomiaru (2026-08-19)
 
