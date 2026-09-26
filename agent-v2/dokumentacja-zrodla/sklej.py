@@ -65,6 +65,7 @@ MODULY = [
     ("nowe_modele.py", "nowe modele wchodzą same: w tej samej rodzinie i dopiero po próbie"),
     ("model_registry.py", "rodzina modelu dla każdej roli i porównywanie wersji — wspólne dla `nowe_modele` i wczytania wyboru"),
     ("research.py", "dogrywka researchu artykułu: konkurencyjne wyjaśnienia, dosłowne cytaty, twardy sufit kosztu"),
+    ("karta_wynikow.py", "te same liczby dla poligonu i produkcji co tydzień — jeden przyrząd, jedne definicje, tylko odczyt"),
     ("artykul_z_puli.py", "artykuł bierze temat z tej samej puli, co notki"),
     ("seria.py", "serie tematyczne — cztery notki o jednym temacie, jedna na dobę; temat wybiera bank, nie plan"),
     ("norma.py", "licznik produkcji: ile agent wystawil wobec normy dziennej"),

@@ -658,6 +658,28 @@
 | `synthesis_question(question, dossier)` | — |
 | `attach(card, dossier)` | — |
 
+### `karta_wynikow.py` — te same liczby dla poligonu i produkcji co tydzień — jeden przyrząd, jedne definicje, tylko odczyt
+
+336 wierszy, 15 funkcji na poziomie modułu, 0 klas
+
+| funkcja | co robi |
+|---|---|
+| `konta()` | Konta wlasciciela: nazwa, katalog danych, uchwyt na Substacku. |
+| `_czas(s)` *(wewn.)* | — |
+| `_jsonl(sciezka)` *(wewn.)* | — |
+| `_w_oknie(kiedy, od, do)` *(wewn.)* | Czy znacznik czasu wypada w dobach [od, do] wlacznie (UTC). |
+| `wzrost(wpisy, od, do)` | Stan konta na koniec okna i zmiana wobec konca doby przed oknem. |
+| `dzialania(dziennik, od, do)` | Ile czego wyszlo naprawde (`udane`), bez zdarzen `skutek`. |
+| `_reagujacy(dziennik, wlasne)` *(wewn.)* | Numer naszej tresci -> uchwyty spoza wlasnych kont, ktore na nia zareagowaly. |
+| `odzew_komentarzy(dziennik, od, do, wlasne)` | Odsetek komentarzy z reakcja, na komentarzach starszych niz 48 h. |
+| `nowi_reagujacy(dziennik, od, do, wlasne)` | Ile uchwytow zareagowalo na nas PIERWSZY RAZ w historii konta w tym oknie. |
+| `zasieg_72h(statystyki, dziennik, od, do)` | Mediana wyswietlen po 72 h dla notek i restackow opublikowanych w oknie |
+| `zapisy(zrodla, dziennik)` | Zapisy z ostatniego odczytu Substacka (okno 30 dni) i przypisania do |
+| `koszt(baza, od, do)` | Koszt przebiegow produkcyjnych w oknie: razem, na dobe i trzy etapy. |
+| `karta(nazwa, dane, od, do, wlasne)` | — |
+| `_wiersze(k)` *(wewn.)* | — |
+| `main(argv, lista_kont)` | — |
+
 ### `artykul_z_puli.py` — artykuł bierze temat z tej samej puli, co notki
 
 1546 wierszy, 14 funkcji na poziomie modułu, 0 klas
