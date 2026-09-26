@@ -218,8 +218,12 @@ try:
     _log = io.StringIO()
     with contextlib.redirect_stdout(_log):
         blok = tz.blok_do_promptu(KORPUS, styki_w_banku=set())
-    sprawdz("blok niesie styk kazdego tekstu",
-            "Touchpoint: szkola" in blok and "Touchpoint: branza" in blok)
+    sprawdz("blok niesie styk kazdego tekstu, po angielsku jak prompt",
+            "Touchpoint: school" in blok and "Touchpoint: AI industry" in blok
+            and "Touchpoint: daily life" in blok, blok[:300])
+    sprawdz("kazdy styk ma angielska nazwe dla modelu",
+            set(config.STYKI) <= set(tz.STYK_DLA_MODELU),
+            sorted(set(config.STYKI) - set(tz.STYK_DLA_MODELU)))
     sprawdz("log wypisuje sklad spizarni",
             "[spizarnia] 8 tekstow z 8 zrodel" in _log.getvalue(), _log.getvalue())
     sprawdz("`ostatnie_tresci` oddaje teksty ze stykiem",

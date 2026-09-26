@@ -588,7 +588,7 @@
 
 ### `tresc_zrodel.py` — treść źródeł z korpusu pobrana za darmo — spiżarnia przed zakupami
 
-271 wierszy, 9 funkcji na poziomie modułu, 0 klas
+283 wierszy, 9 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|

@@ -75,6 +75,17 @@ def _styk(w: dict[str, Any]) -> str:
     return str(w.get("styk") or "branza")
 
 
+# STYK W PROMPCIE PO ANGIELSKU. Prompt skauta jest angielski i wylicza te same
+# slowa (`ciekawostki.md`); polska etykieta („codziennosc") byla dla modelu
+# szumem. W kodzie, banku i dzienniku zostaja polskie nazwy z `config.STYKI`.
+STYK_DLA_MODELU = {
+    "praca": "work", "zdrowie": "health", "szkola": "school",
+    "pieniadze": "money", "prawo": "law", "codziennosc": "daily life",
+    "szkody": "harms", "ludzie": "research about people",
+    "branza": "AI industry",
+}
+
+
 def _na_tekst(surowy: str) -> str:
     """HTML na czysty tekst. Prymitywnie i celowo.
 
@@ -255,7 +266,8 @@ def blok_do_promptu(wpisy: list[dict[str, Any]], ile: int = ILE_ZRODEL,
         czesci.append(
             "### [%s] %s\nSource: %s\nPublished: %s\nTouchpoint: %s\n\n%s"
             % (z["kanal"], z["temat"], z["url"], z["data"],
-               z.get("styk", "branza"), z["tekst"]))
+               STYK_DLA_MODELU.get(z.get("styk", "branza"), "AI industry"),
+               z["tekst"]))
     return "\n\n---\n\n".join(czesci)
 
 

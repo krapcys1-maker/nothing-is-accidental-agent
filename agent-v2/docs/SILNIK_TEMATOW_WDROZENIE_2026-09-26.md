@@ -19,6 +19,20 @@ zapisów). Pełny wydruk: `robocze/krok0_przed_2026-09-26.txt` na komputerze wł
   0,05. Raport szacował 1–2 USD miesięcznie; prawdziwa liczba jest około trzy razy
   wyższa, głównie przez liczbę wywołań skauta (2,6 na dobę, nie jedno).
 
+## Pomiar po zmianie (produkcja `86f615a`, 26.09, 17:50 UTC)
+
+Ten sam odczyt, nowym kodem (`robocze/spizarnia_po.py`, zero wywołań modelu):
+
+- **Spiżarnia:** 8 tekstów z 8 źródeł, **2 branżowe** (Latent Space, DeepMind),
+  6 o ludziach: prawo ×2 (Transformer, EFF), szkoła (The 74), codzienność
+  (404 Media), zdrowie (KFF Health News), szkody (Wpadki AI). Próg „najwyżej 2
+  branżowe, co najmniej 4 o ludziach” spełniony.
+- **Korpus:** 200 wpisów, z tego 48 spoza branży z 10 źródeł.
+- **Lista kanałów dla skauta** ma teraz po jednym wpisie z każdego źródła o ludziach.
+- Czego jeszcze nie widać: faktów z modelu i ich styku. To pokaże pierwszy przebieg
+  produkcyjny, który dobierze bank (linie `[spizarnia]`, `[ciekawostki] styk:`
+  i `[kwota]` w logu).
+
 ## Źródła o ludziach — sprawdzone z serwera, nie z wyszukiwarki
 
 | źródło | styk | wpisy o AI z 30 dni | decyzja |
