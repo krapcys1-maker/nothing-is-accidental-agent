@@ -312,7 +312,7 @@
 
 ### `llm.py` — JEDYNA warstwa dostępu do modeli i liczenia kosztu
 
-1004 wierszy, 17 funkcji na poziomie modułu, 3 klas
+1016 wierszy, 17 funkcji na poziomie modułu, 4 klas
 
 | funkcja | co robi |
 |---|---|

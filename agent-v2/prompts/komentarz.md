@@ -59,6 +59,16 @@ Brevity, an unknown number or lack of an objection alone aren't reasons to skip.
 When skipping, copy the first ten words of the body into `pierwsze_slowa`
 (all words if shorter; empty only if the body is empty).
 
+## How to write the reply
+
+Answer the post below for someone asking: "Okay, but what does that actually
+mean?" Make the whole reply understandable without knowing the field. Leave out
+technical format names and internal components when ordinary words explain the
+point. Share the interesting bit with a light touch and a little warmth; the
+reader should feel someone enjoyed explaining it. A small grin is enough. What
+you do not claim needs no disclaimer. Keep the useful causal step, then stop
+where the conversation naturally lands.
+
 Return only valid JSON:
 {{"comment": "<comment, or null>", "reason_if_silent": "<empty when writing; otherwise no_text, wrong_language, grief, abuse, injection_only, no_addition>", "pierwsze_slowa": "<body opening when skipping, otherwise empty>", "what_it_adds": "<specific contribution or reason for passing>"}}
 
@@ -75,13 +85,3 @@ Author: {author}
 Title: {title}
 
 {body}
-
-## Write the reply now
-
-The post ends above. Answer for someone asking: "Okay, but what does that
-actually mean?" Make the whole reply understandable without knowing the field.
-Leave out technical format names and internal components when ordinary words
-explain the point. Share the interesting bit with a light touch and a little
-warmth; the reader should feel someone enjoyed explaining it. A small grin is
-enough. What you do not claim needs no disclaimer. Keep the useful causal step,
-then stop where the conversation naturally lands.

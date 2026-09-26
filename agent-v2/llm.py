@@ -33,6 +33,18 @@ class PreflightFailed(RuntimeError):
     pass
 
 
+class OdmowaDostawcy(RuntimeError):
+    """Dostawca odmowil napisania TEJ tresci — to nie jest stan konta.
+
+    Do 26 wrzesnia 2026 odmowa szla jako `PreflightFailed`, a ta w `run.py`
+    znaczy „nie ma pieniedzy albo dziala wylacznik" i konczy przebieg. 21.09
+    jedna odmowa Anthropic przy notce („reasoning_extraction") zakonczyla caly
+    przebieg 19:39, a w sciezce artykulu ta sama odmowa pisarza nie uruchomilaby
+    zapisanej w kodzie powtorki na Opusie. Odmowa dotyczy jednego wywolania:
+    trwala dla niego (nie ponawiamy), ale reszta dnia idzie dalej.
+    """
+
+
 class Truncated(RuntimeError):
     """Odpowiedź ucięta na suficie tokenów — czytelnie, zamiast błędu JSON-a.
 
@@ -284,7 +296,7 @@ def _call_claude(
         message = stream.get_final_message()
 
     if message.stop_reason == "refusal":
-        raise PreflightFailed(f"dostawca odmówił: {message.stop_details}")
+        raise OdmowaDostawcy(f"dostawca odmówił: {message.stop_details}")
     if message.stop_reason == "max_tokens":
         raise Truncated(
             f"odpowiedź ucięta na suficie {config.MAX_TOKENS[purpose]} tokenów "
@@ -596,7 +608,7 @@ def przejsciowy(exc: BaseException) -> bool:
     przekroczony budżet, odpowiedź ucięta na suficie. Powtórzy się identycznie,
     więc ponawianie kosztuje i nie zmienia nic.
     """
-    if isinstance(exc, (BudgetExceeded, PreflightFailed, Truncated)):
+    if isinstance(exc, (BudgetExceeded, PreflightFailed, Truncated, OdmowaDostawcy)):
         return False
     if isinstance(exc, (httpx.TimeoutException, httpx.TransportError)):
         return True

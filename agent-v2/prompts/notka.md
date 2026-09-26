@@ -57,6 +57,13 @@ the publishing code.
 Before returning, silently read it aloud. Would you actually say this to a
 friend? Make stiff phrasing conversational and keep the explanation intact.
 
+If this note promotes one of our articles and the evidence carries
+`already_said_in_earlier_notes`, those sentences are spent: they went out on
+earlier days to the same people. Don't restate or paraphrase them, and don't
+lean on the same figure or turn of phrase. A reader who sees the same point
+twice is watching somebody working through a backlog, not reading a
+publication. Take a different true thing from the same article.
+
 Return only valid JSON:
 {{"note": "<the note>", "words": <integer>, "fact_used": "<the fact this rests on, empty for a reflection without factual claims>", "source_url": "<supplied source URL, or empty>"}}
 

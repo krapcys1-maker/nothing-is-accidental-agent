@@ -36,9 +36,29 @@ answer visible without treating missing evidence as evidence of absence.
 Place a limitation beside the claim it qualifies; use a separate paragraph only
 when the reader needs one. Never invent reporting or personal experience.
 
-A claim marked `not_fetched` was not read from its original source in this run.
-If used, attribute it and preserve that limitation. Do not build a new numerical
-comparison or conclusion on it without support from fetched material.
+One claim may carry `"not_fetched": true`. That is the fact this article was
+commissioned from, and its `evidence` is not a passage lifted from a document we
+retrieved — nobody on this run opened that page. You may state it, and you must
+attribute it to the source named in its `url`. Do not build a figure, a
+comparison or a conclusion on it that the fetched material does not also carry.
+
+Dates. Do not write a datestamp such as "figures checked to [date]": that line
+is written by code from the card after you finish, and if you write one yourself
+it will be stripped. Dates inside the argument are still yours: when a rule, a
+price or a deadline holds only as of some date, say so where it matters.
+
+If `source_dates.note` says the material is old, the reader is told once,
+plainly, in your own words. Hiding that caveat is worse than the age; it is the
+reader's right to weigh what they are reading.
+
+Never say a source IS undated. You have not seen the source — you have seen an
+excerpt of it. The phrase "undated in the excerpts" is a fact about our
+material; "the accounts are undated" is a claim about pages that sit on the open
+web with dates on them. One article was lost exactly here: the draft turned the
+first into the second, the fact check opened the pages, found the dates and
+refused to publish. Say what our material shows and let it be the smaller
+claim: the excerpt carries no date, the URL gives a month but no day, the page
+we pulled did not say when it was written.
 
 Before returning, check each factual clause, including the headline and subtitle:
 what exactly in the card establishes this? Keep a documented preparation distinct

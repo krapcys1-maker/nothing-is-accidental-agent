@@ -131,7 +131,7 @@
 {{"text": "the full corrected text", "co_zmienione": "one line: what you changed and what evidence you changed it to"}}
 ```
 
-#### `notka.md` (85 wierszy)
+#### `notka.md` (92 wierszy)
 
 **Pola wejściowe:** `evidence`, `form_brief`, `language`, `marka`, `max_words`, `min_words`, `note_form`, `note_type`, `ostatnie_otwarcia_json`, `ostatnie_zakonczenia_json`, `rozbior`, `type_brief`
 
@@ -141,7 +141,7 @@
 {{"note": "<the note>", "words": <integer>, "fact_used": "<the fact this rests on, empty for a reflection without factual claims>", "source_url": "<supplied source URL, or empty>"}}
 ```
 
-#### `odpowiedz.md` (44 wierszy)
+#### `odpowiedz.md` (47 wierszy)
 
 **Pola wejściowe:** `cel_slow`, `comment`, `commenter`, `evidence`, `language`, `marka`, `otwarcie`, `under_what`
 
@@ -161,7 +161,7 @@
 {{"grupy": [{{"zostaje": <id>, "scalone": [<id>, ...], "dlaczego": "<one clause: what makes these the same story>"}}]}}
 ```
 
-#### `pisarz.md` (98 wierszy)
+#### `pisarz.md` (118 wierszy)
 
 **Pola wejściowe:** `card_json`, `language`, `marka`, `max_words`, `min_words`, `poprzednie_uwagi`, `style_examples`, `style_negative`, `style_positive`, `target_words`
 
