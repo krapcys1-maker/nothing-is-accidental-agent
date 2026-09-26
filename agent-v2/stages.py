@@ -4778,8 +4778,12 @@ def wybierz_material(zapas: list[dict[str, Any]],
                      korpus_zrodel: list[str] | None = None,
                      conn: sqlite3.Connection | None = None,
                      run_id: int | None = None,
+                     kwota: bool = False,
                      ) -> dict[str, Any] | None:
     """Bierze fakt, ktory NIE jest o tym samym, co juz dzis wystawiamy.
+
+    `kwota=True`: fakty spoza branzy probujemy PIERWSZE (silnik tematow, E6) —
+    patrz komentarz przy petli.
 
     Poprzednio bylo `zapas.pop(0)` — pierwszy z brzegu. W przebiegu z 17 sierpnia
     wyszukiwanie oddalo osiem faktow: okna w samolotach, napiwki, symbol
@@ -4826,7 +4830,18 @@ def wybierz_material(zapas: list[dict[str, Any]],
     # Licznik platnych pytan o powtorke w tym jednym wyborze — sufit opisany
     # przy `MAKS_PYTAN_O_POWTORKE`. Lista, bo zmienia sie w petli nizej.
     pytan = [0]
-    for i, f in enumerate(zapas):
+    # KWOTA SPOZA BRANZY TAKZE DLA SWIEZEGO MATERIALU — dopisane po zywym
+    # przebiegu 26.09.2026 19:35. Premiera Gemini otworzyla furtke szukania,
+    # skaut oddal 7 faktow, z tego 6 spoza branzy, a notka poszla o premierze:
+    # material przyszedl prosto ze skauta, z pominieciem `wez_kandydatow`, gdzie
+    # kwota stala. Tu przechodzi KAZDA notka, wiec kwota stoi tutaj. Sort jest
+    # stabilny: w obu grupach zostaje kolejnosc zapasu, a straze nizej obowiazuja
+    # kazdy fakt tak samo — kwota zmienia tylko to, ktory probujemy pierwszy.
+    kolejnosc = list(range(len(zapas)))
+    if kwota:
+        kolejnosc.sort(key=lambda j: styk_faktu(zapas[j]) == "branza")
+    for i in kolejnosc:
+        f = zapas[i]
         temat = _slowa("%s %s" % (f.get("domain") or "", f.get("fact") or ""))
         if any(_zderzenie(temat, u) for u in unikaj_rdzenie):
             continue
@@ -5127,6 +5142,11 @@ def notki_dnia(
     # szukanie ciekawostek to platne wywolanie modelu, a piec notek razy druga
     # proba to piec dodatkowych rachunkow za to samo.
     dobrano_nowy: bool = False
+    # KWOTA SPOZA BRANZY (E6) — patrz `wybierz_material`. Liczona raz na
+    # przebieg z dziennika i gaszona, gdy w tym przebiegu padnie juz fakt spoza
+    # branzy: druga notka tego samego przebiegu idzie zwyklym porzadkiem.
+    kwota_teraz: bool = (config.KWOTA_SPOZA_BRANZY
+                         and not dzis_notka_spoza_branzy())
     # SERIA — jedna część na przebieg. Patrz `seria.py` i miejsce, gdzie ta
     # flaga się zapala.
     seria_wzieta: bool = False
@@ -5247,7 +5267,8 @@ def notki_dnia(
                 fakt = wybierz_material(zapas, juz_o_tym, wczesniejsze,
                                         teksty=teksty_notek,
                                         korpus_zrodel=_tematy_zrodel(),
-                                        conn=conn, run_id=run_id)
+                                        conn=conn, run_id=run_id,
+                                        kwota=kwota_teraz)
             if fakt is None and not dobrano_nowy:
                 # DZIEN NIE MOZE SIE ZAGLODZIC. Do 25 sierpnia to bylo `break`:
                 # cala pula zderzona = koniec dnia. Przy oknie dwunastu zdarzalo
@@ -5271,11 +5292,20 @@ def notki_dnia(
                     fakt = wybierz_material(zapas, juz_o_tym, wczesniejsze,
                                     teksty=teksty_notek,
                                     korpus_zrodel=_tematy_zrodel(),
-                                    conn=conn, run_id=run_id)
+                                    conn=conn, run_id=run_id,
+                                    kwota=kwota_teraz)
             if fakt is None:
                 print("  [notki] został tylko materiał o tym samym, co już dziś"
                       " wystawiamy — kończę dzień krócej", flush=True)
                 break
+            if kwota_teraz:
+                if styk_faktu(fakt) != "branza":
+                    kwota_teraz = False
+                    print("  [kwota] notka spoza branzy (%s)" % styk_faktu(fakt),
+                          flush=True)
+                else:
+                    print("  [kwota] zaden fakt spoza branzy nie przeszedl strazy"
+                          " — ta notka jest branzowa", flush=True)
             juz_o_tym.append("%s %s" % (fakt.get("domain") or "",
                                         fakt.get("fact") or ""))
             material = {"fact": _fakt_do_pisarza(fakt)}

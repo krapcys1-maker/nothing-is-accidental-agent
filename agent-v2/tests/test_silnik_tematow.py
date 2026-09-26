@@ -407,6 +407,25 @@ try:
             stages.styki_w_banku(3) == {"szkola"}, stages.styki_w_banku(3))
 
     print()
+    print("=== 5b. KWOTA TAKZE DLA SWIEZEGO MATERIALU ZE SKAUTA ===")
+    # Zywy przebieg 26.09.2026 19:35: premiera otworzyla szukanie, skaut oddal
+    # siedem faktow (szesc spoza branzy), a notka poszla o premierze — material
+    # szedl prosto do `wybierz_material`, z pominieciem `wez_kandydatow`.
+    _swieze = [dict(fakt(1, "https://deepmind.google/x"), styk="branza"),
+               dict(fakt(2, "https://www.the74million.org/y"), styk="szkola")]
+    sprawdz("KONTRDOWOD: bez kwoty bierze pierwszy (branza)",
+            stages.wybierz_material(list(_swieze), [])["styk"] == "branza")
+    sprawdz("z kwota bierze fakt spoza branzy",
+            stages.wybierz_material(list(_swieze), [], kwota=True)["styk"] == "szkola")
+    _tylko_branza = [dict(fakt(1, "https://deepmind.google/x"), styk="branza")]
+    sprawdz("gdy spoza branzy nie ma, kwota nie blokuje notki",
+            stages.wybierz_material(list(_tylko_branza), [], kwota=True) is not None)
+    _kod_notek = "\n".join(w for w in pathlib.Path("agent-v2/stages.py").read_text(
+        encoding="utf-8").splitlines() if not w.lstrip().startswith("#"))
+    sprawdz("notki_dnia podaje kwote do obu wyborow materialu",
+            _kod_notek.count("kwota=kwota_teraz") == 2, _kod_notek.count("kwota=kwota_teraz"))
+
+    print()
     print("=== 6. SEDZIA BANKU WIDZI STYK KANDYDATA ===")
     _prompty = []
     _stary_call = stages.llm.call
