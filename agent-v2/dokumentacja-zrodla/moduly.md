@@ -1,7 +1,7 @@
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-3174 wierszy, 27 funkcji na poziomie modułu, 1 klas
+3190 wierszy, 27 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -35,12 +35,12 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-10359 wierszy, 159 funkcji na poziomie modułu, 0 klas
+10113 wierszy, 159 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
 | `_na_kanal(nazwa)` *(wewn.)* | Wszystko, co ta funkcja zaplaci, ksieguje sie na kanal `nazwa`. |
-| `_prompt(name, **fields)` *(wewn.)* | Prompt z pliku, z podstawionymi polami. |
+| `_prompt(name, **fields)` *(wewn.)* | Render a task prompt and prepend the shared public voice once. |
 | `pamiec_glosu(prompt)` | Kilka potwierdzonych wypowiedzi do unikania powtorek, bez wywolan API. |
 | `_juz_w_domu(ile_banku, ile_notek)` *(wewn.)* | Co juz mamy poza artykulami: fakty czekajace w banku i wydane notki. |
 | `recent_angles(conn, limit)` | Ostatnie kąty redakcyjne — wejście do reguły różnorodności. |
@@ -170,13 +170,13 @@
 | `dopisz_do_banku_notek(notki)` | Dokłada notki do banku, pomijajac te, ktore juz tam sa. |
 | `wez_z_banku_notek(ile)` | Wyjmuje najstarsze niewykorzystane notki i ZNACZY je jako wyjete. |
 | `stan_banku_notek()` | Ile mamy zapasu — do wypisania przy starcie przebiegu. |
-| `warto_pisac(conn, run_id, card)` | Etap przed pisarzem: czy jest tu luka, ktora obcy poczuje. |
+| `warto_pisac(conn, run_id, card)` | Assess a supported explanation, a corrected belief or an open outcome. |
 | `zbierz_pytania(wpisy)` | Wyławia z odpowiedzi czytelnikow te, ktore sa PYTANIAMI, i zapisuje je. |
 | `wczytaj_pytania()` | Pula pytan czytelnikow. Uszkodzony plik to pusta pula, nie awaria. |
 | `pytania_dla_skauta(ile)` | Najswiezsze pytania czytelnikow, gotowe do wklejenia w prompt skauta. |
 | `_to_pdf(odpowiedz, url)` *(wewn.)* | Czy to PDF. Naglowek jest wiarygodniejszy od koncowki adresu. |
 | `_tekst_z_pdf(dane, max_stron)` *(wewn.)* | Warstwa tekstowa PDF-a. |
-| `bramka_kandydata(k)` | Czy z tego da sie zrobic notke. Sprawdza KOD, nie model. |
+| `bramka_kandydata(k)` | Require substance and a source; myth-breaking and second person are optional. |
 | `wczytaj_indeks()` | Indeks kandydatow. Uszkodzony plik NIE udaje juz pustego banku. |
 | `_zapisz_indeks(indeks)` *(wewn.)* | Zapis ATOMOWY: najpierw plik obok, potem podmiana jednym ruchem. |
 | `_stale_sygnaly(topics, pola)` *(wewn.)* | Ktore z pol mialy TE SAMA wartosc u WSZYSTKICH kandydatow. |
@@ -201,7 +201,7 @@
 
 ### `browser.py` — cała styczność z Substackiem; nie woła modelu
 
-5339 wierszy, 99 funkcji na poziomie modułu, 0 klas
+5475 wierszy, 104 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -251,6 +251,11 @@
 | `_artykuly_z_panelu(page, baza)` *(wewn.)* | Nasze artykuly razem ze statystykami — JEDNYM zapytaniem. |
 | `nasze_pozycje_do_pomiaru(page, ile)` | Co wystawilismy i ma wlasny numer — czyli co da sie zmierzyc. |
 | `dopisz_skutki()` | Dopisuje do dziennika, CO Z NASZYCH DZIALAN WYNIKLO. |
+| `_przodkowie(komentarz)` *(wewn.)* | Numery przodkow z `ancestor_path`, od korzenia w dol. |
+| `korzen_rozmowy(komentarz)` | Numer komentarza, ktory zaczal galaz, w ktorej stoi `komentarz`. |
+| `nasze_odpowiedzi_w_rozmowie(komentarze, korzen, moje_id)` | Ile razy JUZ odpisalismy pod `korzen`. |
+| `limit_rozmowy(rozmowca_id)` | Ile razy wolno nam odpisac w jednej rozmowie z ta osoba. |
+| `_komentarze_galezi(page, komentarz, korzen, post, pamiec)` *(wewn.)* | Wszystkie komentarze galezi `korzen` — jedno zapytanie na galaz. |
 | `odpowiedzi_na_nasze_komentarze(ile)` | Odpowiedzi na NASZE komentarze zostawione pod CUDZYMI tekstami. |
 | `komentarze_pod_artykulami(ile)` | Cudze komentarze pod NASZYMI artykulami, na ktore nie odpisalismy. |
 | `nieodpowiedziane(ile)` | Cudze odpowiedzi pod naszymi notkami, na które jeszcze nie odpisaliśmy. |
@@ -307,7 +312,7 @@
 
 ### `llm.py` — JEDYNA warstwa dostępu do modeli i liczenia kosztu
 
-974 wierszy, 16 funkcji na poziomie modułu, 3 klas
+1004 wierszy, 17 funkcji na poziomie modułu, 3 klas
 
 | funkcja | co robi |
 |---|---|
@@ -323,6 +328,7 @@
 | `_call_deepseek(purpose, system, user)` *(wewn.)* | — |
 | `przejsciowy(exc)` | Czy ten błąd ma szansę minąć sam. |
 | `call(purpose, system, user)` | Woła model właściwy dla etapu i zapisuje koszt. Zwraca tekst odpowiedzi. |
+| `koszt_obrazu(model, usage)` | Image API usage at published rates; unknown versions remain estimates. |
 | `obraz(opis)` | Generuje grafikę do artykułu i zapisuje jej koszt tam, gdzie resztę. |
 | `_obiekty_json(tekst)` *(wewn.)* | Kolejne ZBILANSOWANE obiekty JSON w tekscie, od lewej. |
 | `ratuj_json(purpose, tekst, ksztalt)` | Drugie podejście do odpowiedzi, która nie zawierała JSON-a. |
@@ -444,7 +450,7 @@
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-3661 wierszy, 42 funkcji na poziomie modułu, 0 klas
+3545 wierszy, 42 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -595,12 +601,10 @@
 
 ### `nowe_modele.py` — nowe modele wchodzą same: w tej samej rodzinie i dopiero po próbie
 
-461 wierszy, 18 funkcji na poziomie modułu, 0 klas
+478 wierszy, 17 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
-| `wersja(identyfikator)` | Numery wersji z identyfikatora. Data wydania (8 cyfr) nie jest wersja. |
-| `w_rodzinie(identyfikator, dostawca, rodzina)` | Czy identyfikator nalezy do rodziny u tego dostawcy i nie jest proba. |
 | `najlepszy_w_rodzinie(dostawca, rodzina, lista)` | Najlepszy kandydat rodziny z listy dostawcy `{identyfikator: data_wydania}`. |
 | `zdecyduj(obecne, listy)` | Zamiany do sprawdzenia proba. Nic tu nie wola sieci. |
 | `odpowiedz_jest_ok(tekst)` | Czy odpowiedz proby to obiekt JSON z `ok: true`. |
@@ -608,6 +612,7 @@
 | `_naglowki_anthropic()` *(wewn.)* | — |
 | `_naglowki_deepseek()` *(wewn.)* | — |
 | `lista_modeli()` | Spis modeli u dostawcow. `None` przy bledzie albo pustej liscie. |
+| `proba_obrazu(model, conn, run_id)` | Generate one real image with production size/quality before switching. |
 | `proba_odpowiedzi(dostawca, model)` | Czy model odpowiada poprawnym JSON-em. (ok, opis, tokeny_wej, tokeny_wyj). |
 | `proba_wyszukiwania(model)` | Czy model DeepSeeka NAPRAWDE wyszukuje — TA SAMA droga co produkcja. |
 | `wczytaj()` | — |
@@ -618,15 +623,50 @@
 | `_zapisz_koszt(conn, run_id, dostawca, model, tin, tout, szukan, ok, opis)` *(wewn.)* | — |
 | `sprawdz(conn, run_id, wymus)` | Raz na dobe: lista, decyzje, proby, zapis. Nigdy nie wywala przebiegu. |
 
+### `model_registry.py` — rodzina modelu dla każdej roli i porównywanie wersji — wspólne dla `nowe_modele` i wczytania wyboru
+
+36 wierszy, 2 funkcji na poziomie modułu, 0 klas
+
+| funkcja | co robi |
+|---|---|
+| `version(model)` | — |
+| `in_family(model, provider, family)` | — |
+
+### `research.py` — dogrywka researchu artykułu: konkurencyjne wyjaśnienia, dosłowne cytaty, twardy sufit kosztu
+
+407 wierszy, 19 funkcji na poziomie modułu, 1 klas
+
+| funkcja | co robi |
+|---|---|
+| `_json(value)` *(wewn.)* | — |
+| `_hash(value)` *(wewn.)* | — |
+| `_text(value, limit)` *(wewn.)* | — |
+| `_list(value)` *(wewn.)* | — |
+| `url_key(url)` | Keep meaningful query arguments and different documents on one host. |
+| `_write(path, value)` *(wewn.)* | — |
+| `_spent(conn, run_id)` *(wewn.)* | — |
+| `_parse(raw)` *(wewn.)* | — |
+| `_call(conn, run_id, purpose, prompt, **kwargs)` *(wewn.)* | — |
+| `_prompt(name, **fields)` *(wewn.)* | — |
+| `_view(evidence)` *(wewn.)* | Whole passages only, with a bounded aggregate input. |
+| `_refs(items, sources)` *(wewn.)* | — |
+| `_assessment(raw, view)` *(wewn.)* | No invented URLs/quotes; unsupported answers stay unresolved. |
+| `_assess(conn, run_id, question, evidence, attempted)` *(wewn.)* | — |
+| `_search(conn, run_id, question, gap, seen)` *(wewn.)* | — |
+| `_extract(conn, run_id, question, gap, corpus)` *(wewn.)* | — |
+| `deepen(conn, run_id, question, evidence, corpus)` | Return enriched evidence and an auditable dossier. At most two searches. |
+| `synthesis_question(question, dossier)` | — |
+| `attach(card, dossier)` | — |
+
 ### `artykul_z_puli.py` — artykuł bierze temat z tej samej puli, co notki
 
-1560 wierszy, 14 funkcji na poziomie modułu, 0 klas
+1546 wierszy, 14 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
 | `temat_z_faktu(conn, run_id, fakt)` | Zamienia udokumentowany fakt w brief artykulu. |
 | `glebokosc_z_oceny(ocena)` | RICH / SINGLE / THIN — liczone z tego, co `warto_pisac` ZOBACZYLO. |
-| `uniesie_artykul(brief)` | Czy z tego faktu da sie napisac TYSIAC SLOW, czy tylko dwa zdania. |
+| `uniesie_artykul(brief)` | Allow documented breadth, a later development or distinct explanatory questions. |
 | `wybierz_fakt(conn, run_id, ile)` | Swiezy fakt z puli ciekawostek, ktory NIE powtarza zadnego artykulu. |
 | `main()` | Otwiera przebieg, oddaje robote i ZAMYKA go — takze przy wyjatku. |
 | `_zrob_miejsce_na_fakt(card)` *(wewn.)* | Robi miejsce na wstrzykniete twierdzenie, nie tracac zadnego ZRODLA. |

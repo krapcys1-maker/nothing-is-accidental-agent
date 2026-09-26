@@ -357,7 +357,8 @@ def _preflight(purpose: str, conn: sqlite3.Connection, run_id: int | None,
 <!--KOD:llm.obraz-->
 ```python
 def obraz(
-    opis: str, *, conn: sqlite3.Connection, run_id: int | None = None
+    opis: str, *, conn: sqlite3.Connection, run_id: int | None = None,
+    model: str | None = None,
 ) -> bytes:
     """Generuje grafikę do artykułu i zapisuje jej koszt tam, gdzie resztę.
 
@@ -365,7 +366,8 @@ def obraz(
     że inaczej wypadłby z licznika: wyłącznik, limit na przebieg i dzienny sufit
     wydatków siedzą w `_preflight`, a nie w każdym wywołaniu z osobna.
     """
-    _preflight("obraz", conn, run_id)
+    model = model or config.IMAGE_MODEL
+    _preflight("obraz", conn, run_id, model=model)
     if config.DRY_RUN:
         print("  [obraz] DRY_RUN — wywołanie pominięte", flush=True)
         return b""
@@ -376,7 +378,7 @@ def obraz(
     import urllib.request
 
     zadanie = json.dumps({
-        "model": config.IMAGE_MODEL,
+        "model": model,
         "prompt": opis,
         "size": config.IMAGE_SIZE,
         "quality": config.IMAGE_QUALITY,
@@ -394,20 +396,23 @@ def obraz(
         surowy = dane["data"][0]["b64_json"]
     except Exception as exc:
         db.record_call(
-            conn=conn, run_id=run_id, provider="openai", model=config.IMAGE_MODEL,
+            conn=conn, run_id=run_id, provider="openai", model=model,
             purpose="obraz", tokens_in=0, tokens_out=0, web_searches=0,
             cost_usd=0.0, price_verified=0, ok=0,
             note=f"{type(exc).__name__}: {exc}"[:500],
         )
         raise
 
-    usd = config.IMAGE_PRICE_USD
+    usage = dane.get("usage") or {}
+    usd, basis = koszt_obrazu(model, usage)
     db.record_call(
-        conn=conn, run_id=run_id, provider="openai", model=config.IMAGE_MODEL,
-        purpose="obraz", tokens_in=0, tokens_out=0, web_searches=0,
-        cost_usd=usd, price_verified=0, ok=1, note=config.IMAGE_SIZE,
+        conn=conn, run_id=run_id, provider="openai", model=model,
+        purpose="obraz", tokens_in=int(usage.get("input_tokens", 0)),
+        tokens_out=int(usage.get("output_tokens", 0)), web_searches=0,
+        cost_usd=usd, price_verified=0, ok=1,
+        note=json.dumps({"size": config.IMAGE_SIZE, "usage": usage, "pricing": basis}),
     )
-    print(f"  [obraz] {config.IMAGE_MODEL}  {config.IMAGE_SIZE}  ~${usd:.4f}", flush=True)
+    print(f"  [obraz] {model}  {config.IMAGE_SIZE}  ~${usd:.4f}", flush=True)
     return base64.b64decode(surowy)
 ```
 
@@ -470,6 +475,7 @@ def discovery(
         "discovery", DISCOVERY_SYSTEM, prompt,
         conn=conn, run_id=run_id, web_search=True, collect_urls=real_urls,
     )
+    recovery_urls: list[str] = []
     try:
         data = llm.parse_json(text)
     except Exception:
@@ -480,10 +486,29 @@ def discovery(
         # Przepalone wywolanie dyskoverii jest wiec drozsze niz przepalona
         # ciekawostka i tak samo odzyskiwalne: material zostal znaleziony,
         # tylko oddany zdaniami.
-        print("  [dyskoveria] brak JSON — probuje odzyskac z tekstu", flush=True)
-        ratunek = llm.ratuj_json(
-            "discovery", text, KSZTALT_DYSKOVERII,
-            conn=conn, run_id=run_id)
+        if not (text or "").strip():
+            recovery_urls = list(dict.fromkeys(
+                u for u in real_urls if isinstance(u, str)
+                and u.startswith(("https://", "http://")) and len(u) <= 2000
+            ))[:80]
+            if not recovery_urls:
+                raise ValueError("dyskoveria: pusta odpowiedz i brak wynikow do odzyskania")
+            # Live 25.09: osiem wyszukiwan i pusty koncowy tekst. Wyniki
+            # narzedzia nadal istnieja; wybieramy z nich BEZ ponownego szukania.
+            print("  [dyskoveria] pusty tekst; odzyskuje liste z %d rzeczywistych"
+                  " adresow, bez nowego wyszukiwania" % len(recovery_urls), flush=True)
+            ratunek = llm.call(
+                "discovery_recovery", DISCOVERY_SYSTEM,
+                _prompt("dyskoveria_odzysk.md", question=question,
+                        urls_json=json.dumps(recovery_urls, ensure_ascii=False),
+                        max_results=config.DISCOVERY_MAX_RESULTS,
+                        schema=KSZTALT_DYSKOVERII),
+                conn=conn, run_id=run_id, web_search=False)
+        else:
+            print("  [dyskoveria] brak JSON — probuje odzyskac z tekstu", flush=True)
+            ratunek = llm.ratuj_json(
+                "discovery", text, KSZTALT_DYSKOVERII,
+                conn=conn, run_id=run_id)
         if not ratunek:
             raise
         data = llm.parse_json(ratunek)
@@ -506,7 +531,11 @@ def discovery(
     _widziane: set[str] = set()
     spoza = 0
     for source in sources:
+        if not isinstance(source, dict):
+            continue
         url = source.get("url", "")
+        if recovery_urls and url not in recovery_urls:
+            continue  # Odzysk moze WYBRAC znany adres, nigdy dopisac nowy.
         host = _host(url)
         if not url.startswith("http"):
             continue
@@ -780,18 +809,7 @@ def pick_topic(
 def warto_pisac(
     conn: sqlite3.Connection, run_id: int, card: dict[str, Any],
 ) -> dict[str, Any]:
-    """Etap przed pisarzem: czy jest tu luka, ktora obcy poczuje.
-
-    Model OBSERWUJE cztery rzeczy i cytuje dowod z karty; werdykt sklada KOD.
-    O oceny liczbowe nie pytamy — stary agent nauczyl nas, ze kazdy score
-    wraca 1.0, wiec prog byl dekoracja. Tu kazde pytanie jest tak-nie
-    i wymaga cytatu, a to da sie sprawdzic.
-
-    Werdykty:
-      PISZ   — jest zlamane przekonanie i co najmniej dwa z trzech filarow
-      DOLOZ  — jest zlamane przekonanie, ale materialu za malo: szukamy pary
-      ODLOZ  — nie ma zlamanego przekonania, czyli nie ma luki
-    """
+    """Assess a supported explanation, a corrected belief or an open outcome."""
     # KARTA SZLA TU UCIETA W POLOWIE ZDANIA. Limit 14000 znakow nie mial przy
     # sobie zadnego pomiaru, a audyt policzyl, ze ucinal 7 z 8 kart — model
     # dostawal skladniowo zepsuty JSON bez zadnego znacznika, ze czegos brakuje,
@@ -882,6 +900,17 @@ def warto_pisac(
     # to zjawisko, a nie procedura — i wtedy nie ma czego wystawiac na probe.
     droga_stawki = stawka and filary["named_decider"]
 
+    # Osobna droga: przydatne wyjasnienie, bez obowiazkowego mitu.
+    wyjasnienie = o.get("explanatory_value") or {}
+    cytat = str(wyjasnienie.get("evidence") or "").strip() if isinstance(wyjasnienie, dict) else ""
+    droga_wyjasnienia = bool(
+        isinstance(wyjasnienie, dict) and wyjasnienie.get("present") is True
+        and all(str(wyjasnienie.get(k) or "").strip()
+                for k in ("question", "mechanism", "reader_value"))
+        and cytat and any(cytat in str(c.get(k) or "")
+                         for c in card.get("confirmed_claims", []) if isinstance(c, dict)
+                         for k in ("evidence", "claim")))
+
     if droga_przekonania and droga_stawki:
         werdykt, powod = "PISZ", (
             "obie drogi: zlamane przekonanie + %d z 3 filarow ORAZ "
@@ -892,6 +921,8 @@ def warto_pisac(
         werdykt, powod = "PISZ", (
             "nierozstrzygniety wynik + spisana regula, ktora go rozstrzyga "
             "(droga stawki, bez zlamanego przekonania)")
+    elif droga_wyjasnienia:
+        werdykt, powod = "PISZ", "przydatne wyjasnienie oparte na potwierdzonym materiale"
     elif przekonanie:
         werdykt, powod = "DOLOZ", (
             "zlamane przekonanie jest, ale tylko %d z 3 filarow — szukamy pary "
@@ -905,6 +936,7 @@ def warto_pisac(
             "ani przekonania do zlamania, ani nierozstrzygnietego wyniku — "
             "czytelnik nie ma ani luki do zamkniecia, ani stawki do sledzenia")
 
+    o["wyjasnienie"] = droga_wyjasnienia
     o["przekonanie"] = przekonanie
     o["stawka"] = stawka
     o["filary"] = filary
@@ -1059,208 +1091,20 @@ def losuj_odstep(co: str = "") -> float:
 <!--KOD:stages.bramka_kandydata-->
 ```python
 def bramka_kandydata(k: dict[str, Any]) -> tuple[bool, str]:
-    """Czy z tego da sie zrobic notke. Sprawdza KOD, nie model.
-
-    Regula jest jedna i ta sama, co przy artykulach: da sie zapisac zlamane
-    przekonanie w formie „wiekszosc sadzi X, naprawde Y"? Jesli nie — to jest
-    ciekawostka, a ciekawostka jest zamknieta: mozna ja polubic i nie da sie
-    na nia odpowiedziec, wiec nie rosnie.
-
-    Do tego para decyzja-skutek. Decyzja bez skutku, ktory czytelnik trzyma
-    w reku, to historia administracji. Skutek bez decyzji to ciekawostka.
-    Notka istnieje dopiero tam, gdzie udokumentowana decyzja wyprodukowala
-    rzecz, ktora ktos ma przy sobie.
-    """
-    wiara = str(k.get("wrong_belief") or "").strip()
-    naprawde = str(k.get("actually") or "").strip()
-
-    # BRAMKA 1 — NAZWANY DECYDENT Z DATA. To jest cala premisa pisma: „jaka
-    # decyzja, przepis albo interes za tym stoi". Zabija „dlaczego niebo jest
-    # niebieskie" jednym ruchem, bo nikt tego nie zdecydowal.
-    # ROK JEST WYMAGANY TYLKO OD DECYZJI, nie od kazdego mechanizmu.
-    #
-    # Ta bramka powstala, gdy pole nazywalo sie „kto zdecydowal i kiedy" i
-    # rzeczywiscie kazdy dopuszczalny mechanizm mial date. 30 sierpnia 2026
-    # doktryna sie rozszerzyla: mechanizmem jest tez POMIAR (kto zmierzyl i co
-    # wyszlo), OGRANICZENIE (co w budowie albo matematyce to wymusza) i
-    # KOMPROMIS. Bramka o tym nie wiedziala i zostala sprzecznoscia, ktora sam
-    # wprowadzilem, zmieniajac prompt i nie zagladajac do kodu.
-    #
-    # OGRANICZENIE NIE MA ROKU Z DEFINICJI. Zmierzone na 173 kandydatach:
-    # DWADZIESCIA DZIEWIEC odrzucen „decydent bez daty" dotyczylo faktow, w
-    # ktorych roku nie ma w ZADNYM polu — bo go nie moze byc. Wsrod nich
-    # tokenizacja subwordowa jako powod bledu ze „strawberry", okno kontekstu
-    # gubiace najstarsze tokeny, dostepnosc danych treningowych decydujaca o
-    # tym, ktore z 6900 jezykow model rozumie. To sa najlepsze tematy tego
-    # pisma, odrzucane za to, ze nikt ich nie podpisal.
-    #
-    # Odrzucenie jest OSTATECZNE, wiec kazdy taki fakt przepadl na zawsze.
+    """Require substance and a source; myth-breaking and second person are optional."""
     decyzja = str(k.get("decision") or "").strip()
-
-    # MECHANIZM MA BYC OPISANY, NIE WSKAZANY GESTEM — i to jest wlasciwy
-    # rozroznik, ktorego szukalem trzy razy w zlym miejscu.
-    #
-    # Prog szesciu slow, nie dwoch. Zmierzone na zywych danych 30 sierpnia:
-    #   ODPADA (3-4 slowa, machniecie reka):
-    #     „ustalone przez komitet"          — nikt nienazwany, nic konkretnego
-    #     „nikt, tak dziala fizyka"         — wprost brak mechanizmu
-    #   PRZECHODZI (12-20 slow, opis):
-    #     „Providers each choose their own serving stack — hardware, precision,
-    #      batching policy, caching"
-    #     „A face-recognition system returns ranked candidates, never a
-    #      certainty, so a false match is a ranking artefact"
-    #     „Kather and colleagues at Heidelberg measured it on 500+ real ED cases"
-    #
-    # Dlugosc rozdziela je czysto, a lista slow kluczowych nie rozdzielala ich
-    # ani razu: probowalem slow decyzyjnych (zlapala „chose" w zaprzeczeniu) i
-    # slow niedecyzyjnych (przepuscila trzy z pieciu falszywych odrzucen).
-    # Opis mechanizmu po prostu MUSI byc dluzszy niz gest — to wlasnosc rzeczy,
-    # nie slownictwa.
+    naprawde = str(k.get("actually") or "").strip()
     if len(decyzja.split()) < 6:
-        return False, ("mechanizm wskazany gestem, nie opisany: %r"
-                       % decyzja[:60])
-    # ZAPRZECZENIE NIE JEST TU JUZ POWODEM ODRZUCENIA — i to jest poprawka
-    # z 5 wrzesnia 2026, zrobiona na dowodzie z produkcji.
-    #
-    # Stala tu regula odrzucajaca `decision` zawierajaca „nobody", „no one",
-    # „nothing", „nikt". Zadzialala w calej historii DOKLADNIE RAZ i byl to
-    # falszywy alarm, ktory kosztowal mocny fakt na zawsze:
-    #
-    #   fakt:     OpenAI agents used ordinary public wikis as a message board
-    #             during a web-research benchmark, May-June 2026
-    #   decision: „No one designed a wiki-message-board behaviour; it emerged
-    #             from agents that had web access, and OpenAI shut the activity
-    #             down around 22 June."
-    #
-    # To JEST mechanizm — emergencja u agentow z dostepem do sieci — i do tego
-    # nazwana decyzja z data. Odrzucenie jest OSTATECZNE, a poprawione wersje
-    # tego samego faktu sa od tej pory pomijane jako powtorka odrzuconego.
-    # Jeden falszywy alarm zamknal wiec temat na stale.
-    #
-    # Komentarz przy progu dlugosci mowi to zreszta wprost, na podstawie
-    # wczesniejszego pomiaru: lista slow kluczowych probowana DWA RAZY i ani
-    # razu nie rozdzielila mechanizmu od gestu. Dolozylem ja mimo to, na
-    # przeczucie „dluga wersja »nikogo tu nie ma« przejdzie przez prog" —
-    # przypadku, ktorego nie zaobserwowano ANI RAZU.
-    #
-    # LUKA JEST ZAMKNIETA GDZIE INDZIEJ, przy sedzim banku: kod nie wetuje juz
-    # werdyktu NO_MECHANISM, gdy `decision` zawiera zaprzeczenie. Przy takim
-    # zdaniu sama dlugosc nie rozstrzyga, wiec ocene oddajemy modelowi zamiast
-    # rozstrzygac ja slowem kluczowym.
-    # WYMOG ROKU ZNIESIONY 30 sierpnia 2026, po dwoch nieudanych probach
-    # zwezenia go — i to jest lekcja o metodzie, nie o tej jednej regule.
-    #
-    # Rok byl PROXY NA AKTUALNOSC z czasow, gdy pole nazywalo sie „kto
-    # zdecydowal i kiedy", a jedynym dopuszczalnym mechanizmem byla decyzja.
-    # Dzis aktualnosc mierzy DOKUMENT KONTROLNY (`swiezosc_faktu`): pyta wprost,
-    # co musialoby sie zmienic, zeby twierdzenie przestalo byc prawdziwe, i
-    # sprawdza date tego dokumentu. Trzymanie prymitywnego zamiennika obok
-    # prawdziwego pomiaru to jest sposob, w jaki dorobilismy sie 30 falszywych
-    # odrzucen na 32.
-    #
-    # PROBOWALEM GO ZWEZIC DWA RAZY I DWA RAZY PRZEGRALEM ZE SLOWNIKIEM:
-    #   - wersja z lista slow decyzyjnych odrzucila „the tokenizer architecture
-    #     forces it; NOBODY CHOSE it", bo zlapala „chose" w zaprzeczeniu,
-    #   - wersja z lista slow niedecyzyjnych odrzucila na ZYWYCH danych trzy z
-    #     pieciu nowych kandydatow: „providers each choose their own serving
-    #     stack", „NEDA traded trained humans for a bot", „a face-recognition
-    #     system returns ranked candidates, never a certainty". Same
-    #     ograniczenia i kompromisy — dokladnie material, na ktorym nam zalezy.
-    # Wzorzec slownikowy na tekscie swobodnym zawsze bedzie dziurawy w te
-    # strone, w ktora akurat nie patrzylem. To ta sama wada, co `\byour\b`.
-    #
-    # CO ZOSTAJE ZAMIAST NIEGO: wymog dwoch slow wyzej (zabija „nikt tego nie
-    # zdecydowal"), zlamane przekonanie, skutek w drugiej osobie, sprawdzalnosc
-    # — i dokument kontrolny, ktory robi to, do czego rok byl zastepnikiem.
-
-    # BRAMKA 2 — ZLAMANE PRZEKONANIE. Najostrzejsza regula w calym potoku:
-    # „wiekszosc nie wie" to NIE JEST przekonanie, tylko niewiedza, a niewiedza
-    # produkuje ciekawostki. X musi byc twierdzeniem, ktorego czytelnik BRONILBY,
-    # gdyby mu zaprzeczyc. Ten sam werdykt trzy razy niezaleznie: ta bramka,
-    # bramka warto_pisac i wlasciciel, ktory usunal artykul o symbolu
-    # na kosmetykach — bo nikt nie ma o tym symbolu zadnego zdania.
-    # ZMIERZONE 5 wrzesnia 2026, po zarzucie z zewnetrznego audytu banku, ze ta
-    # regula wycina wyjasnienia mechanizmu. Na produkcyjnym indeksie (126
-    # pozycji):
-    #     odrzucen za brak mitu:                          0
-    #     pozycji z wpisanym przekonaniem:              126
-    #     zaczynajacych sie formulka „most people…":      0 (0%)
-    # Przyklady tego, co model naprawde wpisuje: „OpenAI beat Nvidia by
-    # building a bigger, faster general-purpose GPU", „A model that cheap and
-    # that fast must be small". To sa przekonania, ktorych czytelnik BRONILBY,
-    # a nie wypelniacz — czyli dokladnie to, o co ta bramka prosi.
-    #
-    # NIE MA TEZ KONFLIKTU Z `notka.md`, mimo ze 5 wrzesnia zdjalem stamtad
-    # obowiazek demaskowania. Zdjety zostal obowiazek KSZTALTU („X, not Y"
-    # w kazdej notce); przekonanie zostalo jako os KATA — ten sam fakt daje
-    # kilka notek, kazda przeciw innemu przekonaniu. Bramka pilnuje, ze
-    # material ma ten wymiar; prompt nie kaze go uzywac jako korekty.
-    if len(wiara.split()) < MIN_SLOW_POLOWY:
-        return False, "brak przekonania do zlamania — to ciekawostka, nie notka"
-    if re.search(r"\b(don'?t know|do not know|never heard|are unaware|not aware|"
-                 r"nikt nie wie|malo kto wie)\b", wiara, re.IGNORECASE):
-        return False, ("niewiedza to nie przekonanie — czytelnik musi czegos "
-                       "BRONIC, a nie tego nie znac: %r" % wiara[:60])
+        return False, "mechanizm wskazany gestem, nie opisany: %r" % decyzja[:60]
     if len(naprawde.split()) < MIN_SLOW_POLOWY:
-        return False, "jest przekonanie, ale nie ma co mu przeciwstawic"
-
-    # BRAMKA 3 — KONTAKT. Czytelnik ma tego dotykac, nie podziwiac z daleka.
-    skutek = str(k.get("consequence") or "").strip()
-    if not skutek:
-        return False, "decyzja bez skutku, ktory czytelnik trzyma w reku"
-
-    # I MUSI TO BYC ZWYKLY CZLOWIEK, NIE FACHOWIEC. Pierwszy przebieg na
-    # Federal Register wypuscil szesc kandydatow na szesc: kwoty polowowe dla
-    # posiadaczy zezwolen na takle pelagiczne, oplaty karne dla przetworcow
-    # orzechow wloskich, dodatek za wypalanie kontrolowane dla strazakow
-    # lesnych i formatowanie naglowka w samym Federal Register. Kazdy z nich
-    # ma decydenta, date, zlamane przekonanie i skutek — i zaden nie nadaje
-    # sie do publikacji, bo przekonanie trzyma BRANZA, a nie czytelnik.
-    #
-    # Zero odrzucen na prawdziwych danych bylo zreszta samo w sobie ostrzezeniem:
-    # bramka, ktora nigdy nie zagryzla, nie jest bramka.
-    # Sprawdzenie jest STRUKTURALNE, nie slownikowe, bo lista slow branzowych
-    # jest z natury dziurawa — przepuscila strazakow lesnych i formatowanie
-    # naglowka w samym Federal Register.
-    #
-    # Roznica miedzy dobrym a zlym skutkiem jest inna: dobry nazywa RZECZ,
-    # ktora czytelnik ma, zly nazywa OSOBE, ktorej dotyczy przepis.
-    #   dobrze: „the bottle of sunscreen in your bathroom", „the clock on
-    #           your oven", „the pending charge in your banking app"
-    #   zle:    „an Atlantic-region pelagic longline permit holder",
-    #           „GS and FWS wildland firefighters assigned to prescribed burns"
-    #
-    # Wymog DRUGIEJ OSOBY wymusza odpowiedz na pytanie CO MA CZYTELNIK zamiast
-    # KOGO TO DOTYCZY. Prompt zamawia dokladnie taka forme, wiec to nie jest
-    # zgadywanka — to sprawdzenie, czy model wykonal polecenie.
-    #
-    # SZUKALO SAMEGO „your" I TO BYLA WADA NA JEDNA LITERE. Zmierzone 30
-    # sierpnia 2026 na 173 kandydatach z produkcji: SZESNASCIE odrzucen z
-    # powodem „brak slowa 'your'" dotyczylo zdan pisanych w drugiej osobie —
-    # „the model you talk to", „the sandbox you're told keeps a model
-    # contained", „the number you see on a benchmark leaderboard", „the
-    # entry-level job you apply for". To jest DOKLADNIE forma, ktorej ta
-    # bramka zada, odrzucana przez brak litery „r".
-    #
-    # Zginal na tym najlepszy material, jaki potok znalazl. Odrzucenie jest
-    # OSTATECZNE — wpis dostaje status „odrzucony" na zawsze — wiec te fakty
-    # nie wracaja nigdy.
-    #
-    # BRAMKA SIE NIE ROZLUZNIA: oba pierwotne kontrprzyklady, ktore ja
-    # wywolaly („an Atlantic-region pelagic longline permit holder", „GS and
-    # FWS wildland firefighters"), nadal nie zawieraja zadnej drugiej osoby.
-    if not re.search(r"\byou\b|\byour\b|\byou're\b|\byours\b|\byourself\b",
-                     skutek, re.IGNORECASE):
-        return False, ("skutek nazywa kogos, nie rzecz czytelnika (brak drugiej"
-                       " osoby): %r" % skutek[:70])
-
-    # BRAMKA 4 — SPRAWDZALNOSC. Jesli nie umiemy nazwac, GDZIE mieszka
-    # odpowiedz, to weryfikacja padnie pozniej — a wtedy research bedzie juz
-    # oplacony. Adres wystarcza za wskazanie rodzaju dokumentu.
+        return False, "brak konkretnego ustalenia do wyjasnienia"
+    if not str(k.get("consequence") or "").strip():
+        return False, "brak wyjasnienia znaczenia tego ustalenia"
     if not str(k.get("url") or "").startswith("http"):
         return False, "brak zrodla"
-
-    czysty, powod = bez_wstrzykniecia("%s %s %s" % (wiara, naprawde, k.get("fact", "")))
+    # Opcjonalne pole tez pozostaje danymi z zewnatrz, wiec podlega zaporze.
+    tekst = " ".join(str(k.get(key) or "") for key in ("wrong_belief", "actually", "fact"))
+    czysty, powod = bez_wstrzykniecia(tekst)
     if not czysty:
         return False, "zapora: %s" % powod
     return True, ""

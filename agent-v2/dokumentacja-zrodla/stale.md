@@ -22,6 +22,9 @@
 | `IMAGE_TIMEOUT_S` | `300` | — |
 | `SUBSTACK_HANDLE` | `_env("SUBSTACK_HANDLE", "nothingisaccidental` | Konto na Substacku. ZE SRODOWISKA, ZEBY DALO SIE POSTAWIC DRUGIEGO AGENTA NA INNYM KONCIE. Druga kopia repozytorium dostaje wlasny `DATA_DIR |
 | `MARKA` | `_env("MARKA", "Nothing Is Accidental")` | NAZWA MARKI, ktora agent widzi w promptach. Wstawiana automatycznie przez `stages._prompt` jako pole `{marka}` — dziewiec plikow promptow mi |
+| `MAKS_ODPOWIEDZI_W_ROZMOWIE` | `2` | ILE RAZY ODPISUJEMY W JEDNEJ ROZMOWIE. Rozmowa to galaz komentarzy: ten, ktory ja zaczal, i wszystko pod nim. Liczy `browser.nasze_odpowiedz |
+| `MAKS_ODPOWIEDZI_KONTU_SIOSTRZANEMU` | `1` | — |
+| `KONTA_SIOSTRZANE` | `frozenset( int(x) for x in _env("KONTA_SIOST` | — |
 | `WYLACZ_WYKRYWANIE_AI` | `True` | Czy agent ma klikac "Wylacz wykrywanie AI" przy kazdej publikacji. WLACZONE decyzja wlasciciela z 2026-08-15. To wybor publiczny, nie ustawi |
 | `DRY_RUN` | `_env("DRY_RUN", "false").lower() in {"1", "t` | — |
 | `KILL_SWITCH` | `_env("KILL_SWITCH", "false").lower() in {"1"` | — |
@@ -34,7 +37,7 @@
 | `DEEPSEEK` | `"deepseek-flash"` | DEEPSEEK V4.1 FLASH, OD 10 WRZESNIA 2026. Stara nazwa `deepseek-v4-flash` jest u DeepSeeka juz tylko przekierowaniem: model V4 Flash wycofan |
 | `DEEPSEEK_V4_FLASH` | `"deepseek-v4-flash"` | — |
 | `DEEPSEEK_PRO` | `"deepseek-v4-pro"` | V4 PRO ZOSTAJE. Ogloszenie z 10 wrzesnia zapowiadalo przekierowanie tej nazwy na V4.1 Flash od 14 wrzesnia 04:00 UTC, ale DeepSeek sie wycof |
-| `ROLE_MODELI` | `("CLAUDE", "SONNET", "FABLE", "DEEPSEEK", "D` | — |
+| `ROLE_MODELI` | `tuple(RODZINY_ROL)` | — |
 | `MODELE_Z_KODU` | `{rola: globals()[rola] for rola in ROLE_MODE` | — |
 | `_STAN_WYBORU` | `{} if _w_tescie_wczesnie() else _wybor_model` | — |
 | `MODEL_FOR` | `{ "scout": DEEPSEEK, "feasibility": DEEPSEEK` | Routing od 2026-09-25: Fable pisze artykuly; Flash obsluguje pozostale etapy tekstowe. Ustawienia rozumowania sa osobno w DEEPSEEK_MYSLENIE. |
@@ -81,6 +84,17 @@
 | `MIN_ZRODEL_DO_PISANIA` | `4` | — |
 | `MIN_PRIMARY_SOURCES` | `2` | — |
 | `MIN_WHY_SOURCES` | `2` | — |
+| `RESEARCH_ENABLED` | `True` | Dogrywka reporterska korzysta z juz oplaconych fragmentow. Maksymalnie dwie rundy, po trzy nowe dokumenty; analiza tylko luk, nie ponowny pe |
+| `RESEARCH_MAX_ROUNDS` | `2` | — |
+| `RESEARCH_MAX_NEW_SOURCES` | `3` | — |
+| `RESEARCH_MAX_QUESTIONS` | `4` | — |
+| `RESEARCH_MAX_HYPOTHESES` | `3` | — |
+| `RESEARCH_MAX_INPUT_CHARS` | `60_000` | — |
+| `RESEARCH_MAX_DOC_CHARS` | `18_000` | — |
+| `RESEARCH_MAX_EXCERPTS` | `5` | — |
+| `RESEARCH_MAX_QUOTE_CHARS` | `700` | — |
+| `RESEARCH_CACHE_HOURS` | `24` | — |
+| `RESEARCH_STOP_USD` | `0.15` | Prog zatrzymania przed NASTEPNYM wywolaniem, nie gwarancja kwoty faktury: ostatnie wywolanie i niepotwierdzone stawki moga przekroczyc ten s |
 | `BLOCKED_HOSTS` | `( "federalregister.gov", "regulations.gov", ` | Hosty, które serwują automatom CAPTCHA albo są płatne. Nie omijamy blokad — wykrywamy je i nie marnujemy na nie zapytań. |
 | `CLASSIFY_MAX_INPUT_CHARS` | `90_000` | --- klasyfikacja ------------------------------------------------------------ |
 | `CLASSIFY_MAX_EXCERPTS` | `12` | — |
@@ -131,10 +145,10 @@
 | `POSTAWY_KOMENTARZA` | `{ "CIEKAWOSC": (7, ( "Say what genuinely cau` | SPOSOB OTWARCIA, losowany tak samo jak dlugosc i z tego samego powodu. Zmierzone na naszych wlasnych komentarzach: SIEDEM Z DZIEWIECIU zaczy |
 | `OTWARCIA` | `( "Start with the mechanism itself, no pream` | — |
 | `COMMENTS_PER_DAY` | `4` | Sufit dzienny. Research mówi, że trzy przemyślane komentarze tygodniowo biją piętnaście uprzejmych; pierwotne 15-20 dziennie było z planu sp |
-| `NOTE_FORMS` | `{ "PROSTA": ( "One tight paragraph. No line ` | Typy notek. W dniu publikacji artykułu lecą notki typu ARTYKUL z linkiem; w pozostałe dni — pozostałe typy, oparte na fragmentach, których a |
+| `NOTE_FORMS` | `{ 'PROSTA': 'Explain the point directly. Use` | Typy notek. W dniu publikacji artykułu lecą notki typu ARTYKUL z linkiem; w pozostałe dni — pozostałe typy, oparte na fragmentach, których a |
 | `FORMY_NIEMOZLIWE` | `{ "MYSL": frozenset({"LICZBA", "LISTA", "KON` | FORMY, KTORYCH DANY TYP NIE MOZE WYKONAC — bo zadaja tego, czego typ zabrania. ZMIERZONE 5 wrzesnia 2026 na rotacji z calego roku: 730 z 109 |
 | `NOTE_FORM_MIX` | `("SCENA", "KONTRAST", "ZACZEP_I_KONKRET", "P` | — |
-| `NOTE_TYPES` | `{ # MYSL — jedyny typ ZWOLNIONY z karty dowo` | — |
+| `NOTE_TYPES` | `{ 'MYSL': 'An editorial view, a genuine open` | — |
 | `PUBLISH_TIMEZONE` | `"America/New_York"` | Strefa czasowa publikacji. Liczy się strefa CZYTELNIKÓW, nie właściciela: konto jest anglojęzyczne, więc publiczność jest głównie amerykańsk |
 | `WORST_NOTE_HOURS` | `(12, 13)` | NAJGORSZE OKNO — I TO JEST STALA EGZEKWOWANA, nie zapis ustalen. `pora_na_publikacje` odmawia publikacji w tych godzinach, wiec miedzy 12:00 |
 | `BEST_NOTE_HOURS` | `(6, 7, 8)` | UWAGA: DWIE PONIZSZE STALE NIE SA UZYWANE PRZEZ ZADNA LINIE KODU. Agent nie wazy notek wedlug tych godzin ani dni — rozklada je losowo w okn |
@@ -153,7 +167,7 @@
 | `WYDARZENIE_PROB_MAKS` | `3` | ILE RAZY PROBUJEMY DOBRAC MATERIAL DO JEDNEGO WYDARZENIA, zanim uznamy je za zamkniete mimo braku materialu. Od 2 wrzesnia 2026 furtke zamyk |
 | `BANK_MAKS_DNI` | `7` | TERMIN WAZNOSCI W BANKU, liczony od dnia dopisania — osobny od wieku ZRODLA. To sa dwa rozne pytania: dokument kontrolny mowi, czy fakt jest |
 | `NOTE_MIX_ARTICLE_DAY` | `("ARTYKUL", "CIEKAWOSTKA", "SPROSTOWANIE")` | MIESZANKA DNIA. Ostatnia pozycja to MYSL — notka bez zadnego dowodu. Powod jest w NOTE_TYPES przy samym typie: wszystkie pozostale wymagaja  |
-| `KSZTALTY_MYSLI` | `{ "PYTANIE": ( "Ask something nobody can set` | KSZTALTY NOTKI TYPU MYSL. Losowane w kodzie i podawane jako PRZYDZIAL. Powod jest zmierzony: opis typu wymienial pytanie i obserwacje jako d |
+| `KSZTALTY_MYSLI` | `{ 'PYTANIE': 'Consider a genuine open questi` | KSZTALTY NOTKI TYPU MYSL. Losowane w kodzie i podawane jako PRZYDZIAL. Powod jest zmierzony: opis typu wymienial pytanie i obserwacje jako d |
 | `NOTE_MIX_OTHER_DAY` | `("CIEKAWOSTKA", "DYSKUSJA", "SPROSTOWANIE")` | TRZY NOTKI NA DOBE ZAMIAST DZIESIECIU — decyzja wlasciciela, 7 wrzesnia 2026. Liczba notek na dobe to DLUGOSC TEJ KROTKI i tylko ona. POWOD  |
 | `PISARZE_NOTEK` | `("note",)` | KTO PISZE NOTKI — decyzja wlasciciela z 7 wrzesnia 2026: „zostaw Opusa". Naprzemiennosc weszla 3 wrzesnia jako SLEPA PROBA: polowa notek Opu |
 | `LAJKI_DZIENNIE` | `(10, 16)` | --- zachowanie spoleczne: widelki, nie stale liczby ------------------------- Stala liczba dziennie wyglada jak robot, bo czlowiek nie ma no |
