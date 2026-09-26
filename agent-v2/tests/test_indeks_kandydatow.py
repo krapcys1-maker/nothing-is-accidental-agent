@@ -74,11 +74,11 @@ try:
     sprawdz("kandydat ze zlamanym przekonaniem przechodzi", ok, powod)
     ok, powod = stages.bramka_kandydata(TRIVIA)
     sprawdz("najdluzszy tunel swiata NIE przechodzi", not ok, powod)
-    sprawdz("powod nazywa problem", "ciekawostka" in powod, powod)
+    sprawdz("powod nazywa problem", "ustalenia" in powod, powod)
 
     print()
     print("=== 2. POLOWKI MUSZA MIEC TRESC, NIE SAMO POLE ===")
-    for pole, opis in (("wrong_belief", "przekonanie"), ("actually", "przeciwstawienie")):
+    for pole, opis in (("actually", "ustalenie"),):
         k = dict(DOBRY); k[pole] = "tak"
         ok, powod = stages.bramka_kandydata(k)
         sprawdz("jedno slowo w polu %s to za malo" % opis, not ok, powod)
@@ -229,8 +229,8 @@ try:
             '"wrong_belief"' in prompt and '"actually"' in prompt)
     sprawdz("prompt zamawia decyzje i skutek",
             '"decision"' in prompt and '"consequence"' in prompt)
-    sprawdz("prompt tlumaczy, czemu sama ciekawostka jest martwa",
-            "trivia is discarded" in prompt)
+    sprawdz("prompt dopuszcza wyjasnienie bez mitu",
+            "does not have to expose a myth" in " ".join(prompt.split()))
 
     print()
     print("=== 10. SKUTEK MA NAZYWAC RZECZ CZYTELNIKA, NIE OSOBE ===")
@@ -247,7 +247,7 @@ try:
     ]
     for nazwa, skutek in Z_FEDREG:
         ok, powod = stages.bramka_kandydata(wariant_skutku(skutek))
-        sprawdz("odrzuca: %s" % nazwa, not ok, powod)
+        sprawdz("sama trzecia osoba nie odrzuca: %s" % nazwa, ok, powod)
 
     DOBRE_SKUTKI = [
         ("krem z filtrem", "the bottle of sunscreen in your bathroom"),
@@ -261,9 +261,9 @@ try:
 
     prompt_fr = (config.PROMPTS_DIR / "fedreg.md").read_text(encoding="utf-8")
     sprawdz("prompt fedreg ostrzega przed branza",
-            "would somebody with no connection to" in prompt_fr)
-    sprawdz("prompt fedreg zamawia forme z 'your'",
-            'using the word "your"' in prompt_fr)
+            "useful, checkable AI-related finding" in prompt_fr)
+    sprawdz("prompt fedreg nie wymusza drugiej osoby",
+            "Second-person wording is optional" in prompt_fr)
 
     print()
     print("=== SPIZARNIA Z POPRZEDNIEGO PISMA SIE NIE LICZY ===")

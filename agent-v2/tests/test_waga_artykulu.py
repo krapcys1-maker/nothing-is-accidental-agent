@@ -92,7 +92,7 @@ sprawdz("oba naraz oczywiscie tez", ok)
 
 ok, powod = azp.uniesie_artykul({"second_act": "", "beyond_one_place": ""})
 sprawdz("bez zadnego z dwoch — to notka", not ok, powod)
-sprawdz("i powod mowi to wprost", "notka" in powod, powod)
+sprawdz("i powod mowi to wprost", "notke" in powod, powod)
 
 print()
 print("=== 3. WYPELNIACZE TO PUSTE POLE NAPISANE INACZEJ ===")
@@ -124,7 +124,7 @@ print("=== 5. PODPYTANIA IDA DO RESEARCHU, NIE TYLKO DO PISARZA ===")
 # To znaczy wiecej pytan na WEJSCIU researchu, nie wiecej slow na wyjsciu.
 sprawdz("brief zamawia podpytania", '"sub_questions"' in src)
 sprawdz("prompt odroznia je od hasel do wyszukania",
-        "Not search phrases" in src)
+        "distinct question needing evidence" in src)
 sprawdz("podpytania trafiaja do dyskoverii",
         "pytanie_do_researchu" in src
         and "stages.discovery(conn, run_id, pytanie_do_researchu" in src)

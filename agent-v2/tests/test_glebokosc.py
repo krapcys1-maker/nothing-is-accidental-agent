@@ -142,11 +142,12 @@ print("=== 5. SYNTEZA ZBIERA PARALELE, PISARZ NIMI ZARABIA DLUGOSC ===")
 synteza = (config.PROMPTS_DIR / "synteza.md").read_text(encoding="utf-8")
 sprawdz("synteza ma pole parallel_mechanisms", "parallel_mechanisms" in synteza)
 sprawdz("synteza wymaga trafnosci, nie luznych porownan",
-        "worse than none" in synteza)
+        "supported by the supplied passages" in synteza
+        and "Do not\ninvent examples from memory" in synteza)
 sprawdz("synteza pozwala oddac pusta liste", "empty list" in synteza)
 pisarz = (config.PROMPTS_DIR / "pisarz.md").read_text(encoding="utf-8")
-sprawdz("pisarz wie, ze dlugosc trzeba zarobic", "Earning the length" in pisarz)
-sprawdz("pisarz ma pisac krotko, gdy paralel brak", "write short" in pisarz)
+sprawdz("pisarz wie, ze dlugosc trzeba zarobic", "Do not pad" in pisarz)
+sprawdz("pisarz nie wymaga analogii dla dlugosci", "Depth can come from following one question carefully" in pisarz)
 
 print()
 print("=== 6. CIECIA W PISARZU ===")
@@ -161,19 +162,10 @@ print("=== 6. CIECIA W PISARZU ===")
 #
 # Wiec test pyta teraz o to, co naprawde ma byc prawda: zadne zdanie promptu
 # nie zakazuje akapitu, ktory piec innych miejsc zaklada.
-sprawdz("prompt zamawia JEDEN akapit granic",
-        "One paragraph, and only one." in pisarz
-        and "Say the limits once" in pisarz)
-sprawdz("i rzadzi jego POLOZENIEM, nie istnieniem",
-        "Put that paragraph where the gap opens" in pisarz)
-sprawdz("zadne zdanie nie zakazuje zbierania granic",
-        "Never collect them." not in pisarz
-        and "Put each unknown where it arises, alone." not in pisarz)
-sprawdz("zakaz rozdymania nadal zaklada, ze akapit istnieje",
-        "expand the limits paragraph" in pisarz)
-sprawdz("schemat nadal pyta o obecnosc akapitu",
-        "limits_paragraph_present" in pisarz)
-sprawdz("zakaz powtarzania mechanizmu", "Name the mechanism once" in pisarz)
+sprawdz("osobny akapit granic jest opcjonalny", "false is valid" in pisarz)
+sprawdz("ograniczenie trafia przy twierdzeniu", "beside the claim" in pisarz)
+sprawdz("schemat zachowuje pole ograniczen", "limits_paragraph_present" in pisarz)
+sprawdz("rozwiniecie jest dozwolone dla zrozumienia", "difficult point understandable" in pisarz)
 
 print()
 print("=== 7. GRAFIKA: SCENA Z KONTEKSTEM, SYMBOL TO NIE TEMAT ===")

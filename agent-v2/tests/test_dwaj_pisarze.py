@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
-"""Notki pisza DWAJ pisarze na zmiane, a dziennik wie KTORY.
+"""Dwa historyczne etapy notek maja wspolny model; dziennik zapisuje wykonawce.
+
+Od 2026-09-25 oba ida na Flash. Ponizej historyczne uzasadnienie testow
+metadanych i wyboru etapu; zmiana modelu nie usuwa tych gwarancji.
 
 PO CO TO ISTNIEJE. Notka na Opusie kosztuje 0,084 USD, na DeepSeeku pro 0,010 —
 osiem razy taniej. Slepa proba z 19 sierpnia 2026 pokazala, ze przy notkach
@@ -69,11 +72,9 @@ FAKT = {"fact": "Something checkable happened in 2026.", "url": "https://example
         "domain": "example.org", "wrong_belief": "b", "actually": "c",
         "source_date": "2026-09-01"}
 
-print("=== 1. DWA ETAPY, DWA MODELE, TEN SAM KONTRAKT ===")
-sprawdz("etap `note` chodzi na innym modelu niz `note_tani`",
-        config.MODEL_FOR["note"] != config.MODEL_TANI_NOTKI
-        if hasattr(config, "MODEL_TANI_NOTKI")
-        else config.MODEL_FOR["note"] != config.MODEL_FOR["note_tani"],
+print("=== 1. OBA ETAPY NOTE KORZYSTAJA Z FLASHA ===")
+sprawdz("note i note_tani maja ten sam tani model",
+        config.MODEL_FOR["note"] == config.MODEL_FOR["note_tani"] == config.DEEPSEEK,
         (config.MODEL_FOR["note"], config.MODEL_FOR["note_tani"]))
 sprawdz("oba maja sufit tokenow (bez tego `_preflight` odmawia)",
         config.MAX_TOKENS.get("note_tani") == config.MAX_TOKENS.get("note"),
@@ -323,7 +324,7 @@ print("=== 5. JEDEN PISARZ OD 7 WRZESNIA 2026 — I MECHANIZM NIETKNIETY ===")
 # piec miesiecy.
 sprawdz("notki pisze jeden pisarz", len(config.PISARZE_NOTEK) == 1,
         config.PISARZE_NOTEK)
-sprawdz("i jest nim Opus", config.MODEL_FOR[config.PISARZE_NOTEK[0]] == "claude-opus-5",
+sprawdz("i jest nim Flash", config.MODEL_FOR[config.PISARZE_NOTEK[0]] == config.DEEPSEEK,
         config.MODEL_FOR[config.PISARZE_NOTEK[0]])
 # MECHANIZM MA ZOSTAC ZDATNY DO UZYCIA. Cala wartosc tej zmiany polega na tym,
 # ze wznowienie proby to dopisanie jednego slowa, a nie przywracanie kodu.

@@ -1,43 +1,8 @@
-"""Nowe modele wchodza same — po probie, nie po ogloszeniu.
+"""Daily API-catalog updates for every configured model family.
 
-DLACZEGO TO ISTNIEJE. 10 wrzesnia 2026 DeepSeek wydal V4.1 Flash, wycofal V4 Flash
-i przekierowal jego nazwe na nowy model. Konto chodzilo na nowym modelu trzy dni,
-nie wiedzac o tym, bo wywolania dalej konczyly sie sukcesem. Wyszlo przy
-przegladzie konta 13 wrzesnia, i to w najgorszej postaci: V4.1 Flash nie ma
-narzedzia wyszukiwania, wiec weryfikacja faktow przed publikacja przez trzy dni
-sprawdzala tekst pamiecia modelu. Tego samego dnia DeepSeek najpierw zapowiedzial
-przestawienie `deepseek-v4-pro` na V4.1 Flash, a potem sie z tego wycofal — dwie
-strony jego dokumentacji mowily rozne rzeczy naraz. Nazwy nie wystarcza.
-
-Wlasciciel: „moze warto dopisac cos takiego, zeby automatycznie sie zmienialo na
-nowe modele, jak wychodza". Ten modul to robi — ale na dowodach, nie na nazwach.
-
-JAK DZIALA, raz na dobe:
-
-    1. lista modeli od dostawcow — `GET /v1/models` u Anthropic i `GET /models`
-       u DeepSeeka. Za darmo i dokladnie: to jest spis tego, co da sie wywolac.
-    2. dla kazdej roli najlepszy model W TEJ SAMEJ RODZINIE: Opus na Opusa,
-       Flash na Flasha. Nazwa bez numeru u DeepSeeka (`deepseek-flash`) to jego
-       wlasny sposob mowienia „najnowsza wersja" — wybierana przed numerowanymi.
-    3. proba: nowy model musi odpowiedziec poprawnym JSON-em. Kilka tokenow.
-    4. zamiana zapisana w `data/wybor_modeli.json`; `config` stosuje ja przy
-       kazdym starcie, a tu dziala od razu, w biezacym przebiegu.
-    5. proba wyszukiwania na kazdym modelu DeepSeeka w uzyciu. Gdy model zacznie
-       szukac, wywolania z siecia wroca do niego same; gdy przestanie — pojda
-       do zastepcy juz w nastepnym przebiegu (`config.szuka_naprawde`).
-
-CZEGO TU CELOWO NIE MA.
-
-    - PRZESKOKU MIEDZY RODZINAMI. Opus na Fable to dwa razy wyzszy rachunek
-      i inny glos artykulow. To decyzja wlasciciela, nie aktualizacja.
-    - WERSJI preview, exp, beta, latest, vision. Nie buduje sie konta na czyms,
-      co dostawca sam nazywa proba.
-    - ZAMIANY NA STARSZA WERSJE, dopoki obecna odpowiada. Znikniecie z listy
-      moze byc chwilowe; model, ktory odpowiada, nie jest zepsuty.
-    - DECYZJI NA PUSTEJ LISCIE. Brak odpowiedzi dostawcy to brak danych,
-      a nie dowod, ze wszystkie modele zniknely.
-    - BRAMKI DLA PUBLIKACJI. Nic tutaj nie zatrzymuje notki ani komentarza:
-      nieudana proba zostawia obecny model, ktory dziala.
+Text candidates must return JSON; DeepSeek candidates must also really search.
+Image candidates must generate an image with production settings. Persist the
+selection before applying it to the running process. See docs/AUTOMATYCZNE_MODELE.md.
 """
 from __future__ import annotations
 
@@ -47,19 +12,12 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import config
+from model_registry import ROLE, version as wersja, in_family as w_rodzinie
 
 WAZNE_GODZIN = 24
 
 # rola w config -> (dostawca, rodzina)
-ROLE = {
-    "CLAUDE": ("anthropic", "opus"),
-    "SONNET": ("anthropic", "sonnet"),
-    "FABLE": ("anthropic", "fable"),
-    "DEEPSEEK": ("deepseek", "flash"),
-    "DEEPSEEK_PRO": ("deepseek", "pro"),
-}
-
-ZAKAZANE_CZLONY = ("preview", "exp", "beta", "alpha", "latest", "vision", "test")
+WERSJA_STANU = 2
 
 PROBA_JSON = 'Return only valid JSON, exactly this object: {"ok": true}'
 PYTANIE_SZUKANIA = (
@@ -70,33 +28,6 @@ PYTANIE_SZUKANIA = (
 
 # --- czysta logika: bez sieci, testowalna ------------------------------------
 
-def wersja(identyfikator: str) -> tuple[int, ...]:
-    """Numery wersji z identyfikatora. Data wydania (8 cyfr) nie jest wersja.
-
-        claude-fable-5-1           -> (5, 1)
-        claude-opus-4-5-20251101   -> (4, 5)
-        deepseek-v4.1-pro          -> (4, 1)
-        deepseek-flash             -> ()
-    """
-    liczby: list[int] = []
-    for czlon in re.split(r"[-.]", str(identyfikator).lower()):
-        if re.fullmatch(r"v\d+", czlon):
-            czlon = czlon[1:]
-        if czlon.isdigit() and len(czlon) < 8:
-            liczby.append(int(czlon))
-    return tuple(liczby)
-
-
-def w_rodzinie(identyfikator: str, dostawca: str, rodzina: str) -> bool:
-    """Czy identyfikator nalezy do rodziny u tego dostawcy i nie jest proba."""
-    nazwa = str(identyfikator).lower()
-    prefiks = "deepseek" if dostawca == "deepseek" else "claude"
-    if not nazwa.startswith(prefiks):
-        return False
-    czlony = re.split(r"[-.]", nazwa)
-    return rodzina in czlony and not any(z in czlony for z in ZAKAZANE_CZLONY)
-
-
 def najlepszy_w_rodzinie(dostawca: str, rodzina: str,
                          lista: dict[str, Any]) -> str | None:
     """Najlepszy kandydat rodziny z listy dostawcy `{identyfikator: data_wydania}`."""
@@ -106,7 +37,12 @@ def najlepszy_w_rodzinie(dostawca: str, rodzina: str,
     kanoniczna = "deepseek-%s" % rodzina
     if dostawca == "deepseek" and kanoniczna in kandydaci:
         return kanoniczna
-    return max(kandydaci, key=lambda m: (wersja(m), str(lista.get(m) or "")))
+    # Keep the full-quality image role. A faster sibling is not a newer version.
+    # Prefer the stable name over a dated snapshot of the same version.
+    return max(kandydaci, key=lambda m: (
+        wersja(m), 0 if "flare" in m.split("-") else 1,
+        not bool(re.search(r"-(?:\d{8}|\d{4}-\d{2}-\d{2})$", m)),
+        str(lista.get(m) or "")))
 
 
 def zdecyduj(obecne: dict[str, str],
@@ -154,6 +90,8 @@ def zastosuj_w_procesie(rola: str, stary: str, nowy: str) -> None:
     """Zamiana dziala od razu, bez czekania na nastepny start procesu."""
     setattr(config, rola, nowy)
     for etap, model in list(config.MODEL_FOR.items()):
+        if etap == "write" and config._writer:
+            continue  # An explicit one-run writer override remains pinned.
         if model == stary:
             config.MODEL_FOR[etap] = nowy
     for etap, model in list(config.MODEL_DO_SZUKANIA.items()):
@@ -180,14 +118,28 @@ def lista_modeli() -> dict[str, dict[str, Any] | None]:
     """Spis modeli u dostawcow. `None` przy bledzie albo pustej liscie."""
     import httpx
 
-    listy: dict[str, dict[str, Any] | None] = {"anthropic": None, "deepseek": None}
+    listy: dict[str, dict[str, Any] | None] = {"anthropic": None, "deepseek": None, "openai": None}
     if config.ANTHROPIC_API_KEY:
         try:
-            odp = httpx.get("https://api.anthropic.com/v1/models?limit=1000",
-                            headers=_naglowki_anthropic(), timeout=30)
-            odp.raise_for_status()
-            listy["anthropic"] = {m["id"]: m.get("created_at")
-                                  for m in odp.json().get("data", []) if m.get("id")} or None
+            znalezione = {}
+            cursor = None
+            for _ in range(20):
+                params = {"limit": 1000}
+                if cursor:
+                    params["after_id"] = cursor
+                odp = httpx.get("https://api.anthropic.com/v1/models",
+                                params=params, headers=_naglowki_anthropic(), timeout=30)
+                odp.raise_for_status()
+                dane = odp.json()
+                znalezione.update({m["id"]: m.get("created_at")
+                                   for m in dane.get("data", []) if m.get("id")})
+                if not dane.get("has_more"):
+                    listy["anthropic"] = znalezione or None
+                    break
+                nowy_cursor = dane.get("last_id")
+                if not nowy_cursor or nowy_cursor == cursor:
+                    raise ValueError("niekompletna paginacja listy modeli")
+                cursor = nowy_cursor
         except Exception as exc:
             print("  [nowe modele] lista Anthropic niedostepna (%s) — bez decyzji"
                   % type(exc).__name__, flush=True)
@@ -201,7 +153,39 @@ def lista_modeli() -> dict[str, dict[str, Any] | None]:
         except Exception as exc:
             print("  [nowe modele] lista DeepSeeka niedostepna (%s) — bez decyzji"
                   % type(exc).__name__, flush=True)
+    if config.OPENAI_API_KEY:
+        try:
+            odp = httpx.get("https://api.openai.com/v1/models",
+                            headers={"Authorization": "Bearer " + config.OPENAI_API_KEY}, timeout=30)
+            odp.raise_for_status()
+            listy["openai"] = {m["id"]: m.get("created") for m in odp.json().get("data", [])
+                               if w_rodzinie(m.get("id", ""), "openai", "gpt-image")} or None
+        except Exception as exc:
+            print("  [nowe modele] lista OpenAI niedostepna (%s) — bez decyzji"
+                  % type(exc).__name__, flush=True)
     return listy
+
+
+def proba_obrazu(model: str, conn, run_id: int | None) -> tuple[bool, str]:
+    """Generate one real image with production size/quality before switching."""
+    import hashlib
+    import struct
+    import llm
+    try:
+        obraz = llm.obraz("A simple blue circle on a white background, no text.",
+                          conn=conn, run_id=run_id, model=model)
+        if (not obraz.startswith(b"\x89PNG\r\n\x1a\n") or len(obraz) < 45
+                or obraz[12:16] != b"IHDR" or b"IEND" not in obraz[-16:]):
+            raise ValueError("odpowiedz nie zawiera kompletnego obrazu PNG")
+        rozmiar = struct.unpack(">II", obraz[16:24])
+        if rozmiar != tuple(map(int, config.IMAGE_SIZE.split("x"))):
+            raise ValueError("obraz ma inny rozmiar niz produkcja")
+        folder = config.DATA_DIR / "model-probes"
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / (hashlib.sha256(model.encode()).hexdigest()[:16] + ".png")).write_bytes(obraz)
+        return True, "obraz PNG %sx%s, parametry produkcyjne" % rozmiar
+    except Exception as exc:
+        return False, "proba obrazu: " + type(exc).__name__
 
 
 def proba_odpowiedzi(dostawca: str, model: str) -> tuple[bool, str, int, int]:
@@ -354,7 +338,8 @@ def _zapisz_koszt(conn, run_id: int | None, dostawca: str, model: str,
 def sprawdz(conn=None, run_id: int | None = None, wymus: bool = False) -> dict[str, Any]:
     """Raz na dobe: lista, decyzje, proby, zapis. Nigdy nie wywala przebiegu."""
     stan = wczytaj()
-    if not wymus and _mlodsze_niz(stan.get("_sprawdzone"), WAZNE_GODZIN):
+    if (not wymus and stan.get("wersja") == WERSJA_STANU
+            and _mlodsze_niz(stan.get("_sprawdzone"), WAZNE_GODZIN)):
         return {"pominiete": "sprawdzone w ciagu ostatniej doby"}
     if config.KILL_SWITCH:
         return {"pominiete": "KILL_SWITCH"}
@@ -370,33 +355,63 @@ def sprawdz(conn=None, run_id: int | None = None, wymus: bool = False) -> dict[s
         wykonane: list[dict[str, Any]] = []
         odrzucone: list[dict[str, Any]] = []
         zamiany = dict(stan.get("zamiany") or {})
+        wyszukiwanie = dict(stan.get("wyszukiwanie") or {})
+        sprawdzone_szukanie = set()
+
+        def sprawdz_szukanie(model):
+            dziala, szukan, tin, tout, opis = proba_wyszukiwania(model)
+            _zapisz_koszt(conn, run_id, "deepseek", model, tin, tout, szukan, dziala, opis)
+            sprawdzone_szukanie.add(model)
+            # A timeout/HTTP error is not proof that a previously working tool
+            # disappeared. A new candidate still cannot pass this gate.
+            if dziala or opis == "nie wywoluje wyszukiwarki":
+                wyszukiwanie[model] = {"dziala": dziala, "kiedy": teraz,
+                    "szukan": szukan, "opis": opis, "droga": config.DROGA_WYSZUKIWANIA_DEEPSEEK}
+            print("  [nowe modele] wyszukiwanie na %s: %s" % (model, opis), flush=True)
+            return dziala, opis
 
         for decyzja in zdecyduj(obecne, listy):
             powod = _wolno_placic(conn, run_id, decyzja["na"])
             if powod:
                 odrzucone.append({**decyzja, "dlaczego": powod})
                 continue
-            ok, opis, tin, tout = proba_odpowiedzi(decyzja["dostawca"], decyzja["na"])
-            _zapisz_koszt(conn, run_id, decyzja["dostawca"], decyzja["na"], tin, tout, 0, ok, opis)
+            if decyzja["dostawca"] == "openai":
+                ok, opis = proba_obrazu(decyzja["na"], conn, run_id)
+            else:
+                ok, opis, tin, tout = proba_odpowiedzi(decyzja["dostawca"], decyzja["na"])
+                _zapisz_koszt(conn, run_id, decyzja["dostawca"], decyzja["na"], tin, tout, 0, ok, opis)
             if not ok:
                 odrzucone.append({**decyzja, "dlaczego": "proba nowego modelu: " + opis})
                 continue
+            decyzja["proba"] = opis
+            if decyzja["dostawca"] == "deepseek":
+                powod = _wolno_placic(conn, run_id, decyzja["na"])
+                if powod:
+                    odrzucone.append({**decyzja, "dlaczego": powod})
+                    continue
+                szuka, opis_szukania = sprawdz_szukanie(decyzja["na"])
+                if not szuka:
+                    odrzucone.append({**decyzja, "dlaczego":
+                                      "nowa wersja nie przeszla proby wyszukiwania: " + opis_szukania})
+                    continue
             if decyzja["starsza"]:
-                ok_stary, opis_stary, tin, tout = proba_odpowiedzi(decyzja["dostawca"], decyzja["z"])
-                _zapisz_koszt(conn, run_id, decyzja["dostawca"], decyzja["z"], tin, tout, 0,
-                              ok_stary, opis_stary)
+                powod = _wolno_placic(conn, run_id, decyzja["z"])
+                if powod:
+                    odrzucone.append({**decyzja, "dlaczego": powod})
+                    continue
+                if decyzja["dostawca"] == "openai":
+                    ok_stary, opis_stary = proba_obrazu(decyzja["z"], conn, run_id)
+                else:
+                    ok_stary, opis_stary, tin, tout = proba_odpowiedzi(decyzja["dostawca"], decyzja["z"])
+                    _zapisz_koszt(conn, run_id, decyzja["dostawca"], decyzja["z"], tin, tout, 0,
+                                  ok_stary, opis_stary)
                 if ok_stary:
                     odrzucone.append({**decyzja, "dlaczego":
                                       "zastepca jest starszy, a obecny dalej odpowiada"})
                     continue
             zamiany[decyzja["rola"]] = {"z": decyzja["z"], "na": decyzja["na"],
                                         "kiedy": teraz, "powod": decyzja["powod"]}
-            zastosuj_w_procesie(decyzja["rola"], decyzja["z"], decyzja["na"])
             wykonane.append(decyzja)
-            _do_dziennika("zmiana_modelu", udane=True, rola=decyzja["rola"],
-                          z=decyzja["z"], na=decyzja["na"], powod=decyzja["powod"])
-            print("  [nowe modele] ZAMIANA %s: %s -> %s (%s)"
-                  % (decyzja["rola"], decyzja["z"], decyzja["na"], decyzja["powod"]), flush=True)
 
         for decyzja in odrzucone:
             print("  [nowe modele] bez zamiany %s: %s -> %s — %s"
@@ -406,10 +421,11 @@ def sprawdz(conn=None, run_id: int | None = None, wymus: bool = False) -> dict[s
         # ktory dzis szuka. 10 wrzesnia narzedzie zniknelo po cichu i trwalo to
         # trzy dni; proba raz na dobe skraca to do jednego przebiegu. Na modelu,
         # ktory nie szuka, kosztuje ulamek centa, na szukajacym Pro okolo 3 centy.
-        wyszukiwanie = dict(stan.get("wyszukiwanie") or {})
         modele_deepseeka = sorted({getattr(config, r) for r, (d, _) in ROLE.items()
                                    if d == "deepseek"})
         for model in modele_deepseeka:
+            if model in sprawdzone_szukanie:
+                continue
             ostatnia = wyszukiwanie.get(model) or {}
             # Wynik innej drogi nie jest swiezy, niezaleznie od daty.
             if (not wymus and ostatnia.get("droga") == config.DROGA_WYSZUKIWANIA_DEEPSEEK
@@ -417,33 +433,34 @@ def sprawdz(conn=None, run_id: int | None = None, wymus: bool = False) -> dict[s
                 continue
             if _wolno_placic(conn, run_id, model):
                 continue
-            szukal_dotad = config.szuka_naprawde(model)
-            dziala, szukan, tin, tout, opis = proba_wyszukiwania(model)
-            _zapisz_koszt(conn, run_id, "deepseek", model, tin, tout, szukan, True, opis)
-            wyszukiwanie[model] = {"dziala": dziala, "kiedy": teraz, "szukan": szukan, "opis": opis,
-                                   "droga": config.DROGA_WYSZUKIWANIA_DEEPSEEK}
-            config.PROBY_WYSZUKIWANIA[model] = wyszukiwanie[model]
-            print("  [nowe modele] wyszukiwanie na %s: %s" % (model, opis), flush=True)
-            if dziala != szukal_dotad:
-                powod = ("proba potwierdzila, ze model znow szuka — wywolania z siecia wracaja"
-                         if dziala else
-                         "model PRZESTAL szukac — wywolania z siecia ida do zastepcy")
-                _do_dziennika("zmiana_modelu", udane=True, rola="wyszukiwanie",
-                              z=model if not dziala else config.model_do_szukania("factcheck"),
-                              na=config.model_do_szukania("factcheck") if not dziala else model,
-                              powod=powod)
-                print("  [nowe modele] WYSZUKIWANIE %s: %s" % (model, powod), flush=True)
+            sprawdz_szukanie(model)
 
         historia = list(stan.get("historia") or [])[-50:]
         if wykonane or odrzucone:
             historia.append({"kiedy": teraz, "wykonane": wykonane, "odrzucone": odrzucone})
         zapisz({
+            "wersja": WERSJA_STANU,
             "_sprawdzone": teraz,
             "zamiany": zamiany,
             "wyszukiwanie": wyszukiwanie,
             "u_dostawcow": {k: (sorted(v) if v else None) for k, v in listy.items()},
             "historia": historia,
         })
+        # Persist first. A failed write must leave both the routing and the
+        # success journal unchanged; a fresh process can replay this state.
+        for decyzja in wykonane:
+            zastosuj_w_procesie(decyzja["rola"], decyzja["z"], decyzja["na"])
+            _do_dziennika("zmiana_modelu", udane=True, rola=decyzja["rola"],
+                          z=decyzja["z"], na=decyzja["na"], powod=decyzja["powod"])
+            print("  [nowe modele] ZAMIANA %s: %s -> %s (%s)"
+                  % (decyzja["rola"], decyzja["z"], decyzja["na"], decyzja["powod"]), flush=True)
+        for model, wynik in wyszukiwanie.items():
+            bylo = config.szuka_naprawde(model)
+            config.PROBY_WYSZUKIWANIA[model] = wynik
+            if wynik["dziala"] != bylo:
+                _do_dziennika("zmiana_modelu", udane=True, rola="wyszukiwanie",
+                              z=model, na=model if wynik["dziala"] else config.model_do_szukania("factcheck"),
+                              powod="model znow szuka" if wynik["dziala"] else "model PRZESTAL szukac")
         if not wykonane and not odrzucone:
             print("  [nowe modele] bez zmian: %s" % ", ".join(
                 "%s=%s" % (r, getattr(config, r)) for r in ROLE), flush=True)

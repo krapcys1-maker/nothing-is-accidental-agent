@@ -213,9 +213,9 @@ for zle in ("nothing decides it; it is simply not recorded",
 p = (config.PROMPTS_DIR / "warto_pisac.md").read_text(encoding="utf-8")
 plaski = " ".join(p.split())
 sprawdz("prompt wprost odróżnia niewiedzę od stawki",
-        "is NOT an unsettled outcome" in plaski, "brak zdania w promptcie")
+        "Mere absence of an answer" in plaski, "brak zdania w promptcie")
 sprawdz("prompt daje przykład tej pomyłki",
-        "leaves your hand" in plaski or "went unrecorded" in plaski)
+        "not such an outcome" in plaski)
 
 print()
 print("=== 5. GDY NIE MA ANI JEDNEGO, ANI DRUGIEGO ===")
@@ -236,41 +236,11 @@ print()
 print("=== 7. SKAUT PROPONUJE OBA RODZAJE ===")
 s = (config.PROMPTS_DIR / "skaut.md").read_text(encoding="utf-8")
 plaski_s = " ".join(s.split())
-sprawdz("prompt ma drugi rodzaj tematu",
-        "a system about to be tested" in plaski_s)
-sprawdz("nazywa go w kontrakcie wyjścia", '"SYSTEM_UNDER_TEST"' in plaski_s)
-sprawdz("wymaga trzech pól", all(x in plaski_s for x in
-                                 ("the_moment", "open_outcome", "governing_record")))
-sprawdz("stawia warunek spisanej procedury",
-        "Condition three is the whole guard" in plaski_s)
-sprawdz("zabrania wróżenia wprost",
-        "we do not publish fortune-telling" in plaski_s)
-sprawdz("i nadal zabrania nazywania instytucji",
-        "narrows the search to what you happen to recall" in plaski_s)
-sprawdz("nadal wymaga mieszanki, nie samych systemów",
-        "do not make every topic the same kind" in plaski_s)
-# Skaut oddal 0 tematow artykulowych z 10, wiec prompt musi teraz ZADAC
-# systemow, a nie tylko ich dopuszczac. Przyczyna zera nie byla w modelu:
-# caly prompt kazal mu szukac zwyklych przedmiotow, a systemy z historia
-# byly doklejone na koncu — szukal w zlym miejscu.
-sprawdz("prompt ZADA polowy systemow, nie tylko ich dopuszcza",
-        "At least half your list must be" in plaski_s)
-sprawdz("i trzech z dwoma precedensami",
-        "must carry two or more precedents each" in plaski_s)
-sprawdz("ale zostawia miejsce na zlamane przekonania",
-        "Keep at least two" in plaski_s)
-sprawdz("pokazuje, GDZIE takich tematow szukac",
-        "scar tissue" in plaski_s and "Mine it" in plaski_s)
-# ZASADA, NIE BRZMIENIE. Ten warunek byl przypiety do jednego zdania
-# („prescriptive limits on duty hours") i pekl, gdy przyklad lotniczy zastapiono
-# przykladem z naszej dziedziny. Regula stala nietknieta, test nie. Sprawdzamy
-# wiec, czy wzor JEST WYPELNIONY — trzy pola z trescia — a nie co w nim stoi.
-_wzor = s.split("when:", 1)[-1][:900] if "when:" in s else ""
-sprawdz("daje wypelniony przyklad precedensu",
-        "what_happened:" in _wzor and "what_changed:" in _wzor
-        and len(_wzor.split("what_changed:", 1)[-1].strip()) > 40)
-sprawdz("nazywa oba tryby porazki",
-        "**Too small.**" in plaski_s and "**Too vague.**" in plaski_s)
+sprawdz("obie etykiety routingu pozostaja dostepne", all(x in plaski_s for x in
+    ("SYSTEM_UNDER_TEST", "BROKEN_BELIEF")))
+sprawdz("kontrakt zachowuje pola badania", all(x in plaski_s for x in
+    ("the_moment", "open_outcome", "governing_record", "precedents", "threads")))
+sprawdz("nie wymusza zdarzen historycznych", "An empty list is valid" in plaski_s)
 
 print()
 print("=== 8. KOD SKAUTA STAWIA OBA RODZAJE NA CZELE KOLEJKI ===")

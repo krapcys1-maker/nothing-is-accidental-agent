@@ -4685,6 +4685,23 @@ def hosty_gdzie_komentarz_nie_wchodzi(min_prob: int = 2,
             if ile >= min_prob and udane[h] == 0}
 
 
+def _otworz_pole_komentarza(page, url: str):
+    """Ten sam edytor przy sprawdzeniu przed pisaniem i przy publikacji."""
+    page.goto(url, timeout=READ_TIMEOUT_MS, wait_until="domcontentloaded")
+    page.wait_for_timeout(SETTLE_MS + 2000)
+    page.mouse.wheel(0, 20_000)
+    page.wait_for_timeout(3500)
+    pola = page.locator("textarea")
+    for i in range(pola.count()):
+        pole = pola.nth(i)
+        try:
+            if pole.is_visible() and pole.is_editable():
+                return pole
+        except Exception:
+            continue
+    return None
+
+
 def mozna_komentowac(url: str) -> bool:
     """Czy pod tym tekstem wolno nam w ogóle napisać.
 
@@ -4697,9 +4714,8 @@ def mozna_komentowac(url: str) -> bool:
     Substack mowi o tym w polu `write_comment_permissions`, dostepnym ZANIM
     cokolwiek napiszemy. Wystarczylo zapytac.
 
-    Przy watpliwosci odpowiadamy TAK. Blad w te strone kosztuje jedno nieudane
-    klikniecie; blad w druga zamyka agentowi usta wszedzie tam, gdzie pole ma
-    wartosc, ktorej nie znamy.
+    Niepelne API sprawdzamy w interfejsie PRZED platnym pisaniem. Brak pola
+    albo blad odczytu pomija tylko te probe, bez blokowania calego hosta.
     """
     if "/note/c-" in url:
         return True                   # pod notkami komentuje kazdy
@@ -4720,11 +4736,12 @@ def mozna_komentowac(url: str) -> bool:
     page = context.new_page()
     try:
         slug = url.rstrip("/").rsplit("/", 1)[-1]
-        post = api_json(page, f"/api/v1/posts/{slug}",
-                        baza=f"https://{urlparse(url).netloc}")
-        if not isinstance(post, dict):
-            return True
-        prawo = str(post.get("write_comment_permissions") or "").lower()
+        try:
+            post = api_json(page, f"/api/v1/posts/{slug}",
+                            baza=f"https://{urlparse(url).netloc}")
+        except Exception:
+            post = None
+        prawo = str(post.get("write_comment_permissions") or "").lower() if isinstance(post, dict) else ""
         if prawo in {"only_paid", "only_founding", "none", "no_one"}:
             print(f"  {host}: komentarze tylko dla placacych ({prawo}) —"
                   f" odpuszczam przed pisaniem", flush=True)
@@ -4744,9 +4761,18 @@ def mozna_komentowac(url: str) -> bool:
             # listy, wiec zmiana ustawien u wydawcy odblokowuje go sama.
             zapamietaj_platny_host(host, prawo)
             return False
+        if prawo == "everyone":
+            return True
+        pole = _otworz_pole_komentarza(page, url)
+        if pole is None:
+            print(f"  {host}: brak dostepnego pola komentarza — pomijam przed pisaniem",
+                  flush=True)
+            return False
         return True
-    except Exception:
-        return True                   # nie wiem, wiec probuje
+    except Exception as exc:
+        print(f"  {host}: nie potwierdzono pola komentarza ({type(exc).__name__}) —"
+              " pomijam te probe przed pisaniem", flush=True)
+        return False
     finally:
         page.close()
         browser.close()
@@ -4960,37 +4986,7 @@ def wystaw_komentarz(url: str, tekst: str, wyslij: bool = False,
             wynik["pominiete"] = True
             return wynik
 
-        page.goto(url, timeout=READ_TIMEOUT_MS, wait_until="domcontentloaded")
-        page.wait_for_timeout(SETTLE_MS + 2000)
-
-        # Sekcja komentarzy doczytuje się dopiero po przewinięciu w dół.
-        page.mouse.wheel(0, 20_000)
-        page.wait_for_timeout(3500)
-
-        # Pod postem pole komentarza to TEXTAREA, nie contenteditable jak przy
-        # notkach — to dwa różne edytory i jeden selektor nie obsłuży obu.
-        #
-        # PIERWSZA W DOM TO NIE ZAWSZE TA WŁAŚCIWA. `locator("textarea").first`
-        # brał pierwszą textarea w drzewie niezależnie od tego, czy jest
-        # widoczna. Gdy pola komentarza nie było wcale — a zdarza się to na
-        # postach, których API nie oddaje `write_comment_permissions`, więc
-        # zapora przepuszcza je zgodnie z zasadą „przy wątpliwości próbuję" —
-        # Playwright czekał pełne 15 sekund na aktywność elementu, którego nie
-        # ma, i kończył wyjątkiem. Zdarzyło się to dwa razy pierwszego dnia na
-        # produkcji: scalesignals i glowwithella.
-        #
-        # Bierzemy pierwszą WIDOCZNĄ, a brak pola mówimy wprost zamiast
-        # wywracać się na czasie. Wyjątek i tak nie niósł żadnej informacji
-        # poza nazwą lokatora.
-        pole = None
-        for i in range(page.locator("textarea").count()):
-            kandydat = page.locator("textarea").nth(i)
-            try:
-                if kandydat.is_visible():
-                    pole = kandydat
-                    break
-            except Exception:
-                continue
+        pole = _otworz_pole_komentarza(page, url)
         if pole is None:
             wynik["blad"] = "nie ma pola komentarza pod tym postem"
             print(f"  {wynik['blad']} — odpuszczam", flush=True)

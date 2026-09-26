@@ -129,20 +129,9 @@ print()
 print("=== 4. LISTA WYKLUCZEN NIE ROSNIE O PODEJRZENIA ===")
 # Kazda pozycja ma miec pokrycie w OPISIE FORMY: zada faktu, liczby, dokumentu
 # albo nazwanego decydenta. Bez tego wykluczenie jest gustem, nie sprzecznoscia.
-DOWODY = {
-    "LICZBA": "Open with the number",
-    "LISTA": "must carry a fact",
-    "KONTRAST": "Two facts",
-    "ODWROCENIE": "the record that contradicts",
-    "PYTANIE": "Deliver the whole fact",
-    "ZACZEP_I_KONKRET": "who de",
-}
-for f in sorted(config.FORMY_NIEMOZLIWE["MYSL"]):
-    opis = str(config.NOTE_FORMS.get(f, ""))
-    sprawdz("wykluczenie %s ma pokrycie w opisie formy" % f,
-            DOWODY.get(f, "\x00") in opis, opis[:70])
-sprawdz("a typ MYSL faktycznie zabrania faktow",
-        "NO FACTS" in str(config.NOTE_TYPES.get("MYSL", "")))
+for f in config.FORMY_NIEMOZLIWE["MYSL"]:
+    sprawdz("wykluczona forma %s istnieje" % f, f in config.NOTE_FORMS)
+sprawdz("MYSL nie ma karty dowodowej", "no evidence card" in config.NOTE_TYPES["MYSL"])
 sprawdz("wykluczenia dotycza na razie WYLACZNIE mysli",
         set(config.FORMY_NIEMOZLIWE) == {"MYSL"},
         sorted(config.FORMY_NIEMOZLIWE))
@@ -196,8 +185,8 @@ sprawdz("bez karty dostepne sa wszystkie zapisane finaly",
 # KOD NAPRAWDE PODAJE KARTE. Sam parametr nic nie znaczy, jesli wolajacy
 # go nie uzywa.
 _st = pathlib.Path("agent-v2/stages.py").read_text(encoding="utf-8")
-sprawdz("stages.write podaje karte do losowania finalu",
-        "config.losowy_ruch_koncowy(card, glebokosc)" in _st)
+sprawdz("stages.write nie losuje finalu",
+        "config.losowy_ruch_koncowy(card, glebokosc)" not in _st)
 
 print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))

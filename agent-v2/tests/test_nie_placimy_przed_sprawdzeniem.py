@@ -28,6 +28,9 @@ import json
 import pathlib
 import sys
 import tempfile
+import ast
+import copy
+from types import SimpleNamespace
 
 sys.path.insert(0, "agent-v2")
 
@@ -120,6 +123,59 @@ sprawdz("i robia to PRZED ocena celow",
 # `dyskusje()` mial ten warunek od poczatku — ma go zachowac.
 sprawdz("dyskusje() nadal maja swoj warunek przydzialu",
         'if not na_teraz["komentarze"]:' in _run)
+
+print()
+print("=== 5. KOLEJNE RUNDY TEZ ODSIEWAJA JUZ SKOMENTOWANE ARTYKULY ===")
+# W przebiegu produkcyjnym 269 pierwsza partia nie znalazla celow, a druga
+# ponownie zaplacila za tekst pod artykulem skomentowanym 1 wrzesnia.
+# Uruchamiamy rzeczywisty blok z atrapami sieci i modelu; nie wysylamy nic.
+_blok = next(n for n in ast.walk(ast.parse(_run))
+             if isinstance(n, ast.FunctionDef) and n.name == "komentarze")
+_blok = copy.deepcopy(_blok)
+_blok.decorator_list = []
+_kod = compile(ast.fix_missing_locations(ast.Module(body=[_blok], type_ignores=[])),
+               "run.komentarze", "exec")
+_stary = "https://aiguide.substack.com/p/llms-and-world-models-part-1"
+_nowy = "https://autor.substack.com/p/nowy"
+_nieudany = "https://autor.substack.com/p/wczesniej-nieudany"
+
+
+def ocenione_partie(druga, historia):
+    partie = iter([[{"url": "https://autor.substack.com/p/niepasujacy"}],
+                   [{"url": u} for u in druga]])
+    ocenione = []
+
+    def wybierz(conn, run_id, cele):
+        ocenione.append([x["url"] for x in cele])
+        return [] if len(ocenione) == 1 else cele
+
+    env = dict(
+        kanal=SimpleNamespace(szukaj_nowych=lambda: next(partie),
+                              posty_z_kanalu=lambda: []),
+        browser=SimpleNamespace(hosty_tylko_dla_placacych=lambda: set(),
+                                hosty_gdzie_komentarz_nie_wchodzi=lambda: set(),
+                                adresy_gdzie_juz_komentowalismy=lambda: historia,
+                                mozna_komentowac=lambda url: False),
+        stages=SimpleNamespace(wybierz_cele=wybierz),
+        config=SimpleNamespace(RUNDY_SZUKANIA_CELOW=2),
+        conn=None, run_id=1, na_teraz={"komentarze": 2},
+        zostal_czas=lambda *args: True,
+    )
+    exec(_kod, env)
+    env["komentarze"]()
+    return ocenione
+
+
+_oceny = ocenione_partie([_stary, _stary + "/?utm_source=search", _nowy, _nieudany],
+                         {_stary})
+sprawdz("druga runda nie kupuje oceny starego adresu ani jego wariantu",
+        _oceny[1] == [_nowy, _nieudany], _oceny)
+_oceny = ocenione_partie([_stary], {_stary})
+sprawdz("partia zlozona z samych starych celow nie wywoluje modelu",
+        len(_oceny) == 1, _oceny)
+_oceny = ocenione_partie([_stary, _nowy], set())
+sprawdz("pusta historia nadal pozwala rozwazyc wszystkie nowe cele",
+        _oceny[1] == [_stary, _nowy], _oceny)
 
 print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))

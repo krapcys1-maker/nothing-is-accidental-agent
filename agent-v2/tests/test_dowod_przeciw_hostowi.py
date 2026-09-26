@@ -121,6 +121,9 @@ class Element:
     def is_visible(self):
         return True
 
+    def is_editable(self):
+        return self.is_visible()
+
     def nth(self, i):
         return self
 

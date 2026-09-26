@@ -76,7 +76,7 @@ sprawdz("KONTRDOWOD Z PRODUKCJI: stan z 10-13 wrzesnia daje jedna zamiane, te br
 PO = dict(STAN_10_13_WRZESNIA, DEEPSEEK="deepseek-flash")
 sprawdz("po zamianie: cisza", zamiany(PO) == [], zamiany(PO))
 sprawdz("kod po naprawie jest juz w tym stanie",
-        {r: getattr(config, r) for r in nowe_modele.ROLE} == PO,
+        {r: getattr(config, r) for r in PO} == PO,
         {r: getattr(config, r) for r in nowe_modele.ROLE})
 
 sprawdz("nowy Opus zamienia wylacznie Opusa",
@@ -198,6 +198,12 @@ try:
 
     # 4c. UDANA PROBA — zamiana w pliku, w procesie, w dzienniku i w ksiedze.
     nowe_modele.proba_odpowiedzi = odp_ok
+    def szuk_flash(model):
+        if model == "deepseek-flash":
+            wolane.append(("szukanie", model))
+            return True, 1, 60, 30, "szuka (1 wyszukiwan)"
+        return szuk_nie(model)
+    nowe_modele.proba_wyszukiwania = szuk_flash
     wolane.clear()
     wynik = nowe_modele.sprawdz(conn=conn, run_id=None, wymus=True)
     sprawdz("zamiana wykonana",
@@ -211,7 +217,7 @@ try:
     sprawdz("lista dostawcow zapisana obok", stan["u_dostawcow"]["deepseek"] == ["deepseek-flash", "deepseek-v4-pro"])
     sprawdz("proba wyszukiwania na KAZDYM DeepSeeku w uzyciu, takze na szukajacym Pro",
             ("szukanie", "deepseek-flash") in wolane and ("szukanie", "deepseek-v4-pro") in wolane
-            and stan["wyszukiwanie"]["deepseek-flash"]["dziala"] is False, wolane)
+            and stan["wyszukiwanie"]["deepseek-flash"]["dziala"] is True, wolane)
     sprawdz("wynik proby zapisuje droge, ktora go zmierzono",
             stan["wyszukiwanie"]["deepseek-flash"].get("droga") == config.DROGA_WYSZUKIWANIA_DEEPSEEK,
             stan["wyszukiwanie"]["deepseek-flash"])

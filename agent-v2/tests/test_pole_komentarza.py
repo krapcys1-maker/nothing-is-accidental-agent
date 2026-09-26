@@ -1,30 +1,5 @@
-"""Wybor pola komentarza: pierwsza WIDOCZNA textarea, a brak pola to nie wyjatek.
-
-Zlapane dwa razy pierwszego dnia na produkcji, na dwoch roznych publikacjach:
-
-    BLAD: TimeoutError: Locator.click: Timeout 15000ms exceeded.
-      - waiting for locator("textarea").first
-
-Zapora `wolno_komentowac` czyta z API pole `write_comment_permissions` i przy
-watpliwosci przepuszcza — swiadomie, bo blad w druga strone zamykalby agentowi
-usta wszedzie tam, gdzie wartosci nie znamy. Sprawdzilem oba posty: API NIE
-ODDAJE tego pola wcale, oddaje okrojony obiekt z samym `type`. Brak pola
-przechodzi wiec jak zgoda, agent idzie pisac, a pod postem nie ma gdzie.
-
-Do tego `locator("textarea").first` bralo pierwsza textarea w DRZEWIE, nie
-pierwsza widoczna. Gdy pola nie bylo wcale albo gdy przed nim stala ukryta,
-Playwright czekal pelne 15 sekund na aktywnosc elementu i konczyl wyjatkiem,
-ktory nie niosl zadnej informacji poza nazwa lokatora.
-
-Ten test pilnuje trzech rzeczy: ze bierzemy widoczna, ze brak pola konczy sie
-zdaniem zamiast wyjatkiem, i ze stary sposob naprawde na tym padal.
-
-CZEGO TEN TEST NIE NAPRAWIA, i trzeba to powiedziec wprost: trzy warianty
-komentarza i sprawdzenie faktow sa juz OPLACONE, zanim w ogole otworzymy
-strone. Poprawka zamienia 15 sekund czekania na natychmiastowe „nie ma pola",
-ale nie odzyskuje tych pieniedzy. Zeby je odzyskac, trzeba by sprawdzac
-obecnosc pola PRZED pisaniem — a to zmiana kolejnosci calego bloku i decyzja
-wlasciciela, nie moja przy okazji.
+"""Shared editor lookup chooses a visible editable field and handles its absence.
+The preflight tests in test_pakiet_oszczednosci cover checking BEFORE drafting.
 """
 import sys
 
@@ -49,6 +24,9 @@ class Pole:
         self.strona, self.i, self.widoczne = strona, i, widoczne
 
     def is_visible(self):
+        return self.widoczne
+
+    def is_editable(self):
         return self.widoczne
 
     def count(self):

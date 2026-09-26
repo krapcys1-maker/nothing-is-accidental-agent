@@ -16,7 +16,11 @@ RULES
    still be there when you are done — only the falsehood goes.
 
 3. Work from the evidence given below, not from memory. WHAT THE RECORD SAYS is
-   the material you correct with. If it gives you a figure, use that figure.
+   the material you correct with. Keep the precision needed to fix the error.
+   If the original figure was wrong, supply the correct one; don't introduce
+   extra numbers, acronyms or hardware terms merely because the evidence uses
+   them. Explain the corrected cause and effect in ordinary words a newcomer
+   understands. This is still a conversational note or comment, not a report.
 
 4. If a claim cannot be saved in any form, replace it with the strongest TRUE
    statement the same evidence supports, about the same subject. Do not leave a
@@ -35,6 +39,10 @@ CONTEXT: {kontekst}
 
 --- THE TEXT AS WRITTEN ---
 {tekst}
+
+Keep the original warmth, humour and all unchallenged sentences unchanged.
+Read the corrected passage aloud: it should be as easy to follow as the rest.
+Let the evidence establish the correction without importing its academic voice.
 
 Return only:
 {{"text": "the full corrected text", "co_zmienione": "one line: what you changed and what evidence you changed it to"}}

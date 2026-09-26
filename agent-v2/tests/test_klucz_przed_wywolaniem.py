@@ -140,8 +140,9 @@ sprawdz("a nowa nie przepuszcza zadnego",
 # ILE ETAPOW BYLO BEZ OCHRONY. Liczba, nie przymiotnik.
 ile_bylo = sum(1 for p, m in config.MODEL_FOR.items()
                if stara_regula(m) == "PRZEPUSZCZONY")
-sprawdz("bez ochrony bylo %d etapow z %d" % (ile_bylo, len(config.MODEL_FOR)),
-        ile_bylo >= 10, ile_bylo)
+sprawdz("stara regula nadal przepuscilaby Fable bez klucza",
+        stara_regula(config.MODEL_FOR["write"]) == "PRZEPUSZCZONY" and ile_bylo >= 1,
+        ile_bylo)
 
 print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))

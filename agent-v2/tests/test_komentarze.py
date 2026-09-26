@@ -156,25 +156,17 @@ print()
 print("=== 6. PROMPT NIESIE POSTAWE I RAMKE TRZECIEJ OSOBY ===")
 
 szablon = pathlib.Path("agent-v2/prompts/komentarz.md").read_text(encoding="utf-8")
-sprawdz("prompt ma miejsce na nazwe postawy", "{postawa}" in szablon)
-sprawdz("prompt ma miejsce na opis postawy", "{postawa_opis}" in szablon)
-sprawdz("prompt nazywa oba bledy: korygujacy i potakiwacz",
-        "The corrector" in szablon and "The nodder" in szablon)
-sprawdz("prompt podaje post jako MATERIAL, nie czyjes przekonanie",
-        "artefact to be examined" in szablon)
-
-for nazwa, (waga, opis) in config.POSTAWY_KOMENTARZA.items():
-    gotowy = stages._prompt("komentarz.md", cel_slow=30, otwarcie="x",
-                            postawa=nazwa, postawa_opis=opis, language="English",
-                            author="a", title="t", body="b")
-    if nazwa not in gotowy:
-        sprawdz("postawa %s sklada sie w prompcie" % nazwa, False)
-        break
-else:
-    sprawdz("KAZDA postawa sklada sie w prompcie bez bledu", True)
-
+sprawdz("postawa wynika z materialu, bez losowego polecenia w prompcie",
+        "{postawa}" not in szablon and "{postawa_opis}" not in szablon)
+sprawdz("zgoda i sprzeciw wymagaja powodu",
+        "Agreement and disagreement both need a reason" in szablon)
+sprawdz("prompt podaje post jako MATERIAL",
+        "The text under examination" in szablon)
+gotowy = stages._prompt("komentarz.md", cel_slow=30, language="English",
+                        author="a", title="t", body="b")
+sprawdz("komentarz sklada sie bez losowych pol", "Title: t" in gotowy)
 zrodlo = pathlib.Path("agent-v2/stages.py").read_text(encoding="utf-8")
-sprawdz("comment_on losuje postawe", "config.losowa_postawa()" in zrodlo)
+sprawdz("dziennik widzi strategie z tresci", 'postawa = "Z_TRESCI"' in zrodlo)
 sprawdz("comment_on oddaje postawe", '"postawa": postawa,' in zrodlo)
 sprawdz("run.py zapisuje postawe do dziennika",
         'out.get("postawa")' in pathlib.Path("agent-v2/run.py").read_text(encoding="utf-8"))

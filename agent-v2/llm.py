@@ -51,7 +51,7 @@ def dostawca(model: str) -> str:
     """
     if model.startswith("deepseek"):
         return "deepseek"
-    if model == config.IMAGE_MODEL:
+    if model.startswith("gpt-image-"):
         return "openai"
     return "anthropic"
 
@@ -488,6 +488,7 @@ def _call_deepseek_z_siecia(
     zmyslony adres wyglada w tekscie identycznie jak prawdziwy.
     """
     model = model or config.MODEL_FOR[purpose]
+    myslenie = config.myslenie_deepseek(purpose)
     odpowiedz = httpx.post(
         f"{config.DEEPSEEK_ANTHROPIC_BASE_URL}/v1/messages",
         headers={"x-api-key": str(config.DEEPSEEK_API_KEY),
@@ -498,6 +499,9 @@ def _call_deepseek_z_siecia(
             "max_tokens": config.MAX_TOKENS[purpose],
             "system": system,
             "messages": [{"role": "user", "content": user}],
+            **({"thinking": myslenie} if myslenie else {}),
+            **({"output_config": {"effort": config.DEEPSEEK_EFFORT_FOR[purpose]}}
+               if purpose in config.DEEPSEEK_EFFORT_FOR else {}),
             "tools": [{"type": config.NARZEDZIE_WYSZUKIWANIA_DEEPSEEK,
                        "name": "web_search",
                        "max_uses": config.max_szukan(purpose)}],
@@ -549,6 +553,8 @@ def _call_deepseek(purpose: str, system: str, user: str) -> tuple[str, int, int,
     _mysl = config.myslenie_deepseek(purpose)
     if _mysl:
         cialo["thinking"] = _mysl
+    if purpose in config.DEEPSEEK_EFFORT_FOR:
+        cialo["reasoning_effort"] = config.DEEPSEEK_EFFORT_FOR[purpose]
     response = httpx.post(
         f"{config.DEEPSEEK_BASE_URL}/chat/completions",
         headers={"Authorization": f"Bearer {config.DEEPSEEK_API_KEY}"},
@@ -692,8 +698,9 @@ def call(
         _EFFORT_BEZ_SKUTKU.add(purpose)
         print(f"  [effort] {purpose}={config.EFFORT[purpose]} NIE MA SKUTKU"
               f" — etap chodzi na {model}, a to pokretlo dziala tylko na"
-              f" modelach Claude (DeepSeek ma DEEPSEEK_EFFORT"
-              f"={config.DEEPSEEK_EFFORT})", flush=True)
+              f" modelach Claude (DeepSeek: wysilek="
+              f"{config.DEEPSEEK_EFFORT_FOR.get(purpose, 'domyslny API')}, "
+              f"myslenie={config.myslenie_deepseek(purpose) or 'domyslne API'})", flush=True)
 
     if config.DRY_RUN:
         print(f"  [{purpose}] DRY_RUN — wywołanie pominięte", flush=True)
@@ -746,8 +753,34 @@ def call(
     return text
 
 
+def koszt_obrazu(model: str, usage: dict) -> tuple[float, str]:
+    """Image API usage at published rates; unknown versions remain estimates.
+
+    Rates checked 2026-09-25 against the official OpenAI pricing page.
+    This endpoint generates from text, so it sends no image input or cache.
+    """
+    if not usage or not usage.get("output_tokens"):
+        return config.IMAGE_PRICE_USD, "brak usage; szacunek za obraz"
+    if model.startswith("gpt-image-2.5-"):
+        text_rate, image_rate, out_rate = 5.0, 8.0, 30.0
+        basis = "cennik GPT Image 2.5 z 2026-09-25; nie faktura"
+    elif model == "gpt-image-2" or model.startswith("gpt-image-2-"):
+        text_rate, image_rate, out_rate = 2.5, 4.0, 15.0
+        basis = "cennik GPT Image 2 z 2026-09-25; nie faktura"
+    else:
+        text_rate, image_rate, out_rate = 5.0, 8.0, 32.0
+        basis = "stawka szacunkowa rodziny GPT Image; nie faktura"
+    details = usage.get("input_tokens_details") or {}
+    text_tokens = int(details.get("text_tokens", usage.get("input_tokens", 0)))
+    image_tokens = int(details.get("image_tokens", 0))
+    cost = (text_tokens * text_rate + image_tokens * image_rate
+            + int(usage["output_tokens"]) * out_rate) / 1_000_000
+    return round(cost, 6), basis
+
+
 def obraz(
-    opis: str, *, conn: sqlite3.Connection, run_id: int | None = None
+    opis: str, *, conn: sqlite3.Connection, run_id: int | None = None,
+    model: str | None = None,
 ) -> bytes:
     """Generuje grafikę do artykułu i zapisuje jej koszt tam, gdzie resztę.
 
@@ -755,7 +788,8 @@ def obraz(
     że inaczej wypadłby z licznika: wyłącznik, limit na przebieg i dzienny sufit
     wydatków siedzą w `_preflight`, a nie w każdym wywołaniu z osobna.
     """
-    _preflight("obraz", conn, run_id)
+    model = model or config.IMAGE_MODEL
+    _preflight("obraz", conn, run_id, model=model)
     if config.DRY_RUN:
         print("  [obraz] DRY_RUN — wywołanie pominięte", flush=True)
         return b""
@@ -766,7 +800,7 @@ def obraz(
     import urllib.request
 
     zadanie = json.dumps({
-        "model": config.IMAGE_MODEL,
+        "model": model,
         "prompt": opis,
         "size": config.IMAGE_SIZE,
         "quality": config.IMAGE_QUALITY,
@@ -784,20 +818,23 @@ def obraz(
         surowy = dane["data"][0]["b64_json"]
     except Exception as exc:
         db.record_call(
-            conn=conn, run_id=run_id, provider="openai", model=config.IMAGE_MODEL,
+            conn=conn, run_id=run_id, provider="openai", model=model,
             purpose="obraz", tokens_in=0, tokens_out=0, web_searches=0,
             cost_usd=0.0, price_verified=0, ok=0,
             note=f"{type(exc).__name__}: {exc}"[:500],
         )
         raise
 
-    usd = config.IMAGE_PRICE_USD
+    usage = dane.get("usage") or {}
+    usd, basis = koszt_obrazu(model, usage)
     db.record_call(
-        conn=conn, run_id=run_id, provider="openai", model=config.IMAGE_MODEL,
-        purpose="obraz", tokens_in=0, tokens_out=0, web_searches=0,
-        cost_usd=usd, price_verified=0, ok=1, note=config.IMAGE_SIZE,
+        conn=conn, run_id=run_id, provider="openai", model=model,
+        purpose="obraz", tokens_in=int(usage.get("input_tokens", 0)),
+        tokens_out=int(usage.get("output_tokens", 0)), web_searches=0,
+        cost_usd=usd, price_verified=0, ok=1,
+        note=json.dumps({"size": config.IMAGE_SIZE, "usage": usage, "pricing": basis}),
     )
-    print(f"  [obraz] {config.IMAGE_MODEL}  {config.IMAGE_SIZE}  ~${usd:.4f}", flush=True)
+    print(f"  [obraz] {model}  {config.IMAGE_SIZE}  ~${usd:.4f}", flush=True)
     return base64.b64decode(surowy)
 
 

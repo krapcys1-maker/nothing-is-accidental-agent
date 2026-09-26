@@ -138,8 +138,9 @@ def call(
         _EFFORT_BEZ_SKUTKU.add(purpose)
         print(f"  [effort] {purpose}={config.EFFORT[purpose]} NIE MA SKUTKU"
               f" — etap chodzi na {model}, a to pokretlo dziala tylko na"
-              f" modelach Claude (DeepSeek ma DEEPSEEK_EFFORT"
-              f"={config.DEEPSEEK_EFFORT})", flush=True)
+              f" modelach Claude (DeepSeek: wysilek="
+              f"{config.DEEPSEEK_EFFORT_FOR.get(purpose, 'domyslny API')}, "
+              f"myslenie={config.myslenie_deepseek(purpose) or 'domyslne API'})", flush=True)
 
     if config.DRY_RUN:
         print(f"  [{purpose}] DRY_RUN — wywołanie pominięte", flush=True)

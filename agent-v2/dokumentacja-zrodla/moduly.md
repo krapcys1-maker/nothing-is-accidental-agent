@@ -35,12 +35,13 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-10327 wierszy, 158 funkcji na poziomie modułu, 0 klas
+10359 wierszy, 159 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
 | `_na_kanal(nazwa)` *(wewn.)* | Wszystko, co ta funkcja zaplaci, ksieguje sie na kanal `nazwa`. |
 | `_prompt(name, **fields)` *(wewn.)* | Prompt z pliku, z podstawionymi polami. |
+| `pamiec_glosu(prompt)` | Kilka potwierdzonych wypowiedzi do unikania powtorek, bez wywolan API. |
 | `_juz_w_domu(ile_banku, ile_notek)` *(wewn.)* | Co juz mamy poza artykulami: fakty czekajace w banku i wydane notki. |
 | `recent_angles(conn, limit)` | Ostatnie kąty redakcyjne — wejście do reguły różnorodności. |
 | `tematy_do_porownania(conn, limit)` | Poprzednie artykuly w postaci NADAJACEJ SIE DO POROWNANIA. |
@@ -200,7 +201,7 @@
 
 ### `browser.py` — cała styczność z Substackiem; nie woła modelu
 
-5343 wierszy, 98 funkcji na poziomie modułu, 0 klas
+5339 wierszy, 99 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -292,6 +293,7 @@
 | `zapomnij_platny_host(host)` | Udany komentarz kasuje host z listy — wydawca mogl zmienic ustawienia. |
 | `adresy_gdzie_juz_komentowalismy()` | Adresy wpisow, pod ktorymi nasz komentarz JUZ stoi — do odsiania PRZED ocena. |
 | `hosty_gdzie_komentarz_nie_wchodzi(min_prob, dni)` | Hosty, gdzie w ostatnich `dni` dniach probowalismy >=2 razy i ANI RAZ |
+| `_otworz_pole_komentarza(page, url)` *(wewn.)* | Ten sam edytor przy sprawdzeniu przed pisaniem i przy publikacji. |
 | `mozna_komentowac(url)` | Czy pod tym tekstem wolno nam w ogóle napisać. |
 | `uchwyt_publikacji(host)` | Nazwa konta do obserwowania — z hosta albo, gdy trzeba, z API. |
 | `juz_sie_odezwalismy(page, url)` | Czy JUZ napisalismy cokolwiek pod tym postem albo pod ta notka. |
@@ -305,7 +307,7 @@
 
 ### `llm.py` — JEDYNA warstwa dostępu do modeli i liczenia kosztu
 
-967 wierszy, 16 funkcji na poziomie modułu, 3 klas
+974 wierszy, 16 funkcji na poziomie modułu, 3 klas
 
 | funkcja | co robi |
 |---|---|
@@ -442,7 +444,7 @@
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-3846 wierszy, 42 funkcji na poziomie modułu, 0 klas
+3661 wierszy, 42 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -451,7 +453,7 @@
 | `_wybor_modeli_z_pliku(sciezka)` *(wewn.)* | Stan zapisany przez `nowe_modele.py`. Pusty slownik, gdy nie ma albo zepsuty. |
 | `zamiany_z_danych(dane)` | Zamiany, ktore wolno zastosowac: znana rola i nazwa o ksztalcie identyfikatora. |
 | `_w_tescie_wczesnie()` *(wewn.)* | To samo co `_w_darmowym_tescie` nizej, ale bez wyjatku dla testow platnych. |
-| `myslenie_deepseek(etap)` | Ustawienie `thinking` dla etapu, albo None = nie wysyłaj parametru. |
+| `myslenie_deepseek(etap)` | Kopia ustawienia thinking; None pozostawia domyslne ustawienie API. |
 | `stawka_modelu(model)` | Wpis cennika dla modelu; dla nieznanego — stawka rodziny, niepotwierdzona. |
 | `model_rozliczeniowy(model, kiedy)` | Model, po ktorego stawce dostawca liczy wywolanie `model` w chwili `kiedy`. |
 | `stawka_deepseek(model, kiedy)` | Stawka DeepSeeka z uwzglednieniem pory doby po wejsciu nowej taryfy. |

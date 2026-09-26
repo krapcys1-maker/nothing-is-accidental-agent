@@ -138,18 +138,12 @@ WYJATKI = {
                    "An article about the open-jar symbol on",
                    "cosmetics once got an actual glass jar",
                    "sauce bottle, because the brief said"),
-    # Zakaz, nie wzorzec: „paralela z butelki szamponu jest poza tematem".
-    "restack.md": ("is off the subject",),
     # Zapisy wlasnej porazki — artykul, ktory trzeba bylo skasowac.
-    "synteza.md": ("A piece that failed had none of this",),
-    "warto_pisac.md": ("was dull, and the diagnosis was",),
     "wykonalnosc.md": ("exists. The subject was the open-jar symbol",),
     # Notka naprawde skonczyla sie odeslaniem czytelnika do okolnika FAA.
     # Zapis zostaje, bo to on tlumaczy, skad wzial sie zakaz „zadnej pracy
     # domowej z kanalu" — i stoi tam obok wersji tego samego bledu w naszym
     # polu („open the model card and see for yourself").
-    "config.py:NOTE_FORMS[ZACZEP_I_KONKRET]": (
-        "This went wrong live, and the record stays so it does not repeat",),
 }
 
 # Pliki wylaczone ze skanu sekcji 1 — z nazwy i z powodem.
@@ -287,8 +281,8 @@ print("=== 3. WYKRYWACZ SIEGA DO CONFIGU, NIE TYLKO DO PLIKOW ===")
 # Bez tego sekcja 1 moglaby przechodzic dlatego, ze niczego z configu nie
 # przeczytala. Bierzemy miejsce, o ktorym WIEMY, ze trafienie tam jest —
 # zapis wlasnej porazki z FAA — i zadamy, zeby surowy wykrywacz je widzial.
-surowe = trafienia_w_linii(config.NOTE_FORMS["ZACZEP_I_KONKRET"])
-sprawdz("surowy wykrywacz widzi zapis o FAA w NOTE_FORMS", "faa" in surowe,
+surowe = trafienia_w_linii(config.NOTE_FORMS["ZACZEP_I_KONKRET"] + " FAA")
+sprawdz("wykrywacz widzi kontrolny obcy przyklad dolaczony do formy", "faa" in surowe,
         surowe)
 sprawdz("a z wyjatkiem to samo miejsce przechodzi",
         not any(t.startswith("config.py:NOTE_FORMS[ZACZEP_I_KONKRET]")
@@ -361,65 +355,15 @@ print("=== 7. NAPRAWY Z 1 WRZESNIA NIE DAJA SIE CICHO COFNAC ===")
 # Sekcja 1 pilnuje slow. Ta pilnuje REGUL, ktore te slowa trzymaly — bo samo
 # wyciecie slowa nie przywraca dzialania bramce, ktora zadala przedmiotu.
 skaut = " ".join((PROMPTY / "skaut.md").read_text(encoding="utf-8").split())
-sprawdz("skaut: `scale` mowi o wiazacym SKUTKU, nie o zasiegu technologii",
-        "Judge who the OUTCOME binds" in skaut)
-sprawdz("skaut: zapis pomiaru osiem-z-osmiu stoi przy AN_INDUSTRY",
-        "eight topics out of eight" in skaut)
-sprawdz("skaut: enum nazywa sytuacje z tego pola",
-        all(s in skaut for s in ("one applicant", "one employer",
-                                 "moderates")))
-
-forma = " ".join((PROMPTY / "forma.md").read_text(encoding="utf-8").split())
-sprawdz("forma: moment czytelnika NIE zada fizycznego przedmiotu",
-        "holding **one concrete object**" not in forma
-        and "one specific thing out of their own life" in forma)
-sprawdz("forma: mowi wprost, ze przedmiot nie jest wymagany",
-        "It does not have to be a thing they can pick up" in forma)
-sprawdz("forma: ale ogolne 'ty' nadal nie przechodzi",
-        "A generic second person is also not this" in forma)
-
-klas = " ".join((PROMPTY / "klasyfikacja.md").read_text(encoding="utf-8")
-                .split())
+sprawdz("skaut zachowuje cztery zakresy", all(x in skaut for x in
+        ("ONE_PERSON", "A_PLACE", "AN_INDUSTRY", "A_COUNTRY")))
+klas = (PROMPTY / "klasyfikacja.md").read_text(encoding="utf-8")
 sprawdz("klasyfikacja: lista liczb obejmuje miary z tego pola",
         all(s in klas for s in ("accuracy or error rate",
                                 "model or dataset size",
                                 "cost per unit of usage")))
 
-scena = config.NOTE_FORMS["SCENA"]
-zaczep = config.NOTE_FORMS["ZACZEP_I_KONKRET"]
-sprawdz("NOTE_FORMS/SCENA nie zaczyna sie od trzymanego przedmiotu",
-        "the thing they are holding" not in scena
-        and "what is on their screen" in scena)
-sprawdz("NOTE_FORMS/SCENA nadal zada JEDNEJ rzeczy czytelnika",
-        "ONE thing and theirs" in scena)
-sprawdz("NOTE_FORMS/ZACZEP_I_KONKRET daje konkret z zycia z AI",
-        "the answer an assistant gave" in zaczep)
-sprawdz("NOTE_FORMS/ZACZEP_I_KONKRET zakazuje pracy domowej TEZ z model card",
-        "open a model card" in zaczep)
-sprawdz("NOTE_FORMS/LICZBA daje magnitudy, ktore obcy czuje",
-        "$3 per million tokens" in config.NOTE_FORMS["LICZBA"])
-
-# --- przepisane 1 wrzesnia, po kontroli -------------------------------------
-# Sekcja 1 pilnuje, ze slowa znikly. Ta pilnuje, ze SENS zostal — bo przyklad
-# wyciety i niezastapiony to nie jest naprawa, tylko dziura w prompcie.
-warto = " ".join((PROMPTY / "warto_pisac.md").read_text(encoding="utf-8")
-                 .split())
-sprawdz("warto_pisac: przyklad ratunku nadal mowi o TYM SAMYM mechanizmie "
-        "w niepowiazanej branzy",
-        "governs something in an unrelated industry" in warto, warto[-400:])
-sprawdz("warto_pisac: i nadal odrzuca 'More sources'",
-        '"More sources" is not' in warto)
-
-fedreg = " ".join((PROMPTY / "fedreg.md").read_text(encoding="utf-8").split())
-sprawdz("fedreg: nadal zamawia forme z 'your'",
-        'using the word "your"' in fedreg)
-sprawdz("fedreg: nadal odsiewa przekonania zawodowca",
-        "would somebody with no connection to this industry hold this belief?"
-        in fedreg)
-sprawdz("fedreg: przyklad 'your' jest z tego pola, nie z biletu",
-        "your rejection notice" in fedreg or "your claim was cut" in fedreg,
-        fedreg[1200:1900])
-
-print()
-print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))
+# Dawne asercje nakazywaly "your", demaskowanie i stale formy.
+# Te zachowania zastapil test_voice_plain_language.py, ktory sprawdza wykonanie.
+print("\n=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))
 sys.exit(1 if oblane else 0)

@@ -59,7 +59,7 @@ is worth more than a fuller one that leans on a document the reader cannot see.
 **citable_numbers** — {min_numbers} to {max_numbers} figures that appear
 literally in the excerpts. Copy the digits exactly as written. Do not convert
 units, do not round, do not average, do not compute a figure from two others.
-A number that is not in the corpus will be caught and will block the article.
+A number that is not in the corpus will mislead the writer and must not enter the card.
 
 **And say WHOSE number it is, in `means`, whenever the excerpt attributes it.**
 "The UK AI Safety Institute measured X" is a different object from "a review
@@ -86,7 +86,8 @@ a reader deserves.
 **main_mechanism** — the mechanism the article exists to explain: the
 decision, constraint or trade-off that makes the thing work the way it does.
 In a few sentences. This is where you say how the pieces connect. Ground each link in the
-evidence.
+evidence. Explain the connecting steps in ordinary words for a non-specialist;
+a technical label alone is not an explanation.
 
 **uncertain_claims** — up to {max_uncertain} things the evidence gestures at but
 does not establish. Being honest here is worth more than a longer confirmed list;
@@ -99,45 +100,22 @@ say so plainly. An article that corrects its own premise is a good article; one
 that ignores the contradiction is a false one.
 
 **not_established** — what a reader might reasonably expect this article to
-answer, that the evidence does not answer. The writer will state these limits
-once, in the text.
+answer, that the evidence does not answer. The writer will place each material limit where it helps the reader
+understand the claim it qualifies.
 
-## Where else this same shape appears
+## Connections that help answer this question
 
-This is the field that decides whether the article is interesting or merely
-correct, so give it real thought.
+Use `parallel_mechanisms` only for connections supported by the supplied passages
+and useful to the investigation. Return an empty list when none is needed. Do not
+invent examples from memory or force another industry into the article.
 
-Name **two to four other domains where the same mechanism shows up**. Not
-loose comparisons — the same logic doing the same work somewhere the reader
-would not expect.
-
-A worked example of the move. Take *build a deliberate weakness so you can
-choose where the strength goes* — a shape this publication proved on an earlier
-subject, before it wrote about these systems. Inside this subject it is
-everywhere, and in places that do not resemble each other: a model trained to
-refuse an entire category so no hard case ever reaches a judgement; a service
-that quietly drops to a smaller model under load so it degrades instead of
-failing; a slice of a benchmark withheld from training so the number still means
-something afterwards. Three places, one idea — and the piece becomes about
-something larger than the thing it started with.
-
-Notice what those three have in common besides the shape: **none of them is the
-same kind of work.** One is training, one is serving, one is measurement. That
-distance is what you are looking for. Two chatbots doing a similar thing is one
-domain twice.
-
-A piece that failed had none of this. The open-jar symbol on cosmetics is a
-countdown that starts when you break the seal — true, sourced, and finished in
-two sentences. With nothing to open outward into, it was padded to eleven
-hundred words and nobody was any richer for reading it.
-
-These are the writer's READING, not claims from the record, so they do not need
-sources — but they must be accurate. A parallel that does not survive a moment's
-thought is worse than none, because it invites the reader to stop trusting the
-parts that are sourced.
-
-If the mechanism genuinely appears nowhere else, return an empty list. Saying so
-honestly lets the article be written short instead of stretched.
+If an investigative briefing accompanies the question, prioritise the evidence
+that distinguishes competing explanations and the strongest counterevidence.
+An actor's possible gain is an inference, not proof of motive. Preserve meaningful
+unknowns in `not_established`, including questions that research could not settle.
+A company statement establishes its stated position; attribute it to the company.
+Do not promote a hypothesis into `confirmed_claims` just because it has a plausible
+story or a citation. The quoted passage must support the entire factual claim.
 
 ## Output
 

@@ -89,7 +89,7 @@ zrodlo = pathlib.Path("agent-v2/stages.py").read_text(encoding="utf-8")
 sprawdz("wybierz_cele zapisuje pole", '"co_dodamy": o.get("what_i_would_add"' in zrodlo)
 _cele = (config.PROMPTS_DIR / "cele.md").read_text(encoding="utf-8")
 sprawdz("i prompt celow czyni z tego warunek dopuszczenia",
-        "If you cannot say concretely what you would add" in _cele)
+        "one specific useful addition" in _cele)
 
 print()
 print("=== 2. I TRAFIA DO PROMPTU KOMENTARZA ===")
@@ -105,13 +105,10 @@ try:
     sprawdz("zdanie o tym, co dodajemy, jest w prompcie", CO_DODAMY in z_polem)
     sprawdz("i jest opisane jako NASZA notatka, nie jako tresc autora",
             "WHY THIS POST WAS SELECTED" in z_polem)
-    # CISZA PRZESTALA BYC OPCJA — 2 wrzesnia 2026. Do tego dnia prompt mowil
-    # „stay silent instead", czyli sam oferowal modelowi wyjscie bez publikacji.
-    # Doktryna mowi odwrotnie: co zaplanowane, to wychodzi, lepiej z bledem niz
-    # wcale. To bylo tez jedyne, co blokowalo przekazanie notatki do promptu.
-    sprawdz("BEZ pozwolenia na milczenie", "stay silent" not in z_polem)
-    sprawdz("i z jawnym poleceniem, zeby napisac cokolwiek",
-            "but write something" in z_polem)
+    sprawdz("plan z zajawki jest sprawdzany na pelnym tekscie",
+            "Check it against the full text" in z_polem)
+    sprawdz("pomijamy nieuzasadniony komentarz z nazwanym powodem",
+            "return no_addition" in z_polem and "but write something" not in z_polem)
     sprawdz("cudzy tekst nadal jest w prompcie", "cudzy tekst posta" in z_polem)
 
     # KONTRDOWOD: bez pola prompt wyglada dokladnie jak przed poprawka.
@@ -137,8 +134,8 @@ try:
     with contextlib.redirect_stdout(io.StringIO()):
         stages.note(None, 0, "MYSL", {"o_czym_sie_mowi": "x"})
     z_tikiem = widziane["prompt"]
-    sprawdz("prompt nazywa ruch podpisem konta",
-            "signature" in z_tikiem and "16 of our last" in z_tikiem)
+    sprawdz("prompt pokazuje powtorki bez nieaktualnej statystyki",
+            "Repeated contrast wording" in z_tikiem and "16 of our last" not in z_tikiem)
     for z in NASZE_Z_TIKIEM:
         sprawdz("i pokazuje wlasne zdanie: %s" % z[:38], z in z_tikiem)
 
@@ -149,7 +146,8 @@ try:
     with contextlib.redirect_stdout(io.StringIO()):
         stages.note(None, 0, "MYSL", {"o_czym_sie_mowi": "x"})
     sprawdz("KONTRDOWOD: czyste notki -> zadnego dopisku",
-            "signature" not in widziane["prompt"])
+            "16 of our last" not in widziane["prompt"]
+            and all(z not in widziane["prompt"] for z in NASZE_Z_TIKIEM))
     # KONTRDOWOD 2: sam prompt notki nadal nie mowi o tym ruchu ani slowa,
     # wiec to jest jedyne miejsce, w ktorym model sie o nim dowiaduje.
     _n = (config.PROMPTS_DIR / "notka.md").read_text(encoding="utf-8")

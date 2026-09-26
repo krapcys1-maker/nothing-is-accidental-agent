@@ -96,6 +96,17 @@ And the legislature then removed AI-generated text from the duties; the law
 operative since 2 August 2026 covers image, video and audio only. Two checks,
 one search each, would have stopped it.
 
+## Mechanisms belong to a specific system
+
+Check a technical mechanism against the primary description of the exact product
+and version being discussed. A limitation in one company's model cannot establish
+the mechanism or limit in another. For absolute claims such as "nothing is
+remembered", check every documented source of retained context: a moving window
+may discard older items while an initial image, global context or persistent state
+remains. Finding one eviction mechanism does not confirm that all memory is absent.
+If the primary description names a retained anchor, a claim that there are none is
+`refuted`. If the architecture is unavailable, mark the mechanism `unverified`.
+
 ## True and dead is still wrong
 
 A claim can be perfectly accurate and still ruin the piece, because the world
@@ -104,15 +115,15 @@ so treat currency as a separate question from truth, and ask it every time.
 
 **Three checks that have each already failed here:**
 
-1. **Does the thing still exist?** A model, an API, a product, a programme. If
-   it has been deprecated, retired, sunset or scheduled for removal, the claim
-   is `outdated` however true it is. Real case: a note explained hidden
-   reasoning tokens in OpenAI's o1 models, sourced from the launch coverage.
-   Every word was true. The models are being removed from the API weeks later.
+1. **Does a present-tense availability claim still hold?** Check the current
+   status of the named model, API or product. Retirement or a planned removal
+   does not make an accurately dated historical statement false. Mark outdated
+   only the claim whose time scope conflicts with the record.
 
-2. **Is the version current?** Naming a specific release is a claim about the
-   present. If a newer one has shipped, mark it `outdated` and say which.
-   Writing about 5.0 when 5.5 exists makes the whole text read as stale.
+2. **Which version and date does the text actually describe?** A newer release
+   does not falsify a finding about an explicitly named earlier version. Check
+   claims of latest, current or available against current sources. Do not turn
+   an editorial preference for new subjects into a factual verdict.
 
 3. **Has the count or the price changed?** "Four tiers" was right when the
    announcement was written and wrong once a fifth was added. Re-count against

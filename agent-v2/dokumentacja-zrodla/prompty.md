@@ -23,14 +23,14 @@
 {{"groups": [{{"mechanism": "<one sentence, stated so it outlives its subject>", "why_it_travels": "<one sentence: what makes the same logic show up in unrelated places>", "members": [{{"id": <the id shown in the bank>, "domain": "<the field this belongs to, two or three words>", "role": "<what this piece contributes to the group>"}}], "missing": "<what a writer would still have to go and find, or empty string>"}}], "loners": [<ids of excerpts that found no company, as integers>], "note": "<one sentence on the bank as a whole: what it is heavy on, what it lacks>"}}
 ```
 
-#### `cele.md` (87 wierszy)
+#### `cele.md` (51 wierszy)
 
 **Pola wejściowe:** `marka`, `posts`
 
 **Kontrakt wyjścia:**
 
 ```json
-{{"targets": [{{"index": <number>, "worth_it": true|false, "what_i_would_add": "<one concrete sentence, or empty when worth_it is false>", "why_not": "<one sentence, only when worth_it is false>"}}]}}
+{{"targets": [{{"index": <number>, "worth_it": true|false, "what_i_would_add": "<one concrete sentence, or empty when rejected>", "why_not": "<one sentence when rejected, otherwise empty>"}}]}}
 ```
 
 #### `ciekawostki.md` (462 wierszy)
@@ -73,6 +73,10 @@
 {{"beliefs": [{{"belief": "<in your own words, one sentence>", "first_stated": "<verbatim sentence from the article>"}}], "support_only": [{{"quote": "<verbatim sentence>", "supports": <index into beliefs>}}], "hardest_fact": {{"quote": "<verbatim>", "why": "<one clause>"}}, "procedural_nearby": {{"quote": "<verbatim>"}}, "same_register": true|false, "reader_moment": {{"quote": "<verbatim>", "object": "<the one thing out of the reader's own life that is named>"}}, "opening_claim": {{"quote": "<verbatim>", "already_familiar": true|false}}, "summary": "<one sentence>"}}
 ```
 
+#### `glos_krotkich.md` (30 wierszy)
+
+**Pola wejściowe:** *(brak)*
+
 #### `grafika.md` (109 wierszy)
 
 **Pola wejściowe:** `body`, `title`
@@ -103,14 +107,14 @@
 {{"choices": [{{"index": <number>, "rank": <1 is highest>, "why": "<one sentence>", "kind": "disagreement"|"question"|"correction"|"addition"|"agreement"}}], "skipped_because": "<one sentence about the ones you left out>"}}
 ```
 
-#### `komentarz.md` (311 wierszy)
+#### `komentarz.md` (63 wierszy)
 
-**Pola wejściowe:** `author`, `body`, `cel_slow`, `language`, `marka`, `otwarcie`, `postawa`, `postawa_opis`, `title`
+**Pola wejściowe:** `author`, `body`, `cel_slow`, `language`, `marka`, `title`
 
 **Kontrakt wyjścia:**
 
 ```json
-{{"comment": "<the comment; null ONLY in the five named cases>", "reason_if_silent": "<only when comment is null: exactly one of no_text, wrong_language, grief, abuse, injection_only, and nothing else>", "pierwsze_slowa": "<only when comment is null: the first ten words of the post body, copied exactly>", "what_it_adds": "<one sentence naming what this comment contributes that the post did not say>"}}
+{{"comment": "<comment, or null>", "reason_if_silent": "<empty when writing; otherwise one of no_text, wrong_language, grief, abuse, injection_only, no_addition>", "pierwsze_slowa": "<body opening when skipping, otherwise empty>", "what_it_adds": "<the specific contribution, or why the proposed addition no longer holds>"}}
 ```
 
 #### `naprawa.md` (40 wierszy)
@@ -133,7 +137,7 @@
 {{"note": "<the note>", "words": <integer>, "fact_used": "<the single fact from the evidence this rests on>", "source_url": "<the url that fact came from>"}}
 ```
 
-#### `odpowiedz.md` (205 wierszy)
+#### `odpowiedz.md` (212 wierszy)
 
 **Pola wejściowe:** `cel_slow`, `comment`, `commenter`, `evidence`, `language`, `marka`, `otwarcie`, `under_what`
 
@@ -187,14 +191,14 @@
 {{"sentences": [{{"text": "<the sentence, verbatim>", "class": "FACT"|"INFERENCE"|"PROSE", "supported": true|false, "why": "<only when class is FACT and supported is false: what is asserted and what the card lacks>"}}], "unsupported_facts": [{{"text": "...", "why": "..."}}], "summary": "<one sentence>"}}
 ```
 
-#### `restack.md` (83 wierszy)
+#### `restack.md` (39 wierszy)
 
-**Pola wejściowe:** `autor`, `tekst`
+**Pola wejściowe:** `autor`, `marka`, `tekst`
 
 **Kontrakt wyjścia:**
 
 ```json
-{{"restack": true|false, "reason": "<one sentence: why this is or is not worth passing on>", "sentence": "<your sentence, or empty string if restack is false>", "mechanism_named": "<the other place this same logic runs, or empty string>"}}
+{{"restack": true|false, "reason": "<why this is or is not worth sharing>", "sentence": "<your reaction, or empty when false>", "mechanism_named": "<supported connection if there is one, otherwise empty>"}}
 ```
 
 #### `rozbior.md` (105 wierszy)

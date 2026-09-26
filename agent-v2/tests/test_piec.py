@@ -131,7 +131,7 @@ try:
     podstaw_przegladarke()
     for prawo, oczekiwane in (("only_paid", False), ("only_founding", False),
                               ("none", False), ("everyone", True),
-                              ("all_subscribers", True), (None, True)):
+                              ("all_subscribers", False), (None, False)):
         browser.api_json = podstaw_api({"/api/v1/posts/":
                                         {"id": 1, "write_comment_permissions": prawo}})
         wynik = browser.mozna_komentowac("https://www.slowboring.com/p/x")
@@ -139,8 +139,8 @@ try:
                 wynik is oczekiwane, wynik)
 
     browser.api_json = podstaw_api({})          # API milczy
-    sprawdz("gdy API milczy, PROBUJEMY (nie zamykamy sobie ust)",
-            browser.mozna_komentowac("https://x.substack.com/p/y") is True)
+    sprawdz("gdy API milczy i brak potwierdzonego pola, nie placimy za tekst",
+            browser.mozna_komentowac("https://x.substack.com/p/y") is False)
     sprawdz("pod notka zawsze wolno",
             browser.mozna_komentowac("https://substack.com/note/c-5") is True)
 finally:

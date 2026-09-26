@@ -1516,7 +1516,10 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
                 # `NIA_TRYB=test` w `db.tryb_przebiegu`).
                 if n.get("fakt_wpis"):
                     niewydane.append(n["fakt_wpis"])
-            zrobione["notki"] += 1
+            # Count a new public note only after publication is confirmed.
+            # A rejected draft or an already-existing note is not a new post.
+            if not wyslij or (wynik.get("wyslane") and not wynik.get("pominiete")):
+                zrobione["notki"] += 1
 
         # ZWROT. Stoi tu, a nie w `finally`, bo z tej petli wychodzi sie juz
         # tylko przez `break` — a `break` prowadzi dokladnie tutaj.
@@ -1691,13 +1694,20 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
                            if _up2(x["url"]).netloc.lower().removeprefix("www.")
                            not in platne]
             # Kolejne partie ida prosto do platnego `wybierz_cele`, wiec musza
-            # przejsc PRZEZ TE SAME dwa sita co pula pierwsza. Bez tego runda
+            # przejsc PRZEZ TE SAME trzy sita co pula pierwsza. Bez tego runda
             # druga i dalsze kupowaly ocene dokladnie tych hostow, ktore runda
             # pierwsza odsiala za darmo.
             if martwe:
                 from urllib.parse import urlparse as _up3
                 dobrane = [x for x in dobrane
                            if _up3(x["url"]).netloc.lower() not in martwe]
+            if stali:
+                przed = len(dobrane)
+                dobrane = [x for x in dobrane
+                           if str(x["url"]).split("?")[0].rstrip("/") not in stali]
+                if przed != len(dobrane):
+                    print("  [cele] runda %d: odsiane juz skomentowane adresy: %d z %d"
+                          % (rundy, przed - len(dobrane), przed), flush=True)
             if not dobrane:
                 continue
             cele = cele + stages.wybierz_cele(conn, run_id, dobrane)
@@ -2774,6 +2784,10 @@ def main() -> int:
         if args.stop_after == stage:
             return _done(conn, run_id, stage)
 
+        import research
+        evidence, dossier = research.deepen(conn, run_id, topic["question"], evidence, corpus)
+        pytanie_syntezy = research.synthesis_question(topic["question"], dossier)
+
         # Od tego miejsca artykuł MUSI powstać. Temat jest wybrany, research
         # zrobiony i opłacony — żaden dalszy etap nie ma prawa zabić przebiegu.
         stage = "synthesis"
@@ -2781,8 +2795,9 @@ def main() -> int:
         try:
             card = cached(
                 stage,
-                lambda: stages.synthesis(conn, run_id, topic["question"], evidence),
-                args.use_cache,
+                lambda: stages.synthesis(conn, run_id, pytanie_syntezy, evidence),
+                # Stary cache syntezy nie zna nowej dogrywki ani jej dowodow.
+                args.use_cache and not config.RESEARCH_ENABLED,
             )
         except PRZERYWAJA:
             # Karta zapasowa ma sens po awarii JEDNEGO wywolania. Przy pustym
@@ -2793,6 +2808,7 @@ def main() -> int:
         except Exception as exc:
             print(f"  [awaria] synteza padła ({exc}) — składam kartę z dowodów", flush=True)
             card = stages.fallback_card(topic["question"], evidence)
+        research.attach(card, dossier)
         print(f"\n   teza: {card.get('working_thesis', '')}", flush=True)
         print(f"\n   mechanizm: {card.get('main_mechanism', '')[:400]}", flush=True)
         print(f"\n   potwierdzone twierdzenia ({len(card.get('confirmed_claims', []))}):", flush=True)

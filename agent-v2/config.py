@@ -170,7 +170,9 @@ def plik_wyboru_modeli() -> Path:
     return DATA_DIR / "wybor_modeli.json"
 
 
-ROLE_MODELI = ("CLAUDE", "SONNET", "FABLE", "DEEPSEEK", "DEEPSEEK_PRO")
+from model_registry import ROLE as RODZINY_ROL, in_family as _model_w_rodzinie
+
+ROLE_MODELI = tuple(RODZINY_ROL)
 MODELE_Z_KODU = {rola: globals()[rola] for rola in ROLE_MODELI}
 
 
@@ -194,14 +196,16 @@ def zamiany_z_danych(dane: dict) -> dict[str, str]:
     """
     import re as _re
     wynik: dict[str, str] = {}
-    for rola, wpis in ((dane or {}).get("zamiany") or {}).items():
+    zamiany = dane.get("zamiany") if isinstance(dane, dict) else None
+    if not isinstance(zamiany, dict):
+        return wynik
+    for rola, wpis in zamiany.items():
         if rola not in ROLE_MODELI or not isinstance(wpis, dict):
             continue
         nowy = str(wpis.get("na") or "")
         if not _re.fullmatch(r"[a-z0-9][a-z0-9.\-]{2,79}", nowy):
             continue
-        z_kodu = MODELE_Z_KODU[rola]
-        if nowy.startswith("deepseek") != z_kodu.startswith("deepseek"):
+        if not _model_w_rodzinie(nowy, *RODZINY_ROL[rola]):
             continue
         wynik[rola] = nowy
     return wynik
@@ -224,181 +228,40 @@ _STAN_WYBORU = {} if _w_tescie_wczesnie() else _wybor_modeli_z_pliku(plik_wyboru
 for _rola, _nowy in zamiany_z_danych(_STAN_WYBORU).items():
     globals()[_rola] = _nowy
 
-# Decyzja wlasciciela 2026-08-15 zaczela od DeepSeeka poza pisaniem. Po
-# pozniejszych testach artykuly trafily do Fable 5, notki do Opusa 5, a etapy
-# DeepSeeka zostaly rozdzielone miedzy wariant Pro i Flash ponizej.
+# Routing od 2026-09-25: Fable pisze artykuly; Flash obsluguje pozostale
+# etapy tekstowe. Ustawienia rozumowania sa osobno w DEEPSEEK_MYSLENIE.
 MODEL_FOR = {
-    "scout": DEEPSEEK_PRO,
-    "feasibility": DEEPSEEK,  # tani odsiew przed drogim krokiem
-    # Dyskoveria dziala na DeepSeek V4 Pro przez `/responses` z server-side
-    # `web_search`: wybor adresow to praca mechaniczna, nie ocena. Kazda runda
-    # przesyla cala rozmowe od nowa, wiec wejscie rosnie — zmierzone na
-    # trzynastu wywolaniach `discovery` na DeepSeeku: od 72 do ponad 196 tys.
-    # tokenow. (Liczba „~146 tys." opisywala epoke Opusa i domykal ja rachunek
-    # $0,73 po stawce Anthropic; po przejsciu na DeepSeeka nie znaczy juz nic.)
-    # Opus byl wczesniejsza droga, zanim skrocenie promptu domknelo DeepSeeka.
-    #
-    # Sprawdzone na żywo, żeby nie powtarzać:
-    #  - Haiku 4.5, Sonnet 5: NIE wywołują wyszukiwania w ogóle, wypisują adresy
-    #    z pamięci (977 i 1073 tokeny wejścia, zero wyników). Także po jawnym
-    #    nakazie szukania w prompcie.
-    #  - DeepSeek v4-pro przez /responses: szuka NAPRAWDĘ i tanio ($0,05 wobec
-    #    $0,46 u Opusa, dziewięć razy taniej), zwraca prawdziwe adresy (OSHA,
-    #    Cornell Law, NFPA). ALE przy tym prompcie nie kończy: robi 11-22
-    #    wyszukiwań, zużywa cały budżet wyjścia na rozumowanie i nigdy nie tworzy
-    #    bloku `message`. Przy krótkim prompcie kończy poprawnie, więc droga
-    #    prowadzi przez uproszczenie promptu dyskoverii, nie przez model.
-    #    Po skróceniu promptu do ~250 słów kończy poprawnie — i tak zostaje.
-    #  - Opus jest NIEPRZEWIDYWALNY kosztowo: te same 8 wyszukiwań dały raz
-    #    52 767 tokenów wejścia ($0,46), a raz 285 759 ($1,65), bo wielkość
-    #    wyników zależy od tematu. To dyskwalifikuje go z etapu, który biegnie
-    #    codziennie bez nadzoru.
-    "discovery": DEEPSEEK_PRO,
-    "classify": DEEPSEEK,  # mechaniczne, wysokowolumenowe
-    # DRUGI PRZEBIEG ODSIEWU BANKU, po filtrze slownym. Filtr slowny liczy
-    # wspolne slowa; przepisane zdanie ich nie ma. Zmierzone na produkcji
-    # 3 wrzesnia 2026: z 22 wolnych faktow CZTERY PARY byly tym samym
-    # wydarzeniem opowiedzianym inaczej — ten sam DeepSeek Harness z 13
-    # sierpnia, ta sama licencja Breeze TTS 2, ta sama liczba 35x przy H3
-    # Max, ten sam uklad Jalapeno. Model dostaje tylko te pozycje banku,
-    # ktore dziela z kandydatem NAZWE albo LICZBE, wiec pytanie jest krotkie
-    # i zadawane rzadko. Najtanszy model, bo to rozstrzygniecie tak/nie.
+    "scout": DEEPSEEK,
+    "feasibility": DEEPSEEK,
+    "discovery": DEEPSEEK,
+    "discovery_recovery": DEEPSEEK,
+    "investigation": DEEPSEEK,
+    "investigation_search": DEEPSEEK,
+    "investigation_extract": DEEPSEEK,
+    "classify": DEEPSEEK,
     "powtorka": DEEPSEEK,
-    # ROZBIOR MATERIALU PRZED NOTKA — jedyny etap, w ktorym ROZUMOWANIE
-    # JEST PRODUKTEM, a nie kosztem ubocznym. Model pyta o material i sam
-    # sobie odpowiada, zanim pisarz cokolwiek napisze; patrz `stages.rozbior`.
-    # DEEPSEEK_PRO, bo tanszy wariant oddaje streszczenie zamiast sadu —
-    # a streszczenie mamy juz w karcie faktu.
-    "rozbior": DEEPSEEK_PRO,
-    # PAROWANIE — JEDYNE PYTANIE O ZBIOR, NIE O POZYCJE.
-    #
-    # Wszystko inne w tym potoku patrzy na fakt osobno: bramka swiezosci,
-    # straznik powtorek, ranking banku. Dlatego 4 wrzesnia 2026 na miejscach
-    # 1 i 2 w banku stanely DWA fakty o cenniku Gemini 3.8 Flash, a 31 sierpnia
-    # wyszly TRZY notki o GLM-5.3-Flash jednego dnia. Zabezpieczenia dzialaja
-    # dopiero przy wyborze notki — czyli za pozno, bo bank jest juz zapchany
-    # wariantami jednej historii.
-    #
-    # Pytanie brzmi „ktore z tych sa TA SAMA historia", zadawane raz na
-    # uzupelnienie banku, na samych tresciach faktow. Najtanszy model, bo to
-    # grupowanie, nie pisanie.
+    "rozbior": DEEPSEEK,
     "parowanie": DEEPSEEK,
-    "synthesis": DEEPSEEK_PRO,
-    # TO JEST PRODUKT. Fable 5 po porównaniu A/B na identycznej karcie: krótszy
-    # i bliższy celu długości (1127 wobec 1204 słów), ale przede wszystkim
-    # dokładniejszy — wyłapał, że przepis o przywiązanych nakrętkach jest węższy
-    # niż jego popularne streszczenie, i skorygował omówienie RTÉ. Opus tego nie
-    # zauważył. Kosztuje 3,5x więcej, co przy 4 artykułach miesięcznie znaczy
-    # $2,12 zamiast $0,61.
+    "synthesis": DEEPSEEK,
     "write": FABLE,
-    "review": DEEPSEEK_PRO,
-    # Obserwacja formy: beaty, eskalacja, moment przylapania, znajomosc
-    # otwarcia. Osobne wywolanie od recenzji CELOWO — recenzent ma wprost
-    # chronic wnioskowanie przed zgloszeniem, a ta bramka liczy m.in.
-    # zastrzezenia. Zlaczone w jedno pytanie tepilyby sie nawzajem.
-    "forma": DEEPSEEK_PRO,
-    # Komentarze ida na DeepSeek V4 Pro, notki na Claude Opus 5. Notka ma jeden
-    # wariant (`NOTE_CANDIDATES = 1`), wiec nie powstaje pula kilkunastu
-    # kandydatow do wyboru.
-    # PODZIAL PO TESCIE A/B NA TYM SAMYM POSCIE. Pro przynioslo konkretny
-    # precedens (protokol z Amsterdamu 1997 o czuciu zwierzat) i nazwalo
-    # asymetrie kosztu bledu; flash dal trafna, ale ogolniejsza uwage. Roznica
-    # kosztu to ~12 USD miesiecznie i placimy ja TAM, GDZIE TEKST JEST PUBLICZNY
-    # I TRWALY — a nie tam, gdzie model tylko wybiera z listy albo opisuje obrazek.
-    # NOTKA IDZIE DO FABLE — zmiana na galezi v2-test, po A/B na tym samym
-    # materiale z banku. Trzy powody, w tej kolejnosci:
-    #
-    # 1. Fable pisze wyraznie lepiej i to widac golym okiem. Na tym samym
-    #    patencie DeepSeek dal „a structural panel in a pressurized cabin"
-    #    (nieprzezroczyste dla obcego), Fable „an aircraft cabin window that
-    #    seals itself" — i zamknal linia „Failure is the mechanism, not the
-    #    emergency". Fable sformatowal tez numer jako 2,989,787 zamiast
-    #    US2989787, wiec czyta sie jak wielkosc, a nie jak kod.
-    # 2. Badania nad Substackiem mowia zgodnie, ze NOTKI daja ponad 60%
-    #    przyrostu subskrybentow i sa jedynym narzedziem pokazujacym nas
-    #    ludziom, ktorzy nas nie obserwuja. Artykul czyta ten, kto juz
-    #    przyszedl.
-    # 3. Do tej pory bylo odwrotnie niz powinno: najdrozszy model pisal to,
-    #    co NIE napedza wzrostu (piec artykulow = $2,13), a najtanszy to,
-    #    co napedza.
-    #
-    # 2026-08-19, PO DWOCH SLEPYCH TESTACH: notka idzie do OPUSA, nie Fable.
-    #
-    # Powyzsze uzasadnienie bylo oparte na porownaniu, w ktorym znalismy
-    # etykiety. Dwie proby na slepo daly co innego:
-    #   Fable kontra DeepSeek-pro   3 : 2
-    #   Fable kontra Opus 5         2 : 2
-    # Na dziewiec par Fable wygral piec. To jest rzut moneta, a nie przewaga.
-    # Wlasciciel wybieral w ciemno i w zadnej probie nie rozpoznal drozszego
-    # modelu.
-    #
-    # Opus jest dokladnie dwa razy tanszy od Fable ($5/$25 wobec $10/$50)
-    # i nadal jest modelem najwyzszej polki, wiec ryzyko, ze czterdziesci piec
-    # slow zabrzmi „przetlumaczone", zostaje znikome. Tego akurat zaden slepy
-    # test nie zlapie pewnie i dlatego nie schodzimy nizej dla ostatnich
-    # $4,59 miesiecznie.
-    #
-    # Razem z zejsciem na jeden wariant: $42,05 -> $6,07 miesiecznie za notki.
-    # ARTYKUL zostaje na Fable — tam A/B z Opusem dotyczyl calego tekstu,
-    # a nie czterdziestu pieciu slow, i przy czterech artykulach miesiecznie
-    # roznica ceny to $1,85.
-    "note": CLAUDE,
-    # DRUGI PISARZ NOTEK — TEN SAM ETAP, INNY MODEL, OSOBNA POZYCJA W KSIEDZE.
-    #
-    # Notki ida na zmiane: parzysta Opusem, nieparzysta DeepSeekiem. Osobna
-    # nazwa etapu zamiast parametru `model=` przy wywolaniu jest tu celowa —
-    # tabela `calls` rozlicza po etapie, wiec koszt obu pisarzy rozdziela sie
-    # SAM, bez dokladania kolumny i bez liczenia czegokolwiek recznie.
-    #
-    # Po co w ogole: notka na Opusie kosztuje 0,084 USD, na DeepSeeku pro
-    # 0,010 — osiem razy taniej. Slepa proba z 19 sierpnia pokazala, ze przy
-    # notkach wlasciciel NIE ROZPOZNAL drozszego modelu (Fable kontra Opus
-    # 2:2 na dziewieciu parach). Podzial pol na pol jest wiec jednoczesnie
-    # oszczednoscia i testem: po dwoch tygodniach zobaczymy z dziennika, czy
-    # notki jednego pisarza zbieraja wiecej odpowiedzi niz drugiego.
-    "note_tani": DEEPSEEK_PRO,
-    "comment": DEEPSEEK_PRO,
-    "reply": DEEPSEEK_PRO,
-    # RANKING BANKU POMYSLOW. Flash, bo to porzadkowanie kilkudziesieciu
-    # jednozdaniowych opisow, a nie rozumowanie o tresci — i ma byc tanie,
-    # zeby oplacalo sie wolac je czesto.
+    "review": DEEPSEEK,
+    "forma": DEEPSEEK,
+    "note": DEEPSEEK,
+    "note_tani": DEEPSEEK,
+    "comment": DEEPSEEK,
+    "reply": DEEPSEEK,
     "bank": DEEPSEEK,
     "factcheck": DEEPSEEK,
-    # NAPRAWA OBALONEGO ZDANIA. Kazdy tekst wraca do TEGO SAMEGO modelu,
-    # ktory go napisal — notka do Opusa, komentarz do DeepSeeka-pro. Nie z
-    # oszczednosci, tylko dlatego, ze naprawa ma zachowac glos: model, ktory
-    # nie pisal tego zdania, przepisuje przy okazji rytm calego tekstu, a
-    # wtedy „popraw jedna liczbe" cichcem staje sie „napisz to jeszcze raz".
-    "naprawa": CLAUDE,
-    "naprawa_komentarza": DEEPSEEK_PRO,
-    # Pytanie „jakie modele sa dzisiaj" MUSI isc na model z wyszukiwaniem —
-    # to jest cala jego wartosc. Ten sam, co sprawdzanie faktow, bo robi
-    # dokladnie to samo: konfrontuje pamiec ze swiatem.
+    "naprawa": DEEPSEEK,
+    "naprawa_komentarza": DEEPSEEK,
     "aktualne_modele": DEEPSEEK,
     "curiosity": DEEPSEEK,
     "grafika": DEEPSEEK,
     "cele": DEEPSEEK,
-    "wybor": DEEPSEEK_PRO,
-    # Bibliotekarz czyta caly bank naraz i szuka MECHANIZMU wspolnego
-    # dla roznych dziedzin. Pro, bo to jedyne zadanie w systemie, gdzie
-    # trzeba trzymac w glowie sto kilkadziesiat fragmentow jednoczesnie
-    # i widziec miedzy nimi zwiazek — a przy 10 tys. tokenow wejscia
-    # roznica ceny to ulamek centa.
-    "bibliotekarz": DEEPSEEK_PRO,
-    # Bramka ciekawosci przed pisarzem. Pro, bo musi rozpoznac, jakie
-    # przekonanie czytelnik przynosi ze soba — to sad o ludziach,
-    # nie odczyt z tekstu.
-    "warto_pisac": DEEPSEEK_PRO,
-    # Restack: jedno zdanie, ktore ma stanac obok cudzego tekstu pod naszym
-    # nazwiskiem. Pro z tego samego powodu co komentarze — najczesciej trzeba
-    # przypomniec sobie, GDZIE INDZIEJ ten sam mechanizm dziala, a to pamiec
-    # faktow, jedyna trwala przewaga pro nad flashem.
-    "restack": DEEPSEEK_PRO,
-    # Wyciaganie kandydatow z preambuly przepisu. Flash, bo to praca
-    # WYDOBYWCZA na podanym tekscie, a nie siegniecie do pamieci o swiecie —
-    # czyli dokladnie ta kategoria, w ktorej flash dorownuje pro i jest
-    # trzykrotnie tanszy. Preambuly bywaja polmilionowe, wiec objetosc
-    # wejscia decyduje o rachunku.
+    "wybor": DEEPSEEK,
+    "bibliotekarz": DEEPSEEK,
+    "warto_pisac": DEEPSEEK,
+    "restack": DEEPSEEK,
     "fedreg": DEEPSEEK,
 }
 
@@ -424,71 +287,44 @@ DROGA_WYSZUKIWANIA_DEEPSEEK = "anthropic"
 # nieprawdziwy dla dwóch trzecich etapów.
 DEEPSEEK_EFFORT = "low"
 
-# ROZUMOWANIE NA `chat/completions` — per etap, i domyślnie NIE RUSZAMY GO.
-#
-# CO ZMIERZYŁEM 6 września 2026, pytając samego API (nie dokumentacji):
-# rozumowanie jest tam włączone DOMYŚLNIE, a `_call_deepseek` nigdy nie wysyłał
-# parametru `thinking`. Cztery warianty, to samo pytanie, `deepseek-v4-flash`:
-#
-#     brak parametru (jak było)   53 tokeny wyjścia, 42 rozumowania
-#     thinking disabled           10                  0
-#     thinking low                91                 80
-#     thinking high              121                110
-#
-# Wszystkie cztery dały IDENTYCZNĄ, poprawną odpowiedź. Dwie rzeczy z tego
-# wynikają i obie są ważne:
-#
-# 1. Domyślne ustawienie NIE JEST `high` — jest niższe niż `low`, czyli
-#    DeepSeek dobiera wysiłek sam. Zewnętrzny audyt zalecał ustawić `low`
-#    wszędzie; na tym pomiarze `low` byłoby DROŻSZE od dzisiejszego stanu.
-# 2. Dźwignią jest `disabled`, nie `low`.
-#
-# DLACZEGO MIMO TO TA TABLICA JEST PUSTA — i to jest ROZSTRZYGNIĘTE POMIAREM,
-# a nie ostrożnością. Pięć powtórzeń na PRAWDZIWYM prompcie `cele` (12 celów
-# z żywego korpusu, `deepseek-v4-flash`):
-#
-#     wariant     wyjście śr.   USD/wyw.   wybranych celów   zgodność z „dziś"
-#     dziś            11 721     0,0077     2,4  (2-3)              —
-#     low             13 507     0,0089     2,2  (2-3)            5 / 5
-#     disabled           719     0,0005     5,6  (3-7)            0 / 5
-#
-# `low` jest DROŻSZE od dzisiejszego stanu przy identycznych decyzjach — to
-# obala zalecenie zewnętrznego audytu, żeby ustawić `low` na etapach wyboru.
-#
-# `disabled` jest 16 razy tańsze NA ETAPIE i bezużyteczne w całości, bo wybiera
-# ponad dwa razy więcej celów. Policzone na wolumenie z produkcji (82 wywołania
-# `cele` na 7 dni, koszt wyjścia `comment` 0,0044 USD):
-#
-#     oszczędność na `cele`                       +0,60 USD / 7 dni
-#     262 dodatkowe cele, z tego połowa zagadana  -0,58 USD / 7 dni
-#     BILANS                                      +0,02 USD / 7 dni
-#
-# Czyli zero — a cele są przy tym GORSZE (zgodność 0 na 5). Etap wchodzi tu
-# dopiero wtedy, gdy pomiar pokaże, że jego DECYZJA się nie zmienia.
-#
-# CZEGO NIE ZMIERZYŁEM: etapów, które PISZĄ (`comment`, `restack`, `bank`,
-# `forma`, `synthesis`, `note_tani`). Tam „ta sama decyzja" nie jest miarą —
-# trzeba porównać teksty, a to jest osobny eksperyment, nie porównanie zbiorów.
-# `comment` to największa pozycja wyjścia w całym rachunku (1,29 USD / 7 dni),
-# więc jest wart tego eksperymentu; `note_tani` pisze notki i tego bym nie
-# ruszał bez bardzo mocnego powodu.
-#
-# Brak etapu w tej tablicy = zero zmian wobec tego, co konto robiło do dziś.
+# Wspolny override etapu dla aktualnych transportow: chat i Anthropic.
+# Selektor i ograniczony research artykulu; reszta bez zmian.
+DEEPSEEK_EFFORT_FOR: dict[str, str] = {
+    "cele": "low", "investigation": "low",
+    "investigation_search": "low", "investigation_extract": "low",
+}
+
+# Pamiec brzmienia z juz potwierdzonych publikacji, bez dodatkowego modelu.
+PAMIEC_GLOSU_ILE = 4
+PAMIEC_GLOSU_ZNAKI = 240
+PAMIEC_GLOSU_OGON_BAJTY = 128 * 1024
+
+# Notki i restacki powstaja bez dodatkowego rozumowania. Proba z 2026-09-25
+# wykazala bledne uzasadnienie korekty w reply bez myslenia, wiec rozmowy
+# i naprawy zachowuja rozumowanie. Parametr dociera do obu transportow.
+# Selekcja nadal rozumuje, ale jej wysilek ustala DEEPSEEK_EFFORT_FOR.
+# Weryfikacja zachowuje domyslna glebokosc dostawcy.
 DEEPSEEK_MYSLENIE: dict[str, dict[str, str]] = {
-    # JEDYNY ETAP Z WLACZONYM ROZUMOWANIEM — i jedyny, w ktorym ono cos daje.
-    # Wszedzie indziej rozumowanie to rachunek za tokeny, ktorych nikt nie
-    # czyta; tutaj pytanie brzmi „co z tego wynika", wiec droga do odpowiedzi
-    # JEST odpowiedzia. Patrz `stages.rozbior`.
+    "discovery_recovery": {"type": "disabled"},
+    # Strukturalna analiza ma jawnymi polami pokazac hipotezy i dowody.
+    # Proba live: low + domyslne myslenie zuzylo caly limit 6000 tokenow
+    # przed odpowiedzia. Te trzy etapy oddaja bezposrednio sprawdzalny JSON.
+    "investigation": {"type": "disabled"},
+    "investigation_search": {"type": "disabled"},
+    "investigation_extract": {"type": "disabled"},
     "rozbior": {"type": "enabled"},
+    "note": {"type": "disabled"},
+    "note_tani": {"type": "disabled"},
+    "comment": {"type": "enabled"},
+    "reply": {"type": "enabled"},
+    "restack": {"type": "disabled"},
+    "naprawa": {"type": "enabled"},
+    "naprawa_komentarza": {"type": "enabled"},
 }
 
 
 def myslenie_deepseek(etap: str) -> dict[str, str] | None:
-    """Ustawienie `thinking` dla etapu, albo None = nie wysyłaj parametru.
-
-    None znaczy DOKŁADNIE to, co konto robiło do 6 września 2026: nie ruszamy
-    niczego i DeepSeek dobiera wysiłek sam.
-    """
+    """Kopia ustawienia thinking; None pozostawia domyslne ustawienie API."""
     w = DEEPSEEK_MYSLENIE.get(etap)
     return dict(w) if isinstance(w, dict) and w else None
 
@@ -799,7 +635,8 @@ MODEL_DO_SZUKANIA: dict[str, str] = {}
 # Ile wyszukiwan wolno jednemu wywolaniu Claude, gdy etap chodzi na Claude
 # (np. dyskoveria w trybie tanim). Bez limitu Claude robil 17, potem 31 rund.
 # Ten sam limit idzie do DeepSeeka przez endpoint zgodny z API Anthropic.
-MAX_SZUKAN_NA_ETAP = {"factcheck": 3, "curiosity": 3, "aktualne_modele": 4, "reply": 2}
+MAX_SZUKAN_NA_ETAP = {"factcheck": 3, "curiosity": 3, "aktualne_modele": 4, "reply": 2,
+                     "investigation_search": 3}
 
 # Wyniki prob wyszukiwania z `nowe_modele.py`: {model: {"dziala": bool, "kiedy": iso}}.
 PROBY_WYSZUKIWANIA: dict[str, dict] = {
@@ -1150,6 +987,22 @@ MIN_ZRODEL_DO_PISANIA = 4
 MIN_PRIMARY_SOURCES = 2  # wymóg właściciela: w korpusie ≥2 dokumenty pierwotne
 MIN_WHY_SOURCES = 2  # ≥2 źródła mówiące DLACZEGO, nie tylko treść reguły
 
+# Dogrywka reporterska korzysta z juz oplaconych fragmentow. Maksymalnie dwie
+# rundy, po trzy nowe dokumenty; analiza tylko luk, nie ponowny pelny research.
+RESEARCH_ENABLED = True
+RESEARCH_MAX_ROUNDS = 2
+RESEARCH_MAX_NEW_SOURCES = 3
+RESEARCH_MAX_QUESTIONS = 4
+RESEARCH_MAX_HYPOTHESES = 3
+RESEARCH_MAX_INPUT_CHARS = 60_000
+RESEARCH_MAX_DOC_CHARS = 18_000
+RESEARCH_MAX_EXCERPTS = 5
+RESEARCH_MAX_QUOTE_CHARS = 700
+RESEARCH_CACHE_HOURS = 24
+# Prog zatrzymania przed NASTEPNYM wywolaniem, nie gwarancja kwoty faktury:
+# ostatnie wywolanie i niepotwierdzone stawki moga przekroczyc ten szacunek.
+RESEARCH_STOP_USD = 0.15
+
 # Hosty, które serwują automatom CAPTCHA albo są płatne. Nie omijamy blokad —
 # wykrywamy je i nie marnujemy na nie zapytań.
 BLOCKED_HOSTS = (
@@ -1363,11 +1216,8 @@ THINKING_HEADROOM_TOKENS = 28000
 # `synthesis` i `review` chodza na DeepSeeku, a `forma` nie wywolala sie ani
 # razu (dodana po ostatnim artykule).
 #
-# DeepSeek ma wlasne pokretlo, DEEPSEEK_EFFORT="low", i jest ono JEDNO dla
-# wszystkich etapow z twardego powodu: tokeny rozumowania licza sie do
-# max_output_tokens, wiec "high" potrafi zjesc caly budzet i nie zostawic
-# miejsca na odpowiedz (bylo: 11 wyszukiwan, status completed, zero tekstu).
-# Przepiecie tych wpisow na DeepSeeka odtworzyloby dokladnie te awarie.
+# DeepSeek: DEEPSEEK_EFFORT dotyczy starego /responses, a aktualne
+# transporty korzystaja z DEEPSEEK_EFFORT_FOR i DEEPSEEK_MYSLENIE.
 #
 # Wpisy dla etapow deepseekowych ZOSTAJA, bo wyrazaja intencje na wypadek
 # przepiecia etapu na Claude. Zeby jednak nie byly cicha ozdoba, `llm.call`
@@ -2032,114 +1882,15 @@ COMMENTS_PER_DAY = 4
 # kolejne linie zaczynajace sie tak samo (anafora) daja ponad trzykrotnie lepsza
 # konwersje. Zadnej z tych rzeczy nie robilismy.
 NOTE_FORMS = {
-    "PROSTA": (
-        "One tight paragraph. No line breaks. This is the default shape and it "
-        "works — but it cannot be every note, so use it plainly and well."
-    ),
-    "KONTRAST": (
-        "Two facts set against each other, on separate lines, with a blank line "
-        "between them. Same object, opposite rules. Then one short line that "
-        "names what the difference actually is. Three blocks, no more."
-    ),
-    "LISTA": (
-        "Three consecutive short lines that begin with the same word, then one "
-        "closing line that lands the point. The repetition builds a visual "
-        "pattern that stops a thumb. Keep each line under ten words. "
-        "EVERY line must carry a fact the previous line did not. Three lines "
-        "that restate one idea to satisfy the pattern are worse than no pattern "
-        "at all: the reader gets the shape of an argument with nothing inside "
-        "it. If you only have one fact, this is not the form for it."
-    ),
-    "LICZBA": (
-        "Open with the number itself, alone on the first line — a quantity, a "
-        "duration, a price, a count. Blank line. Then what it is and who "
-        "decided it. "
-        "The number does the stopping; the rest does the explaining. "
-        "It has to be a number a STRANGER CAN FEEL: a quantity, a duration, a "
-        "price, a count of things. A version string, a checkpoint name, a "
-        "catalogue or patent number, a paper identifier, a section number or a "
-        "docket reference is not a number in this sense — "
-        "it is a label that happens to be made of digits, and it stops nobody. "
-        "A BARE YEAR is not a magnitude either — it is a label for a point in "
-        "time. '2009.' alone on a line stops nobody; 'eleven seconds' or "
-        "'$3 per million tokens' or 'two cents an image' does. "
-        "A year may appear later in the note, never as the hook. "
-        "This went wrong live twice: notes opened with 'US2989787' and with "
-        "'2009.', where the good version of the same form opened with '1 drop'. "
-        "If the only figures in the material are identifiers or dates, this is "
-        "the wrong form for that material."
-    ),
-    "SCENA": (
-        "Start with what is in front of the reader, in the second person: what "
-        "is on their screen, what has just answered them, what they are waiting "
-        "on, what decided something about them without telling them. One line. "
-        "Blank line. Then the rule hiding inside it. It does not have to be a "
-        "thing they can pick up — but it does have to be ONE thing and theirs, "
-        "not a scene from somebody else's life. Never a question, and no "
-        "invented experience of your own."
-    ),
-    "PYTANIE": (
-        "Deliver the whole fact first, in two or three lines. Then, on its own "
-        "line, one short question the reader can answer from their own life "
-        "without looking anything up. "
-        "This form is an experiment and it has a cost. Notes containing a "
-        "question mark convert 35 percent fewer subscribers — but direct, "
-        "easy questions are what actually pulls comments, and a young account "
-        "needs conversation more than it needs a clean conversion rate. So: "
-        "never a question INSTEAD of the fact, only after it. Never a question "
-        "whose answer is in the note. Never a request for engagement."
-    ),
-    "ODWROCENIE": (
-        "First line: the thing everyone believes, stated fairly and without "
-        "mockery. Blank line. Then the record that contradicts it, and why the "
-        "belief was reasonable in the first place. Break that second half too — "
-        "four sentences crammed into one block undoes the whole point of the "
-        "shape."
-    ),
-    # Struktura wskazywana zgodnie przez dwie niezalezne analizy duzych prob
-    # notek (setki tysiecy sztuk): zaczep w pierwszej linii, dwie-cztery linie
-    # tresci, konkret na koncu. Wersja dla NAS: zamiast osobistego wyniku,
-    # ktorego anonimowa marka nie ma, konczymy rzecza do sprawdzenia u siebie.
-    "ZACZEP_I_KONKRET": (
-        "Three moves, in order. One: a hook line that works on somebody who "
-        "has never heard of us and is scrolling — specific and surprising, "
-        "never a category label. Two: two to four lines saying what the "
-        "arrangement actually is and who decided it. Three: one closing line "
-        "handing the reader something they can look at, count or compare "
-        "themselves, today, without our help. Do not promise what they will "
-        "find. No personal anecdote — we do not have one and must not invent it. "
-        "THE THING MUST ALREADY BE IN THEIR LIFE: the answer an assistant gave "
-        "them this week, the recommendations sitting on their own feed, the box "
-        "they had to untick to opt out. Sending them to read a policy, open a "
-        "model card, pull up a system card or look up a regulator's guidance is "
-        "homework, and nobody does homework from a feed. "
-        "This went wrong live, and the record stays so it does not repeat: a "
-        "note ended with 'pull up any FAA advisory circular and count how many "
-        "open with that phrase'. The same mistake wearing this field's clothes "
-        "is 'open the model card and see for yourself' — newer document, "
-        "identical homework."
-    ),
-    # WYJASNIENIE — jedyna forma z dlugim oknem (patrz `FORMY_DLUGIE`).
-    # Napisana z wzorca, ktory wlasciciel podal recznie 3 wrzesnia 2026, gdy
-    # przepisal nasza niezrozumiala notke o benchmarkach. Cztery ruchy w tej
-    # kolejnosci sa CALA trescia tej formy — bez ktoregokolwiek zostaje
-    # aforyzm, czyli to, co naprawiamy.
-    "WYJASNIENIE": (
-        "Four moves, in this order, and none of them is optional. "
-        "ONE: name the thing in the first two sentences, plainly, including "
-        "the verdict on it. TWO: define the technical word you just used, as "
-        "an answer to the question the reader is already asking - 'what is X, "
-        "minus the jargon?' - and define it as a list of ordinary parts, not "
-        "as another abstraction. THREE: hold the reader's own situation "
-        "against that definition, part by part, and say which parts theirs is "
-        "missing. FOUR: close with the smallest version of the right thing "
-        "they could start doing this week, with a number in it. "
-        "FORBIDDEN HERE, because this form exists to cure them: opening by "
-        "contradicting a claim the reader has never heard ('I keep hearing "
-        "that...'); a metaphor standing in place of a definition; any named "
-        "measure, method or product left unexplained. If you find yourself "
-        "writing an aphorism, you are writing the wrong form."
-    ),
+    'PROSTA': 'Explain the point directly. Use paragraphs where they make reading easier.',
+    'KONTRAST': 'If two supported facts reveal a useful difference, explain that difference. No fixed layout is required.',
+    'LISTA': 'Use a short list only when the items are genuinely distinct and clearer as a list. Choose its length from the material.',
+    'LICZBA': 'If a measurement is the point, introduce it with its unit, scope and meaning. A number does not need its own line.',
+    'SCENA': 'Start from a concrete situation the evidence describes, or a clearly hypothetical example. Do not invent a witnessed scene.',
+    'PYTANIE': 'Ask a genuine unanswered question after enough context to understand it. Do not pretend the material has no answer when it does.',
+    'ODWROCENIE': 'Explain a supported surprising difference. Name a mistaken belief only if the supplied material establishes it.',
+    'ZACZEP_I_KONKRET': 'Lead with the detail that makes the subject worth understanding, then explain it. A punchline or reader assignment is optional.',
+    'WYJASNIENIE': 'Use the extra space to explain a difficult idea step by step for a newcomer. Add a concrete example if helpful. No required number of steps or terms.',
 }
 
 # FORMY, KTORYCH DANY TYP NIE MOZE WYKONAC — bo zadaja tego, czego typ zabrania.
@@ -2176,66 +1927,11 @@ NOTE_FORM_MIX = ("SCENA", "KONTRAST", "ZACZEP_I_KONKRET", "PROSTA", "LISTA",
                  "PYTANIE", "ODWROCENIE", "LICZBA", "WYJASNIENIE")
 
 NOTE_TYPES = {
-    # MYSL — jedyny typ ZWOLNIONY z karty dowodowej, i jedyny, ktoremu nie
-    # wolno niesc faktu.
-    #
-    # Wlasciciel pokazal cztery notki z kont, ktore chce nasladowac. Zadna nie
-    # miala ani jednego udokumentowanego faktu — zero zrodel, zero liczb, zero
-    # nazwisk — a ta zlozona z samych pytan ("Should AI have its own universal
-    # language?") zebrala pietnascie komentarzy. Wiecej niz cokolwiek, co dotad
-    # wystawilismy przy naszych 26 polubieniach na dwanascie notek.
-    #
-    # Nasze pozostale cztery typy wymagaja dowodu, wiec takiej notki nie da sie
-    # u nas napisac. Ten typ to naprawia, placac twarda cena: bez faktu znaczy
-    # BEZ FAKTU. Dzieki temu sprawdzanie faktow jest tu EGZEKUTOREM, a nie
-    # przeszkoda — notka bez sprawdzalnego twierdzenia nie ma czego oblac,
-    # a notka, ktora fakt przemyci, oblewa sie sama.
-    "MYSL": (
-        "A thought, a question, or an observation about what it is like to "
-        "live alongside these systems. NO EVIDENCE CARD, and therefore NO "
-        "FACTS: no number, no date, no named company doing a named thing, no "
-        "study, no percentage, nothing a reader could look up and find false. "
-        "If your idea needs a fact to stand up, it is a different note type "
-        "and you should say so instead of inventing one.\n\n"
-        "What is left is the part people actually answer: a question nobody "
-        "can settle, an observation about the shared experience of using this "
-        "stuff, a position you would defend out loud. It may be openly "
-        "uncertain. It may be funny. It may admit that you are behind, "
-        "confused, or annoyed — those read as human because they are the "
-        "things a person says and an account never does.\n\n"
-        "Two shapes work. FIRST: the open question, asked in earnest, with "
-        "the two or three ways it could go named underneath — not a rhetorical "
-        "question whose answer you are holding. SECOND: the observation that "
-        "names something everyone has felt and nobody has said, followed by "
-        "what you think it means.\n\n"
-        "Speak in the first person and mean it. 'I think', 'I just realised', "
-        "'maybe' are allowed here and nowhere else in this publication. The "
-        "reader is being invited to disagree, so give them a specific thing "
-        "to disagree with, not a mood."
-    ),
-    "ARTYKUL": (
-        "A fact from an article published today. State the fact so it stands on "
-        "its own, then let the link do the rest. Do not summarise the article "
-        "and do not tease it — the note has to be worth reading by someone who "
-        "never clicks."
-    ),
-    "CIEKAWOSTKA": (
-        "A single documented fact, surprising on its own, with no link and "
-        "nothing to sell. The test: a reader who knows nothing about this "
-        "publication stops scrolling and wants to know who found that out."
-    ),
-    "DYSKUSJA": (
-        "A statement someone could reasonably disagree with, backed by a "
-        "specific from the evidence. Not a question, and never a request for "
-        "opinions — take a position and leave the obvious objection visible so "
-        "a reader can pick it up. Comments carry more reach than likes."
-    ),
-    "SPROSTOWANIE": (
-        "Name a thing widely believed, then the record that contradicts it. "
-        "This is the house speciality: the gap between what people assume and "
-        "what the document says. Do not mock the belief — explain why it is "
-        "reasonable and where it goes wrong."
-    ),
+    'MYSL': 'An editorial view, a genuine open question, or a clearly hypothetical situation. There is no evidence card: do not assert checkable events, figures, company actions or shared personal experiences. Reasoning and first-person judgment are welcome.',
+    'ARTYKUL': 'A supported point from our article, understandable on its own. The publishing code adds its link. Do not reduce the note to an advertisement.',
+    'CIEKAWOSTKA': 'Explain a documented finding and why it matters. It can be useful without overturning a myth or criticising anyone.',
+    'DYSKUSJA': 'Offer a reasoned position or a genuine question grounded in the evidence. Let readers see what the judgment depends on.',
+    'SPROSTOWANIE': 'Correct a claim actually present in the material and explain the difference. If no mistaken claim is documented, explain the finding directly instead of inventing one.',
 }
 
 # Strefa czasowa publikacji. Liczy się strefa CZYTELNIKÓW, nie właściciela:
@@ -2485,30 +2181,10 @@ NOTE_MIX_ARTICLE_DAY = ("ARTYKUL", "CIEKAWOSTKA", "SPROSTOWANIE")
 # Notka wlasciciela z pietnastoma komentarzami — najwiecej ze wszystkiego, co
 # pokazal — byla PYTANIEM. Czyli ksztaltem, ktorego model nie wybral ani razu.
 KSZTALTY_MYSLI = {
-    "PYTANIE": (
-        "Ask something nobody can settle, in earnest, and mean the question. "
-        "Name two or three ways it could go underneath — that is the part "
-        "people answer. You are not holding a hidden answer: if you know how "
-        "it comes out, this is the wrong shape. End on the open end, not on a "
-        "resolution. Do NOT open with the question and then quietly answer it."
-    ),
-    "OBSERWACJA": (
-        "Name something everyone who uses these systems has felt and nobody "
-        "has said out loud, then say what you think it means. First person, "
-        "specific, about a habit or a moment rather than about the industry."
-    ),
-    "TEZA": (
-        "State a position you would defend out loud, then the reasoning that "
-        "got you there, then the part of it you are least sure about. Give "
-        "the reader something precise to disagree with. No hedging into "
-        "mush — a clearly stated wrong opinion is better than a safe one."
-    ),
-    "CUDZE_ZDANIE": (
-        "Somebody else's take that you keep turning over — argued with, not "
-        "reported. Say what it gets right, then where you come off it. Do not "
-        "name or quote anyone: you have no evidence card, so the position is "
-        "described in your own words as a position, never attributed."
-    ),
+    'PYTANIE': 'Consider a genuine open question and the alternatives that matter. Do not force a question if a statement explains the idea better.',
+    'OBSERWACJA': 'Consider an observation about the idea. Do not claim everyone has felt it or invent your own experience.',
+    'TEZA': 'Consider a clear position with its reason and any material uncertainty. Provocation is optional.',
+    'CUDZE_ZDANIE': 'Consider a possible opposing argument fairly. Without a source, frame it as hypothetical, never as something a real person said.',
 }
 
 
@@ -3241,6 +2917,9 @@ MAX_TOKENS = {
     purpose: ceiling + THINKING_HEADROOM_TOKENS
     for purpose, ceiling in MAX_TOKENS.items()
 }
+# Te sufity juz obejmuja rozumowanie. Nie dodajemy kolejnych 28 tysiecy tokenow.
+MAX_TOKENS.update({"investigation": 6000, "investigation_search": 6000,
+                   "investigation_extract": 8000, "discovery_recovery": 6000})
 
 # --- terminy -----------------------------------------------------------------
 # Termin musi pokryć własny sufit tokenów. Zmierzone: mediana 16,08 ms na token

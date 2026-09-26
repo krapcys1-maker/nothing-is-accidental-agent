@@ -49,7 +49,10 @@ Requirements:
 4. Use at least three different organisations. Any country, any language.
 5. Free, no login, readable as HTML or text. Skip these hosts, they block
    automated reading: {blocked_hosts}
-6. No forums, Q&A sites or vendor blogs.
+6. No forums or Q&A sites. A company's original announcement or policy, including
+   its own blog, is PRIMARY evidence of what it said or committed to. Attribute
+   the statement; it does not independently establish that its claims are true.
+   Skip marketing summaries that add no original record.
 
 6a. **If a search result quotes a study, a report or an official finding BY
     NAME, go and get that document itself.** Search for it directly — by
