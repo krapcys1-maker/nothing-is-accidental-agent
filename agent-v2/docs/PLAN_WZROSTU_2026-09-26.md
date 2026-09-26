@@ -335,12 +335,12 @@ Database, Komisja UE i częściowo Transformer.
 - 52% dorosłych Amerykanów bardziej się AI obawia, niż na nie cieszy (37% w 2021);
   wśród 18–29 lat 55% (31% w 2021); około trzech czwartych spodziewa się mniej
   miejsc pracy (Pew, sierpień 2026). [A]
-- Około połowa dorosłych używa chatbotów, co czwarty codziennie; 64% nastolatków
+- Około połowa dorosłych używa chatbotów, część z nich codziennie; 64% nastolatków
   13–17 lat; co dziesiąty rodzic dziecka 5–12 lat mówi, że dziecko ich używa
   (Pew, 2026). [A] Niekorzystający: 6 na 10 bez zainteresowania, dalej
   prywatność i trafność. [A]
-- 34% dorosłych używa chatbotów w sprawach zdrowia; co czwarty do oceny objawów,
-  podobnie wielu do zrozumienia wyników badań; 22%, bo tanio; 18%, bo o tym
+- 34% dorosłych używa chatbotów w sprawach zdrowia; co czwarty dorosły robi to
+  do oceny objawów, podobnie wielu do zrozumienia wyników badań; 22%, bo tanio; 18%, bo o tym
   wstydzi się rozmawiać (Pew, 25.08.2026). [A]
 - Ponad 70% wiadomości do ChatGPT nie dotyczy pracy; porady praktyczne, szukanie
   informacji i pisanie to prawie 80% rozmów (Chatterji i in., NBER 2025). [B]
@@ -392,6 +392,9 @@ z regułą przy `korpus_kanalow.ZRODLA`:
   jest kod.
 
 ### 7.6. Jak mierzymy E6
+
+Szczegółowy projekt tematów — źródła z dostępem, sygnały ciekawości, uczenie się
+na wynikach i budowa notki — jest w `agent-v2/docs/SILNIK_TEMATOW_2026-09-26.md`.
 
 Dwa tygodnie przed i po, na poligonie (Nothing Is Accidental):
 
