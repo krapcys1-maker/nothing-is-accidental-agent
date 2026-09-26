@@ -1,7 +1,7 @@
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-3190 wierszy, 27 funkcji na poziomie modułu, 1 klas
+3194 wierszy, 27 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -35,7 +35,7 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-10113 wierszy, 159 funkcji na poziomie modułu, 0 klas
+10305 wierszy, 165 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -107,6 +107,12 @@
 | `odeslanie_donikad(tekst)` | Odeslanie w PIERWSZYM zdaniu do badania, ktorego czytelnik nie widzial. |
 | `za_duzo_zargonu(tekst)` | Terminy insiderskie, gdy jest ich wiecej, niz notka udzwignie. Inaczej pusto. |
 | `note(conn, run_id, note_type, evidence, link, note_form, etap, seria)` | Jedna notka danego typu i danej FORMY — do szuflady. |
+| `_host_adresu(url)` *(wewn.)* | — |
+| `_adres_bez_ogona(url)` *(wewn.)* | — |
+| `styk_ze_zrodla(fakt, tresci)` | (styk, skad): `skad` to `adres`, `host`, `rejestr` albo `brak`. |
+| `styk_faktu(fakt)` | Styk zapisany w banku; wpisy sprzed silnika tematow sa `branza`. |
+| `dzis_notka_spoza_branzy()` | Czy dzis wyszla juz notka na fakcie spoza branzy — z DZIENNIKA. |
+| `styki_w_banku(dni)` | Styki faktow dopisanych do banku w ostatnich `dni` dniach. |
 | `_pola_ksztaltu(ksztalt, pomin)` *(wewn.)* | Nazwy pol z kontraktu na odpowiedz, bez klucza opakowujacego. |
 | `zakwestionuj_promocje(url, powod)` | Artykul, ktorego notka promujaca odpadla na sprawdzeniu faktow. |
 | `zapamietaj_niewystawiony(sciezka, powod)` | Zapisuje, ze gotowy artykul lezy na dysku i nie poszedl w swiat. |
@@ -187,7 +193,7 @@
 | `opublikowane_teksty(limit)` | Tresci, ktore NAPRAWDE wyszly na konto — notki i artykuly z dziennika. |
 | `dopisz_kandydatow(kandydaci, conn, run_id)` | Przepuszcza kandydatow przez bramke i dokłada do indeksu. |
 | `wez_kandydatow(ile)` | Wyjmuje kandydatow gotowych do pisania i ZNACZY ich jako uzytych. |
-| `co_zadzialalo(ile)` | NASZE wlasne notki z ZMIERZONYM odbiorem — material dla sedziego banku. |
+| `co_zadzialalo()` | ODBIOR NASZYCH NOTEK PO STYKACH — material dla sedziego banku. |
 | `sparuj_bank(conn, run_id)` | Scala fakty, ktore sa TA SAMA historia. Jedyne pytanie o ZBIOR, nie o pozycje. |
 | `posortuj_bank(conn, run_id, ile)` | Ustawia bank pomyslow od najmocniejszego i wyrzuca slabe. |
 | `_termin_waznosci(dni)` *(wewn.)* | Kiedy ta kandydatura przestaje byc tematem. Data z godzina, w UTC. |
@@ -201,7 +207,7 @@
 
 ### `browser.py` — cała styczność z Substackiem; nie woła modelu
 
-5475 wierszy, 104 funkcji na poziomie modułu, 0 klas
+5479 wierszy, 104 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -292,7 +298,7 @@
 | `potwierdz_odpowiedz(page, note_id, tekst)` | Pyta Substacka, czy nasza odpowiedź naprawdę jest w wątku — i KTORA. |
 | `wystaw_odpowiedz(note_id, tekst, wyslij, kontekst, rodzaj)` | Odpowiada w watku — pod nasza notka albo w cudzej dyskusji. |
 | `zdejmij_plakietke_ai(page, id_notki)` | Wylacza wykrywanie AI przy jednej notce. Sciezka z interfejsu Substacka. |
-| `wystaw_notke(tekst, wyslij, typ, forma, model, fakt_ranga, fakt_klucz)` | Wystawia notkę. Domyślnie WYPEŁNIA i NIE WYSYŁA. |
+| `wystaw_notke(tekst, wyslij, typ, forma, model, fakt_ranga, fakt_klucz, styk)` | Wystawia notkę. Domyślnie WYPEŁNIA i NIE WYSYŁA. |
 | `zapamietaj_platny_host(host, prawo)` | Host, ktory wprost mowi, ze komentowac moga tylko placacy. |
 | `hosty_tylko_dla_placacych()` | Hosty, gdzie komentowac moga tylko placacy — do odsiania PRZED ocena. |
 | `zapomnij_platny_host(host)` | Udany komentarz kasuje host z listy — wydawca mogl zmienic ustawienia. |
@@ -450,7 +456,7 @@
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-3545 wierszy, 42 funkcji na poziomie modułu, 0 klas
+3565 wierszy, 42 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -499,7 +505,7 @@
 
 ### `statystyki.py` — co przyniosła każda pozycja: wejścia, reakcje, subskrypcje
 
-746 wierszy, 14 funkcji na poziomie modułu, 0 klas
+795 wierszy, 16 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -516,6 +522,8 @@
 | `wczytaj(rodzaj)` | Wszystkie pomiary z pliku, w kolejnosci zapisu. Uszkodzone linie pomija. |
 | `najnowsze_per_pozycja(rodzaj)` | {identyfikator: ostatni pomiar}. To sie czyta przy raporcie. |
 | `po_godzinach(rodzaj, godzin)` | Stan kazdej pozycji po TYLE SAMO czasu od pierwszego pomiaru. |
+| `wynik_odbioru(wyswietlenia, odwiedziny, zapisy)` | 100 x (odwiedziny profilu + WAGA_ZAPISU x zapisy) / wyswietlenia. |
+| `zapisy_przypisane(zrodla)` | {numer notki: zapisy}, ktore Substack sam przypisal tresci. |
 | `podsumowanie(rodzaj)` | Sumy i srednie PO POZYCJACH, nie po pomiarach. |
 
 ### `bramki.py` — co może zatrzymać treść — wyliczone z drzewa składni, nie spisane z pamięci
@@ -552,10 +560,12 @@
 
 ### `korpus_kanalow.py` — o czym mówi się w tym tygodniu — zaczyn tematów, nigdy źródło
 
-751 wierszy, 19 funkcji na poziomie modułu, 1 klas
+869 wierszy, 21 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
+| `styk_wpisu(kanal, tytul)` | Styk jednego wpisu korpusu: ze zrodla, a przy zrodle mieszanym z tytulu. |
+| `o_ai(e)` | Czy wpis feedu dotyczy AI — po tytule i poczatku opisu (RSS albo Atom). |
 | `oczysc(tytul)` | Zdejmuje obietnice, zostawia zdarzenie. |
 | `_pole(e, nazwa)` *(wewn.)* | Tresc pola wpisu, obojetnie czy feed jest Atomem czy RSS-em 2.0. |
 | `_data_wpisu(e)` *(wewn.)* | Data wpisu jako RRRR-MM-DD. Atom daje ISO, RSS 2.0 format RFC 822. |
@@ -578,14 +588,18 @@
 
 ### `tresc_zrodel.py` — treść źródeł z korpusu pobrana za darmo — spiżarnia przed zakupami
 
-172 wierszy, 5 funkcji na poziomie modułu, 0 klas
+271 wierszy, 9 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
+| `_styk(w)` *(wewn.)* | — |
 | `_na_tekst(surowy)` *(wewn.)* | HTML na czysty tekst. Prymitywnie i celowo. |
 | `_warto(tekst)` *(wewn.)* | Czy z tej strony jest co czytac. |
-| `tresci_zrodel(wpisy, ile, znakow)` | Pobiera tresc pierwszych `ile` nadajacych sie wpisow korpusu. |
-| `blok_do_promptu(wpisy, ile)` | Tresci zrodel gotowe do wklejenia w prompt skauta. |
+| `kolejnosc_ludzi(wpisy, styki_w_banku)` | Wpisy spoza branzy w kolejnosci, w jakiej spizarnia ma je probowac. |
+| `tresci_zrodel(wpisy, ile, znakow, styki_w_banku)` | Pobiera tresc `ile` nadajacych sie wpisow korpusu — z kwota, patrz wyzej. |
+| `sklad(gotowe)` | Jedna linia do logu: ile tekstow, z ilu zrodel, jakie styki. |
+| `blok_do_promptu(wpisy, ile, styki_w_banku)` | Tresci zrodel gotowe do wklejenia w prompt skauta. |
+| `ostatnie_tresci()` | Teksty ostatnio pobranej spizarni — `stages.styk_ze_zrodla` bierze z nich |
 | `wyczysc_zapas()` | Do testow — zapas procesowy nie moze przeciekac miedzy przypadkami. |
 
 ### `aktualne_modele.py` — jakie modele istnieją DZIŚ; pytane na żywo, nie z pamięci
@@ -660,7 +674,7 @@
 
 ### `karta_wynikow.py` — te same liczby dla poligonu i produkcji co tydzień — jeden przyrząd, jedne definicje, tylko odczyt
 
-336 wierszy, 15 funkcji na poziomie modułu, 0 klas
+400 wierszy, 16 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -674,6 +688,7 @@
 | `odzew_komentarzy(dziennik, od, do, wlasne)` | Odsetek komentarzy z reakcja, na komentarzach starszych niz 48 h. |
 | `nowi_reagujacy(dziennik, od, do, wlasne)` | Ile uchwytow zareagowalo na nas PIERWSZY RAZ w historii konta w tym oknie. |
 | `zasieg_72h(statystyki, dziennik, od, do)` | Mediana wyswietlen po 72 h dla notek i restackow opublikowanych w oknie |
+| `odbior_po_stykach(statystyki, dziennik, zrodla, od, do)` | Notki spoza branzy wobec branzowych — miara decyzji E6 (silnik tematow). |
 | `zapisy(zrodla, dziennik)` | Zapisy z ostatniego odczytu Substacka (okno 30 dni) i przypisania do |
 | `koszt(baza, od, do)` | Koszt przebiegow produkcyjnych w oknie: razem, na dobe i trzy etapy. |
 | `karta(nazwa, dane, od, do, wlasne)` | — |

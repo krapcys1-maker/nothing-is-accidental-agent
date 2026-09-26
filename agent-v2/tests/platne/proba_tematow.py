@@ -276,9 +276,23 @@ def main():
             print("=== SZUKANIE %d z %d ===" % (nr + 1, a.ile))
             bufor = io.StringIO()
             import contextlib
+
+            import tresc_zrodel
+            # SPIZARNIA PAMIETA SIE 30 MINUT — wyczyszczona przed kazda proba.
+            # Pomiar z 8 wrzesnia jej nie czyscil i nie wypisywal, co w niej
+            # jest, wiec nie pokazal, ze wszystkie proby pisaly z tych samych
+            # osmiu tekstow przy wylaczonym szukaniu (raport WYBOR_TEMATOW).
+            tresc_zrodel.wyczysc_zapas()
             with contextlib.redirect_stdout(bufor):
                 fakty = stages.znajdz_ciekawostki(conn, run_id)
             wyjscie = bufor.getvalue()
+            _sp = re.search(r"\[spizarnia\] (.+)", wyjscie)
+            print("  spizarnia: %s" % (_sp.group(1).strip() if _sp
+                                       else "(nie pobrana w tej probie)"))
+            print("  szukanie w sieci: %s" % (
+                "TAK (dokupione)" if "dokupuje szukaniem" in wyjscie
+                else "TAK (pusta spizarnia)" if "spizarnia pusta" in wyjscie
+                else "NIE" if "BEZ platnego szukania" in wyjscie else "?"))
             # Dziedziny i obecnosc zaczynu odczytujemy z linii, ktore kod
             # DRUKUJE SAM. Gdy prefiks sie zmieni, mowimy „nie znalazlem"
             # zamiast podac zmyslona liczbe.
@@ -345,6 +359,14 @@ def main():
     zrodla("%d faktow z %d szukan" % (len(wszystkie), a.ile), wszystkie)
     print("      punkt odniesienia z 8 wrzesnia: 4 ZRODLA na 32 fakty.")
     print("      bank narastajacy tygodniami: 88 zrodel na 131 faktow.")
+
+    print()
+    print("=== STYK FAKTOW (E6) — ile spoza branzy ===")
+    _styki = collections.Counter(str(f.get("styk") or "branza") for f in wszystkie)
+    _poza = sum(n for s, n in _styki.items() if s != "branza")
+    print("  %s" % ", ".join("%s %d" % kv for kv in _styki.most_common()))
+    print("  SPOZA BRANZY: %d z %d (%.0f%%)   prog E6: co najmniej 50%%"
+          % (_poza, len(wszystkie), 100.0 * _poza / max(1, len(wszystkie))))
 
     print()
     print("=== CZY MODEL ODPOWIADAL NA ZADANE PYTANIE ===")

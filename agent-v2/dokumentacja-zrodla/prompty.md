@@ -3,7 +3,7 @@
 
 **Pola wejściowe:** *(brak)*
 
-#### `bank.md` (41 wierszy)
+#### `bank.md` (49 wierszy)
 
 **Pola wejściowe:** `co_zadzialalo`, `kandydaci`, `marka`
 
@@ -33,7 +33,7 @@
 {{"targets": [{{"index": <number>, "worth_it": true|false, "what_i_would_add": "<one concrete sentence, or empty when rejected>", "why_not": "<one sentence when rejected, otherwise empty>"}}]}}
 ```
 
-#### `ciekawostki.md` (70 wierszy)
+#### `ciekawostki.md` (83 wierszy)
 
 **Pola wejściowe:** `dziedziny`, `dzis`, `generatory`, `ile`, `ile_z_obszarow`, `jak_uzywac_obszarow`, `marka`, `miesiac`, `premiera`, `stan_modeli`, `uzyte`, `w_reku`, `wyczerpane_zrodla`, `wydarzenia`, `zaczyn_kanalow`, `zamowienia`
 
@@ -131,7 +131,7 @@
 {{"text": "the full corrected text", "co_zmienione": "one line: what you changed and what evidence you changed it to"}}
 ```
 
-#### `notka.md` (92 wierszy)
+#### `notka.md` (99 wierszy)
 
 **Pola wejściowe:** `evidence`, `form_brief`, `language`, `marka`, `max_words`, `min_words`, `note_form`, `note_type`, `ostatnie_otwarcia_json`, `ostatnie_zakonczenia_json`, `rozbior`, `type_brief`
 

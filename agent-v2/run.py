@@ -1442,7 +1442,11 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
                                              # nakladaniu sie slow.
                                              fakt_klucz=stages._klucz_faktu(
                                                  stages.tekst_faktu(
-                                                     n.get("fakt"))))
+                                                     n.get("fakt"))),
+                                             # PUNKT STYKU FAKTU (E6) — odbior
+                                             # liczony per rodzina, patrz
+                                             # `stages.co_zadzialalo`.
+                                             styk=n.get("styk") or "")
                 # Fakt odhaczamy DOPIERO po potwierdzonej publikacji. Wczesniej
                 # znikal juz przy znalezieniu, wiec przepadal takze wtedy, gdy
                 # notka nie poszla albo gdy przebieg byl tylko sprawdzeniem.

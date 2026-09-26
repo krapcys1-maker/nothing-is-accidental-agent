@@ -22,6 +22,8 @@
 | `IMAGE_TIMEOUT_S` | `300` | — |
 | `SUBSTACK_HANDLE` | `_env("SUBSTACK_HANDLE", "nothingisaccidental` | Konto na Substacku. ZE SRODOWISKA, ZEBY DALO SIE POSTAWIC DRUGIEGO AGENTA NA INNYM KONCIE. Druga kopia repozytorium dostaje wlasny `DATA_DIR |
 | `MARKA` | `_env("MARKA", "Nothing Is Accidental")` | NAZWA MARKI, ktora agent widzi w promptach. Wstawiana automatycznie przez `stages._prompt` jako pole `{marka}` — dziewiec plikow promptow mi |
+| `STYKI` | `("praca", "zdrowie", "szkola", "pieniadze", ` | STYK — silnik tematow, 26 wrzesnia 2026 (eksperyment E6, poligon). Miejsce, w ktorym zwykly czlowiek spotyka AI: praca, zdrowie, szkola, pie |
+| `KWOTA_SPOZA_BRANZY` | `True` | KWOTA „1 Z 3 NOTEK SPOZA BRANZY". Konto wystawia trzy notki na dobe (`NOTE_MIX_*`), wiec to znaczy: dopoki dzis nie wyszla notka spoza `bran |
 | `MAKS_ODPOWIEDZI_W_ROZMOWIE` | `2` | ILE RAZY ODPISUJEMY W JEDNEJ ROZMOWIE. Rozmowa to galaz komentarzy: ten, ktory ja zaczal, i wszystko pod nim. Liczy `browser.nasze_odpowiedz |
 | `MAKS_ODPOWIEDZI_KONTU_SIOSTRZANEMU` | `1` | — |
 | `KONTA_SIOSTRZANE` | `frozenset( int(x) for x in _env("KONTA_SIOST` | — |

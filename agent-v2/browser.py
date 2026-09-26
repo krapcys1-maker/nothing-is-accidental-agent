@@ -4409,7 +4409,7 @@ def zdejmij_plakietke_ai(page, id_notki: str) -> bool:
 def wystaw_notke(tekst: str, wyslij: bool = False, typ: str = "",
                  forma: str = "", model: str = "",
                  fakt_ranga: int | None = None,
-                 fakt_klucz: str = "") -> dict[str, Any]:
+                 fakt_klucz: str = "", styk: str = "") -> dict[str, Any]:
     """Wystawia notkę. Domyślnie WYPEŁNIA i NIE WYSYŁA.
 
     `wyslij=False` to nie ostrożność dla samej ostrożności: notki nie da się
@@ -4515,7 +4515,9 @@ def wystaw_notke(tekst: str, wyslij: bool = False, typ: str = "",
                          # „trzeba parowac notke z faktem po nakladaniu sie
                          # slow, co dalo 14 par z 46 notek". Ranga byla
                          # polowicznym rozwiazaniem — nie identyfikuje wpisu.
-                         fakt_klucz=fakt_klucz)
+                         fakt_klucz=fakt_klucz,
+                         # STYK FAKTU (E6) — patrz `stages.styk_ze_zrodla`.
+                         styk=styk)
             # WYKRYWANIE AI — KROK PO PUBLIKACJI, ODDZIELONY OD NIEJ.
             #
             # Substack pokazuje przy dluzszych notkach plakietke Pangramu
@@ -4559,7 +4561,9 @@ def wystaw_notke(tekst: str, wyslij: bool = False, typ: str = "",
                          # „trzeba parowac notke z faktem po nakladaniu sie
                          # slow, co dalo 14 par z 46 notek". Ranga byla
                          # polowicznym rozwiazaniem — nie identyfikuje wpisu.
-                         fakt_klucz=fakt_klucz)
+                         fakt_klucz=fakt_klucz,
+                         # STYK FAKTU (E6) — patrz `stages.styk_ze_zrodla`.
+                         styk=styk)
         page.close()
         browser.close()
         p.stop()

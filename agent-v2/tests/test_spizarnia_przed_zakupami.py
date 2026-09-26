@@ -207,7 +207,11 @@ def _udawany_call(purpose, system, user, **kw):
         for i in range(n)) + "]}")
 
 
-def _bez_szukania(_wpisy_, ile=8):
+# `styki_w_banku` doszlo 26 wrzesnia 2026 (silnik tematow, E6): spizarnia
+# stawia na poczatku styki, ktorych bank nie widzial od trzech dni. Atrapa bez
+# tego parametru wywalala sie na TypeError, a `znajdz_ciekawostki` bralo to za
+# pusta spizarnie i placilo za szukanie — test mierzyl wtedy swoja atrape.
+def _bez_szukania(_wpisy_, ile=8, styki_w_banku=None):
     return "### [OpenAI] cos\nSource: https://e.example/1\n\nTEKST"
 
 

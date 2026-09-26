@@ -1479,6 +1479,25 @@ def zaczyn_z_kanalow(ile: int = 26) -> str:
         print("  [kanaly] nie zebralem zaczynu (%s)" % type(exc).__name__,
               flush=True)
         return "(could not be fetched today)"
+    # ZRODLA O LUDZIACH TEZ SA KANALAMI (silnik tematow, E6). Prompt skauta
+    # kaze wiazac trzy czwarte materialu z TA lista, a najnowsze wpisy to
+    # branza i YouTube — feed o ludziach, piszacy raz na dwa dni, sie tu nie
+    # miescil. Skaut widzialby tekst o ludziach w spizarni, ale nie na liscie
+    # kanalow, i mogl go odkladac, zeby trzymac sie kanalow.
+    # PO JEDNYM Z KAZDEGO ZRODLA — lista ma pokazac, o czym pisza, a nie kto
+    # pisze najczesciej (zlapane testem: bez tego dwa pierwsze miejsca bral Pew).
+    try:
+        _sa = {w.get("url") for w in wpisy}
+        _ludzie: list[dict[str, Any]] = []
+        _zrodla: set[str] = set()
+        for w in korpus_kanalow.korpus_kanalow(200):
+            if (str(w.get("styk") or "branza") != "branza"
+                    and w.get("url") not in _sa and w.get("kanal") not in _zrodla):
+                _ludzie.append(w)
+                _zrodla.add(w.get("kanal"))
+        wpisy = list(wpisy) + _ludzie[:max(1, ile // 2)]
+    except Exception:
+        pass
     if not wpisy:
         return "(nothing fetched today)"
     return NOWA_LINIA.join(
@@ -2147,7 +2166,13 @@ def znajdz_ciekawostki(
     _tresc = ""
     try:
         import tresc_zrodel as _tz
-        _tresc = _tz.blok_do_promptu(korpus_kanalow.korpus_kanalow(30))
+        # CALY KORPUS, NIE TRZYDZIESCI PIERWSZYCH — silnik tematow (E6). Po
+        # dacie wygrywa ten, kto pisze najczesciej, a polowa czolowki to
+        # YouTube, ktorego spizarnia nie czyta; feed o ludziach, piszacy raz na
+        # dwa dni, do trzydziestki nie wchodzil. Wyborem rzadzi teraz kwota
+        # w `tresc_zrodel.tresci_zrodel`.
+        _tresc = _tz.blok_do_promptu(korpus_kanalow.korpus_kanalow(200),
+                                     styki_w_banku=styki_w_banku())
     except Exception as exc:
         print("  [ciekawostki] nie pobralem tresci zrodel (%s)"
               % type(exc).__name__, flush=True)
@@ -2280,6 +2305,28 @@ def znajdz_ciekawostki(
                      None)
         f["z_kanalu"] = bool(_traf)
         f["kanal_zrodlowy"] = (_traf or {}).get("kanal", "")
+
+    # STYK ZE ZRODLA — patrz `styk_ze_zrodla`. Nadpisujemy wszystko, co model
+    # mogl wpisac sam: styk jest pomiarem kodu, tak jak kotwica wyzej.
+    # `skad` idzie do logu, bo dopasowanie po adresie to jedyne pewne — gdyby
+    # przewazal `brak`, kwota i miara stalyby na samej branzy i nikt by tego
+    # nie zauwazyl.
+    try:
+        import tresc_zrodel as _tz
+        _tresci = _tz.ostatnie_tresci()
+    except Exception:
+        _tresci = []
+    _styki: dict[str, int] = {}
+    _skad: dict[str, int] = {}
+    for f in fakty:
+        f["styk"], f["styk_skad"] = styk_ze_zrodla(f, _tresci)
+        _styki[f["styk"]] = _styki.get(f["styk"], 0) + 1
+        _skad[f["styk_skad"]] = _skad.get(f["styk_skad"], 0) + 1
+    if fakty:
+        print("  [ciekawostki] styk: %s (dopasowanie: %s)"
+              % (", ".join("%s %d" % kv for kv in sorted(_styki.items())),
+                 ", ".join("%s %d" % kv for kv in sorted(_skad.items()))),
+              flush=True)
 
     _zakotwiczone = sum(1 for f in fakty if f.get("z_kanalu"))
     print(f"  [ciekawostki] z pokryciem: {len(fakty)}", flush=True)
@@ -3867,6 +3914,112 @@ KSZTALT_CIEKAWOSTEK = (
     '"CONFIRMS|MODIFIES|ENDS", "control_fact": "", "domain": ""}]}'
 )
 
+
+# STYK FAKTU PRZEPISUJE KOD ZE ZRODLA — silnik tematow, 26 wrzesnia 2026 (E6).
+#
+# NIE PYTAMY MODELU, gdzie czytelnik spotyka fakt — z tego samego powodu, dla
+# ktorego nie pytamy go, z ktorego kanalu wzial fakt (`z_kanalu`): deklaracje
+# trzeba by sprawdzac, a kod i tak zna zrodlo. Styk niesie ZRODLO
+# (`korpus_kanalow.STYK_ZRODLA`), spizarnia przenosi go na tekst, a tu tekst
+# przenosi go na fakt: po adresie, potem po hoscie tekstow spizarni, na koniec
+# po hoscie feedu z rejestru zrodel. Bez dopasowania fakt jest `branza` —
+# lepiej nie doliczyc faktu o ludziach, niz doliczyc branzowy i zafalszowac
+# kwote, ktora ma pilnowac tematow o ludziach.
+def _host_adresu(url: Any) -> str:
+    from urllib.parse import urlparse
+    try:
+        h = (urlparse(str(url or "")).netloc or "").lower()
+    except ValueError:
+        return ""
+    # `rss.arxiv.org` to feed, `arxiv.org` to artykul — ten sam serwis.
+    for przedrostek in ("www.", "rss.", "feeds."):
+        if h.startswith(przedrostek):
+            h = h[len(przedrostek):]
+    return h
+
+
+def _adres_bez_ogona(url: Any) -> str:
+    return str(url or "").strip().split("#")[0].rstrip("/")
+
+
+def styk_ze_zrodla(fakt: dict[str, Any],
+                   tresci: list[dict[str, Any]]) -> tuple[str, str]:
+    """(styk, skad): `skad` to `adres`, `host`, `rejestr` albo `brak`.
+
+    HOST Z DWOMA STYKAMI NIE ROZSTRZYGA. arXiv daje w jednej spizarni i szkole,
+    i prace — fakt z tego hosta bez dokladnego adresu nie wie, ktory jest jego.
+    """
+    adres = _adres_bez_ogona(fakt.get("url"))
+    for z in tresci or []:
+        if adres and _adres_bez_ogona(z.get("url")) == adres:
+            return str(z.get("styk") or "branza"), "adres"
+    host = _host_adresu(fakt.get("url"))
+    if not host:
+        return "branza", "brak"
+    z_hosta = {str(z.get("styk") or "branza") for z in tresci or []
+               if _host_adresu(z.get("url")) == host}
+    if len(z_hosta) == 1:
+        return z_hosta.pop(), "host"
+    try:
+        import korpus_kanalow as _kk
+        rejestr: dict[str, set[str]] = {}
+        for nazwa, feed in {**_kk.ZRODLA, **_kk.ZRODLA_LUDZIE}.items():
+            rejestr.setdefault(_host_adresu(feed), set()).add(_kk.styk_wpisu(nazwa))
+        z_rejestru = rejestr.get(host) or set()
+    except Exception:
+        z_rejestru = set()
+    if len(z_rejestru) == 1:
+        return next(iter(z_rejestru)), "rejestr"
+    return "branza", "brak"
+
+
+def styk_faktu(fakt: dict[str, Any]) -> str:
+    """Styk zapisany w banku; wpisy sprzed silnika tematow sa `branza`."""
+    s = str((fakt or {}).get("styk") or "").strip().lower()
+    return s if s in config.STYKI else "branza"
+
+
+def dzis_notka_spoza_branzy() -> bool:
+    """Czy dzis wyszla juz notka na fakcie spoza branzy — z DZIENNIKA.
+
+    Z dziennika, nie z banku: liczy sie to, co czytelnik naprawde dostal, a nie
+    to, co wyjelismy (fakt wziety na artykul albo na notke, ktora nie wyszla,
+    kwoty nie spelnia). Styk notki zapisuje `browser.wystaw_notke` od 26.09.
+    """
+    import json as _json
+    dzis = str(db.now())[:10]
+    try:
+        with (config.DATA_DIR / "dziennik.jsonl").open(encoding="utf-8") as f:
+            for linia in f:
+                try:
+                    w = _json.loads(linia)
+                except ValueError:
+                    continue
+                if (w.get("rodzaj") == "notka" and w.get("udane")
+                        and str(w.get("kiedy") or "")[:10] == dzis
+                        and w.get("styk") and w.get("styk") != "branza"):
+                    return True
+    except OSError:
+        return False
+    return False
+
+
+def styki_w_banku(dni: int = 3) -> set[str]:
+    """Styki faktow dopisanych do banku w ostatnich `dni` dniach.
+
+    Spizarnia stawia na poczatku zrodla o styku, ktorego tu NIE MA — inaczej
+    najczestszy styk wygrywalby codziennie tak samo, jak wygrywala branza.
+    """
+    from datetime import date, timedelta
+    try:
+        prog = (date.fromisoformat(str(db.now())[:10])
+                - timedelta(days=dni)).isoformat()
+        return {styk_faktu(k) for k in wczytaj_indeks()
+                if str(k.get("kiedy") or "")[:10] >= prog}
+    except Exception:
+        return set()
+
+
 # Pola kontraktu ciekawostek wyprowadzone z samego ksztaltu — zeby zapis do
 # indeksu nie mogl sie z nim rozjechac. Patrz `dopisz_kandydatow`.
 def _pola_ksztaltu(ksztalt: str, pomin: tuple[str, ...] = ("facts",)) -> tuple[str, ...]:
@@ -4554,6 +4707,10 @@ KSIEGOWOSC_BANKU = frozenset({
     "status", "powod", "kiedy", "wazny_do", "zielone_swiatlo", "ranga",
     "na_artykul", "dlaczego_mocny", "podobne_do", "uzyty_kiedy", "katy",
     "drugi_kat", "scalone_z", "z_kanalu", "kanal_zrodlowy", "decision",
+    # STYK TO NASZA ETYKIETA ZRODLA, NIE DOWOD. Pisarz ma wyczytac z dowodu,
+    # gdzie fakt trafia w zycie czytelnika (`notka.md`), a nie dostac gotowe
+    # „praca" i dopisac do niej prace.
+    "styk", "styk_skad",
 })
 
 
@@ -5206,6 +5363,10 @@ def notki_dnia(
         # WSZYSTKIE OSIEMNASCIE maja tam `None`. Ani jednej rangi.
         wynik["fakt_ranga"] = (None if typ == "MYSL"
                                else (fakt or {}).get("ranga"))
+        # STYK FAKTU — do dziennika, zeby `co_zadzialalo` i karta wynikow
+        # policzyly odbior per rodzina (E6). Pusty, gdy notka nie stoi na
+        # fakcie z banku (MYSL, promocja artykulu).
+        wynik["styk"] = styk_faktu(fakt) if isinstance(fakt, dict) else ""
         # Ta sama zasada co przy faktach: dzien promocji odhacza ten, kto notke
         # NAPRAWDE wystawil. Wystarczylo, ze kandydat przeszedl bramke — wiec
         # nieudana publikacja albo zwykle sprawdzenie zjadaly po cichu jeden
@@ -8671,6 +8832,11 @@ def dopisz_kandydatow(kandydaci: list[dict[str, Any]],
     licznik = {"przyjete": 0, "odrzucone": 0, "znane": 0, "podobne": 0,
                "powtorka_llm": 0, "juz_pisalismy": 0}
     for k in kandydaci or []:
+        # STYK ZE ZRODLA TAKZE DLA KANDYDATOW Z INNYCH DROG. `znajdz_ciekawostki`
+        # dopasowuje go do tekstow spizarni; kandydat, ktory tamtedy nie szedl,
+        # dostaje go z rejestru zrodel po hoscie — albo `branza`.
+        if "styk_skad" not in k:
+            k["styk"], k["styk_skad"] = styk_ze_zrodla(k, [])
         # NAZWA PACZKI PRZESTAJE WYGLADAC JAK WZMIANKA — patrz
         # `bez_malpy_w_nazwie_paczki`. Normalizujemy PRZED bramka i przed
         # zapisem, zeby zapora widziala to samo, co pozniej pojdzie do pisarza.
@@ -8704,6 +8870,8 @@ def dopisz_kandydatow(kandydaci: list[dict[str, Any]],
                 "kiedy": db.now(),
                 "z_kanalu": bool(k.get("z_kanalu")),
                 "kanal_zrodlowy": str(k.get("kanal_zrodlowy") or "")[:60],
+                "styk": styk_faktu(k),
+                "styk_skad": str(k.get("styk_skad") or "")[:10],
             })
             # RANGA ZDJETA, zeby sedzia ocenil go na nowo razem z reszta.
             _stary.pop("ranga", None)
@@ -8792,6 +8960,11 @@ def dopisz_kandydatow(kandydaci: list[dict[str, Any]],
             # wszystko wygladalo na „z pamieci", takze to, co przyszlo z kanalu.
             "z_kanalu": bool(k.get("z_kanalu")),
             "kanal_zrodlowy": str(k.get("kanal_zrodlowy") or "")[:60],
+            # TA SAMA KLASA WADY CO KOTWICA WYZEJ: styk liczy kod po odpowiedzi
+            # modelu, wiec z ksztaltu sam sie nie przepisze. Bez tych dwoch
+            # linii kwota i miara (E6) widzialyby w banku sama branze.
+            "styk": styk_faktu(k),
+            "styk_skad": str(k.get("styk_skad") or "")[:10],
             "status": "nowy" if ok else "odrzucony",
             "powod": powod,
             "kiedy": db.now(),
@@ -8943,6 +9116,29 @@ def wez_kandydatow(ile: int = 1) -> list[dict[str, Any]]:
     # wlasnej pamieci.
     swiezi.sort(key=lambda para: (not para[0].get("z_kanalu"),
                                   para[0].get("ranga", 10 ** 6)))
+
+    # KWOTA SPOZA BRANZY — silnik tematow (E6): co najmniej jedna z trzech
+    # notek dnia (`config.KWOTA_SPOZA_BRANZY`).
+    #
+    # Porzadek wyzej nie wie nic o tym, GDZIE ludzie spotykaja fakt, a kotwica
+    # w kanalach znaczyla dotad branze — wiec branza wygrywala kazdy dzien bez
+    # wzgledu na range. Dopoki dzis nie wyszla notka spoza branzy, najlepszy
+    # fakt z innym stykiem idzie na poczatek; wybiera go ten sam porzadek, wiec
+    # zakotwiczony w kanalach ma pierwszenstwo i tutaj.
+    if config.KWOTA_SPOZA_BRANZY and swiezi and ile > 0 \
+            and not dzis_notka_spoza_branzy():
+        _nr = next((i for i, (k, _) in enumerate(swiezi)
+                    if styk_faktu(k) != "branza"), None)
+        if _nr is None:
+            print("  [kwota] dzis jeszcze nic spoza branzy, a w banku nie ma"
+                  " faktu z innym stykiem — idzie branza", flush=True)
+        else:
+            if _nr:
+                swiezi.insert(0, swiezi.pop(_nr))
+            print("  [kwota] dzis jeszcze nic spoza branzy — pierwszy idzie"
+                  " fakt ze stykiem %s: %s"
+                  % (styk_faktu(swiezi[0][0]),
+                     str(swiezi[0][0].get("fact") or "")[:60]), flush=True)
 
     # BLIZNIAKI W JEDNEJ PARTII. Ranking ustawia kandydatow wzgledem siebie, ale
     # nie pyta, czy dwaj sasiedzi nie mowia tego samego — i nie zapyta, bo to
@@ -9240,99 +9436,91 @@ def wez_kandydatow(ile: int = 1) -> list[dict[str, Any]]:
 POWODY_WYRZUCENIA = ("NOT_AI", "NOTHING_TO_CHECK", "NO_MECHANISM")
 
 
-def co_zadzialalo(ile: int = 6) -> str:
-    """NASZE wlasne notki z ZMIERZONYM odbiorem — material dla sedziego banku.
+def co_zadzialalo() -> str:
+    """ODBIOR NASZYCH NOTEK PO STYKACH — material dla sedziego banku.
 
     PO CO. Sedzia banku mial ocenic, „czy nieznajomy przestanie przewijac", i
-    robil to z wlasnych przekonan o tym, co ludzie lubia. My mamy pomiar:
-    wyswietlenia, polubienia i odpowiedzi kazdej wystawionej pozycji.
+    robil to z wlasnych przekonan o tym, co ludzie lubia. My mamy pomiar.
+    Model obserwuje, kod decyduje — takze tutaj: kod liczy, sedzia dostaje
+    wynik rodzin tematow, a nie pytanie o ocene w skali.
 
-    Model obserwuje, kod decyduje — takze tutaj. Kod wybiera, ktore notki
-    pokazac (najmocniejsze i najslabsze wedlug tej samej miary), a model ma z
-    nich wyciagnac wniosek. Nie pytamy go o ocene w skali; pokazujemy dowody.
+    ZMIENIONE 26 WRZESNIA 2026 (silnik tematow, E6), dwie rzeczy naraz:
 
-    MIARA: polubienia + 3 x odpowiedzi. Odpowiedz jest rzadsza i drozsza od
-    polubienia — ktos musial cos napisac — wiec wazy wiecej. Wyswietlenia
-    zostaja w opisie, ale NIE wchodza do miary: mowia, ilu ludziom Substack
-    pokazal notke, a nie czy ktokolwiek ja uznal za warta czegokolwiek.
+    MIARA. Do tego dnia: polubienia + 3 x odpowiedzi z OSTATNIEGO pomiaru.
+    Polubienia nie maja zwiazku z zapisami (korelacja rang -0,03 na 17 000
+    notek, analiza zewnetrzna), u nas reakcje nie odrozniaja dobrej notki od
+    belkotu (3,2 / 3,0 / 3,1, audyt 3.09), a ostatni pomiar mieszal wiek
+    z jakoscia. Teraz `statystyki.wynik_odbioru` po 72 godzinach: odwiedziny
+    profilu i zapisy przypisane przez Substacka na 100 wyswietlen.
+
+    RODZINY, NIE NOTKI. Przy trzech notkach na dobe pojedyncza notka to szum;
+    sedzia dostawal szesc najlepszych i szesc najgorszych i uczyl sie z nich
+    przypadku. Teraz dostaje tabele po stykach (`korpus_kanalow.STYK_ZRODLA`).
+    Styk niesie dziennik od 26.09 — notek sprzed tego dnia nie zgadujemy, wiec
+    przez pierwsze trzy doby tabela jest pusta i sedzia rankuje bez historii.
+
+    RESTACKI WYPADAJA: to cudzy tekst pod naszym nazwiskiem, a przy nich stoi
+    polowa przypisanych zapisow konta — sedzia uczylby sie cudzego pisania.
     """
     try:
         import statystyki
-        naj = statystyki.najnowsze_per_pozycja("notka")
+        pozycje = statystyki.po_godzinach("notka", 72)["pozycje"]
+        zapisy = statystyki.zapisy_przypisane()
     except Exception:
         return "(no measurements available yet)"
-    if not naj:
-        return "(no measurements available yet)"
 
-    # TYLKO POMIARY Z EPOKI AI. Konto do 25 sierpnia pisalo o przedmiotach
-    # codziennych i te notki nadal siedza w statystykach — dwie najslabsze w
-    # calym zbiorze dotycza symbolu na butelce szamponu.
-    #
-    # Podanie ich sedziemu jako dowodu „co dziala na tym koncie" jest DOKLADNIE
-    # ta sama wada, ktora tego samego dnia wycielismy z dziewieciu promptow:
-    # uczenie na materiale sprzed przestawienia. Gorzej nawet, bo tu wyglada na
-    # twardy pomiar — a mierzy inna publikacje, czytana przez innych ludzi.
-    #
-    # Wlasciciel zlapal to natychmiast: „jaki szampon, o ai piszemy".
-    # DATA PUBLIKACJI, NIE POMIARU. Pole `kiedy` w statystykach to chwila, w
-    # ktorej ZMIERZYLISMY notke, wiec jest zawsze dzisiejsza — pierwsza wersja
-    # tego filtru nie odsiala niczego i szampon przeszedl dalej. Prawdziwa data
-    # wystawienia siedzi w dzienniku dzialan, razem z trescia, wiec laczymy
-    # jedno z drugim po poczatku tekstu.
-    granica = config.DATA_PRZESTAWIENIA
-    kiedy_wystawiona: dict[str, str] = {}
+    # STYK PO NUMERZE NOTKI, NIE PO TRESCI. Dziennik niesie `id` i `styk`
+    # kazdej wystawionej notki, a statystyki sa kluczowane tym samym numerem.
+    styk_po_id: dict[str, str] = {}
+    restacki: set[str] = set()
     try:
         import json as _js
         dz = config.DATA_DIR / "dziennik.jsonl"
         for linia in dz.read_text(encoding="utf-8").splitlines():
-            linia = linia.strip()
-            if not linia:
-                continue
             try:
                 w = _js.loads(linia)
             except ValueError:
                 continue
-            if w.get("rodzaj") != "notka" or not w.get("udane"):
+            if not isinstance(w, dict) or not w.get("id"):
                 continue
-            klucz = " ".join(str(w.get("tekst") or "").split())[:60].lower()
-            if klucz:
-                kiedy_wystawiona.setdefault(klucz, str(w.get("kiedy") or "")[:10])
+            if w.get("rodzaj") == "restack":
+                restacki.add(str(w["id"]))
+            elif (w.get("rodzaj") == "notka" and w.get("udane")
+                  and w.get("styk")):
+                styk_po_id[str(w["id"])] = str(w["styk"])
     except Exception:
         pass
 
-    def _wystawiona(r) -> str:
-        klucz = " ".join(str(r.get("tekst") or "").split())[:60].lower()
-        return kiedy_wystawiona.get(klucz, "")
+    rodziny: dict[str, dict[str, int]] = {}
+    for nid, r in pozycje.items():
+        nid = str(nid)
+        if nid in restacki or nid not in styk_po_id:
+            continue
+        d = rodziny.setdefault(styk_po_id[nid],
+                               {"notek": 0, "wysw": 0, "odw": 0, "zap": 0})
+        d["notek"] += 1
+        d["wysw"] += statystyki._liczba(r.get("wyswietlenia"))
+        d["odw"] += statystyki._liczba(r.get("odwiedziny_profilu"))
+        d["zap"] += zapisy.get(nid, 0)
+    if not rodziny:
+        return "(no notes measured by touchpoint yet)"
 
-    # Pomiar, ktorego nie da sie polaczyc z dziennikiem, ZOSTAJE. Odsiewamy
-    # tylko to, o czym WIEMY, ze jest sprzed przestawienia — nieznane traktujemy
-    # jak nasze, bo cicha utrata dowodow jest gorsza od jednego starego wpisu.
-    po_przestawieniu = {k: r for k, r in naj.items()
-                        if not _wystawiona(r) or _wystawiona(r) >= granica}
-    odsiane = len(naj) - len(po_przestawieniu)
-    if odsiane:
-        print("  [odbior] pomijam %d pomiarow sprzed przestawienia konta (%s)"
-              % (odsiane, granica), flush=True)
-    naj = po_przestawieniu
+    def _wynik(d: dict[str, int]) -> float:
+        w = statystyki.wynik_odbioru(d["wysw"], d["odw"], d["zap"])
+        return -1.0 if w is None else w
 
-    def punkty(r):
-        return (statystyki._liczba(r.get("polubienia"))
-                + 3 * statystyki._liczba(r.get("odpowiedzi")))
-
-    posort = sorted(naj.values(), key=punkty, reverse=True)
-    if len(posort) < 4:
-        return "(too few measurements to compare)"
-
-    def wiersz(r):
-        return ("  %s likes, %s replies, %s views — %s"
-                % (r.get("polubienia", 0), r.get("odpowiedzi", 0),
-                   r.get("wyswietlenia", 0),
-                   " ".join(str(r.get("tekst") or "").split())[:150]))
-
-    gora = [wiersz(r) for r in posort[:ile]]
-    dol = [wiersz(r) for r in posort[-ile:]]
-    return (NOWA_LINIA.join(["THESE LANDED:"] + gora + ["", "THESE DID NOT:"]
-                            + dol))
+    linie = ["Our notes 72 hours after posting, grouped by the touchpoint of the"
+             " source. Score = 100 x (profile visits + %d x attributed signups)"
+             " / views. Profile visits are the only visible step before a"
+             " subscription; likes are not counted." % statystyki.WAGA_ZAPISU]
+    for s, d in sorted(rodziny.items(), key=lambda kv: -_wynik(kv[1])):
+        linie.append("  %s: %d notes, %d views, %d profile visits, %d signups,"
+                     " score %.1f" % (s, d["notek"], d["wysw"], d["odw"],
+                                      d["zap"], max(_wynik(d), 0.0)))
+    print("  [odbior] rodziny tematow: %s"
+          % ", ".join("%s %d" % (s, d["notek"]) for s, d in sorted(rodziny.items())),
+          flush=True)
+    return NOWA_LINIA.join(linie)
 
 
 BANK_SYSTEM = (
@@ -9548,10 +9736,14 @@ def posortuj_bank(conn: sqlite3.Connection, run_id: int | None = None,
     print("  [bank] %d z %d rozwazanych bez rangi — rankuje"
           % (len(bez_rangi), len(wolni)), flush=True)
 
+    # STYK ZRODLA PRZY KAZDYM KANDYDACIE — patrz `styk_ze_zrodla`. Sedzia
+    # widzi rodzine faktu, a w historii (`co_zadzialalo`) wynik tej rodziny.
     opis = "\n\n".join(
         "id: %d\nfakt: %s\nmechanizm: %s\ndla czytelnika: %s\ndziedzina: %s"
+        "\nstyk: %s"
         % (i, str(k.get("fact") or "")[:400], str(k.get("decision") or "")[:200],
-           str(k.get("consequence") or "")[:200], str(k.get("domain") or "")[:80])
+           str(k.get("consequence") or "")[:200], str(k.get("domain") or "")[:80],
+           styk_faktu(k))
         for i, k in enumerate(wolni))
 
     try:

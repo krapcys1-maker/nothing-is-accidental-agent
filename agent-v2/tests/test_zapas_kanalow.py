@@ -130,12 +130,15 @@ korpus_kanalow.korpus_kanalow(5)
 # trzynascie kanalow YouTube (Atom) i siedem zrodel pierwotnych (RSS 2.0,
 # poza vLLM). Test pilnuje, ze KAZDE zostalo odpytane dokladnie raz — czyli
 # ze nikt nie zgubil zbioru i nikt nie pyta dwa razy o to samo.
-_ile_zrodel = len(korpus_kanalow.KANALY) + len(korpus_kanalow.ZRODLA)
+# Od 26 wrzesnia 2026 trzeci zbior: zrodla o ludziach (`ZRODLA_LUDZIE`, silnik
+# tematow E6), odpytywane ta sama petla co zrodla pierwotne.
+_ile_zrodel = (len(korpus_kanalow.KANALY) + len(korpus_kanalow.ZRODLA)
+               + len(korpus_kanalow.ZRODLA_LUDZIE))
 sprawdz("odpytal kazdy kanal i kazde zrodlo",
         siegniecia["ile"] == _ile_zrodel,
-        "%d zapytan przy %d kanalach i %d zrodlach"
+        "%d zapytan przy %d kanalach, %d zrodlach i %d o ludziach"
         % (siegniecia["ile"], len(korpus_kanalow.KANALY),
-           len(korpus_kanalow.ZRODLA)))
+           len(korpus_kanalow.ZRODLA), len(korpus_kanalow.ZRODLA_LUDZIE)))
 
 print()
 print("=== 4. PRZETERMINOWANY ZAPAS NIE JEST UZYWANY ===")

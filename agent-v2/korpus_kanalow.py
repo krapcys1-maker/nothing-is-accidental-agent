@@ -168,6 +168,115 @@ ZRODLA = {
     "Interconnects":   "https://www.interconnects.ai/feed",
 }
 
+# ZRODLA O LUDZIACH — silnik tematow, 26 wrzesnia 2026 (eksperyment E6).
+# Plan: `agent-v2/docs/WYBOR_TEMATOW_2026-09-26.md`.
+#
+# Wszystko wyzej to blogi firm, wydania bibliotek, strony awarii i podcasty
+# branzowe; o ludziach pisza tam tylko Wpadki AI, Komisja UE i Transformer.
+# A spizarnia (`tresc_zrodel`) bierze teksty wlasnie stad, wiec bank byl
+# w 70% branzowy — o temacie decydowal kod, nie model (pomiar 26.09: z osmiu
+# tekstow spizarni siedem branzowych).
+#
+# Licza sie jako kanaly w regule „trzy czwarte z kanalow" (decyzja wlasciciela
+# zostaje; zmienia sie to, co jest kanalem), bo trafiaja do tego samego korpusu,
+# z ktorego `stages.znajdz_ciekawostki` liczy `z_kanalu`.
+#
+# SPRAWDZONE NA ZYWO z serwera 26.09 (`pomiary/zrodla_ludzie.py`): tytul feedu,
+# data ostatniego wpisu, wpisy o AI z 30 dni — nie sam kod 200.
+#     CourtListener   17 z 17 (zapytanie juz jest o AI)   ostatni 25.09
+#     EdSurge         12 z 21                             ostatni 23.09
+#     Rest of World    9 z 12                             ostatni 24.09
+#     Pew              8 z 90                             ostatni 25.09
+#     EFF             13 z 34                             ostatni 25.09
+#     404 Media        7 z 15                             ostatni 25.09
+#     KFF Health News  1 z 10     The 74   1 z 25     FTC konsumenci   1 z 11
+#     arXiv cs.CY, cs.HC  tytul poprawny, zero wpisow: sobota, arXiv nie
+#                         publikuje w weekendy. Jesli w tygodniu pusty, wypada.
+# ODRZUCONE przy tej samej probie: NBER (404 i nieczytelny XML), FDA (401),
+# Tech Policy Press (zero wpisow), FTC komunikaty (0 o AI), SEC (1 o AI i wymog
+# adresu kontaktowego w naglowku), The Markup i AlgorithmWatch (0 o AI).
+# Federal Register (27 dokumentow o AI w 30 dni) to API, nie feed — osobny krok.
+ZRODLA_LUDZIE = {
+    "CourtListener":  "https://www.courtlistener.com/feed/search/"
+                      "?q=%22artificial+intelligence%22&type=o",
+    "EdSurge":        "https://www.edsurge.com/articles_rss",
+    "The 74":         "https://www.the74million.org/feed/",
+    "KFF Health":     "https://kffhealthnews.org/feed/",
+    "Pew":            "https://www.pewresearch.org/feed/",
+    "FTC konsumenci": "https://www.ftc.gov/feeds/press-release-consumer-protection.xml",
+    "EFF":            "https://www.eff.org/rss/updates.xml",
+    "404 Media":      "https://www.404media.co/rss/",
+    "Rest of World":  "https://restofworld.org/feed/latest",
+    "arXiv cs.CY":    "https://rss.arxiv.org/rss/cs.CY",
+    "arXiv cs.HC":    "https://rss.arxiv.org/rss/cs.HC",
+}
+
+# STYK ZRODLA — gdzie ludzie spotykaja to, o czym zrodlo pisze. NIE PYTAMY
+# MODELU: styk faktu kod przepisuje ze zrodla (`stages.styk_ze_zrodla`), tak
+# samo jak `z_kanalu`. Zrodla spoza tej tabeli sa `branza`.
+STYK_ZRODLA = {
+    "CourtListener": "prawo", "EdSurge": "szkola", "The 74": "szkola",
+    "KFF Health": "zdrowie", "Pew": "codziennosc", "FTC konsumenci": "pieniadze",
+    "EFF": "prawo",
+    # Juz w korpusie od dawna, dotad liczone jak branza.
+    "Wpadki AI": "szkody", "Komisja UE": "prawo", "Transformer": "prawo",
+}
+
+# ZRODLA MIESZANE: styk z tytulu, a gdy tytul nie ma zadnego slowa z mapy,
+# wartosc tutaj. Rest of World pisze w tym miesiacu glownie o wyscigu z Chinami,
+# a to jest branza, nie praca; arXiv cs.CY i cs.HC to badania o ludziach.
+STYK_Z_TYTULU = {"Rest of World": "branza", "404 Media": "codziennosc",
+                 "arXiv cs.CY": "ludzie", "arXiv cs.HC": "ludzie"}
+# Kolejnosc ma znaczenie: pierwsze trafienie wygrywa, a szkola i zdrowie sa
+# wezsze niz praca czy prawo.
+MAPA_STYKU = (
+    ("szkola", re.compile(r"\b(students?|teachers?|schools?|classrooms?|"
+                          r"universit(?:y|ies)|colleges?|education|homework|"
+                          r"children|kids|teens?)\b", re.IGNORECASE)),
+    ("zdrowie", re.compile(r"\b(patients?|doctors?|nurses?|hospitals?|"
+                           r"health|medical|clinics?|therap(?:y|ists?))\b",
+                           re.IGNORECASE)),
+    ("praca", re.compile(r"\b(workers?|jobs?|employees?|employment|hiring|"
+                         r"layoffs?|wages?|labou?r|unions?|gig|freelancers?)\b",
+                         re.IGNORECASE)),
+    ("prawo", re.compile(r"\b(courts?|judges?|lawsuits?|laws?|legal|"
+                         r"regulat\w+|police|surveillance|privacy)\b",
+                         re.IGNORECASE)),
+    ("pieniadze", re.compile(r"\b(scams?|fraud|prices?|consumers?|loans?|"
+                             r"insurance)\b", re.IGNORECASE)),
+)
+
+
+def styk_wpisu(kanal: str, tytul: str = "") -> str:
+    """Styk jednego wpisu korpusu: ze zrodla, a przy zrodle mieszanym z tytulu."""
+    if kanal in STYK_Z_TYTULU:
+        return next((s for s, wz in MAPA_STYKU if wz.search(tytul or "")),
+                    STYK_Z_TYTULU[kanal])
+    return STYK_ZRODLA.get(kanal, "branza")
+
+
+# FILTR O AI dla feedow, ktore pisza o wszystkim (Pew: polityka i religia, EFF:
+# cale prawa cyfrowe, KFF: cala sluzba zdrowia). Ten sam wzorzec, ktorym mierzy
+# `pomiary/zrodla_ludzie.py` — pomiar i produkcja licza to samo. Bez slowa
+# „algorithm": w komunikatach urzedow to najczesciej handel algorytmiczny.
+# CourtListener nie jest filtrowany: zapytanie juz jest o AI, a tytul orzeczenia
+# to same nazwiska stron. `A.I.` z kropkami stoi osobno: w grupie zamknietej
+# przez `\b` nie trafialo nigdy, bo po kropce nie ma granicy slowa.
+FILTR_O_AI = set(ZRODLA_LUDZIE) - {"CourtListener"}
+O_AI = re.compile(
+    r"\bA\.I\.|\b(AI|artificial intelligence|machine learning|chatbots?|"
+    r"ChatGPT|OpenAI|Anthropic|Claude|Gemini|Copilot|LLMs?|"
+    r"large language models?|generative|deepfakes?|facial recognition|"
+    r"automated decision[- ]making|neural networks?)\b",
+    re.IGNORECASE)
+
+
+def o_ai(e: Any) -> bool:
+    """Czy wpis feedu dotyczy AI — po tytule i poczatku opisu (RSS albo Atom)."""
+    opis = _pole(e, "description") or _pole(e, "summary")
+    return bool(O_AI.search(_pole(e, "title") + " " + opis[:600]))
+
+
 # ILE NAJNOWSZYCH BIERZEMY Z JEDNEGO ZRODLA. YouTube oddaje 15 i tyle wystarcza;
 # feed OpenAI ma 1164 wpisow i bez sufitu jedno zrodlo zdominowaloby korpus.
 # Bierzemy po dacie, nie po kolejnosci w pliku — kolejnosc bywa dowolna.
@@ -293,6 +402,9 @@ def przetworz(wpisy: list[tuple[str, Any]]) -> list[dict[str, Any]]:
             "data": _data_wpisu(e),
             "url": _link_wpisu(e),
             "rola": "zdarzenie do sprawdzenia; naglowka nie kopiujemy",
+            # STYK ZE ZRODLA — patrz `STYK_ZRODLA`. Idzie dalej do spizarni
+            # i z niej do faktu; model go nie nadaje.
+            "styk": styk_wpisu(kanal, czysty),
         })
     out.sort(key=lambda x: x["data"], reverse=True)
     return out
@@ -691,7 +803,7 @@ def korpus_kanalow(ile: int = 30) -> list[dict[str, Any]]:
         # roznica jest w formacie feedu (RSS 2.0 zamiast Atoma) i obsluguje ja
         # `_pole`. Awaria jednego zrodla nie moze zabrac reszty, wiec kazde
         # ma wlasny `try`, tak jak kanaly.
-        for nazwa, adres in ZRODLA.items():
+        for nazwa, adres in {**ZRODLA, **ZRODLA_LUDZIE}.items():
             # TEN SAM ZAPAS CO PRZY KANALACH. Zrodlo pierwotne tez ma prawo
             # miec zla godzine, a jego zla godzina nie moze znaczyc dziury w
             # spizarni — bo pusta spizarnia to platne szukanie.
@@ -718,6 +830,11 @@ def korpus_kanalow(ile: int = 30) -> list[dict[str, Any]]:
                 korzen = ET.fromstring(surowy.encode("utf-8"))
                 poz = korzen.findall(".//a:entry", NS) or korzen.findall(".//item")
                 poz.sort(key=_data_wpisu, reverse=True)
+                # FILTR PRZED SUFITEM, nie po nim: Pew ma 90 wpisow w miesiacu,
+                # z tego 8 o AI — dwanascie najnowszych przefiltrowanych
+                # dawaloby jeden, dwa tematy zamiast osmiu.
+                if nazwa in FILTR_O_AI:
+                    poz = [e for e in poz if o_ai(e)]
                 # WIEK ODCINAMY JUZ TUTAJ, inaczej niz przy kanalach. YouTube
                 # oddaje 15 ostatnich filmow i to sa z natury rzeczy filmy
                 # swieze; feed OpenAI ma 1164 wpisow, a Epoch AI publikuje
@@ -732,8 +849,9 @@ def korpus_kanalow(ile: int = 30) -> list[dict[str, Any]]:
                 print("  [zrodla] %s: %s" % (nazwa, type(exc).__name__), flush=True)
 
     k = przetworz(wpisy)
-    print("  [kanaly] %d wpisow z %d kanalow i %d zrodel -> %d tematow"
-          % (len(wpisy), len(KANALY), len(ZRODLA), len(k)), flush=True)
+    print("  [kanaly] %d wpisow z %d kanalow i %d zrodel (w tym %d o ludziach) -> %d tematow"
+          % (len(wpisy), len(KANALY), len(ZRODLA) + len(ZRODLA_LUDZIE),
+             len(ZRODLA_LUDZIE), len(k)), flush=True)
     # Zapas zapisujemy TYLKO wtedy, gdy cos przyszlo. Zapamietanie pustki po
     # sieciowej wpadce wyciszyloby kanaly na pol godziny, a prompt dostalby
     # „(nothing fetched today)" mimo dzialajacej sieci.

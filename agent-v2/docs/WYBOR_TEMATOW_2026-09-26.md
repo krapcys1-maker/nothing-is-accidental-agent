@@ -3,6 +3,11 @@
 26 września 2026. Odpowiedź na pytanie właściciela: „skąd brać tematy, sprawdź,
 jak to mamy, a jak powinno być, jak to zrobić, jak najtaniej".
 
+**Stan, 26.09 wieczorem:** krok 0 wykonany z serwera, kroki 1–6 wdrożone na
+poligonie. Co weszło, czym różni się od tego planu (m.in. inne źródła po pomiarze,
+koszt wyboru tematu 5,54 USD/30 dni zamiast 1–2) i jak rozstrzygniemy:
+`SILNIK_TEMATOW_WDROZENIE_2026-09-26.md`.
+
 Podstawa: kod z `main` (a1242dc), pomiary w `docs/` i research
 z `SILNIK_TEMATOW_2026-09-26.md`. Ten raport jest węższy od tamtego: dotyczy
 tylko tego, jak **nasz** bot wybiera temat, i kończy się listą zmian w kodzie.

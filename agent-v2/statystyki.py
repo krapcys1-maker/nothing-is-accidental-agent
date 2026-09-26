@@ -659,6 +659,55 @@ def po_godzinach(rodzaj: str | None = None, godzin: float = 24.0) -> dict:
             "za_mlode": za_mlode, "bez_czasu": bez_czasu}
 
 
+# MIARA ODBIORU TEMATU — silnik tematow (E6), 26 wrzesnia 2026. Jedno miejsce
+# dla `stages.co_zadzialalo` i `karta_wynikow`, zeby sedzia banku i karta, na
+# ktorej wlasciciel decyduje, liczyly TO SAMO.
+#
+# Polubienia nie mowia nic o zapisach (korelacja rang -0,03 na 17 tys. notek,
+# analiza zewnetrzna; u nas reakcje nie odrozniaja dobrej notki od belkotu),
+# a odwiedziny profilu to jedyny widoczny krok przed subskrypcja — ta miara
+# wyrzucila juz typ MYSL (7.09). Zapis wazy piec odwiedzin, bo jest celem, a nie
+# krokiem; piatka to punkt startowy z planu `docs/WYBOR_TEMATOW_2026-09-26.md`.
+WAGA_ZAPISU = 5
+
+
+def wynik_odbioru(wyswietlenia: int, odwiedziny: int, zapisy: int) -> float | None:
+    """100 x (odwiedziny profilu + WAGA_ZAPISU x zapisy) / wyswietlenia."""
+    if not wyswietlenia:
+        return None
+    return round(100.0 * (odwiedziny + WAGA_ZAPISU * zapisy) / wyswietlenia, 2)
+
+
+def zapisy_przypisane(zrodla: list[dict] | None = None) -> dict[str, int]:
+    """{numer notki: zapisy}, ktore Substack sam przypisal tresci.
+
+    Z `zrodla.jsonl` (`podsumowanie.zapisy_per_notka`), maksimum po odczytach
+    — kazdy odczyt to okno 30 dni, wiec suma liczylaby ten sam zapis kilka
+    razy. Tak samo liczy `karta_wynikow.zapisy`. Pole `subskrypcje` przy
+    pozycji to okno doby, NIE przypisanie.
+    """
+    if zrodla is None:
+        zrodla = []
+        try:
+            tresc = (config.DATA_DIR / "zrodla.jsonl").read_text(
+                encoding="utf-8", errors="replace")
+        except OSError:
+            tresc = ""
+        for linia in tresc.splitlines():
+            try:
+                w = json.loads(linia)
+            except ValueError:
+                continue
+            if isinstance(w, dict):
+                zrodla.append(w)
+    wynik: dict[str, int] = {}
+    for z in zrodla:
+        for k, v in ((z.get("podsumowanie") or {}).get("zapisy_per_notka")
+                     or {}).items():
+            wynik[str(k)] = max(wynik.get(str(k), 0), _liczba(v))
+    return wynik
+
+
 def podsumowanie(rodzaj: str | None = None) -> dict:
     """Sumy i srednie PO POZYCJACH, nie po pomiarach.
 

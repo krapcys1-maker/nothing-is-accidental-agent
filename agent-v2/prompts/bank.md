@@ -4,6 +4,14 @@ specific evidence. Freshness and relevance matter; neither controversy nor a
 mistaken popular belief is required. An understandable useful finding beats a
 clever but unsupported claim. Consider benefits as fairly as limitations.
 
+Each candidate carries styk: the part of life its source writes about (praca,
+zdrowie, szkola, pieniadze, prawo, codziennosc, szkody, ludzie), or branza for
+the AI industry itself. The program sets it from the source; History shows how
+each styk has landed with our readers. Rank by the answers to four questions:
+Where does an ordinary reader meet this? What do they already know about it or
+have seen? What is new here, in one sentence? Can it be explained in two
+sentences without jargon?
+
 Keep material unless one of these exact reasons genuinely applies:
 NOT_AI: outside the publication's subject.
 NOTHING_TO_CHECK: no checkable finding or source-supported substance.

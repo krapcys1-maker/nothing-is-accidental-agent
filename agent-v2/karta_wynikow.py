@@ -209,6 +209,58 @@ def zasieg_72h(statystyki: list[dict], dziennik: list[dict], od: date,
     return wynik
 
 
+def odbior_po_stykach(statystyki: list[dict], dziennik: list[dict],
+                      zrodla: list[dict], od: date, do: date) -> dict:
+    """Notki spoza branzy wobec branzowych — miara decyzji E6 (silnik tematow).
+
+    Ta sama selekcja co `zasieg_72h` (okno przesuniete o trzy doby, pomiar
+    najblizszy 72 h) i ta sama miara co sedzia banku (`statystyki.wynik_odbioru`):
+    100 x (odwiedziny profilu + 5 x zapisy przypisane) / wyswietlenia. Styk
+    niesie dziennik od 26.09; starsze notki ida do `bez_styku`.
+    """
+    import statystyki as _st
+
+    styk_po_id = {str(e.get("id")): str(e.get("styk") or "")
+                  for e in dziennik
+                  if e.get("rodzaj") == "notka" and e.get("udane") and e.get("id")}
+    restacki = {str(e.get("id")) for e in dziennik
+                if e.get("rodzaj") == "restack" and e.get("id")}
+    zap = _st.zapisy_przypisane(zrodla)
+    przes_od, przes_do = od - timedelta(days=3), do - timedelta(days=3)
+    pomiary: dict[str, list] = defaultdict(list)
+    for s in statystyki:
+        if "wyswietlenia" not in s or s.get("rodzaj") != "notka":
+            continue
+        nid = str(s.get("id"))
+        if nid in restacki:
+            continue
+        wyst, zm = _czas(s.get("wystawione")), _czas(s.get("zmierzone"))
+        if not wyst or not zm or not _w_oknie(s.get("wystawione"), przes_od, przes_do):
+            continue
+        wiek = (zm - wyst).total_seconds() / 3600
+        pomiary[nid].append((abs(wiek - DOJRZALOSC_H), s))
+    grupy: dict[str, dict] = {g: {"n": 0, "wyswietlenia": 0, "odwiedziny": 0,
+                                  "zapisy": 0}
+                              for g in ("spoza_branzy", "branza", "bez_styku")}
+    for nid, v in pomiary.items():
+        if min(x[0] for x in v) > TOLERANCJA_H:
+            continue
+        s = min(v, key=lambda x: x[0])[1]
+        styk = styk_po_id.get(nid, "")
+        g = grupy["bez_styku" if not styk
+                  else "branza" if styk == "branza" else "spoza_branzy"]
+        g["n"] += 1
+        g["wyswietlenia"] += int(s.get("wyswietlenia") or 0)
+        g["odwiedziny"] += int(s.get("odwiedziny_profilu")
+                               if s.get("odwiedziny_profilu") is not None
+                               else (s.get("interakcje") or {}).get("Profile visit", 0))
+        g["zapisy"] += zap.get(nid, 0)
+    for g in grupy.values():
+        g["wynik"] = _st.wynik_odbioru(g["wyswietlenia"], g["odwiedziny"],
+                                       g["zapisy"])
+    return grupy
+
+
 def zapisy(zrodla: list[dict], dziennik: list[dict]) -> dict:
     """Zapisy z ostatniego odczytu Substacka (okno 30 dni) i przypisania do
     naszych tresci — ze wszystkich odczytow, maksimum na tresc."""
@@ -267,6 +319,9 @@ def karta(nazwa: str, dane: Path, od: date, do: date, wlasne: set[str]) -> dict:
         "komentarze": odzew_komentarzy(dziennik, od, do, wlasne),
         "nowi_reagujacy": nowi_reagujacy(dziennik, od, do, wlasne),
         "zasieg_72h": zasieg_72h(_jsonl(dane / "statystyki.jsonl"), dziennik, od, do),
+        "odbior_po_stykach": odbior_po_stykach(
+            _jsonl(dane / "statystyki.jsonl"), dziennik,
+            _jsonl(dane / "zrodla.jsonl"), od, do),
         "zapisy": zapisy(_jsonl(dane / "zrodla.jsonl"), dziennik),
         "koszt": koszt(dane / "agent-v2.db", od, do),
     }
@@ -275,12 +330,17 @@ def karta(nazwa: str, dane: Path, od: date, do: date, wlasne: set[str]) -> dict:
 def _wiersze(k: dict) -> list[tuple[str, str]]:
     w, d, kom, z = k["wzrost"], k["dzialania"], k["komentarze"], k["zasieg_72h"]
     ko, za = k["koszt"], k["zapisy"]
+    ps = k.get("odbior_po_stykach") or {}
 
     def wart(v):
         return "—" if v is None else str(v)
 
     def zmiana(v):
         return "—" if v is None else f"{v:+d}"
+
+    def odbior(g):
+        g = ps.get(g) or {}
+        return f"{wart(g.get('wynik'))} ({g.get('n', 0)})"
 
     return [
         ("subskrybenci (zmiana)", f"{wart(w.get('subskrybenci'))} ({zmiana(w.get('przyrost_subskrybenci'))})"),
@@ -298,6 +358,10 @@ def _wiersze(k: dict) -> list[tuple[str, str]]:
         ("notka: mediana 72 h (n)", f"{wart(z['notka']['mediana'])} ({z['notka']['n']})"),
         ("restack: mediana 72 h (n)", f"{wart(z['restack']['mediana'])} ({z['restack']['n']})"),
         ("odwiedziny profilu na notke", wart(z["notka"]["odwiedziny_profilu_na_szt"])),
+        # E6: 100 x (odwiedziny profilu + 5 x zapisy) / wyswietlenia, po 72 h.
+        ("odbior 72 h: spoza branzy (n)", odbior("spoza_branzy")),
+        ("odbior 72 h: branza (n)", odbior("branza")),
+        ("odbior 72 h: przed E6 (n)", odbior("bez_styku")),
         ("koszt USD (na dobe)", f"{ko.get('usd', '—')} ({ko.get('usd_na_dobe', '—')})"),
         ("najdrozsze etapy", ", ".join(f"{e} {v}" for e, v in ko.get("etapy", [])) or "—"),
         ("przebiegi", ", ".join(f"{s} {n}" for s, n in sorted(ko.get("przebiegi", {}).items())) or "—"),

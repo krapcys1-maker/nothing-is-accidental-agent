@@ -99,6 +99,26 @@ SUBSTACK_HANDLE = _env("SUBSTACK_HANDLE", "nothingisaccidental")
 # wpisana w tresci, wiec drugi agent pisalby cudzym nazwiskiem.
 MARKA = _env("MARKA", "Nothing Is Accidental")
 
+# STYK — silnik tematow, 26 wrzesnia 2026 (eksperyment E6, poligon). Miejsce,
+# w ktorym zwykly czlowiek spotyka AI: praca, zdrowie, szkola, pieniadze,
+# prawo, codziennosc, szkody, ludzie (badania o ludziach) albo branza. Niesie go
+# ZRODLO (`korpus_kanalow.STYK_ZRODLA`), a nie model; kod przepisuje go na fakt
+# (`stages.styk_ze_zrodla`), tak jak `z_kanalu`. Plan i pomiar:
+# `agent-v2/docs/WYBOR_TEMATOW_2026-09-26.md`.
+#
+# PO CO. Najlepsza notka poligonu od 5.09 (250 wyswietlen przy typowych 10-30)
+# mowila o „panelu myslenia", ktory uzytkownik widzi w chatbocie; najslabsze
+# (7-13) tlumaczyly wnetrze modeli. Bank byl w 70% branzowy, bo spizarnia brala
+# teksty z blogow branzowych i przy niej skaut w ogole nie szuka w sieci.
+STYKI = ("praca", "zdrowie", "szkola", "pieniadze", "prawo", "codziennosc",
+         "szkody", "ludzie", "branza")
+# KWOTA „1 Z 3 NOTEK SPOZA BRANZY". Konto wystawia trzy notki na dobe
+# (`NOTE_MIX_*`), wiec to znaczy: dopoki dzis nie wyszla notka spoza `branza`,
+# fakt z innym stykiem idzie na poczatek kolejki (`stages.wez_kandydatow`).
+# Gdy bank takiego nie ma, jest tylko wpis w logu i idzie branza.
+# Cofniecie: False.
+KWOTA_SPOZA_BRANZY = True
+
 # ILE RAZY ODPISUJEMY W JEDNEJ ROZMOWIE. Rozmowa to galaz komentarzy: ten,
 # ktory ja zaczal, i wszystko pod nim. Liczy `browser.nasze_odpowiedzi_w_rozmowie`
 # z danych Substacka, wiec obejmuje tez rozmowy sprzed tej stalej.

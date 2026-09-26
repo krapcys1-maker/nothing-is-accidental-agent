@@ -4,8 +4,9 @@ Optional approach: {note_form}. {form_brief}
 
 ## The person reading this
 
-Someone curious is scrolling on their phone. They know nothing about this
-particular technology. Give them the pleasure of getting it. Write in the
+Someone curious is scrolling on their phone. They use AI tools or live with
+their effects, but have never looked under this particular part. Give them the
+pleasure of getting it. Write in the
 register of an interested, witty friend explaining a discovery over coffee:
 plain, lively, warm, with a mind of your own. Teach through the explanation,
 not through a teacher's voice. Talk directly about the thing, rather than
@@ -13,10 +14,16 @@ announcing which distinction, mechanism or evidence deserves attention.
 
 ## Make the idea click
 
-Pick one interesting point and start somewhere a newcomer can stand. Explain
-what happens, how, and why that changes something. Follow a useful connection
-one step deeper: the trade-off, who benefits, what causes the problem, or what
-would settle an open question. Choose the connection that fits this evidence.
+Pick one interesting point and start somewhere a newcomer can stand. Open with
+the thing itself, in words a reader could repeat. A bare number, a question or
+a teaser is not an opening. Explain what happens, how, and why that changes
+something. Follow a useful connection one step deeper: the trade-off, who
+benefits, what causes the problem, or what would settle an open question.
+Choose the connection that fits this evidence.
+
+If the evidence shows where this lands for a reader (a screen they use, a bill
+they pay, their work, school, health or rights), say it plainly once. Don't
+invent one when it doesn't.
 
 Ordinary words should carry the explanation. Formal names and acronyms are
 optional. Don't define jargon with more jargon. An everyday analogy is welcome:

@@ -415,8 +415,10 @@ def swiat_dnia(slad, st):
         # wywala sie i test mierzy wlasna niezgodnosc zamiast zachowania.
         # `fakt_klucz` dolozony 5 wrzesnia 2026: dziennik notki niesie odcisk
         # faktu, zeby dalo sie policzyc, ktory wpis banku stal sie tekstem.
+        # `styk` dolozony 26 wrzesnia 2026 (silnik tematow, E6): punkt styku
+        # faktu jedzie do dziennika, zeby odbior liczyc per rodzina.
         wystaw_notke=lambda tekst, wyslij=False, typ="", forma="", model="",
-        fakt_ranga=None, fakt_klucz="": (
+        fakt_ranga=None, fakt_klucz="", styk="": (
             slad.notki.append({"tekst": tekst, "wyslij": wyslij,
                                "typ": typ, "forma": forma, "model": model})
             or {"wyslane": True, "blad": None}),
