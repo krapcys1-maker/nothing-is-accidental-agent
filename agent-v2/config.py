@@ -403,15 +403,24 @@ BEZ_TOKENOW = {"obraz"}
 # czyli zmyslona cene podana jako potwierdzona. Stad nazwy doslownie, a nowe
 # modele dostaja stawke przez `stawka_modelu`, jawnie niepotwierdzona.
 PRICING = {
-    "claude-opus-5": {"in": 5.00, "out": 25.00, "verified": True},
-    "claude-sonnet-5": {"in": 3.00, "out": 15.00, "verified": True},
+    # "cache" = trafienia w cache, z cennika Anthropic (26.09.2026): 0,1 stawki
+    # wejscia, 0,05 u Opusa 5.5 i 0,025 u Fable 5.1.
+    "claude-opus-5": {"in": 5.00, "out": 25.00, "cache": 0.50, "verified": True},
+    # OPUS 5.5 — model, na ktory `nowe_modele` przeszedl 23.09.2026. Do 26.09
+    # liczony jak Opus 5 (5/25), bo nie mial wpisu; cennik Anthropic podaje
+    # 4/20 i cache 0,20. Z cennika, nie z faktury, wiec `verified: False`.
+    "claude-opus-5-5": {"in": 4.00, "out": 20.00, "cache": 0.20, "verified": False},
+    # SONNET 5 — 2/10, nie 3/15. Cennik Anthropic (26.09.2026): cena wprowadzajaca
+    # zostala cena stala, a zapowiedziana na 1 wrzesnia podwyzka do 3/15 „nie
+    # nastapi". Z cennika, nie z faktury.
+    "claude-sonnet-5": {"in": 2.00, "out": 10.00, "cache": 0.20, "verified": False},
     # STAWKA FABLE 5.1 NIEPOTWIERDZONA. Wpisana z ceny poprzednika, bo model
     # wyszedl 1 wrzesnia i nie ma go jeszcze na zadnej naszej fakturze.
     # `verified: False` sprawia, ze kazde takie wywolanie zapisuje sie
     # z `price_verified = 0` — czyli koszt artykulu bedzie widoczny jako
     # SZACUNEK, dopoki nie sprawdzimy go na rozliczeniu.
-    "claude-fable-5-1": {"in": 10.00, "out": 50.00, "verified": False},
-    "claude-fable-5": {"in": 10.00, "out": 50.00, "verified": True},
+    "claude-fable-5-1": {"in": 10.00, "out": 50.00, "cache": 0.25, "verified": False},
+    "claude-fable-5": {"in": 10.00, "out": 50.00, "cache": 1.00, "verified": True},
     # STAWKI POTWIERDZONE FAKTURA (15-19 sierpnia 2026). Dziesiec wierszy
     # rozliczenia odtworzonych co do centa, wiec `verified` znaczy tu wreszcie
     # to, co powinno: rozliczone z rachunkiem, nie przepisane z cennika.
@@ -443,10 +452,43 @@ RODZINY_CEN = {
 }
 
 
+# CENY SPRAWDZONE PRZY ZAMIANIE MODELU — `nowe_modele` odczytuje stawke nastepcy
+# z cennika dostawcy (`cennik_dostawcy`) i zapisuje ja przy zamianie. Stan czyta
+# kazdy przebieg, wiec liczby przechodza te same zapory co reszta pliku: tylko
+# nazwa o ksztalcie identyfikatora i liczby, ktore wygladaja na cennik.
+# Zawsze `verified: False` — to cennik, nie nasza faktura.
+MAKS_PODWYZKA_PRZY_ZAMIANIE = 0.25   # drozszy nastepca czeka na wlasciciela
+
+
+def _ceny_zamian(stan: dict) -> dict[str, dict]:
+    import re as _re
+    wynik: dict[str, dict] = {}
+    zamiany = stan.get("zamiany") if isinstance(stan, dict) else None
+    for wpis in (zamiany.values() if isinstance(zamiany, dict) else ()):
+        if not isinstance(wpis, dict) or not isinstance(wpis.get("cena"), dict):
+            continue
+        nazwa = str(wpis.get("na") or "")
+        try:
+            cena = {k: float(wpis["cena"][k]) for k in ("in", "out")}
+            cena["cache"] = float(wpis["cena"].get("cache", 0.0))
+        except (KeyError, TypeError, ValueError):
+            continue
+        if (_re.fullmatch(r"[a-z0-9][a-z0-9.\-]{2,79}", nazwa)
+                and 0 < cena["in"] < cena["out"] and 0 <= cena["cache"] <= cena["in"]):
+            wynik[nazwa] = {**cena, "verified": False}
+    return wynik
+
+
+CENY_ZAMIAN: dict[str, dict] = _ceny_zamian(_STAN_WYBORU)
+
+
 def stawka_modelu(model: str) -> dict:
-    """Wpis cennika dla modelu; dla nieznanego — stawka rodziny, niepotwierdzona."""
+    """Wpis cennika dla modelu; dla nieznanego — cena sprawdzona przy zamianie,
+    a gdy jej nie ma, stawka rodziny 1:1, niepotwierdzona."""
     if model in PRICING:
         return PRICING[model]
+    if model in CENY_ZAMIAN:
+        return CENY_ZAMIAN[model]
     nazwa = str(model).lower()
     for rodzina, wzor in RODZINY_CEN.items():
         if rodzina in nazwa and wzor.startswith("deepseek") == nazwa.startswith("deepseek"):

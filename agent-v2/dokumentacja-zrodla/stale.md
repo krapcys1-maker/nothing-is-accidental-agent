@@ -53,8 +53,9 @@
 | `PAMIEC_GLOSU_OGON_BAJTY` | `128 * 1024` | — |
 | `CHEAP_MODE` | `_env("AGENT_V2_CHEAP", "0").lower() in {"1",` | Tryb tani: wszystko na DeepSeeku poza dyskoveria, ktora ten jawny override zostawia u Claude'a. Sluzy do testowania HYDRAULIKI — czy lancuch |
 | `BEZ_TOKENOW` | `{"obraz"}` | — |
-| `PRICING` | `{ "claude-opus-5": {"in": 5.00, "out": 25.00` | KLUCZEM JEST NAZWA MODELU, NIE STALA. Do 13 wrzesnia 2026 slownik byl zbudowany na stalych (`CLAUDE: {...}`) i przy nazwach wpisanych na szt |
+| `PRICING` | `{ # "cache" = trafienia w cache, z cennika A` | KLUCZEM JEST NAZWA MODELU, NIE STALA. Do 13 wrzesnia 2026 slownik byl zbudowany na stalych (`CLAUDE: {...}`) i przy nazwach wpisanych na szt |
 | `RODZINY_CEN` | `{ "opus": "claude-opus-5", "sonnet": "claude` | NAJTANSZY I NAJDROZSZY WPIS KAZDEJ RODZINY — stawka dla modelu, ktorego nie ma w cenniku, bo wszedl automatycznie. Rodzina, nie „jakikolwiek |
+| `MAKS_PODWYZKA_PRZY_ZAMIANIE` | `0.25` | CENY SPRAWDZONE PRZY ZAMIANIE MODELU — `nowe_modele` odczytuje stawke nastepcy z cennika dostawcy (`cennik_dostawcy`) i zapisuje ja przy zam |
 | `STAWKI_PRZED_PODWYZKA` | `{ "deepseek-v4-flash": {"in": 0.14, "out": 0` | --- taryfa szczytowa DeepSeeka ----------------------------------------------- Od 2026-08-16 16:00 UTC DeepSeek wprowadza ceny szczytowe i p |
 | `PRZEKIEROWANIA_DEEPSEEK` | `( (DEEPSEEK_V4_FLASH, "2026-09-10T04:00:00+0` | PRZEKIEROWANIA U DOSTAWCY: stara nazwa przyjmowana dalej, ale rozliczana po stawce modelu, na ktory DeepSeek ja przestawil. Od 10.09 04:00 U |
 | `TARYFA_SZCZYTOWA_OD` | `"2026-08-16T16:00:00+00:00"` | — |

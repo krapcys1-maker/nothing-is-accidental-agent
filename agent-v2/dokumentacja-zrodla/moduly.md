@@ -456,7 +456,7 @@
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-3565 wierszy, 42 funkcji na poziomie modułu, 0 klas
+3607 wierszy, 43 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -466,7 +466,8 @@
 | `zamiany_z_danych(dane)` | Zamiany, ktore wolno zastosowac: znana rola i nazwa o ksztalcie identyfikatora. |
 | `_w_tescie_wczesnie()` *(wewn.)* | To samo co `_w_darmowym_tescie` nizej, ale bez wyjatku dla testow platnych. |
 | `myslenie_deepseek(etap)` | Kopia ustawienia thinking; None pozostawia domyslne ustawienie API. |
-| `stawka_modelu(model)` | Wpis cennika dla modelu; dla nieznanego — stawka rodziny, niepotwierdzona. |
+| `_ceny_zamian(stan)` *(wewn.)* | — |
+| `stawka_modelu(model)` | Wpis cennika dla modelu; dla nieznanego — cena sprawdzona przy zamianie, |
 | `model_rozliczeniowy(model, kiedy)` | Model, po ktorego stawce dostawca liczy wywolanie `model` w chwili `kiedy`. |
 | `stawka_deepseek(model, kiedy)` | Stawka DeepSeeka z uwzglednieniem pory doby po wejsciu nowej taryfy. |
 | `pora_na_publikacje(kiedy)` | Czy teraz wolno wystawiac NOTKI — wg zegara CZYTELNIKOW, nie serwera. |
@@ -615,7 +616,7 @@
 
 ### `nowe_modele.py` — nowe modele wchodzą same: w tej samej rodzinie i dopiero po próbie
 
-478 wierszy, 17 funkcji na poziomie modułu, 0 klas
+515 wierszy, 17 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -694,6 +695,22 @@
 | `karta(nazwa, dane, od, do, wlasne)` | — |
 | `_wiersze(k)` *(wewn.)* | — |
 | `main(argv, lista_kont)` | — |
+
+### `cennik_dostawcy.py` — stawka nowego modelu z oficjalnego cennika dostawcy, sprawdzana przy zamianie; bez niej 1:1 jak poprzednik
+
+186 wierszy, 9 funkcji na poziomie modułu, 0 klas
+
+| funkcja | co robi |
+|---|---|
+| `dostawca_modelu(model)` | Dostawca, ktorego cennik umiemy odczytac; None dla reszty. |
+| `_kwota(tekst)` *(wewn.)* | — |
+| `nazwa_anthropic(model)` | `claude-opus-5-5` -> „Claude Opus 5.5"; data na koncu nie zmienia nazwy. |
+| `z_cennika_anthropic(md, model)` | Stawka z tabeli cen modeli w dokumentacji Anthropic; None, gdy nie ma. |
+| `z_cennika_openai(strona, model)` | Stawka z pierwszego wiersza modelu na stronie cennika OpenAI. |
+| `wiarygodna(cena, wzor)` | Czy liczby wygladaja na cennik: wejscie < wyjscie, cache <= wejscie, |
+| `podwyzka(cena, wzor)` | O ile nastepca drozszy od poprzednika (0.25 = o 25%), po wejsciu + wyjsciu. |
+| `_pobierz(url)` *(wewn.)* | — |
+| `stawka_u_dostawcy(model, wzor, pobierz)` | (stawka, zrodlo) z cennika dostawcy albo (None, powod). Bez wyjatkow. |
 
 ### `artykul_z_puli.py` — artykuł bierze temat z tej samej puli, co notki
 

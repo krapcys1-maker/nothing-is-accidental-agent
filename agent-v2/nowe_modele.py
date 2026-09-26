@@ -11,6 +11,7 @@ import re
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+import cennik_dostawcy
 import config
 from model_registry import ROLE, version as wersja, in_family as w_rodzinie
 
@@ -370,7 +371,35 @@ def sprawdz(conn=None, run_id: int | None = None, wymus: bool = False) -> dict[s
             print("  [nowe modele] wyszukiwanie na %s: %s" % (model, opis), flush=True)
             return dziala, opis
 
+        # CENY ZAMIAN ZROBIONYCH, ZANIM SPRAWDZALISMY CENY — raz, darmowym GET.
+        # Nastepca bez wpisu w cenniku i bez zapisanej ceny liczyl sie stawka
+        # rodziny; teraz dostaje stawke z cennika dostawcy, jesli ten ja podaje.
+        ceny_nowe: dict[str, dict[str, Any]] = {}
+        for wpis in zamiany.values():
+            if (not isinstance(wpis, dict) or wpis.get("cena")
+                    or str(wpis.get("na") or "") in config.PRICING):
+                continue
+            cena, zrodlo = cennik_dostawcy.stawka_u_dostawcy(
+                str(wpis.get("na")), wzor=config.stawka_modelu(str(wpis.get("z"))))
+            if cena:
+                wpis["cena"], wpis["cena_zrodlo"] = cena, zrodlo
+                ceny_nowe[str(wpis["na"])] = cena
+                print("  [nowe modele] cena %s z cennika: %s (%s)"
+                      % (wpis["na"], cena, zrodlo), flush=True)
+
         for decyzja in zdecyduj(obecne, listy):
+            # CENA NASTEPCY PRZED PLATNA PROBA. Z cennika dostawcy; gdy go nie
+            # da sie odczytac, nastepca liczy sie jak poprzednik (1:1) — decyzja
+            # wlasciciela z 26.09.2026. Wyraznie drozszy nie wchodzi sam: czeka.
+            wzor = config.stawka_modelu(decyzja["z"])
+            cena, zrodlo_ceny = cennik_dostawcy.stawka_u_dostawcy(decyzja["na"], wzor=wzor)
+            if cena and cennik_dostawcy.podwyzka(cena, wzor) > config.MAKS_PODWYZKA_PRZY_ZAMIANIE:
+                odrzucone.append({**decyzja, "dlaczego":
+                                  "drozszy o %.0f%% wg %s — zamiana czeka na decyzje wlasciciela"
+                                  % (100 * cennik_dostawcy.podwyzka(cena, wzor), zrodlo_ceny)})
+                continue
+            decyzja["cena"] = cena
+            decyzja["cena_zrodlo"] = zrodlo_ceny if cena else "jak poprzednik: " + zrodlo_ceny
             powod = _wolno_placic(conn, run_id, decyzja["na"])
             if powod:
                 odrzucone.append({**decyzja, "dlaczego": powod})
@@ -410,7 +439,11 @@ def sprawdz(conn=None, run_id: int | None = None, wymus: bool = False) -> dict[s
                                       "zastepca jest starszy, a obecny dalej odpowiada"})
                     continue
             zamiany[decyzja["rola"]] = {"z": decyzja["z"], "na": decyzja["na"],
-                                        "kiedy": teraz, "powod": decyzja["powod"]}
+                                        "kiedy": teraz, "powod": decyzja["powod"],
+                                        "cena_zrodlo": decyzja["cena_zrodlo"]}
+            if decyzja["cena"]:
+                zamiany[decyzja["rola"]]["cena"] = decyzja["cena"]
+                ceny_nowe[decyzja["na"]] = decyzja["cena"]
             wykonane.append(decyzja)
 
         for decyzja in odrzucone:
@@ -448,12 +481,16 @@ def sprawdz(conn=None, run_id: int | None = None, wymus: bool = False) -> dict[s
         })
         # Persist first. A failed write must leave both the routing and the
         # success journal unchanged; a fresh process can replay this state.
+        # Ceny tak samo: najpierw zapisane, potem wazne w tym procesie.
+        for nazwa, cena in ceny_nowe.items():
+            config.CENY_ZAMIAN[nazwa] = {**cena, "verified": False}
         for decyzja in wykonane:
             zastosuj_w_procesie(decyzja["rola"], decyzja["z"], decyzja["na"])
             _do_dziennika("zmiana_modelu", udane=True, rola=decyzja["rola"],
                           z=decyzja["z"], na=decyzja["na"], powod=decyzja["powod"])
-            print("  [nowe modele] ZAMIANA %s: %s -> %s (%s)"
-                  % (decyzja["rola"], decyzja["z"], decyzja["na"], decyzja["powod"]), flush=True)
+            print("  [nowe modele] ZAMIANA %s: %s -> %s (%s; cena: %s)"
+                  % (decyzja["rola"], decyzja["z"], decyzja["na"], decyzja["powod"],
+                     decyzja["cena_zrodlo"]), flush=True)
         for model, wynik in wyszukiwanie.items():
             bylo = config.szuka_naprawde(model)
             config.PROBY_WYSZUKIWANIA[model] = wynik

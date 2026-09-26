@@ -49,14 +49,14 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **30 plików**, 36 627 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **31 plików**, 36 892 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
 | jedno polecenie uruchamiające | `python agent-v2/run.py` | dotrzymane |
 | pełna autonomia, zero pytań | brak interaktywnych promptów | dotrzymane |
 
-**WADA — 30 plików zamiast dziesięciu.** Najbliższe usunięciu:
+**WADA — 31 plików zamiast dziesięciu.** Najbliższe usunięciu:
 `style.py` (127 wierszy, wołany tylko z `stages.py`) i
 `kopia_subskrybentow.py` (203 wierszy, narzędzie ręczne poza
 przebiegiem). Scalenie któregokolwiek przywraca zgodność z mandatem.
@@ -113,8 +113,8 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 > w głównej ścieżce artykułu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
-się testować bez przeglądarki i bez pieniędzy**. 187 zestawów
-testów, 4574 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+się testować bez przeglądarki i bez pieniędzy**. 188 zestawów
+testów, 4613 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -598,7 +598,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-3565 wierszy, 42 funkcji na poziomie modułu, 0 klas
+3607 wierszy, 43 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -608,7 +608,8 @@ wiec nie da sie go rozjechac z kodem.
 | `zamiany_z_danych(dane)` | Zamiany, ktore wolno zastosowac: znana rola i nazwa o ksztalcie identyfikatora. |
 | `_w_tescie_wczesnie()` *(wewn.)* | To samo co `_w_darmowym_tescie` nizej, ale bez wyjatku dla testow platnych. |
 | `myslenie_deepseek(etap)` | Kopia ustawienia thinking; None pozostawia domyslne ustawienie API. |
-| `stawka_modelu(model)` | Wpis cennika dla modelu; dla nieznanego — stawka rodziny, niepotwierdzona. |
+| `_ceny_zamian(stan)` *(wewn.)* | — |
+| `stawka_modelu(model)` | Wpis cennika dla modelu; dla nieznanego — cena sprawdzona przy zamianie, |
 | `model_rozliczeniowy(model, kiedy)` | Model, po ktorego stawce dostawca liczy wywolanie `model` w chwili `kiedy`. |
 | `stawka_deepseek(model, kiedy)` | Stawka DeepSeeka z uwzglednieniem pory doby po wejsciu nowej taryfy. |
 | `pora_na_publikacje(kiedy)` | Czy teraz wolno wystawiac NOTKI — wg zegara CZYTELNIKOW, nie serwera. |
@@ -757,7 +758,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `nowe_modele.py` — nowe modele wchodzą same: w tej samej rodzinie i dopiero po próbie
 
-478 wierszy, 17 funkcji na poziomie modułu, 0 klas
+515 wierszy, 17 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -836,6 +837,22 @@ wiec nie da sie go rozjechac z kodem.
 | `karta(nazwa, dane, od, do, wlasne)` | — |
 | `_wiersze(k)` *(wewn.)* | — |
 | `main(argv, lista_kont)` | — |
+
+### `cennik_dostawcy.py` — stawka nowego modelu z oficjalnego cennika dostawcy, sprawdzana przy zamianie; bez niej 1:1 jak poprzednik
+
+186 wierszy, 9 funkcji na poziomie modułu, 0 klas
+
+| funkcja | co robi |
+|---|---|
+| `dostawca_modelu(model)` | Dostawca, ktorego cennik umiemy odczytac; None dla reszty. |
+| `_kwota(tekst)` *(wewn.)* | — |
+| `nazwa_anthropic(model)` | `claude-opus-5-5` -> „Claude Opus 5.5"; data na koncu nie zmienia nazwy. |
+| `z_cennika_anthropic(md, model)` | Stawka z tabeli cen modeli w dokumentacji Anthropic; None, gdy nie ma. |
+| `z_cennika_openai(strona, model)` | Stawka z pierwszego wiersza modelu na stronie cennika OpenAI. |
+| `wiarygodna(cena, wzor)` | Czy liczby wygladaja na cennik: wejscie < wyjscie, cache <= wejscie, |
+| `podwyzka(cena, wzor)` | O ile nastepca drozszy od poprzednika (0.25 = o 25%), po wejsciu + wyjsciu. |
+| `_pobierz(url)` *(wewn.)* | — |
+| `stawka_u_dostawcy(model, wzor, pobierz)` | (stawka, zrodlo) z cennika dostawcy albo (None, powod). Bez wyjatkow. |
 
 ### `artykul_z_puli.py` — artykuł bierze temat z tej samej puli, co notki
 
@@ -11089,8 +11106,9 @@ wartosc i komentarz stojacy bezposrednio nad definicja.
 | `PAMIEC_GLOSU_OGON_BAJTY` | `128 * 1024` | — |
 | `CHEAP_MODE` | `_env("AGENT_V2_CHEAP", "0").lower() in {"1",` | Tryb tani: wszystko na DeepSeeku poza dyskoveria, ktora ten jawny override zostawia u Claude'a. Sluzy do testowania HYDRAULIKI — czy lancuch |
 | `BEZ_TOKENOW` | `{"obraz"}` | — |
-| `PRICING` | `{ "claude-opus-5": {"in": 5.00, "out": 25.00` | KLUCZEM JEST NAZWA MODELU, NIE STALA. Do 13 wrzesnia 2026 slownik byl zbudowany na stalych (`CLAUDE: {...}`) i przy nazwach wpisanych na szt |
+| `PRICING` | `{ # "cache" = trafienia w cache, z cennika A` | KLUCZEM JEST NAZWA MODELU, NIE STALA. Do 13 wrzesnia 2026 slownik byl zbudowany na stalych (`CLAUDE: {...}`) i przy nazwach wpisanych na szt |
 | `RODZINY_CEN` | `{ "opus": "claude-opus-5", "sonnet": "claude` | NAJTANSZY I NAJDROZSZY WPIS KAZDEJ RODZINY — stawka dla modelu, ktorego nie ma w cenniku, bo wszedl automatycznie. Rodzina, nie „jakikolwiek |
+| `MAKS_PODWYZKA_PRZY_ZAMIANIE` | `0.25` | CENY SPRAWDZONE PRZY ZAMIANIE MODELU — `nowe_modele` odczytuje stawke nastepcy z cennika dostawcy (`cennik_dostawcy`) i zapisuje ja przy zam |
 | `STAWKI_PRZED_PODWYZKA` | `{ "deepseek-v4-flash": {"in": 0.14, "out": 0` | --- taryfa szczytowa DeepSeeka ----------------------------------------------- Od 2026-08-16 16:00 UTC DeepSeek wprowadza ceny szczytowe i p |
 | `PRZEKIEROWANIA_DEEPSEEK` | `( (DEEPSEEK_V4_FLASH, "2026-09-10T04:00:00+0` | PRZEKIEROWANIA U DOSTAWCY: stara nazwa przyjmowana dalej, ale rozliczana po stawce modelu, na ktory DeepSeek ja przestawil. Od 10.09 04:00 U |
 | `TARYFA_SZCZYTOWA_OD` | `"2026-08-16T16:00:00+00:00"` | — |
