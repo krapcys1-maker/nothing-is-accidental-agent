@@ -304,18 +304,23 @@ def sklad_spizarni() -> None:
     # zapas tresci i licznik porazek; pomiar ma zostawic dysk nietkniety.
     for nazwa in ("_zapamietaj_tresc", "_zapisz_porazke", "_zapisz_sukces"):
         setattr(korpus_kanalow, nazwa, lambda *a, **k: None)
-    korpus = korpus_kanalow.korpus_kanalow(30)
+    # TAK JAK PRODUKCJA OD 26.09 (silnik tematow, E6): caly korpus i styki
+    # banku z trzech dni, a styk kazdego tekstu podaje kod. Wczesniej ten odczyt
+    # bral `korpus_kanalow(30)` — po wdrozeniu pokazywalby spizarnie, ktorej
+    # produkcja juz nie buduje.
+    import stages
+    korpus = korpus_kanalow.korpus_kanalow(200)
     z_youtube = sum(1 for w in korpus if "youtu" in str(w.get("url") or ""))
-    teksty = tresc_zrodel.tresci_zrodel(korpus)
+    teksty = tresc_zrodel.tresci_zrodel(korpus,
+                                        styki_w_banku=stages.styki_w_banku())
     print("\n" + "=" * 96)
     print("SKLAD SPIZARNI TERAZ: %d wpisow korpusu (z tego YouTube, ktorego"
-          " spizarnia nie czyta: %d) -> %d tekstow z %d zrodel"
-          % (len(korpus), z_youtube, len(teksty),
-             len({t["kanal"] for t in teksty})))
+          " spizarnia nie czyta: %d) -> %s"
+          % (len(korpus), z_youtube, tresc_zrodel.sklad(teksty)))
     for t in teksty:
-        print("   %s  %-16s %-8s %s" % (t["data"], t["kanal"][:16],
-                                       NIE_BRANZA.get(t["kanal"], "branza"),
-                                       t["temat"][:60]))
+        print("   %s  %-16s %-11s %s" % (t["data"], t["kanal"][:16],
+                                        t.get("styk", "branza"),
+                                        t["temat"][:60]))
     print("   Przy niepustej spizarni skaut NIE SZUKA w sieci"
           " (`web_search = not _tresc` w `stages.znajdz_ciekawostki`).")
 
