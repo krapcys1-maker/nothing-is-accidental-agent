@@ -1,5 +1,15 @@
 # Pierwszy pomiar przyrządem — i obalił moją własną zmianę
 
+> **SPROSTOWANIE z 26 września 2026.** Liczby w tym dokumencie są prawdziwe,
+> ale ich wyjaśnienie („model idzie tam, gdzie da się udokumentować fakt") nie.
+> `znajdz_ciekawostki` wyłącza wyszukiwanie, gdy spiżarnia nie jest pusta
+> (`web_search = not _tresc`). Spiżarnia to osiem najnowszych tekstów z naszych
+> feedów, najwyżej dwa z jednego źródła, i pamięta je 30 minut. Przyrząd nie
+> czyścił jej między próbami ani nie wypisywał jej składu. Próby dostały więc
+> najpewniej te same osiem tekstów z czterech blogów, bez wyszukiwania. Stąd
+> „32 z 35 z czterech blogów" i dziedziny ignorowane przez model. Szczegóły:
+> `agent-v2/docs/WYBOR_TEMATOW_2026-09-26.md`, rozdział 1.3.
+
 8 września 2026. Dziesięć szukań przez prawdziwy potok,
 `tests/platne/proba_tematow.py --live --ile 10`.
 Koszt: **0,3783 USD**, 11 płatnych wywołań. Bank nietknięty (10 przechwyconych

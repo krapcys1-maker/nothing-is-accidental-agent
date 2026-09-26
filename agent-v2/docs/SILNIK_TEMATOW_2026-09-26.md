@@ -14,6 +14,16 @@ poniżej pochodzą z dokumentacji znalezionej w wyszukiwarce i **każdy trzeba s
 na żywo na serwerze** (tytuł feedu i data ostatniego wpisu), zgodnie z regułą przy
 `korpus_kanalow.ZRODLA`.
 
+> **SPROSTOWANIE, 26 września 2026, później tego samego dnia.** Mechanizm 3
+> z rozdziału 1 („szukanie: model idzie tam, gdzie łatwo udokumentować") jest
+> nietrafny. Gdy spiżarnia nie jest pusta, skaut w ogóle nie szuka
+> (`web_search = not _tresc` w `stages.znajdz_ciekawostki`). Pracuje na ośmiu
+> tekstach z naszych feedów, najwyżej dwóch z jednego źródła, a 22 z 25 feedów
+> to branża. To spiżarnia daje „91% z czterech blogów". Krok 2 z rozdziału 6
+> (styk z cytatem od modelu) zastępuje prostsza wersja: styk przychodzi ze
+> źródła, a model go nie deklaruje. Krok 3 (limit hosta) jest niepotrzebny.
+> Stan obecny, projekt, koszty i kolejność są w `WYBOR_TEMATOW_2026-09-26.md`.
+
 ---
 
 ## Najkrócej
