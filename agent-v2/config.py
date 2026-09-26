@@ -99,6 +99,26 @@ SUBSTACK_HANDLE = _env("SUBSTACK_HANDLE", "nothingisaccidental")
 # wpisana w tresci, wiec drugi agent pisalby cudzym nazwiskiem.
 MARKA = _env("MARKA", "Nothing Is Accidental")
 
+# ILE RAZY ODPISUJEMY W JEDNEJ ROZMOWIE. Rozmowa to galaz komentarzy: ten,
+# ktory ja zaczal, i wszystko pod nim. Liczy `browser.nasze_odpowiedzi_w_rozmowie`
+# z danych Substacka, wiec obejmuje tez rozmowy sprzed tej stalej.
+#
+# ZMIERZONE 26 wrzesnia 2026: pod artykulem NIA „I'd like the songwriter's
+# definition of fair" jeden nasz komentarz urosl do 41 — 20 odpowiedzi NIA
+# i 20 naszych, na zmiane, przez piec dni. Kazda strona sprawdzala tylko, czy
+# na TE wiadomosc juz odpisala, a kazda odpowiedz drugiej byla nowa. Czlowiek
+# odpisuje raz, dwa razy i odpuszcza; dwa automaty nie odpuszczaja nigdy.
+#
+# Rozmowa z drugim botem wlasciciela jest dozwolona — wlasciciel chce dialogu,
+# nie zapetlenia — ale krotsza: jedna nasza odpowiedz, i ostatnie slowo zostaje
+# po ich stronie. KONTA_SIOSTRZANE to numery uzytkownikow Substacka, po
+# przecinku; domyslnie NIA (`nia1503032`). Druga kopia ustawia je w `.env`.
+MAKS_ODPOWIEDZI_W_ROZMOWIE = 2
+MAKS_ODPOWIEDZI_KONTU_SIOSTRZANEMU = 1
+KONTA_SIOSTRZANE = frozenset(
+    int(x) for x in _env("KONTA_SIOSTRZANE", "547272980").replace(";", ",").split(",")
+    if x.strip().isdigit())
+
 # Czy agent ma klikac "Wylacz wykrywanie AI" przy kazdej publikacji.
 # WLACZONE decyzja wlasciciela z 2026-08-15. To wybor publiczny, nie ustawienie
 # techniczne, wiec nalezal do niego, a nie do kodu.
