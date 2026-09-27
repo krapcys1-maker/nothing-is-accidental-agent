@@ -58,6 +58,12 @@ our code. Use them. A real number or the answer the source gives beats calling
 something unknown. If an uncertainty still matters, keep it beside the claim it
 limits; don't make it the last thing the reader reads.
 
+The evidence may carry `our_angle`: the one conclusion this note exists to
+deliver — something the reader would not get from the headline — with its
+reasoning, an everyday example and the strongest objection. Build the note so
+that conclusion lands. If the idea is technical, use the example to make it
+click. Mention the objection only where it genuinely changes the picture.
+
 The evidence may carry `perspective` and `investigation`: one message from our
 own investigation of a story, with the claims it stands on. A finding is stated
 plainly, with its sources. A motive or a two-year scenario is OUR reading: say
