@@ -119,6 +119,20 @@ STYKI = ("praca", "zdrowie", "szkola", "pieniadze", "prawo", "codziennosc",
 # Cofniecie: False.
 KWOTA_SPOZA_BRANZY = True
 
+# EKSPERYMENTY PRZEPLATANE (27.09.2026) — {nazwa zmiany: udzial notek, ktore ja
+# dostaja}. Notka trafia do ramienia „on" albo „off" deterministycznie z dnia
+# i numeru miejsca w dobie (`stages.ramie`), wiec obie grupy dziela te same dni,
+# godziny i ten sam trend zasiegu. PUSTO = WSZYSTKO JAK ZAWSZE.
+#
+# PO CO. Zasieg notki spadl we wrzesniu o 55% (srednia geometryczna 26,5 ->
+# 12,2 wyswietlenia tydzien do tygodnia), wiec kazde „przed i po" pokazuje
+# pogorszenie niezaleznie od zmiany. Porownanie w tym samym okresie jest
+# jedynym, ktore cos mowi. Moc przy ok. 3 notkach dziennie: wzrost o 50% to
+# ok. 29 notek na ramie, o 25% — ok. 95. Plan i rejestr:
+# `agent-v2/docs/POMIAR_I_EKSPERYMENTY_2026-09-27.md`.
+# Obslugiwane: "wniosek" (etap `stages.wniosek`).
+EKSPERYMENTY: dict[str, float] = {}
+
 # ILE RAZY ODPISUJEMY W JEDNEJ ROZMOWIE. Rozmowa to galaz komentarzy: ten,
 # ktory ja zaczal, i wszystko pod nim. Liczy `browser.nasze_odpowiedzi_w_rozmowie`
 # z danych Substacka, wiec obejmuje tez rozmowy sprzed tej stalej.

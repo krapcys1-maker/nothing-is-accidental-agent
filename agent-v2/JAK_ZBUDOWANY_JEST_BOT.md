@@ -49,14 +49,14 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **34 plików**, 39 088 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **35 plików**, 39 421 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
 | jedno polecenie uruchamiające | `python agent-v2/run.py` | dotrzymane |
 | pełna autonomia, zero pytań | brak interaktywnych promptów | dotrzymane |
 
-**WADA — 34 plików zamiast dziesięciu.** Najbliższe usunięciu:
+**WADA — 35 plików zamiast dziesięciu.** Najbliższe usunięciu:
 `style.py` (127 wierszy, wołany tylko z `stages.py`) i
 `kopia_subskrybentow.py` (203 wierszy, narzędzie ręczne poza
 przebiegiem). Scalenie któregokolwiek przywraca zgodność z mandatem.
@@ -113,8 +113,8 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 > w głównej ścieżce artykułu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
-się testować bez przeglądarki i bez pieniędzy**. 193 zestawów
-testów, 4823 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+się testować bez przeglądarki i bez pieniędzy**. 194 zestawów
+testów, 4844 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -143,10 +143,11 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-3220 wierszy, 27 funkcji na poziomie modułu, 1 klas
+3245 wierszy, 28 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
+| `_wersja_kodu()` *(wewn.)* | Skrot commita, z ktorego dziala przebieg — albo pusto, gdy gita nie ma. |
 | `_utf8_stdout()` *(wewn.)* | Konsola Windows domyślnie cp1252 i wywala się na polskich znakach. |
 | `cached(stage, produce, use_cache)` | Zapisuje wynik etapu i oddaje go z dysku zamiast płacić drugi raz. |
 | `odmow_publikacji_z_kopii(wyslij)` | Kopia testowa nie ma prawa nic opublikowac. Nigdy. |
@@ -177,7 +178,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-10733 wierszy, 172 funkcji na poziomie modułu, 0 klas
+10760 wierszy, 173 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -232,6 +233,7 @@ wiec nie da sie go rozjechac z kodem.
 | `ostatnie_otwarcia(rodzaj, ile)` | Pierwsze slowa ostatnich notek — zeby kolejna nie zaczela sie tak samo. |
 | `ostatnie_zakonczenia(rodzaj, ile)` | Ostatnie zdania ostatnich notek — zeby kolejna nie konczyla sie tak samo. |
 | `rozbior(conn, run_id, evidence)` | Przepytanie materialu, ZANIM powstanie notka. |
+| `ramie(nazwa, miejsce, dzien)` | Ramie notki w eksperymencie przeplatanym: "on", "off" albo "" (nie trwa). |
 | `wniosek(conn, run_id, evidence)` | NIESZTANDAROWY WNIOSEK przed pisaniem — albo `{}`, gdy go nie ma. |
 | `wiek_zrodla_w_dniach(data_zrodla, teraz)` | Ile dni ma zrodlo. None, gdy daty nie da sie odczytac. |
 | `nazywa_wersje(tekst)` | Czy zdanie nazywa konkretna wersje produktu. Zwraca ja albo pusty napis. |
@@ -605,7 +607,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-3728 wierszy, 43 funkcji na poziomie modułu, 0 klas
+3742 wierszy, 43 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -816,6 +818,27 @@ wiec nie da sie go rozjechac z kodem.
 | `czekajace_przeslania()` | Ile przeslan czeka na notke: wazne i jeszcze nie wydane. |
 | `wez_przeslanie()` | Nastepne przeslanie do notki — JEDNO na dobe, najstarsza historia pierwsza. |
 | `material_notki(p)` | (fakt do dziennika i straznikow, material dla pisarza) z przeslania. |
+
+### `eksperymenty.py` — pomiar zmian — odbiór notek w grupach względem tła tygodnia, 95% przedział i werdykt (lepiej / gorzej / brak dowodu / za mało danych)
+
+267 wierszy, 14 funkcji na poziomie modułu, 0 klas
+
+| funkcja | co robi |
+|---|---|
+| `_grupujacy(pole)` *(wewn.)* | Funkcja: wpis dziennika -> nazwa grupy. |
+| `wiersze(dziennik, pomiary, zapisy, od, do)` | Notki z pomiarem po 72 h: wpis dziennika + liczby odbioru. |
+| `_dzien(x)` *(wewn.)* | — |
+| `odejmij_tlo(dane, okno, min_sasiadow)` | Kazdej notce: `lr` = log wyswietlen MINUS typowa notka konta z tego tygodnia. |
+| `_rozne_okresy(a, b)` *(wewn.)* | Czy grupy pochodza z roznych okresow — wtedy trend miesza sie ze zmiana. |
+| `_kwantyle(wartosci)` *(wewn.)* | — |
+| `_bootstrap(a, b, stat)` *(wewn.)* | — |
+| `_geo(r)` *(wewn.)* | — |
+| `_na_100(r, pole)` *(wewn.)* | — |
+| `_stosunek(a, b)` *(wewn.)* | Ile razy grupa `a` bije swoje tlo mocniej niz grupa `b` (patrz `odejmij_tlo`). |
+| `_sd_log(r)` *(wewn.)* | — |
+| `porownaj(dane, grupa, odniesienie)` | Grupy, ich miary i porownanie kazdej z grupa odniesienia. |
+| `_wczytaj()` *(wewn.)* | — |
+| `main(argv)` | — |
 
 ### `aktualne_modele.py` — jakie modele istnieją DZIŚ; pytane na żywo, nie z pamięci
 

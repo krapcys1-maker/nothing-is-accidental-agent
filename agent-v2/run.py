@@ -24,6 +24,26 @@ import llm
 import seria
 import stages
 
+
+def _wersja_kodu() -> str:
+    """Skrot commita, z ktorego dziala przebieg — albo pusto, gdy gita nie ma.
+
+    KAZDA NOTKA WIE, KTORY KOD JA NAPISAL (27.09.2026). Tego dnia poszlo na
+    produkcje siedem wersji; bez tego pola odbior notki dalo sie przypisac do
+    zmiany tylko po godzinie, a godziny wdrozen trzeba bylo wyciagac z logow.
+    Patrz `agent-v2/docs/POMIAR_I_EKSPERYMENTY_2026-09-27.md`.
+    """
+    import subprocess
+    try:
+        return subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True,
+            timeout=5, cwd=os.path.dirname(os.path.abspath(__file__))).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return ""
+
+
+WERSJA_KODU = _wersja_kodu()
+
 # DWA WYJATKI, KTORE NIE SA AWARIA JEDNEGO WYWOLANIA, TYLKO STANEM KONTA.
 #
 # `llm.BudgetExceeded` i `llm.PreflightFailed` dziedzicza po `RuntimeError`,
@@ -1472,6 +1492,11 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
                                                      n.get("przeslanie_id"),
                                                  # rodzaj niesztandarowego wniosku
                                                  "wniosek": n.get("wniosek") or "",
+                                                 # wersja kodu i ramiona
+                                                 # eksperymentow przeplatanych
+                                                 "wersja": WERSJA_KODU,
+                                                 "eksperymenty":
+                                                     n.get("eksperymenty") or {},
                                              })
                 # Fakt odhaczamy DOPIERO po potwierdzonej publikacji. Wczesniej
                 # znikal juz przy znalezieniu, wiec przepadal takze wtedy, gdy
