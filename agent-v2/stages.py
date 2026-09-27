@@ -1513,8 +1513,10 @@ def _historia_wersji() -> list[tuple[str, str, bool]]:
     """Nasza wlasna historia dla pamieci wersji: (tekst, data, tylko_z_rodzina).
 
     Obsluzone wydarzenia (ich klucze to rdzenie tytulow, wiec gole numery sa tam
-    wiarygodne), bank faktow i wystawione notki oraz artykuly — w tych dwoch
-    tylko numery z nazwa rodziny, bo w tekscie ciaglym „5.5" to tez „5,5 mld".
+    wiarygodne) i wystawione notki oraz artykuly — w nich tylko numery z nazwa
+    rodziny, bo w tekscie ciaglym „5.5" to tez „5,5 mld". Banku faktow nie
+    bierzemy: zapowiedz („Gemini 4.0 w przyszlym roku") zamknelaby droge
+    prawdziwej premierze — patrz `korpus_kanalow.pamiec_wersji`.
     """
     wynik: list[tuple[str, str, bool]] = []
     try:
@@ -1524,11 +1526,6 @@ def _historia_wersji() -> list[tuple[str, str, bool]]:
     for klucz, wpis in (znane.items() if isinstance(znane, dict) else ()):
         kiedy = wpis.get("kiedy") if isinstance(wpis, dict) else wpis
         wynik.append((str(klucz).replace(",", " "), str(kiedy or ""), False))
-    try:
-        for k in wczytaj_indeks():
-            wynik.append((str(k.get("fact") or ""), str(k.get("kiedy") or ""), True))
-    except Exception:
-        pass
     try:
         with (config.DATA_DIR / "dziennik.jsonl").open(encoding="utf-8") as f:
             for linia in f:

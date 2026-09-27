@@ -35,7 +35,7 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-10375 wierszy, 166 funkcji na poziomie modułu, 0 klas
+10372 wierszy, 166 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -562,7 +562,7 @@
 
 ### `korpus_kanalow.py` — o czym mówi się w tym tygodniu — zaczyn tematów, nigdy źródło
 
-975 wierszy, 23 funkcji na poziomie modułu, 1 klas
+997 wierszy, 23 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|

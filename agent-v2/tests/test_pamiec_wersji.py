@@ -77,8 +77,17 @@ sprawdz("KONTRDOWOD: goly „5.5” z tekstu ciaglego NIE wchodzi", "5.5" not in
 plik = config.DATA_DIR / "wersje_widziane.json"
 sprawdz("pamiec zapisana na dysku", plik.exists()
         and json.loads(plik.read_text(encoding="utf-8")).get("gemini 3.8") == DAWNO)
-pam2 = kk.pamiec_wersji([wpis("Kanal B", "Gemini 3.8 again", DZIS)])
+pam2 = kk.pamiec_wersji([wpis("Kanal B", "Gemini 3.8 again", DZIS),
+                         wpis("Kanal C", "Gemini 3.8 once more", DZIS)])
 sprawdz("nowszy wpis nie nadpisuje wczesniejszej daty", pam2.get("gemini 3.8") == DAWNO, pam2)
+# PRZECIEK NA JEDNYM KANALE TO NIE PREMIERA, ktora juz byla.
+pam3 = kk.pamiec_wersji([wpis("Kanal L", "Gemini 4.0 LEAKED", DAWNO)])
+sprawdz("KONTRDOWOD: jeden kanal z przeciekiem nie wpisuje wersji",
+        "gemini 4.0" not in pam3, pam3)
+pam4 = kk.pamiec_wersji([wpis("Kanal L", "Gemini 4.0 LEAKED", DAWNO),
+                         wpis("Kanal M", "Gemini 4.0 is here", PRZEDWCZORAJ)])
+sprawdz("dwa kanaly: wersja wpisana z data DRUGIEGO",
+        pam4.get("gemini 4.0") == PRZEDWCZORAJ, pam4.get("gemini 4.0"))
 
 print()
 print("=== 3. DZIEN 26.09 ODTWORZONY ===")
@@ -124,10 +133,14 @@ stages.WYDARZENIA_OBSLUZONE = config.DATA_DIR / "wydarzenia_obsluzone.json"
 (config.DATA_DIR / "dziennik.jsonl").write_text(json.dumps(
     {"rodzaj": "notka", "udane": True, "kiedy": DAWNO + "T10:00:00+00:00",
      "tekst": "Claude Fable 5.1 writes our articles now."}) + "\n", encoding="utf-8")
+stages._zapisz_indeks([{"fact": "Google plans Gemini 5.0 for next spring.",
+                        "kiedy": DAWNO, "status": "nowy"}])
 hist = stages._historia_wersji()
 sprawdz("obsluzone wydarzenia w historii", ("3.8 flash gemini", DAWNO, False) in hist, hist[:3])
 sprawdz("wystawione notki w historii, tylko z rodzina",
         any(t.startswith("Claude Fable") and z is True for t, _, z in hist), hist)
+sprawdz("KONTRDOWOD: zapowiedz z banku faktow nie jest historia wersji",
+        not any("Gemini 5.0" in t for t, _, _ in hist), hist)
 
 _kod = "\n".join(w for w in pathlib.Path("agent-v2/stages.py").read_text(
     encoding="utf-8").splitlines() if not w.lstrip().startswith("#"))

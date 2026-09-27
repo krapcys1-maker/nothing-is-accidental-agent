@@ -483,10 +483,17 @@ def pamiec_wersji(korpus: list[dict[str, Any]],
                   dodatkowe: list[tuple[str, str, bool]] | None = None) -> dict[str, str]:
     """{klucz wersji: najwczesniejszy dzien, w ktorym go widzielismy}. Trwala.
 
-    `korpus` — tytuly z kanalow i zrodel, z data wpisu. `dodatkowe` — trojki
-    (tekst, data, tylko_z_rodzina) z naszej wlasnej historii: obsluzone
-    wydarzenia, bank faktow, wystawione notki. Plik lezy w katalogu danych
-    instancji; nieudany zapis nie zatrzymuje przebiegu.
+    `korpus` — tytuly z kanalow i zrodel, z data wpisu. Wersja liczy sie
+    dopiero, gdy mowia o niej DWA ROZNE KANALY, a data to dzien, w ktorym
+    dolaczyl drugi: jeden film z przeciekiem („Gemini 4 LEAKED") nie moze
+    tygodniami wczesniej zamknac drogi prawdziwej premierze. `dodatkowe` —
+    trojki (tekst, data, tylko_z_rodzina) z naszej historii: obsluzone
+    wydarzenia i wystawione notki. Plik lezy w katalogu danych instancji;
+    nieudany zapis nie zatrzymuje przebiegu.
+
+    BANKU FAKTOW TU NIE MA — zmierzone przy pierwszym uruchomieniu na
+    produkcji: dawal „gemini 4.0" z 12.09 (zapowiedz) i ceny w rodzaju
+    „gemini 7.50", czyli wlasnie przedwczesne „juz bylo".
     """
     import json
 
@@ -500,18 +507,33 @@ def pamiec_wersji(korpus: list[dict[str, Any]],
         znane = {}
     zmiana = False
 
-    def _dopisz(tekst: str, data: str, tylko_z_rodzina: bool) -> None:
+    def _dopisz_klucz(k: str, data: str) -> None:
         nonlocal zmiana
+        if k not in znane or data < str(znane[k]):
+            znane[k] = data
+            zmiana = True
+
+    def _dopisz(tekst: str, data: str, tylko_z_rodzina: bool) -> None:
         data = str(data or "")[:10]
         if len(data) != 10:
             return
         for k in klucze_wersji(tekst, tylko_z_rodzina):
-            if k not in znane or data < str(znane[k]):
-                znane[k] = data
-                zmiana = True
+            _dopisz_klucz(k, data)
 
+    # KORPUS: data, w ktorej o wersji mowil juz DRUGI kanal.
+    kanaly_wersji: dict[str, dict[str, str]] = {}
     for p in korpus or []:
-        _dopisz(p.get("temat") or "", p.get("data") or "", False)
+        data = str(p.get("data") or "")[:10]
+        if len(data) != 10:
+            continue
+        for k in klucze_wersji(p.get("temat") or ""):
+            dni = kanaly_wersji.setdefault(k, {})
+            kanal = str(p.get("kanal") or "?")
+            if kanal not in dni or data < dni[kanal]:
+                dni[kanal] = data
+    for k, dni in kanaly_wersji.items():
+        if len(dni) >= 2:
+            _dopisz_klucz(k, sorted(dni.values())[1])
     for tekst, data, tylko_z_rodzina in dodatkowe or []:
         _dopisz(tekst, data, tylko_z_rodzina)
     if zmiana:
