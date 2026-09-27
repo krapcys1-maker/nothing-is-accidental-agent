@@ -286,6 +286,12 @@ sprawdz("artykul: droga --sledztwo i pominiecie artykulu z puli po artykule ze s
         '"--sledztwo" in sys.argv' in _art and "_sledztwo.ile_artykulow(6)" in _art)
 sprawdz("sledztwo bez --wyslij nie rusza kolejki ani pamieci",
         "if na_serio:" in _art and "sledztwo.dodaj_do_kolejki" in _art)
+# 27.09 pierwsze sledztwo na produkcji: pisarz artykulu odmowil („cyber") i
+# przebieg wywrocil sie tracebackiem, choc przeslania byly juz w kolejce.
+sprawdz("odmowa dostawcy przy artykule sledztwa konczy przebieg komunikatem, po zapisie przeslan",
+        "except llm.OdmowaDostawcy" in _art
+        and _art.index("sledztwo.dodaj_do_kolejki") < _art.index("except llm.OdmowaDostawcy")
+        < _art.index("sledztwo.oznacz_artykul(run_id)"))
 sprawdz("nowe sledztwo dopiero, gdy kolejka przeslan zejdzie (przed wyborem historii)",
         "czeka = sledztwo.czekajace_przeslania()" in _art
         and _art.index("sledztwo.czekajace_przeslania()") < _art.index("sledztwo.historie("))

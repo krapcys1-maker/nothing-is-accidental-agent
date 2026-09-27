@@ -1062,7 +1062,19 @@ def _przebieg_sledztwa(conn, run_id: int) -> int:
     card["editorial_hypotheses"] = [
         {k: p.get(k) for k in ("rodzaj", "przeslanie", "tresc", "za", "przeciw", "co_obali")}
         for p in przes if p["rodzaj"] in ("MOTYW", "ZA_DWA_LATA")]
-    kod = _napisz_i_zapisz(conn, run_id, brief, card, evidence)
+    # ODMOWA DOSTAWCY NIE KONCZY SLEDZTWA TRACEBACKIEM. 27.09.2026, pierwsze
+    # sledztwo na produkcji: historia o agentach OpenAI na stronach rzadow USA,
+    # ustalenie i trzy przeslania gotowe, a pisarz artykulu (Fable, potem Opus)
+    # odmowil w kategorii „cyber". Przeslania i zapis sledztwa sa juz wyzej,
+    # wiec jedyna strata to artykul; przebieg ma to powiedziec, a nie wywrocic
+    # sie ze stanem ERROR. Odmowa nic nie kosztowala (0 tokenow).
+    try:
+        kod = _napisz_i_zapisz(conn, run_id, brief, card, evidence)
+    except llm.OdmowaDostawcy as exc:
+        print(">> dostawca odmowil napisania artykulu (%s) — przeslania sa juz"
+              " w kolejce notek, artykulu z tego sledztwa nie bedzie"
+              % str(exc)[:160], flush=True)
+        return 1
     if kod == 0 and na_serio:
         sledztwo.oznacz_artykul(run_id)
     return kod
