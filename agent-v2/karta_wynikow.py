@@ -327,11 +327,23 @@ def _grupa_koncowki(e: dict) -> str:
     return "ocenia" if e.get("koncowka_ocena") else "konczy_mysl"
 
 
+# WNIOSEK I PRZESLANIE (27.09.2026, `docs/WNIOSEK_2026-09-27.md`) — czy notka
+# zbudowana wokol niesztandarowego wniosku albo przeslania ze sledztwa jest
+# lepiej przyjmowana niz zwykla. Notka z przeslania nie dostaje wniosku, wiec
+# ma wlasna grupe: inaczej rozmywalaby „bez wniosku".
+def _grupa_wniosku(e: dict) -> str:
+    if "wniosek" not in e:
+        return "przed"
+    if e.get("przeslanie_id"):
+        return "przeslanie"
+    return "z_wnioskiem" if e.get("wniosek") else "bez_wniosku"
+
+
 def odbior_radar_glebia(statystyki: list[dict], dziennik: list[dict],
                         zrodla: list[dict], od: date, do: date) -> dict:
     return {nazwa: _odbior_grup(statystyki, dziennik, zrodla, od, do, fn)
             for nazwa, fn in (("radar", _grupa_radaru), ("glebia", _grupa_glebi),
-                              ("koncowka", _grupa_koncowki))}
+                              ("koncowka", _grupa_koncowki), ("wniosek", _grupa_wniosku))}
 
 
 def zrodla_z_problemem(dane: Path, dni_bez_wpisow: int = 14, porazek: int = 3) -> list[str]:
@@ -477,6 +489,8 @@ def _wiersze(k: dict) -> list[tuple[str, str]]:
          podzial("glebia", ("z_karta", "bez_karty"))),
         ("odbior 72 h: koniec mysla / ocena materialu (n)",
          podzial("koncowka", ("konczy_mysl", "ocenia"))),
+        ("odbior 72 h: z wnioskiem / bez / z przeslania (n)",
+         podzial("wniosek", ("z_wnioskiem", "bez_wniosku", "przeslanie"))),
         ("zrodla z problemem", "; ".join(k.get("zrodla_z_problemem") or []) or "—"),
         ("koszt USD (na dobe)", f"{ko.get('usd', '—')} ({ko.get('usd_na_dobe', '—')})"),
         ("najdrozsze etapy", ", ".join(f"{e} {v}" for e, v in ko.get("etapy", [])) or "—"),

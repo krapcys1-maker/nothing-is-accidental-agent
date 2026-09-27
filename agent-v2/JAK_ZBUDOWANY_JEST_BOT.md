@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **34 plików**, 39 074 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **34 plików**, 39 088 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -114,7 +114,7 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
 się testować bez przeglądarki i bez pieniędzy**. 193 zestawów
-testów, 4821 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+testów, 4823 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -889,7 +889,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `karta_wynikow.py` — te same liczby dla poligonu i produkcji co tydzień — jeden przyrząd, jedne definicje, tylko odczyt
 
-516 wierszy, 22 funkcji na poziomie modułu, 0 klas
+530 wierszy, 23 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -908,6 +908,7 @@ wiec nie da sie go rozjechac z kodem.
 | `_grupa_radaru(e)` *(wewn.)* | — |
 | `_grupa_glebi(e)` *(wewn.)* | — |
 | `_grupa_koncowki(e)` *(wewn.)* | — |
+| `_grupa_wniosku(e)` *(wewn.)* | — |
 | `odbior_radar_glebia(statystyki, dziennik, zrodla, od, do)` | — |
 | `zrodla_z_problemem(dane, dni_bez_wpisow, porazek)` | Zrodla, ktore nie odpowiadaja albo od dawna nic nie maja (27.09.2026) — |
 | `zapisy(zrodla, dziennik)` | Zapisy z ostatniego odczytu Substacka (okno 30 dni) i przypisania do |

@@ -747,7 +747,7 @@
 
 ### `karta_wynikow.py` — te same liczby dla poligonu i produkcji co tydzień — jeden przyrząd, jedne definicje, tylko odczyt
 
-516 wierszy, 22 funkcji na poziomie modułu, 0 klas
+530 wierszy, 23 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -766,6 +766,7 @@
 | `_grupa_radaru(e)` *(wewn.)* | — |
 | `_grupa_glebi(e)` *(wewn.)* | — |
 | `_grupa_koncowki(e)` *(wewn.)* | — |
+| `_grupa_wniosku(e)` *(wewn.)* | — |
 | `odbior_radar_glebia(statystyki, dziennik, zrodla, od, do)` | — |
 | `zrodla_z_problemem(dane, dni_bez_wpisow, porazek)` | Zrodla, ktore nie odpowiadaja albo od dawna nic nie maja (27.09.2026) — |
 | `zapisy(zrodla, dziennik)` | Zapisy z ostatniego odczytu Substacka (okno 30 dni) i przypisania do |

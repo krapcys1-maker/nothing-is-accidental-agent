@@ -407,6 +407,22 @@ sprawdz("glebia: z karta / bez / przed", {g: v["n"] for g, v in rg["glebia"].ite
         == {"z_karta": 2, "bez_karty": 1, "przed": 1}, rg["glebia"])
 sprawdz("koncowka: mysl / ocena / przed", {g: v["n"] for g, v in rg["koncowka"].items()}
         == {"konczy_mysl": 2, "ocenia": 1, "przed": 1}, rg["koncowka"])
+# WNIOSEK I PRZESLANIE (27.09): notka z przeslania nie ma wniosku, ale NIE jest
+# „bez wniosku" — inaczej rozmywalaby porownanie.
+_st_w, _dz_w = [], []
+for nid, wn, przes in (("w1", "MECHANISM", None), ("w2", "", None), ("w3", "", "p-1"), ("w4", None, None)):
+    _st_w.append({"rodzaj": "notka", "id": nid, "wyswietlenia": 50, "odwiedziny_profilu": 1,
+                  "wystawione": _wyst.isoformat(), "zmierzone": (_wyst + timedelta(hours=72)).isoformat()})
+    _wpis = {"rodzaj": "notka", "udane": True, "id": nid, "przeslanie_id": przes}
+    if wn is not None:
+        _wpis["wniosek"] = wn
+    _dz_w.append(_wpis)
+rw = karta_wynikow.odbior_radar_glebia(_st_w, _dz_w, [], _do - timedelta(days=6), _do)
+sprawdz("wniosek: z wnioskiem / bez / z przeslania / przed",
+        {g: v["n"] for g, v in rw["wniosek"].items()}
+        == {"z_wnioskiem": 1, "bez_wniosku": 1, "przeslanie": 1, "przed": 1}, rw["wniosek"])
+sprawdz("karta wynikow ma wiersz wniosku",
+        "z wnioskiem / bez / z przeslania" in pathlib.Path("agent-v2/karta_wynikow.py").read_text(encoding="utf-8"))
 
 
 def _kod(sciezka):
