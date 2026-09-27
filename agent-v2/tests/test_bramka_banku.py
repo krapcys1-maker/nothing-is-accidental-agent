@@ -29,7 +29,7 @@ import json
 import pathlib
 import sys
 import tempfile
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 sys.path.insert(0, "agent-v2")
 import config   # noqa: E402
@@ -72,7 +72,10 @@ def kandydat(nr, decision=MECHANIZM):
             "kiedy": datetime.now(timezone.utc).isoformat(),
             "decision": decision, "actually": "", "wrong_belief": "",
             "consequence": "", "url": "https://example.org/%d" % nr,
-            "source_date": "2026-08-20", "domain": "test"}
+            # Wczoraj — od 27.09.2026 sedzia nie dostaje tematu ze zrodlem
+            # starszym niz `config.MAKS_WIEK_TEMATU_DNI`.
+            "source_date": (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d"),
+            "domain": "test"}
 
 
 def ustaw(ile, decisions=None):

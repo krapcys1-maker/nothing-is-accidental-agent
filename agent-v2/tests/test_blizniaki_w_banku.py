@@ -53,7 +53,9 @@ OSOBNY = ("In a 12-month longitudinal study, participants who used a "
           "differently afterwards.")
 
 JUTRO = (datetime.now(timezone.utc) + timedelta(days=3)).strftime("%Y-%m-%d %H:%M")
-SWIEZY = (datetime.now(timezone.utc) - timedelta(days=10)).strftime("%Y-%m-%d")
+# Wczoraj, nie dziesiec dni temu: od 27.09.2026 bank wyrzuca temat ze zrodlem
+# starszym niz `config.MAKS_WIEK_TEMATU_DNI` (3), a ten plik sprawdza blizniaki.
+SWIEZY = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d")
 
 
 def kandydat(tresc, ranga=None):

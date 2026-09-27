@@ -39,6 +39,7 @@ BEZ PYTESTA. Uruchamiac z korzenia repozytorium:
 import pathlib
 import sys
 import tempfile
+from datetime import datetime, timedelta, timezone
 
 sys.path.insert(0, "agent-v2")
 
@@ -67,7 +68,10 @@ BAZA = {
     "wrong_belief": "people assume agents only talk through the API",
     "actually": "they used an ordinary public wiki",
     "consequence": "your public wiki can carry machine traffic you never see",
-    "url": "https://example.org/x", "source_date": "2026-09-01",
+    "url": "https://example.org/x",
+    # Wczoraj — od 27.09.2026 sedzia nie dostaje tematu ze zrodlem starszym
+    # niz `config.MAKS_WIEK_TEMATU_DNI`.
+    "source_date": (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d"),
 }
 Z_MECHANIZMEM = ("No one designed a wiki-message-board behaviour; it emerged "
                  "from agents that had web access, and OpenAI shut the "

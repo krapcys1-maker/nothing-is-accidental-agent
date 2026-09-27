@@ -173,10 +173,14 @@ print("=== 5b. JEDNO ZRODLO NIE ZAJMUJE CALEJ SPIZARNI ===")
 httpx.Client = _KlientUdawany
 try:
     tz.wyczysc_zapas()
+    # Z DZISIEJSZA DATA: od 27.09.2026 spizarnia bierze najpierw swieze wpisy,
+    # a wpis bez daty traktuje jak stary (tylko na ratunek, do polowy).
+    from datetime import datetime as _dt5, timezone as _tz5
+    _dzis5 = _dt5.now(_tz5.utc).strftime("%Y-%m-%d")
     _gadatliwy = [{"url": "https://g.example/%d" % i, "kanal": "Gadatliwy",
-                   "temat": "t%d" % i} for i in range(6)]
+                   "temat": "t%d" % i, "data": _dzis5} for i in range(6)]
     _reszta = [{"url": "https://r%d.example/x" % i, "kanal": "Zrodlo%d" % i,
-                "temat": "u%d" % i} for i in range(4)]
+                "temat": "u%d" % i, "data": _dzis5} for i in range(4)]
     _mix = tz.tresci_zrodel(_gadatliwy + _reszta, ile=6)
     _ile_gadatliwego = sum(1 for z in _mix if z["kanal"] == "Gadatliwy")
     sprawdz("jedno zrodlo nie przekracza sufitu",

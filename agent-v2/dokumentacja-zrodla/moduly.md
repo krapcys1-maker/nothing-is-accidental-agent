@@ -1,7 +1,7 @@
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-3194 wierszy, 27 funkcji na poziomie modułu, 1 klas
+3199 wierszy, 27 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -35,7 +35,7 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-10372 wierszy, 166 funkcji na poziomie modułu, 0 klas
+10392 wierszy, 166 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -208,7 +208,7 @@
 
 ### `browser.py` — cała styczność z Substackiem; nie woła modelu
 
-5479 wierszy, 104 funkcji na poziomie modułu, 0 klas
+5486 wierszy, 104 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -299,7 +299,7 @@
 | `potwierdz_odpowiedz(page, note_id, tekst)` | Pyta Substacka, czy nasza odpowiedź naprawdę jest w wątku — i KTORA. |
 | `wystaw_odpowiedz(note_id, tekst, wyslij, kontekst, rodzaj)` | Odpowiada w watku — pod nasza notka albo w cudzej dyskusji. |
 | `zdejmij_plakietke_ai(page, id_notki)` | Wylacza wykrywanie AI przy jednej notce. Sciezka z interfejsu Substacka. |
-| `wystaw_notke(tekst, wyslij, typ, forma, model, fakt_ranga, fakt_klucz, styk)` | Wystawia notkę. Domyślnie WYPEŁNIA i NIE WYSYŁA. |
+| `wystaw_notke(tekst, wyslij, typ, forma, model, fakt_ranga, fakt_klucz, styk, zrodlo_data)` | Wystawia notkę. Domyślnie WYPEŁNIA i NIE WYSYŁA. |
 | `zapamietaj_platny_host(host, prawo)` | Host, ktory wprost mowi, ze komentowac moga tylko placacy. |
 | `hosty_tylko_dla_placacych()` | Hosty, gdzie komentowac moga tylko placacy — do odsiania PRZED ocena. |
 | `zapomnij_platny_host(host)` | Udany komentarz kasuje host z listy — wydawca mogl zmienic ustawienia. |
@@ -319,7 +319,7 @@
 
 ### `llm.py` — JEDYNA warstwa dostępu do modeli i liczenia kosztu
 
-1016 wierszy, 17 funkcji na poziomie modułu, 4 klas
+1017 wierszy, 17 funkcji na poziomie modułu, 4 klas
 
 | funkcja | co robi |
 |---|---|
@@ -457,7 +457,7 @@
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-3607 wierszy, 43 funkcji na poziomie modułu, 0 klas
+3658 wierszy, 43 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -466,7 +466,7 @@
 | `_wybor_modeli_z_pliku(sciezka)` *(wewn.)* | Stan zapisany przez `nowe_modele.py`. Pusty slownik, gdy nie ma albo zepsuty. |
 | `zamiany_z_danych(dane)` | Zamiany, ktore wolno zastosowac: znana rola i nazwa o ksztalcie identyfikatora. |
 | `_w_tescie_wczesnie()` *(wewn.)* | To samo co `_w_darmowym_tescie` nizej, ale bez wyjatku dla testow platnych. |
-| `myslenie_deepseek(etap)` | Kopia ustawienia thinking; None pozostawia domyslne ustawienie API. |
+| `myslenie_deepseek(etap, siec)` | Kopia ustawienia thinking; None pozostawia domyslne ustawienie API. |
 | `_ceny_zamian(stan)` *(wewn.)* | — |
 | `stawka_modelu(model)` | Wpis cennika dla modelu; dla nieznanego — cena sprawdzona przy zamianie, |
 | `model_rozliczeniowy(model, kiedy)` | Model, po ktorego stawce dostawca liczy wywolanie `model` w chwili `kiedy`. |
@@ -592,7 +592,7 @@
 
 ### `tresc_zrodel.py` — treść źródeł z korpusu pobrana za darmo — spiżarnia przed zakupami
 
-283 wierszy, 9 funkcji na poziomie modułu, 0 klas
+311 wierszy, 10 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -601,6 +601,7 @@
 | `_warto(tekst)` *(wewn.)* | Czy z tej strony jest co czytac. |
 | `kolejnosc_ludzi(wpisy, styki_w_banku)` | Wpisy spoza branzy w kolejnosci, w jakiej spizarnia ma je probowac. |
 | `tresci_zrodel(wpisy, ile, znakow, styki_w_banku)` | Pobiera tresc `ile` nadajacych sie wpisow korpusu — z kwota, patrz wyzej. |
+| `_podziel_po_wieku(wpisy)` *(wewn.)* | (swieze, starsze) wzgledem `config.MAKS_WIEK_SPIZARNI_DNI`, w kolejnosci |
 | `sklad(gotowe)` | Jedna linia do logu: ile tekstow, z ilu zrodel, jakie styki. |
 | `blok_do_promptu(wpisy, ile, styki_w_banku)` | Tresci zrodel gotowe do wklejenia w prompt skauta. |
 | `ostatnie_tresci()` | Teksty ostatnio pobranej spizarni — `stages.styk_ze_zrodla` bierze z nich |

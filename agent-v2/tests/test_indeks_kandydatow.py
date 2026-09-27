@@ -541,7 +541,9 @@ try:
         return {"source_date": (_dzis2 - _td2(days=dni)).isoformat(),
                 "wazny_do": wazny}
 
-    prog = config.MAKS_WIEK_ZRODLA_DNI
+    # Od 27.09.2026 bank ma krotszy prog tematu (`MAKS_WIEK_TEMATU_DNI`), a 30
+    # dni zostaje dla twierdzen o stanie swiata — granica to mniejszy z nich.
+    prog = min(config.MAKS_WIEK_ZRODLA_DNI, config.MAKS_WIEK_TEMATU_DNI)
     sprawdz("zrodlo dokladnie na progu (%d dni) ZOSTAJE" % prog,
             not stages._po_terminie(_fakt(prog)), prog)
     sprawdz("zrodlo dzien za progiem (%d dni) WYPADA" % (prog + 1),
