@@ -1,7 +1,7 @@
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-3218 wierszy, 27 funkcji na poziomie modułu, 1 klas
+3220 wierszy, 27 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -35,7 +35,7 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-10633 wierszy, 171 funkcji na poziomie modułu, 0 klas
+10711 wierszy, 172 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -90,6 +90,7 @@
 | `ostatnie_otwarcia(rodzaj, ile)` | Pierwsze slowa ostatnich notek — zeby kolejna nie zaczela sie tak samo. |
 | `ostatnie_zakonczenia(rodzaj, ile)` | Ostatnie zdania ostatnich notek — zeby kolejna nie konczyla sie tak samo. |
 | `rozbior(conn, run_id, evidence)` | Przepytanie materialu, ZANIM powstanie notka. |
+| `wniosek(conn, run_id, evidence)` | NIESZTANDAROWY WNIOSEK przed pisaniem — albo `{}`, gdy go nie ma. |
 | `wiek_zrodla_w_dniach(data_zrodla, teraz)` | Ile dni ma zrodlo. None, gdy daty nie da sie odczytac. |
 | `nazywa_wersje(tekst)` | Czy zdanie nazywa konkretna wersje produktu. Zwraca ja albo pusty napis. |
 | `swiezosc_karty(card, teraz)` | Ile lat ma material, na ktorym stanie artykul. Zwraca uwagi, nie werdykt. |
@@ -462,7 +463,7 @@
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-3703 wierszy, 43 funkcji na poziomie modułu, 0 klas
+3712 wierszy, 43 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -642,7 +643,7 @@
 
 ### `sledztwo.py` — śledztwo — historia z radaru, bramka nowości sprawdzana kodem, trzy przesłania (ustalenie, motyw, za dwa lata) i kolejka notek
 
-491 wierszy, 26 funkcji na poziomie modułu, 0 klas
+500 wierszy, 26 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|

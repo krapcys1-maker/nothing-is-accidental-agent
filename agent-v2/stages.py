@@ -2823,10 +2823,6 @@ def wniosek(conn: sqlite3.Connection | None, run_id: int | None,
         "reasoning": [" ".join(str(x).split())[:220] for x in (w.get("tok") or [])][:5],
         "everyday_example": " ".join(str(w.get("przyklad") or "").split())[:300],
         "strongest_objection": " ".join(str(w.get("zarzut") or "").split())[:300],
-        # PEWNOSC Z LISTY, inaczej „nasza interpretacja": ostrozniej jest
-        # przedstawic fakt jako odczytanie niz odczytanie jako fakt.
-        "how_sure": ("SHOWN" if str(w.get("pewnosc") or "").strip().upper() == "SHOWN"
-                     else "OUR_READING"),
     }
     print("  [wniosek] %s: %s (%s)" % (kat["kind"], kat["conclusion"][:100],
                                        " ".join(str(dane.get("dlaczego") or "").split())[:70]),

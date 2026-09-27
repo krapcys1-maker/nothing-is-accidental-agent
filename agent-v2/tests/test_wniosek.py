@@ -72,16 +72,6 @@ try:
     sprawdz("tok, przyklad i zarzut przechodza do pisarza",
             kat.get("reasoning") == ["denial earns 25%", "approval earns nothing"]
             and kat.get("everyday_example") and kat.get("strongest_objection"), kat)
-    sprawdz("KONTRDOWOD: brak pewnosci = nasza interpretacja, nie fakt",
-            kat.get("how_sure") == "OUR_READING", kat)
-    ODP["wniosek"] = {"wnioski": [{"rodzaj": "MECHANISM", "wniosek": "A no pays.", "pewnosc": " shown "}],
-                      "wybrany": 0}
-    sprawdz("pewnosc SHOWN przechodzi (wielkosc liter i spacje bez znaczenia)",
-            stages.wniosek(sqlite3.connect(":memory:"), None, DOWOD).get("how_sure") == "SHOWN")
-    ODP["wniosek"] = {"wnioski": [{"rodzaj": "MECHANISM", "wniosek": "A no pays.", "pewnosc": "CERTAIN"}],
-                      "wybrany": 0}
-    sprawdz("KONTRDOWOD: pewnosc spoza listy = OUR_READING",
-            stages.wniosek(sqlite3.connect(":memory:"), None, DOWOD).get("how_sure") == "OUR_READING")
 
     print()
     print("=== 2. KOD ODRZUCA ZLE WNIOSKI ===")
@@ -146,12 +136,14 @@ print()
 print("=== 6. PROMPTY ===")
 notka = " ".join((pathlib.Path("agent-v2/prompts/notka.md")).read_text(encoding="utf-8").split())
 sprawdz("notka.md mowi pisarzowi, co zrobic z our_angle", "`our_angle`" in notka)
-sprawdz("notka.md: zastrzezenia zrodla zostaja, OUR_READING slychac (runda 3 A/B)",
-        "The evidence's hedges stay" in notka and "When `how_sure` is OUR_READING" in notka
-        and "never the words that keep a claim true" in notka)
+# RUNDA 3 A/B (docs/WNIOSEK_2026-09-27.md): akapit z rundy 1 byl najuczciwszy
+# w obu rundach; dopiski o dlugosci i „naszym odczytaniu" nie dawaly zysku.
+sprawdz("notka.md: akapit our_angle z rundy 1 (wygral uczciwoscia w rundach 2 i 3)",
+        "Mention the objection only where it genuinely changes the picture." in notka
+        and "how_sure" not in notka and "replace detail rather than add to it" not in notka)
 wn = (pathlib.Path("agent-v2/prompts/wniosek.md")).read_text(encoding="utf-8")
-sprawdz("wniosek.md: krok z dowodu trzyma zastrzezenie i pewnosc jest w odpowiedzi",
-        "keeps its hedge" in wn and '"pewnosc": "SHOWN"|"OUR_READING"' in wn)
+sprawdz("wniosek.md: krok z dowodu trzyma zastrzezenie zrodla",
+        "keeps its hedge" in " ".join(wn.split()) and "unknown, not absent" in " ".join(wn.split()))
 sprawdz("wniosek.md: wszystko po angielsku (A/B 27.09: Flash odpisal po polsku)",
         "Write every value in English." in wn)
 _pola = set(re.findall(r"(?<!\{)\{([a-z_]+)\}(?!\})", wn))

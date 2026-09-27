@@ -3,7 +3,7 @@
 
 **Pola wejściowe:** *(brak)*
 
-#### `bank.md` (49 wierszy)
+#### `bank.md` (54 wierszy)
 
 **Pola wejściowe:** `co_zadzialalo`, `kandydaci`, `marka`
 
@@ -151,7 +151,7 @@
 {{"poprawki": [{{"nr": <sentence number>, "nowe": "<replacement sentence, or empty to delete>"}}]}}
 ```
 
-#### `notka.md` (112 wierszy)
+#### `notka.md` (118 wierszy)
 
 **Pola wejściowe:** `evidence`, `form_brief`, `language`, `marka`, `max_words`, `min_words`, `note_form`, `note_type`, `ostatnie_otwarcia_json`, `ostatnie_zakonczenia_json`, `rozbior`, `type_brief`
 
@@ -333,6 +333,16 @@
 
 ```json
 {{"claims": [{{"claim": "<what the text asserts>", "status": "confirmed"|"refuted"|"outdated"|"unverified", "url": "<source, or empty>", "source_date": "<when that source was published, YYYY-MM-DD, or empty>", "what_the_source_says": "<one sentence, required for refuted and outdated>"}}], "safe_to_post": true|false, "verdict": "<one sentence>"}}
+```
+
+#### `wniosek.md` (35 wierszy)
+
+**Pola wejściowe:** `evidence`, `marka`
+
+**Kontrakt wyjścia:**
+
+```json
+{{"wnioski": [{{"rodzaj": "MECHANISM"|"MONEY_OR_POWER"|"NEXT"|"PATTERN", "wniosek": "<one plain sentence>", "tok": ["<step>", "<step>"], "przyklad": "<everyday example>", "zarzut": "<strongest objection>"}}], "wybrany": <0, 1 or 2>, "dlaczego": "<one sentence>"}}
 ```
 
 #### `wykonalnosc.md` (97 wierszy)

@@ -63,17 +63,6 @@ deliver — something the reader would not get from the headline — with its
 reasoning, an everyday example and the strongest objection. Build the note so
 that conclusion lands. If the idea is technical, use the example to make it
 click. Mention the objection only where it genuinely changes the picture.
-Keep the conclusion exactly as strong as the evidence. The evidence's hedges
-stay ("appears to", "reportedly", "so far"); what the evidence doesn't mention
-isn't a fact about the world ("nobody pays"); an incentive is not proof of
-intent; and the source's own wording ("unauthorised access") is not yours to
-upgrade ("broke in"). When `how_sure` is OUR_READING, let the reader hear in
-plain words that this is our reading, once, without apologising for it. Never
-add a supporting claim the evidence lacks just to make the conclusion land.
-The example must be instantly clear to someone who has never heard of the
-case, and it must map onto the mechanism without a second read. Make room for
-the conclusion and the example by cutting background, never the words that
-keep a claim true: stay inside the word range.
 
 The evidence may carry `perspective` and `investigation`: one message from our
 own investigation of a story, with the claims it stands on. A finding is stated
