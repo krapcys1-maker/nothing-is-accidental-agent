@@ -1451,7 +1451,23 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
                                              # notki w dzienniku wprost.
                                              zrodlo_data=str(
                                                  (n.get("fakt_wpis") or {})
-                                                 .get("source_date") or "")[:10])
+                                                 .get("source_date") or "")[:10],
+                                             # RADAR, GLEBIA, ZRODLO I KONCOWKA
+                                             # (27.09.2026) — karta wynikow liczy
+                                             # po nich odbior, patrz `radar.py`,
+                                             # `glebia.py`.
+                                             # Liczy je `stages.notki_dnia`; tu
+                                             # tylko przekazujemy.
+                                             pomiar={
+                                                 "radar": n.get("radar"),
+                                                 "glebia": n.get("glebia"),
+                                                 "glebia_odpowiedz":
+                                                     n.get("glebia_odpowiedz"),
+                                                 "zrodlo_host":
+                                                     n.get("zrodlo_host") or "",
+                                                 "koncowka_ocena": gotowe[0].get(
+                                                     "koncowka_ocena") or "",
+                                             })
                 # Fakt odhaczamy DOPIERO po potwierdzonej publikacji. Wczesniej
                 # znikal juz przy znalezieniu, wiec przepadal takze wtedy, gdy
                 # notka nie poszla albo gdy przebieg byl tylko sprawdzeniem.

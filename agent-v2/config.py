@@ -296,6 +296,9 @@ MODEL_FOR = {
     "naprawa_komentarza": DEEPSEEK,
     "aktualne_modele": DEEPSEEK,
     "curiosity": DEEPSEEK,
+    # RADAR I KARTA GLEBI (27.09.2026) — patrz `radar.py` i `glebia.py`.
+    "radar": DEEPSEEK,
+    "glebia": DEEPSEEK,
     "grafika": DEEPSEEK,
     "cele": DEEPSEEK,
     "wybor": DEEPSEEK,
@@ -367,6 +370,11 @@ DEEPSEEK_MYSLENIE: dict[str, dict[str, str]] = {
     "restack": {"type": "disabled"},
     "naprawa": {"type": "enabled"},
     "naprawa_komentarza": {"type": "enabled"},
+    # Radar i karta glebi: ustawianie naglowkow i wyciaganie cytatow. Prototyp
+    # 27.09 bez rozumowania: 96 naglowkow za 0,0010 USD, karta za 0,0006 USD.
+    # Kazdy cytat z karty sprawdza potem KOD, nie model (`glebia._w_tekscie`).
+    "radar": {"type": "disabled"},
+    "glebia": {"type": "disabled"},
 }
 
 
@@ -1436,6 +1444,10 @@ MAX_TOKENS = {
     # Wpis jest potrzebny `_preflight`, ktory pilnuje budzetu takze tych prob.
     "nowe_modele": 1500,
     "curiosity": 24000,
+    # Radar: do pietnastu grup po kilka identyfikatorow i dwa zdania.
+    "radar": 6000,
+    # Karta glebi: do pieciu liczb z cytatem, dwa cytaty, pytanie.
+    "glebia": 4000,
     "grafika": 4000,
     "cele": 6000,
     "wybor": 6000,
@@ -2284,6 +2296,14 @@ MAKS_WIEK_SPIZARNI_DNI = MAKS_WIEK_TEMATU_DNI
 # 4.7, Gemini 3.8) otwieraly furtke skauta w KAZDYM przebiegu 26.09: trzy platne
 # szukania na dobe przy regule jednego, a bank urosl ponad sufit (27 przy 20).
 WYDARZENIE_SWIEZOSC_DNI = 1
+
+# RADAR CIEKAWOSCI I KARTA GLEBI — wlasciciel 27.09.2026: „chce pisac ciekawe
+# notki", „miec system, ktory wylapuje to", „system glebokosci danych".
+# Opis i pomiary: `radar.py`, `glebia.py`,
+# `docs/SWIEZOSC_KOSZT_ZRODLA_2026-09-27.md`. Wylacznik na wypadek, gdyby
+# ktores z nich psulo przebieg — oba zawodza na pusto i tak.
+RADAR_WLACZONY = True
+GLEBIA_WLACZONA = True
 
 # MIESZANKA DNIA. Ostatnia pozycja to MYSL — notka bez zadnego dowodu.
 #

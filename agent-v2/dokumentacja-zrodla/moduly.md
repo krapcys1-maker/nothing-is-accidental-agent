@@ -1,7 +1,7 @@
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-3199 wierszy, 27 funkcji na poziomie modułu, 1 klas
+3215 wierszy, 27 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -35,7 +35,7 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-10403 wierszy, 166 funkcji na poziomie modułu, 0 klas
+10504 wierszy, 168 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -106,11 +106,13 @@
 | `terminy_insiderskie(tekst)` | Slowa, przy ktorych zwykly czytelnik sie zatrzymuje. Bez powtorzen. |
 | `hak_bez_zaczepu(tekst)` | Otwarcie jednym slowem, ktorego nastepne zdanie nie wiaze. Puste, gdy wiaze. |
 | `odeslanie_donikad(tekst)` | Odeslanie w PIERWSZYM zdaniu do badania, ktorego czytelnik nie widzial. |
+| `konczy_ocena_materialu(tekst)` | Fraza, ktora OSTATNIE zdanie notki ocenia material („I'd want…"), albo pusto. |
 | `za_duzo_zargonu(tekst)` | Terminy insiderskie, gdy jest ich wiecej, niz notka udzwignie. Inaczej pusto. |
 | `note(conn, run_id, note_type, evidence, link, note_form, etap, seria)` | Jedna notka danego typu i danej FORMY — do szuflady. |
 | `_host_adresu(url)` *(wewn.)* | — |
 | `_adres_bez_ogona(url)` *(wewn.)* | — |
 | `styk_ze_zrodla(fakt, tresci)` | (styk, skad): `skad` to `adres`, `host`, `rejestr` albo `brak`. |
+| `radar_ze_zrodla(fakt, tresci)` | Miejsce historii w radarze (1 = najciekawsza) dla tekstu spizarni, z ktorego |
 | `styk_faktu(fakt)` | Styk zapisany w banku; wpisy sprzed silnika tematow sa `branza`. |
 | `dzis_notka_spoza_branzy()` | Czy dzis wyszla juz notka na fakcie spoza branzy — z DZIENNIKA. |
 | `styki_w_banku(dni)` | Styki faktow dopisanych do banku w ostatnich `dni` dniach. |
@@ -208,7 +210,7 @@
 
 ### `browser.py` — cała styczność z Substackiem; nie woła modelu
 
-5486 wierszy, 104 funkcji na poziomie modułu, 0 klas
+5493 wierszy, 104 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -299,7 +301,7 @@
 | `potwierdz_odpowiedz(page, note_id, tekst)` | Pyta Substacka, czy nasza odpowiedź naprawdę jest w wątku — i KTORA. |
 | `wystaw_odpowiedz(note_id, tekst, wyslij, kontekst, rodzaj)` | Odpowiada w watku — pod nasza notka albo w cudzej dyskusji. |
 | `zdejmij_plakietke_ai(page, id_notki)` | Wylacza wykrywanie AI przy jednej notce. Sciezka z interfejsu Substacka. |
-| `wystaw_notke(tekst, wyslij, typ, forma, model, fakt_ranga, fakt_klucz, styk, zrodlo_data)` | Wystawia notkę. Domyślnie WYPEŁNIA i NIE WYSYŁA. |
+| `wystaw_notke(tekst, wyslij, typ, forma, model, fakt_ranga, fakt_klucz, styk, zrodlo_data, pomiar)` | Wystawia notkę. Domyślnie WYPEŁNIA i NIE WYSYŁA. |
 | `zapamietaj_platny_host(host, prawo)` | Host, ktory wprost mowi, ze komentowac moga tylko placacy. |
 | `hosty_tylko_dla_placacych()` | Hosty, gdzie komentowac moga tylko placacy — do odsiania PRZED ocena. |
 | `zapomnij_platny_host(host)` | Udany komentarz kasuje host z listy — wydawca mogl zmienic ustawienia. |
@@ -457,7 +459,7 @@
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-3658 wierszy, 43 funkcji na poziomie modułu, 0 klas
+3678 wierszy, 43 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -592,7 +594,7 @@
 
 ### `tresc_zrodel.py` — treść źródeł z korpusu pobrana za darmo — spiżarnia przed zakupami
 
-311 wierszy, 10 funkcji na poziomie modułu, 0 klas
+344 wierszy, 10 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -600,12 +602,38 @@
 | `_na_tekst(surowy)` *(wewn.)* | HTML na czysty tekst. Prymitywnie i celowo. |
 | `_warto(tekst)` *(wewn.)* | Czy z tej strony jest co czytac. |
 | `kolejnosc_ludzi(wpisy, styki_w_banku)` | Wpisy spoza branzy w kolejnosci, w jakiej spizarnia ma je probowac. |
-| `tresci_zrodel(wpisy, ile, znakow, styki_w_banku)` | Pobiera tresc `ile` nadajacych sie wpisow korpusu — z kwota, patrz wyzej. |
+| `tresci_zrodel(wpisy, ile, znakow, styki_w_banku, wg_radaru)` | Pobiera tresc `ile` nadajacych sie wpisow korpusu — z kwota, patrz wyzej. |
 | `_podziel_po_wieku(wpisy)` *(wewn.)* | (swieze, starsze) wzgledem `config.MAKS_WIEK_SPIZARNI_DNI`, w kolejnosci |
 | `sklad(gotowe)` | Jedna linia do logu: ile tekstow, z ilu zrodel, jakie styki. |
-| `blok_do_promptu(wpisy, ile, styki_w_banku)` | Tresci zrodel gotowe do wklejenia w prompt skauta. |
+| `blok_do_promptu(wpisy, ile, styki_w_banku, wg_radaru)` | Tresci zrodel gotowe do wklejenia w prompt skauta. |
 | `ostatnie_tresci()` | Teksty ostatnio pobranej spizarni — `stages.styk_ze_zrodla` bierze z nich |
 | `wyczysc_zapas()` | Do testow — zapas procesowy nie moze przeciekac miedzy przypadkami. |
+
+### `radar.py` — radar ciekawości — świeże nagłówki ustawione od najciekawszej historii, warianty jednej sprawy razem
+
+208 wierszy, 4 funkcji na poziomie modułu, 0 klas
+
+| funkcja | co robi |
+|---|---|
+| `_swieze(korpus)` *(wewn.)* | Wpisy z okna swiezosci spizarni, ktore da sie pobrac, bez juz opisanych. |
+| `przyklady_odbioru(ile, min_wyswietlen)` | (najlepsze, najslabsze) notki konta po 72 h — ta sama miara co sedzia banku. |
+| `uporzadkuj(korpus, conn, run_id)` | Korpus ustawiony od najciekawszej historii — albo `[]`, gdy radar nie dziala. |
+| `wyczysc_zapas()` | Do testow — zapas procesowy nie moze przeciekac miedzy przypadkami. |
+
+### `glebia.py` — karta głębi — liczby, dokument pierwotny i odpowiedź z pełnego tekstu źródła, każdy cytat sprawdzony kodem
+
+211 wierszy, 8 funkcji na poziomie modułu, 0 klas
+
+| funkcja | co robi |
+|---|---|
+| `_norm(tekst)` *(wewn.)* | — |
+| `_w_tekscie(cytat, *teksty)` *(wewn.)* | Czy cytat NAPRAWDE stoi w ktoryms z pobranych tekstow (po ujednoliceniu |
+| `_host(url)` *(wewn.)* | — |
+| `linki_pierwotne(html, adres, ile)` | Adresy dokumentow pierwotnych ze strony — bez linkow do samej siebie. |
+| `_pobierz(url)` *(wewn.)* | (html, tekst) albo ("", "") — nigdy wyjatek. |
+| `karta_glebi(fakt, conn, run_id)` | Karta glebi dla faktu albo `None`. Nigdy nie podnosi wyjatku. |
+| `_znakow_spizarni()` *(wewn.)* | — |
+| `dla_weryfikatora(karta)` | Cytaty z karty w postaci wierszy rekordu dla weryfikatora faktow. |
 
 ### `aktualne_modele.py` — jakie modele istnieją DZIŚ; pytane na żywo, nie z pamięci
 
@@ -679,7 +707,7 @@
 
 ### `karta_wynikow.py` — te same liczby dla poligonu i produkcji co tydzień — jeden przyrząd, jedne definicje, tylko odczyt
 
-400 wierszy, 16 funkcji na poziomie modułu, 0 klas
+490 wierszy, 21 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -694,6 +722,11 @@
 | `nowi_reagujacy(dziennik, od, do, wlasne)` | Ile uchwytow zareagowalo na nas PIERWSZY RAZ w historii konta w tym oknie. |
 | `zasieg_72h(statystyki, dziennik, od, do)` | Mediana wyswietlen po 72 h dla notek i restackow opublikowanych w oknie |
 | `odbior_po_stykach(statystyki, dziennik, zrodla, od, do)` | Notki spoza branzy wobec branzowych — miara decyzji E6 (silnik tematow). |
+| `_odbior_grup(statystyki, dziennik, zrodla, od, do, grupa)` *(wewn.)* | Ta sama selekcja i miara co `odbior_po_stykach`, dowolny podzial notek. |
+| `_grupa_radaru(e)` *(wewn.)* | — |
+| `_grupa_glebi(e)` *(wewn.)* | — |
+| `_grupa_koncowki(e)` *(wewn.)* | — |
+| `odbior_radar_glebia(statystyki, dziennik, zrodla, od, do)` | — |
 | `zapisy(zrodla, dziennik)` | Zapisy z ostatniego odczytu Substacka (okno 30 dni) i przypisania do |
 | `koszt(baza, od, do)` | Koszt przebiegow produkcyjnych w oknie: razem, na dobe i trzy etapy. |
 | `karta(nazwa, dane, od, do, wlasne)` | — |

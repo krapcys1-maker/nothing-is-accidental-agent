@@ -215,7 +215,9 @@ def _udawany_call(purpose, system, user, **kw):
 # stawia na poczatku styki, ktorych bank nie widzial od trzech dni. Atrapa bez
 # tego parametru wywalala sie na TypeError, a `znajdz_ciekawostki` bralo to za
 # pusta spizarnie i placilo za szukanie — test mierzyl wtedy swoja atrape.
-def _bez_szukania(_wpisy_, ile=8, styki_w_banku=None):
+#
+# `wg_radaru` doszlo 27 wrzesnia 2026 (radar ciekawosci) — ta sama pulapka.
+def _bez_szukania(_wpisy_, ile=8, styki_w_banku=None, wg_radaru=False):
     return "### [OpenAI] cos\nSource: https://e.example/1\n\nTEKST"
 
 

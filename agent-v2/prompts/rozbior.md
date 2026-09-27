@@ -22,6 +22,10 @@ inquiry when the material provides no reason to investigate one. Separate the st
 reason from possible incentives. Consider a competing explanation when the
 evidence supports one. Neither suspicion nor enthusiasm is compulsory.
 
+If the evidence carries `depth`, its quoted data points and answer come from the
+full source page: use them, mark answers taken from them `z_dowodu` true, and
+don't list as unknown what they answer.
+
 Answer from the evidence where possible. Mark `z_dowodu` false for inference or
 an answer that is not established, and say which it is in the answer. If scale
 cannot be compared using the supplied material, leave `skala` empty. Do not

@@ -172,6 +172,8 @@
 | `MAKS_WIEK_TEMATU_DNI` | `3` | SWIEZOSC TEMATU — wlasciciel 27.09.2026: „maja byc swieze notki". Zmierzone tego ranka na produkcji: wolne fakty w banku staly na zrodlach s |
 | `MAKS_WIEK_SPIZARNI_DNI` | `MAKS_WIEK_TEMATU_DNI` | Spizarnia skauta bierze teksty z tych samych dni, bo `source_date` faktu to data strony, z ktorej go wyjal. Starsze teksty wchodza TYLKO wte |
 | `WYDARZENIE_SWIEZOSC_DNI` | `1` | FALA I PREMIERA — wlasciciel: „chce napisac o tym w tym samym dniu, max dzien po". Wykrywacz liczyl fale z czterech dni, wiec te same fale ( |
+| `RADAR_WLACZONY` | `True` | RADAR CIEKAWOSCI I KARTA GLEBI — wlasciciel 27.09.2026: „chce pisac ciekawe notki", „miec system, ktory wylapuje to", „system glebokosci dan |
+| `GLEBIA_WLACZONA` | `True` | — |
 | `NOTE_MIX_ARTICLE_DAY` | `("ARTYKUL", "CIEKAWOSTKA", "SPROSTOWANIE")` | MIESZANKA DNIA. Ostatnia pozycja to MYSL — notka bez zadnego dowodu. Powod jest w NOTE_TYPES przy samym typie: wszystkie pozostale wymagaja  |
 | `KSZTALTY_MYSLI` | `{ 'PYTANIE': 'Consider a genuine open questi` | KSZTALTY NOTKI TYPU MYSL. Losowane w kodzie i podawane jako PRZYDZIAL. Powod jest zmierzony: opis typu wymienial pytanie i obserwacje jako d |
 | `NOTE_MIX_OTHER_DAY` | `("CIEKAWOSTKA", "DYSKUSJA", "SPROSTOWANIE")` | TRZY NOTKI NA DOBE ZAMIAST DZIESIECIU — decyzja wlasciciela, 7 wrzesnia 2026. Liczba notek na dobe to DLUGOSC TEJ KROTKI i tylko ona. POWOD  |

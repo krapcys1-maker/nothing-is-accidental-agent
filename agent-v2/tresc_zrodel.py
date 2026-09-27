@@ -142,8 +142,15 @@ def kolejnosc_ludzi(wpisy: list[dict[str, Any]],
 def tresci_zrodel(wpisy: list[dict[str, Any]], ile: int = ILE_ZRODEL,
                   znakow: int = ZNAKOW_ZE_STRONY,
                   styki_w_banku: set[str] | frozenset[str] | None = None,
+                  wg_radaru: bool = False,
                   ) -> list[dict[str, str]]:
     """Pobiera tresc `ile` nadajacych sie wpisow korpusu — z kwota, patrz wyzej.
+
+    `wg_radaru=True` (27.09.2026): wpisy przychodza ustawione przez `radar`
+    od najciekawszej historii. Kolejnosc zostaje (bez rotacji stykow), a JEDNA
+    HISTORIA IDZIE RAZ — radar laczy naglowki o tym samym w grupe i spizarnia
+    nie bierze dwoch wersji tej samej sprawy. Kwota E6 (etapy nizej) stoi
+    bez zmian.
 
     Trzy etapy, kazdy liczy tylko teksty NAPRAWDE pobrane:
       1. o ludziach: po jednym z kazdego zrodla, az zostanie MAKS_BRANZA miejsc;
@@ -174,8 +181,19 @@ def tresci_zrodel(wpisy: list[dict[str, Any]], ile: int = ILE_ZRODEL,
     # Zmierzone rano: pierwsze zrodlo o ludziach w kolejce (KFF Health) mialo
     # najnowszy wpis sprzed osmiu dni.
     swieze, starsze = _podziel_po_wieku(wpisy)
-    ludzie = kolejnosc_ludzi(swieze, frozenset(styki_w_banku or ()))
-    branza = [w for w in swieze if _styk(w) == "branza"]
+    # WARIANTY HISTORII CZEKAJA NA DOPELNIENIE. Historie reprezentuje naglowek,
+    # ktory radar wskazal jako najbardziej konkretny; wersja tej samej sprawy
+    # z innego zrodla wchodzi dopiero wtedy, gdy tamten sie nie pobral. Bez tego
+    # wariant ze stykiem „o ludziach" (Wpadki AI) wyprzedzal w pierwszym etapie
+    # najlepszy naglowek ze stykiem branzowym (BBC) — zlapane testem.
+    warianty = ([w for w in swieze if (w.get("radar") or {}).get("wariant")]
+                if wg_radaru else [])
+    glowne = [w for w in swieze if not (w.get("radar") or {}).get("wariant")]
+    ludzie = ([w for w in glowne if _styk(w) != "branza"] if wg_radaru
+              else kolejnosc_ludzi(glowne, frozenset(styki_w_banku or ())))
+    branza = [w for w in glowne if _styk(w) == "branza"]
+    # Miejsca radaru juz obecne w spizarni — jedna historia raz.
+    historie: set[int] = set()
     naglowki = {"User-Agent": config.FETCH_USER_AGENT}
     try:
         klient = httpx.Client(timeout=config.FETCH_TIMEOUT_S,
@@ -198,6 +216,9 @@ def tresci_zrodel(wpisy: list[dict[str, Any]], ile: int = ILE_ZRODEL,
                 kan = str(w.get("kanal") or "?")
                 if z_kanalu.get(kan, 0) >= na_zrodlo:
                     continue
+                _hist = (w.get("radar") or {}).get("miejsce") if wg_radaru else None
+                if _hist is not None and _hist in historie:
+                    continue
                 sprobowane.add(url)
                 try:
                     r = c.get(url)
@@ -209,6 +230,8 @@ def tresci_zrodel(wpisy: list[dict[str, Any]], ile: int = ILE_ZRODEL,
                 if not _warto(tekst):
                     continue
                 z_kanalu[kan] = z_kanalu.get(kan, 0) + 1
+                if _hist is not None:
+                    historie.add(_hist)
                 out.append({
                     "kanal": kan,
                     "temat": str(w.get("temat") or ""),
@@ -216,6 +239,9 @@ def tresci_zrodel(wpisy: list[dict[str, Any]], ile: int = ILE_ZRODEL,
                     "url": url,
                     "styk": _styk(w),
                     "tekst": tekst[:znakow],
+                    # MIEJSCE I HAK Z RADARU — miejsce idzie dalej na fakt
+                    # (`stages.radar_ze_zrodla`) i do dziennika notki.
+                    "radar": w.get("radar") or None,
                 })
                 # GRZECZNIE, NIE SZYBKO. Te adresy sa nasze na dlugo; serwer,
                 # ktory nas zablokuje, kosztuje wiecej niz pol sekundy zwloki.
@@ -223,7 +249,7 @@ def tresci_zrodel(wpisy: list[dict[str, Any]], ile: int = ILE_ZRODEL,
 
         wez(ludzie, lambda: len(out) < ile - MAKS_BRANZA, 1)
         wez(branza, lambda: len(out) < ile and _branzy() < MAKS_BRANZA, 1)
-        wez(ludzie + branza, lambda: len(out) < ile, MAKS_Z_JEDNEGO_ZRODLA)
+        wez(ludzie + branza + warianty, lambda: len(out) < ile, MAKS_Z_JEDNEGO_ZRODLA)
         # STARSZE TYLKO NA RATUNEK: gdy swiezych nie starczylo nawet na polowe
         # spizarni. Pusta spizarnia to platne szukanie w sieci.
         if len(out) < ile // 2 and starsze:
@@ -260,7 +286,8 @@ def sklad(gotowe: list[dict[str, str]]) -> str:
 
 
 def blok_do_promptu(wpisy: list[dict[str, Any]], ile: int = ILE_ZRODEL,
-                    styki_w_banku: set[str] | frozenset[str] | None = None) -> str:
+                    styki_w_banku: set[str] | frozenset[str] | None = None,
+                    wg_radaru: bool = False) -> str:
     """Tresci zrodel gotowe do wklejenia w prompt skauta.
 
     Pusty napis, gdy nic nie udalo sie pobrac — wolajacy ma wtedy przejsc na
@@ -271,7 +298,8 @@ def blok_do_promptu(wpisy: list[dict[str, Any]], ile: int = ILE_ZRODEL,
             and teraz - _ZAPAS["kiedy"] < ZAPAS_WAZNY_S):
         gotowe = _ZAPAS["tresci"]
     else:
-        gotowe = tresci_zrodel(wpisy, ile=ile, styki_w_banku=styki_w_banku)
+        gotowe = tresci_zrodel(wpisy, ile=ile, styki_w_banku=styki_w_banku,
+                               wg_radaru=wg_radaru)
         _ZAPAS["tresci"] = gotowe
         _ZAPAS["kiedy"] = teraz
         # SKLAD DO LOGU PRZY KAZDYM POBRANIU — przyrzad z 8 wrzesnia nie
@@ -291,10 +319,15 @@ def blok_do_promptu(wpisy: list[dict[str, Any]], ile: int = ILE_ZRODEL,
         # STYK W NAGLOWKU: skaut widzi, skad jest tekst. Styk faktu i tak
         # przepisuje kod (`stages.styk_ze_zrodla`), wiec to jest informacja
         # dla modelu, a nie jego zadanie.
+        # HAK Z RADARU — dlaczego czytelnik mialby chciec to wiedziec. To jest
+        # PRZYPUSZCZENIE radaru, nie dowod, i tak jest podpisane.
+        _hak = (z.get("radar") or {}).get("hak") or ""
         czesci.append(
-            "### [%s] %s\nSource: %s\nPublished: %s\nTouchpoint: %s\n\n%s"
+            "### [%s] %s\nSource: %s\nPublished: %s\nTouchpoint: %s\n%s\n%s"
             % (z["kanal"], z["temat"], z["url"], z["data"],
                STYK_DLA_MODELU.get(z.get("styk", "branza"), "AI industry"),
+               ("Why a reader may care (our radar's guess, not evidence): %s\n"
+                % _hak) if _hak else "",
                z["tekst"]))
     return "\n\n---\n\n".join(czesci)
 

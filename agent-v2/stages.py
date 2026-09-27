@@ -2221,8 +2221,15 @@ def znajdz_ciekawostki(
         # YouTube, ktorego spizarnia nie czyta; feed o ludziach, piszacy raz na
         # dwa dni, do trzydziestki nie wchodzil. Wyborem rzadzi teraz kwota
         # w `tresc_zrodel.tresci_zrodel`.
-        _tresc = _tz.blok_do_promptu(korpus_kanalow.korpus_kanalow(200),
-                                     styki_w_banku=styki_w_banku())
+        #
+        # RADAR CIEKAWOSCI (27.09.2026) — patrz `radar.py`. Ustawia swieze
+        # naglowki od najciekawszej historii; pusta lista = kolejnosc korpusu.
+        import radar as _radar
+        _korpus = korpus_kanalow.korpus_kanalow(200)
+        _po_radarze = _radar.uporzadkuj(_korpus, conn=conn, run_id=run_id)
+        _tresc = _tz.blok_do_promptu(_po_radarze or _korpus,
+                                     styki_w_banku=styki_w_banku(),
+                                     wg_radaru=bool(_po_radarze))
     except Exception as exc:
         print("  [ciekawostki] nie pobralem tresci zrodel (%s)"
               % type(exc).__name__, flush=True)
@@ -2372,6 +2379,8 @@ def znajdz_ciekawostki(
         f["styk"], f["styk_skad"] = styk_ze_zrodla(f, _tresci)
         _styki[f["styk"]] = _styki.get(f["styk"], 0) + 1
         _skad[f["styk_skad"]] = _skad.get(f["styk_skad"], 0) + 1
+        # MIEJSCE W RADARZE — ta sama droga co styk: po adresie tekstu spizarni.
+        f["radar_miejsce"] = radar_ze_zrodla(f, _tresci)
     if fakty:
         print("  [ciekawostki] styk: %s (dopasowanie: %s)"
               % (", ".join("%s %d" % kv for kv in sorted(_styki.items())),
@@ -3533,6 +3542,43 @@ def odeslanie_donikad(tekst: str) -> str:
     return ""
 
 
+# KONCOWKA, KTORA OCENIA MATERIAL ZAMIAST SKONCZYC MYSL (27.09.2026).
+#
+# Piec z szesciu ostatnich notek przed ta data konczylo sie tak samo: „That's
+# the number I'd want to see before believing…", „I'd want the underlying
+# production counts…", „Wait for someone without a launch blog…", „No launch
+# document has surfaced yet…". W zywym A/B pisarzy robily to wszystkie trzy
+# modele, takze Opus — przyczyna jest cienki material, nie pisarz, i na nia
+# odpowiada karta glebi (`glebia.py`). Ten wzorzec jest MIARA, czy odpowiada:
+# idzie do dziennika notki jako `koncowka_ocena`, nie jest bramka.
+KONCOWKA_OCENIA = re.compile(
+    r"\bI'?d (want|like|need)\b|\bI would (want|like|need)\b|"
+    r"\bbefore (believing|treating|trusting|calling|taking)\b|\bwait for\b|"
+    r"\b(hasn'?t|has not|haven'?t|have not|doesn'?t|does not|didn'?t|did not|"
+    r"isn'?t|is not)\b[^.!?]{0,40}\b(explain|explained|say|said|describe|"
+    r"described|disclose|disclosed|publish|published|share|shared|report|"
+    r"reported|surfaced|tested|measured|known)\b|"
+    r"\b(remains?|stays?|still) (unknown|unclear|unproven|untested|unmeasured|"
+    r"unverified)\b|\bno (test|benchmark|numbers?|data|figures?|independent)\b|"
+    r"\bnobody('s| is| has)\b|\bthe (record|evidence|material) I have\b|"
+    r"\buntil (someone|somebody)\b", re.IGNORECASE)
+
+
+def konczy_ocena_materialu(tekst: str) -> str:
+    """Fraza, ktora OSTATNIE zdanie notki ocenia material („I'd want…"), albo pusto.
+
+    Tylko ostatnie zdanie: niepewnosc przy twierdzeniu w srodku notki jest
+    zgodna z `notka.md` („keep necessary uncertainty beside the claim"); wada
+    jest ostatnie slowo oddane temu, czego brakuje.
+    """
+    t = re.sub(r"https?://\S+", " ", str(tekst or "")).strip()
+    zdania = [z for z in re.split(r"(?<=[.!?])\s+", " ".join(t.split())) if z]
+    if not zdania:
+        return ""
+    m = KONCOWKA_OCENIA.search(zdania[-1])
+    return m.group(0) if m else ""
+
+
 def za_duzo_zargonu(tekst: str) -> list[str]:
     """Terminy insiderskie, gdy jest ich wiecej, niz notka udzwignie. Inaczej pusto.
 
@@ -4021,6 +4067,21 @@ def styk_ze_zrodla(fakt: dict[str, Any],
     if len(z_rejestru) == 1:
         return next(iter(z_rejestru)), "rejestr"
     return "branza", "brak"
+
+
+def radar_ze_zrodla(fakt: dict[str, Any],
+                    tresci: list[dict[str, Any]]) -> int | None:
+    """Miejsce historii w radarze (1 = najciekawsza) dla tekstu spizarni, z ktorego
+    fakt wyjeto — tylko po DOKLADNYM adresie. Brak dopasowania to `None`, nie
+    zgadywanie po hoscie: host niesie wiele historii naraz (27.09.2026)."""
+    adres = _adres_bez_ogona(fakt.get("url"))
+    if not adres:
+        return None
+    for z in tresci or []:
+        if _adres_bez_ogona(z.get("url")) == adres:
+            miejsce = (z.get("radar") or {}).get("miejsce")
+            return int(miejsce) if isinstance(miejsce, int) else None
+    return None
 
 
 def styk_faktu(fakt: dict[str, Any]) -> str:
@@ -4761,6 +4822,9 @@ KSIEGOWOSC_BANKU = frozenset({
     # gdzie fakt trafia w zycie czytelnika (`notka.md`), a nie dostac gotowe
     # „praca" i dopisac do niej prace.
     "styk", "styk_skad",
+    # MIEJSCE W RADARZE (27.09.2026) — pomiar, czy radar wybiera to, co
+    # czytelnicy przyjmuja; pisarz go nie dostaje.
+    "radar_miejsce",
 })
 
 
@@ -5368,6 +5432,18 @@ def notki_dnia(
             juz_o_tym.append("%s %s" % (fakt.get("domain") or "",
                                         fakt.get("fact") or ""))
             material = {"fact": _fakt_do_pisarza(fakt)}
+            # KARTA GLEBI (27.09.2026) — patrz `glebia.py`. Liczby, szczegol
+            # i odpowiedz z PELNEGO tekstu zrodla, kazda z cytatem, ktory kod
+            # znalazl w pobranej stronie. Brak karty = notka jak przed zmiana.
+            try:
+                import glebia as _glebia
+                karta_glebi = _glebia.karta_glebi(fakt, conn=conn, run_id=run_id)
+            except Exception as exc:
+                print("  [glebia] pominieta (%s)" % type(exc).__name__, flush=True)
+                karta_glebi = None
+            if karta_glebi:
+                material["depth"] = {k: v for k, v in karta_glebi.items()
+                                     if k != "source_chars"}
         print(f"  [{typ} / {forma}]", flush=True)
         # Adres artykułu leci TYLKO pod notką, która ten artykuł promuje.
         # Pod ciekawostką byłby reklamą doklejoną do faktu i psułby ją.
@@ -5456,6 +5532,19 @@ def notki_dnia(
         # policzyly odbior per rodzina (E6). Pusty, gdy notka nie stoi na
         # fakcie z banku (MYSL, promocja artykulu).
         wynik["styk"] = styk_faktu(fakt) if isinstance(fakt, dict) else ""
+        # RADAR I GLEBIA (27.09.2026) — do dziennika, zeby karta wynikow
+        # policzyla odbior wedlug miejsca w radarze i wedlug karty glebi.
+        wynik["radar"] = (fakt.get("radar_miejsce")
+                          if isinstance(fakt, dict) else None)
+        _glb = (material.get("depth") if isinstance(material, dict) else None) or {}
+        wynik["glebia"] = len(_glb.get("data_points") or [])
+        wynik["glebia_odpowiedz"] = bool(_glb.get("answer"))
+        wynik["zrodlo_host"] = _host_faktu(fakt) if isinstance(fakt, dict) else ""
+        # KONCOWKA — patrz `KONCOWKA_OCENIA`. Na gotowym tekscie kazdego
+        # kandydata, bo `run.py` publikuje pierwszego bezpiecznego.
+        for _kand in wynik.get("candidates") or []:
+            if isinstance(_kand, dict):
+                _kand["koncowka_ocena"] = konczy_ocena_materialu(_kand.get("note") or "")
         # Ta sama zasada co przy faktach: dzien promocji odhacza ten, kto notke
         # NAPRAWDE wystawil. Wystarczylo, ze kandydat przeszedl bramke — wiec
         # nieudana publikacja albo zwykle sprawdzenie zjadaly po cichu jeden
@@ -5842,12 +5931,21 @@ def _rekord_do_weryfikacji(note_type: str, evidence: dict[str, Any]) -> str:
     pola = [(k, w) for k, w in pola if w]
     if not pola:
         return naglowek
+    # KARTA GLEBI (27.09.2026): cytaty z pelnego tekstu zrodla, kazdy znaleziony
+    # w pobranej stronie przez kod. Bez nich weryfikator szukalby od zera liczb,
+    # ktore pisarz wzial z karty — albo uznal je za nieznalezione.
+    try:
+        import glebia as _glebia
+        _z_karty = _glebia.dla_weryfikatora((evidence or {}).get("depth"))
+    except Exception:
+        _z_karty = ""
     return (naglowek + "\n\nThe text was written from this record, which was "
             "already checked and paid for when the fact entered our bank. "
             "Check the text against it FIRST, and search only for what the "
             "record does not settle. The record is not above doubt: if it is "
             "wrong, say so.\n\n"
-            + "\n".join("- %s: %s" % (k, w[:400]) for k, w in pola))
+            + "\n".join("- %s: %s" % (k, w[:400]) for k, w in pola)
+            + _z_karty)
 
 
 def karta_do_weryfikacji(tytul: str, card: dict[str, Any] | None) -> str:
@@ -8961,6 +9059,7 @@ def dopisz_kandydatow(kandydaci: list[dict[str, Any]],
                 "kanal_zrodlowy": str(k.get("kanal_zrodlowy") or "")[:60],
                 "styk": styk_faktu(k),
                 "styk_skad": str(k.get("styk_skad") or "")[:10],
+                "radar_miejsce": k.get("radar_miejsce"),
             })
             # RANGA ZDJETA, zeby sedzia ocenil go na nowo razem z reszta.
             _stary.pop("ranga", None)
@@ -9054,6 +9153,8 @@ def dopisz_kandydatow(kandydaci: list[dict[str, Any]],
             # linii kwota i miara (E6) widzialyby w banku sama branze.
             "styk": styk_faktu(k),
             "styk_skad": str(k.get("styk_skad") or "")[:10],
+            # MIEJSCE W RADARZE — pomiar radaru (27.09.2026), jak styk wyzej.
+            "radar_miejsce": k.get("radar_miejsce"),
             "status": "nowy" if ok else "odrzucony",
             "powod": powod,
             "kiedy": db.now(),

@@ -4410,7 +4410,8 @@ def wystaw_notke(tekst: str, wyslij: bool = False, typ: str = "",
                  forma: str = "", model: str = "",
                  fakt_ranga: int | None = None,
                  fakt_klucz: str = "", styk: str = "",
-                 zrodlo_data: str = "") -> dict[str, Any]:
+                 zrodlo_data: str = "",
+                 pomiar: dict[str, Any] | None = None) -> dict[str, Any]:
     """Wystawia notkę. Domyślnie WYPEŁNIA i NIE WYSYŁA.
 
     `wyslij=False` to nie ostrożność dla samej ostrożności: notki nie da się
@@ -4521,7 +4522,10 @@ def wystaw_notke(tekst: str, wyslij: bool = False, typ: str = "",
                          styk=styk,
                          # DATA STRONY ZRODLOWEJ — swiezosc notki mierzona
                          # wprost, bez parowania z bankiem (27.09.2026).
-                         zrodlo_data=zrodlo_data)
+                         zrodlo_data=zrodlo_data,
+                         # RADAR, GLEBIA, ZRODLO, KONCOWKA (27.09.2026) —
+                         # pola pomiaru z `run.py`, bez dalszych parametrow.
+                         **(pomiar or {}))
             # WYKRYWANIE AI — KROK PO PUBLIKACJI, ODDZIELONY OD NIEJ.
             #
             # Substack pokazuje przy dluzszych notkach plakietke Pangramu
@@ -4570,7 +4574,10 @@ def wystaw_notke(tekst: str, wyslij: bool = False, typ: str = "",
                          styk=styk,
                          # DATA STRONY ZRODLOWEJ — swiezosc notki mierzona
                          # wprost, bez parowania z bankiem (27.09.2026).
-                         zrodlo_data=zrodlo_data)
+                         zrodlo_data=zrodlo_data,
+                         # RADAR, GLEBIA, ZRODLO, KONCOWKA (27.09.2026) —
+                         # pola pomiaru z `run.py`, bez dalszych parametrow.
+                         **(pomiar or {}))
         page.close()
         browser.close()
         p.stop()

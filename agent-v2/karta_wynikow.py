@@ -261,6 +261,79 @@ def odbior_po_stykach(statystyki: list[dict], dziennik: list[dict],
     return grupy
 
 
+def _odbior_grup(statystyki: list[dict], dziennik: list[dict], zrodla: list[dict],
+                 od: date, do: date, grupa) -> dict:
+    """Ta sama selekcja i miara co `odbior_po_stykach`, dowolny podzial notek.
+
+    `grupa(wpis_dziennika) -> str` nazywa grupe; pusty wpis (notka bez linii
+    w dzienniku) tez dostaje grupe, zeby nic nie znikalo w ciszy.
+    """
+    import statystyki as _st
+
+    wpis_po_id = {str(e.get("id")): e for e in dziennik
+                  if e.get("rodzaj") == "notka" and e.get("udane") and e.get("id")}
+    restacki = {str(e.get("id")) for e in dziennik
+                if e.get("rodzaj") == "restack" and e.get("id")}
+    zap = _st.zapisy_przypisane(zrodla)
+    przes_od, przes_do = od - timedelta(days=3), do - timedelta(days=3)
+    pomiary: dict[str, list] = defaultdict(list)
+    for s in statystyki:
+        if "wyswietlenia" not in s or s.get("rodzaj") != "notka":
+            continue
+        nid = str(s.get("id"))
+        if nid in restacki:
+            continue
+        wyst, zm = _czas(s.get("wystawione")), _czas(s.get("zmierzone"))
+        if not wyst or not zm or not _w_oknie(s.get("wystawione"), przes_od, przes_do):
+            continue
+        pomiary[nid].append((abs((zm - wyst).total_seconds() / 3600 - DOJRZALOSC_H), s))
+    grupy: dict[str, dict] = {}
+    for nid, v in pomiary.items():
+        if min(x[0] for x in v) > TOLERANCJA_H:
+            continue
+        s = min(v, key=lambda x: x[0])[1]
+        g = grupy.setdefault(grupa(wpis_po_id.get(nid) or {}),
+                             {"n": 0, "wyswietlenia": 0, "odwiedziny": 0, "zapisy": 0})
+        g["n"] += 1
+        g["wyswietlenia"] += int(s.get("wyswietlenia") or 0)
+        g["odwiedziny"] += int(s.get("odwiedziny_profilu")
+                               if s.get("odwiedziny_profilu") is not None
+                               else (s.get("interakcje") or {}).get("Profile visit", 0))
+        g["zapisy"] += zap.get(nid, 0)
+    for g in grupy.values():
+        g["wynik"] = _st.wynik_odbioru(g["wyswietlenia"], g["odwiedziny"], g["zapisy"])
+    return grupy
+
+
+# RADAR, KARTA GLEBI I KONCOWKA (27.09.2026) — czy radar wybiera to, co czytelnicy
+# przyjmuja, czy karta glebi podnosi odbior i czy notki przestaja konczyc sie
+# ocena materialu. Notki sprzed zmiany nie maja tych pol w dzienniku: `przed`.
+def _grupa_radaru(e: dict) -> str:
+    if "radar" not in e:
+        return "przed"
+    m = e.get("radar")
+    return "brak" if not isinstance(m, int) else ("czolo" if m <= 3 else "dalej")
+
+
+def _grupa_glebi(e: dict) -> str:
+    if "glebia" not in e:
+        return "przed"
+    return "z_karta" if (e.get("glebia") or e.get("glebia_odpowiedz")) else "bez_karty"
+
+
+def _grupa_koncowki(e: dict) -> str:
+    if "koncowka_ocena" not in e:
+        return "przed"
+    return "ocenia" if e.get("koncowka_ocena") else "konczy_mysl"
+
+
+def odbior_radar_glebia(statystyki: list[dict], dziennik: list[dict],
+                        zrodla: list[dict], od: date, do: date) -> dict:
+    return {nazwa: _odbior_grup(statystyki, dziennik, zrodla, od, do, fn)
+            for nazwa, fn in (("radar", _grupa_radaru), ("glebia", _grupa_glebi),
+                              ("koncowka", _grupa_koncowki))}
+
+
 def zapisy(zrodla: list[dict], dziennik: list[dict]) -> dict:
     """Zapisy z ostatniego odczytu Substacka (okno 30 dni) i przypisania do
     naszych tresci — ze wszystkich odczytow, maksimum na tresc."""
@@ -322,6 +395,9 @@ def karta(nazwa: str, dane: Path, od: date, do: date, wlasne: set[str]) -> dict:
         "odbior_po_stykach": odbior_po_stykach(
             _jsonl(dane / "statystyki.jsonl"), dziennik,
             _jsonl(dane / "zrodla.jsonl"), od, do),
+        "odbior_radar_glebia": odbior_radar_glebia(
+            _jsonl(dane / "statystyki.jsonl"), dziennik,
+            _jsonl(dane / "zrodla.jsonl"), od, do),
         "zapisy": zapisy(_jsonl(dane / "zrodla.jsonl"), dziennik),
         "koszt": koszt(dane / "agent-v2.db", od, do),
     }
@@ -341,6 +417,13 @@ def _wiersze(k: dict) -> list[tuple[str, str]]:
     def odbior(g):
         g = ps.get(g) or {}
         return f"{wart(g.get('wynik'))} ({g.get('n', 0)})"
+
+    rg = k.get("odbior_radar_glebia") or {}
+
+    def podzial(nazwa, grupy):
+        d = rg.get(nazwa) or {}
+        return " / ".join(f"{wart((d.get(g) or {}).get('wynik'))} ({(d.get(g) or {}).get('n', 0)})"
+                          for g in grupy)
 
     return [
         ("subskrybenci (zmiana)", f"{wart(w.get('subskrybenci'))} ({zmiana(w.get('przyrost_subskrybenci'))})"),
@@ -362,6 +445,13 @@ def _wiersze(k: dict) -> list[tuple[str, str]]:
         ("odbior 72 h: spoza branzy (n)", odbior("spoza_branzy")),
         ("odbior 72 h: branza (n)", odbior("branza")),
         ("odbior 72 h: przed E6 (n)", odbior("bez_styku")),
+        # Radar i karta glebi (27.09.2026), ta sama miara.
+        ("odbior 72 h: radar 1-3 / dalej / poza (n)",
+         podzial("radar", ("czolo", "dalej", "brak"))),
+        ("odbior 72 h: z karta glebi / bez (n)",
+         podzial("glebia", ("z_karta", "bez_karty"))),
+        ("odbior 72 h: koniec mysla / ocena materialu (n)",
+         podzial("koncowka", ("konczy_mysl", "ocenia"))),
         ("koszt USD (na dobe)", f"{ko.get('usd', '—')} ({ko.get('usd_na_dobe', '—')})"),
         ("najdrozsze etapy", ", ".join(f"{e} {v}" for e, v in ko.get("etapy", [])) or "—"),
         ("przebiegi", ", ".join(f"{s} {n}" for s, n in sorted(ko.get("przebiegi", {}).items())) or "—"),

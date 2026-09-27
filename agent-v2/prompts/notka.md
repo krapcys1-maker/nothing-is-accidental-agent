@@ -52,6 +52,12 @@ intent. Keep necessary uncertainty beside the claim it affects. Don't turn
 missing benchmarks into a closing paragraph when you made no speed or price
 claim. Leave internal research bookkeeping out of the public note.
 
+The evidence may carry `depth`: numbers, a surprising detail and the answer to
+a reader's first question, each quoted from the full source page and checked by
+our code. Use them. A real number or the answer the source gives beats calling
+something unknown. If an uncertainty still matters, keep it beside the claim it
+limits; don't make it the last thing the reader reads.
+
 For MYSL without factual material, write a clearly hypothetical question or
 editorial view. Don't invent an event or personal experience. If earlier notes
 are listed, choose another supported point instead of dressing up a repeat.

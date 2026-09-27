@@ -61,6 +61,8 @@ MODULY = [
     ("raport_statystyk.py", "te same dane w tabeli dla człowieka"),
     ("korpus_kanalow.py", "o czym mówi się w tym tygodniu — zaczyn tematów, nigdy źródło"),
     ("tresc_zrodel.py", "treść źródeł z korpusu pobrana za darmo — spiżarnia przed zakupami"),
+    ("radar.py", "radar ciekawości — świeże nagłówki ustawione od najciekawszej historii, warianty jednej sprawy razem"),
+    ("glebia.py", "karta głębi — liczby, dokument pierwotny i odpowiedź z pełnego tekstu źródła, każdy cytat sprawdzony kodem"),
     ("aktualne_modele.py", "jakie modele istnieją DZIŚ; pytane na żywo, nie z pamięci"),
     ("nowe_modele.py", "nowe modele wchodzą same: w tej samej rodzinie i dopiero po próbie"),
     ("model_registry.py", "rodzina modelu dla każdej roli i porównywanie wersji — wspólne dla `nowe_modele` i wczytania wyboru"),
