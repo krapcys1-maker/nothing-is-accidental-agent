@@ -2794,15 +2794,23 @@ def ramie(nazwa: str, miejsce: int, dzien: str | None = None) -> str:
     dziennika — a obie grupy dziela te same dni i ten sam trend zasiegu.
     Plan: `docs/POMIAR_I_EKSPERYMENTY_2026-09-27.md`.
     """
-    udzial = (getattr(config, "EKSPERYMENTY", None) or {}).get(nazwa)
-    if udzial is None:
+    ustaw = (getattr(config, "EKSPERYMENTY", None) or {}).get(nazwa)
+    if ustaw is None:
         return ""
     if dzien is None:
         from datetime import datetime as _dt, timezone as _tz
         dzien = _dt.now(_tz.utc).date().isoformat()
+    # OKNO DAT — eksperyment sam startuje i sam sie konczy (`config.EKSPERYMENTY`).
+    if isinstance(ustaw, dict):
+        if ((ustaw.get("od") and dzien < str(ustaw["od"]))
+                or (ustaw.get("do") and dzien > str(ustaw["do"]))):
+            return ""
+        udzial = float(ustaw.get("udzial", 0.5))
+    else:
+        udzial = float(ustaw)
     los = int(hashlib.sha256(("%s|%s|%d" % (nazwa, dzien, miejsce)).encode())
               .hexdigest()[:8], 16) / 0x100000000
-    return "on" if los < float(udzial) else "off"
+    return "on" if los < udzial else "off"
 
 
 RODZAJE_WNIOSKU = ("MECHANISM", "MONEY_OR_POWER", "NEXT", "PATTERN")

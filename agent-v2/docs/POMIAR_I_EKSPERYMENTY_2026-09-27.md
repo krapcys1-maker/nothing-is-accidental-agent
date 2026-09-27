@@ -115,13 +115,26 @@ poprawki (sformułowanie w prompcie, forma) rozstrzyga warstwa 1 plus strażnicy
 - **28.09–11.10 — zamrożenie potoku notek** (tylko naprawy). Zbieramy tło pod
   nowy system. Pierwsze przesłania ze śledztwa wychodzą 28–30.09.
 - **ok. 13.10** — decyzja E6 (tematy spoza branży), zaplanowana wcześniej.
-- **Pierwszy eksperyment przeplatany — do decyzji właściciela:** wniosek
-  70/30 przez 4 tygodnie. Daje ok. 84 notki (59 z wnioskiem, 25 bez) i wykrywa
-  różnicę rzędu ±45%.
-  - Dlaczego wniosek: to największa zmiana w pisaniu, jest tania, sędziowie
-    są za nim, a jego wpływ na zasięg jest nieznany.
-  - Cena tej wiedzy: 30% notek przez 4 tygodnie idzie bez wniosku.
-  - Włączenie: `EKSPERYMENTY = {"wniosek": 0.7}` w `config.py`.
+- **E10 — pierwszy eksperyment przeplatany, ZATWIERDZONY przez właściciela
+  27.09:** wniosek u 70% notek z banku, **28.09–25.10**. W `config.py` wpisane
+  z oknem dat, więc eksperyment sam startuje i sam się kończy.
+  - Dlaczego wniosek: to największa zmiana w pisaniu, jest tania, sędziowie są
+    za nim, a jego wpływ na zasięg jest nieznany.
+  - Próba: ok. 84 notki (59 z wnioskiem, 25 bez), wykrywa różnicę rzędu ±45%.
+    Notki z przesłania wniosku nie dostają i w eksperymencie nie biorą udziału.
+  - Miara decyzji: wyświetlenia po 72 h względem tła, ramię „on" do „off",
+    95% przedział.
+  - Miary poboczne: zaangażowanie i odbiór na 100 wyświetleń.
+  - Strażnicy: końcówka oceniająca, długość, obalone fakty, koszt.
+  - Reguła, zapisana przed startem:
+    - dolna granica > 1,0 — wygrana, wniosek zostaje dla wszystkich;
+    - dolna granica > 0,9 — bez szkody, wniosek zostaje (przemawia za nim jakość);
+    - górna granica < 1,0 — szkoda, wniosek wyłączamy i szukamy przyczyny
+      w strażnikach;
+    - poniżej planowanej próby — nie rozstrzygamy.
+  - Ocena ok. **29.10** (ostatnie notki muszą dojrzeć 72 h):
+    `python agent-v2/eksperymenty.py --pole eksperyment:wniosek --od 2026-09-28`.
+  - Cena tej wiedzy: 30% notek z banku przez 4 tygodnie idzie bez wniosku.
 - **ok. 25.10 — ocena E8/E9:**
   - przesłania kontra zwykłe notki (`--pole przeslanie`),
   - artykuły ze śledztw (zapisy przypisane, wyświetlenia),

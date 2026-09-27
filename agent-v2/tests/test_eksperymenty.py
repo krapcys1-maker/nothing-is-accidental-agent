@@ -56,6 +56,15 @@ sprawdz("udzial ramienia on zgodny z konfiguracja (0,7 +- 0,03)", abs(_udzial - 
 sprawdz("KONTRDOWOD: rozne dni daja rozne przydzialy",
         len({tuple(stages.ramie("wniosek", m, "2026-10-%02d" % d) for m in range(5)) for d in range(1, 15)}) > 3)
 sprawdz("inny eksperyment nie trwa, mimo ze trwa wniosek", stages.ramie("glebia", 0, "2026-10-01") == "")
+config.EKSPERYMENTY = {"wniosek": {"udzial": 0.7, "od": "2026-09-28", "do": "2026-10-25"}}
+sprawdz("KONTRDOWOD: przed startem okna eksperyment nie trwa",
+        stages.ramie("wniosek", 0, "2026-09-27") == "")
+sprawdz("KONTRDOWOD: po koncu okna eksperyment sam sie konczy",
+        all(stages.ramie("wniosek", m, "2026-10-26") == "" for m in range(10)))
+_w_oknie = [stages.ramie("wniosek", m, "2026-%s" % d) for d in ("09-28", "10-10", "10-25") for m in range(40)]
+sprawdz("w oknie (takze pierwszy i ostatni dzien) notki trafiaja do on/off, ok. 70% on",
+        set(_w_oknie) == {"on", "off"} and 0.55 < _w_oknie.count("on") / len(_w_oknie) < 0.85,
+        _w_oknie.count("on") / len(_w_oknie))
 config.EKSPERYMENTY = _stare
 
 print()
@@ -208,7 +217,9 @@ sprawdz("wersja kodu to skrot commita albo pusto (bez gita)",
 sprawdz("notki_dnia: ramie wniosku zerowane przy kazdej notce i zapisywane w wyniku",
         '_ramie_wniosku = ""' in _st and 'wynik["eksperymenty"]' in _st
         and _st.index('_ramie_wniosku = ""') < _st.index('_ramie_wniosku = ramie("wniosek", od + nr)'))
-sprawdz("domyslnie zaden eksperyment nie trwa", config.EKSPERYMENTY == {}, config.EKSPERYMENTY)
+sprawdz("E10 zatwierdzone przez wlasciciela 27.09: wniosek 70/30, 28.09-25.10, jedyny trwajacy",
+        config.EKSPERYMENTY == {"wniosek": {"udzial": 0.7, "od": "2026-09-28", "do": "2026-10-25"}},
+        config.EKSPERYMENTY)
 
 print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))

@@ -131,7 +131,19 @@ KWOTA_SPOZA_BRANZY = True
 # ok. 29 notek na ramie, o 25% — ok. 95. Plan i rejestr:
 # `agent-v2/docs/POMIAR_I_EKSPERYMENTY_2026-09-27.md`.
 # Obslugiwane: "wniosek" (etap `stages.wniosek`).
-EKSPERYMENTY: dict[str, float] = {}
+#
+# Wartosc: udzial (0-1) albo {"udzial", "od", "do"} — z oknem dat eksperyment
+# sam startuje i sam sie konczy. Bez konca 30% notek szloby bez wniosku az do
+# czasu, gdy ktos przypomni sobie o tym wpisie.
+#
+# E10 — ZATWIERDZONE PRZEZ WLASCICIELA 27.09.2026: wniosek u 70% notek z banku,
+# 28.09-25.10 (ok. 84 notki: 59 z wnioskiem, 25 bez; wykrywa roznice rzedu
+# +-45% zasiegu wzgledem tla). Ocena ok. 29.10, gdy ostatnie notki dojrzeja
+# (72 h): `python agent-v2/eksperymenty.py --pole eksperyment:wniosek`.
+# Regula decyzji zapisana PRZED startem w dokumencie wyzej.
+EKSPERYMENTY: dict = {
+    "wniosek": {"udzial": 0.7, "od": "2026-09-28", "do": "2026-10-25"},
+}
 
 # ILE RAZY ODPISUJEMY W JEDNEJ ROZMOWIE. Rozmowa to galaz komentarzy: ten,
 # ktory ja zaczal, i wszystko pod nim. Liczy `browser.nasze_odpowiedzi_w_rozmowie`
