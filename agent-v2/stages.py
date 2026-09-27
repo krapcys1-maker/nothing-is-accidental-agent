@@ -6052,6 +6052,22 @@ def _liczby(tekst: str) -> set[str]:
     return set(re.findall(r"\d+(?:[.,]\d+)?", str(tekst or "")))
 
 
+# ZDANIE O NASZEJ KUCHNI, NIE O SWIECIE. `pisarz.md` zabrania pokazywac czytelnikowi
+# warsztat („the card", „the prompt"), a drugi artykul ze sledztwa 27.09 napisal
+# i tak „No excerpt I have seen gives the company's reason". Prosba w prompcie nie
+# jest bramka — takie zdania ida do tej samej poprawki co zdania bez pokrycia.
+O_WARSZTACIE = re.compile(
+    r"\b(excerpts?|evidence card|the card|our (material|record|sources|research)|"
+    r"the (material|record) (I|we) (have|saw|hold)|(I|we) have seen)\b", re.IGNORECASE)
+
+
+def zdania_o_warsztacie(body: str) -> list[dict[str, str]]:
+    """Zdania artykulu, ktore mowia o naszym researchu zamiast o temacie."""
+    zdania = re.split(r"(?<=[.!?])\s+", " ".join(str(body or "").split()))
+    return [{"text": z, "why": "mentions our research process instead of the subject"}
+            for z in zdania if O_WARSZTACIE.search(z)]
+
+
 def popraw_bez_pokrycia(conn: sqlite3.Connection, run_id: int, body: str,
                         card: dict[str, Any], bez_pokrycia: list[dict[str, Any]]
                         ) -> tuple[str, list[str]]:

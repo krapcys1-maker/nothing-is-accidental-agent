@@ -184,6 +184,15 @@ try:
     nowy, log = stages.popraw_bez_pokrycia(sqlite3.connect(":memory:"), None, BODY, KARTA,
                                            [{"text": "Every request they sent went out from systems the company controls."}])
     sprawdz("awaria — tekst bez zmian", nowy == BODY, log)
+    # Zywy test 27.09: No excerpt I have seen gives the company's reason.
+    _warsztat = [z["text"] for z in stages.zdania_o_warsztacie(
+        "No excerpt I have seen gives the company's reason for the gap. The card says little. "
+        "Our reading is that OpenAI waited. The agent kept going.")]
+    sprawdz("zdania o naszej kuchni wylapane",
+            _warsztat == ["No excerpt I have seen gives the company's reason for the gap.",
+                          "The card says little."], _warsztat)
+    sprawdz("KONTRDOWOD: our reading (podpis hipotezy) to nie kuchnia",
+            not any("Our reading" in z for z in _warsztat))
 
     print()
     print("=== 4. TRZY PRZESLANIA ===")

@@ -141,7 +141,17 @@
 {{"text": "the full corrected text", "co_zmienione": "one line: what you changed and what evidence you changed it to"}}
 ```
 
-#### `notka.md` (105 wierszy)
+#### `naprawa_artykulu.md` (23 wierszy)
+
+**Pola wejściowe:** `dowody`, `zdania`
+
+**Kontrakt wyjścia:**
+
+```json
+{{"poprawki": [{{"nr": <sentence number>, "nowe": "<replacement sentence, or empty to delete>"}}]}}
+```
+
+#### `notka.md` (112 wierszy)
 
 **Pola wejściowe:** `evidence`, `form_brief`, `language`, `marka`, `max_words`, `min_words`, `note_form`, `note_type`, `ostatnie_otwarcia_json`, `ostatnie_zakonczenia_json`, `rozbior`, `type_brief`
 
@@ -149,6 +159,16 @@
 
 ```json
 {{"note": "<the note>", "words": <integer>, "fact_used": "<the fact this rests on, empty for a reflection without factual claims>", "source_url": "<supplied source URL, or empty>"}}
+```
+
+#### `nowosc.md` (24 wierszy)
+
+**Pola wejściowe:** `karta`, `naglowki`
+
+**Kontrakt wyjścia:**
+
+```json
+{{"jest": true|false, "ustalenie": "<the finding in one plain sentence, or empty>", "twierdzenia": [<numbers of the confirmed claims that together establish it>], "dlaczego_nie_w_jednym": "<why no single report states it, or why there is no finding>"}}
 ```
 
 #### `odpowiedz.md` (47 wierszy)
@@ -171,7 +191,7 @@
 {{"grupy": [{{"zostaje": <id>, "scalone": [<id>, ...], "dlaczego": "<one clause: what makes these the same story>"}}]}}
 ```
 
-#### `pisarz.md` (118 wierszy)
+#### `pisarz.md` (130 wierszy)
 
 **Pola wejściowe:** `card_json`, `language`, `marka`, `max_words`, `min_words`, `poprzednie_uwagi`, `style_examples`, `style_negative`, `style_positive`, `target_words`
 
@@ -193,6 +213,16 @@
 
 ```json
 {{"powtorka_nr": <number of the bank fact it repeats, or 0 if none>, "powod": "<one short sentence>"}}
+```
+
+#### `przeslania.md` (38 wierszy)
+
+**Pola wejściowe:** `hipotezy`, `karta`, `marka`
+
+**Kontrakt wyjścia:**
+
+```json
+{{"przeslania": [{{"rodzaj": "USTALENIE"|"MOTYW"|"ZA_DWA_LATA", "przeslanie": "<the one-sentence message of this note>", "tresc": "<3-5 sentences of reasoning the writer should convey, in plain words>", "fakty": [<claim numbers>], "za": "<the evidence for this reading>", "przeciw": "<the strongest evidence against it, or the main uncertainty>", "co_obali": "<what would prove this wrong>", "pominac": false, "powod": ""}}]}}
 ```
 
 #### `radar.md` (38 wierszy)

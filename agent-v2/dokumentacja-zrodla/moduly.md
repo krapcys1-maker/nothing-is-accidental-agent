@@ -1,7 +1,7 @@
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-3215 wierszy, 27 funkcji na poziomie modułu, 1 klas
+3218 wierszy, 27 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -35,7 +35,7 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-10506 wierszy, 168 funkcji na poziomie modułu, 0 klas
+10633 wierszy, 171 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -146,6 +146,9 @@
 | `_status_twierdzenia(c)` *(wewn.)* | Status twierdzenia, znormalizowany. NIEZNANA ETYKIETA ZNACZY `unverified`. |
 | `_rekord_do_weryfikacji(note_type, evidence)` *(wewn.)* | Kontekst dla weryfikatora: rekord, z ktorego notka powstala. |
 | `karta_do_weryfikacji(tytul, card)` | To samo, co `_rekord_do_weryfikacji`, ale dla karty artykulu. |
+| `_liczby(tekst)` *(wewn.)* | — |
+| `zdania_o_warsztacie(body)` | Zdania artykulu, ktore mowia o naszym researchu zamiast o temacie. |
+| `popraw_bez_pokrycia(conn, run_id, body, card, bez_pokrycia)` | (poprawiony tekst, log). Nigdy nie podnosi wyjatku — awaria = tekst jak byl. |
 | `zweryfikuj(conn, run_id, tekst, kontekst, szukaj)` | Sprawdza to, co model NAPISAŁ — nie to, czego szukał przed pisaniem. |
 | `_zapora_notki(tekst)` *(wewn.)* | Pusty napis, gdy tekst notki przechodzi zapory. Inaczej powod. |
 | `_zapora_komentarza(tekst)` *(wewn.)* | To samo dla komentarza — ale komentarz ma zapore o jedna wiecej. |
@@ -459,7 +462,7 @@
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-3678 wierszy, 43 funkcji na poziomie modułu, 0 klas
+3703 wierszy, 43 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -564,7 +567,7 @@
 
 ### `korpus_kanalow.py` — o czym mówi się w tym tygodniu — zaczyn tematów, nigdy źródło
 
-1042 wierszy, 23 funkcji na poziomie modułu, 1 klas
+1138 wierszy, 25 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -580,6 +583,8 @@
 | `klucze_wersji(tekst, tylko_z_rodzina)` | Klucze wersji z tekstu: „gemini 3.8", „gpt-6" albo sam „3.8", gdy rodziny brak. |
 | `pamiec_wersji(korpus, dodatkowe)` | {klucz wersji: najwczesniejszy dzien, w ktorym go widzielismy}. Trwala. |
 | `wielkie_wydarzenia(korpus, min_kanalow, min_wspolnych, swiezosc_dni, min_kanalow_premiery, wersje_widziane)` | Rzeczy, o ktorych mowi NARAZ kilka roznych kanalow. |
+| `_zapisz_zdrowie(stan)` *(wewn.)* | Dopisuje wynik tego pobrania do stanu zrodel. Nigdy nie podnosi wyjatku. |
+| `zle_zrodla()` | (zrodlo, co z nim nie tak) — nie odpowiada od kilku pobran z rzedu albo |
 | `_plik_przerw()` *(wewn.)* | — |
 | `_wczytaj_przerwy()` *(wewn.)* | — |
 | `_zapisz_przerwy(dane)` *(wewn.)* | — |
@@ -707,7 +712,7 @@
 
 ### `karta_wynikow.py` — te same liczby dla poligonu i produkcji co tydzień — jeden przyrząd, jedne definicje, tylko odczyt
 
-490 wierszy, 21 funkcji na poziomie modułu, 0 klas
+516 wierszy, 22 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -727,6 +732,7 @@
 | `_grupa_glebi(e)` *(wewn.)* | — |
 | `_grupa_koncowki(e)` *(wewn.)* | — |
 | `odbior_radar_glebia(statystyki, dziennik, zrodla, od, do)` | — |
+| `zrodla_z_problemem(dane, dni_bez_wpisow, porazek)` | Zrodla, ktore nie odpowiadaja albo od dawna nic nie maja (27.09.2026) — |
 | `zapisy(zrodla, dziennik)` | Zapisy z ostatniego odczytu Substacka (okno 30 dni) i przypisania do |
 | `koszt(baza, od, do)` | Koszt przebiegow produkcyjnych w oknie: razem, na dobe i trzy etapy. |
 | `karta(nazwa, dane, od, do, wlasne)` | — |
@@ -751,7 +757,7 @@
 
 ### `artykul_z_puli.py` — artykuł bierze temat z tej samej puli, co notki
 
-1546 wierszy, 14 funkcji na poziomie modułu, 0 klas
+1722 wierszy, 15 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -763,6 +769,7 @@
 | `_zrob_miejsce_na_fakt(card)` *(wewn.)* | Robi miejsce na wstrzykniete twierdzenie, nie tracac zadnego ZRODLA. |
 | `_rozszerz_najstarsze(card, data_faktu)` *(wewn.)* | Data wstrzyknietego zrodla wazy — ale TYLKO w strone ostrzezenia. |
 | `_przebieg(conn, run_id)` *(wewn.)* | — |
+| `_przebieg_sledztwa(conn, run_id)` *(wewn.)* | Sledztwo: historia z radaru -> pytania -> zrodla -> badanie -> karta -> |
 | `_katalog_ratunku()` *(wewn.)* | Katalog OBOK `ARTICLES_DIR`, nigdy w nim. |
 | `_opublikuj(sciezka)` *(wewn.)* | Wystawia gotowy artykul, probujac wiecej niz raz. NIE JEST BRAMKA. |
 | `_ramka(powod, brak, katalog)` *(wewn.)* | Ostrzezenie, ktore idzie na POCZATEK `.md`, a nie tylko obok niego. |

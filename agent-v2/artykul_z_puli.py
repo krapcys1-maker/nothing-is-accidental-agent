@@ -1563,9 +1563,10 @@ def _napisz_i_zapisz(conn, run_id, brief, card, evidence=None) -> int:
     # ZDANIA BEZ POKRYCIA POPRAWIANE (27.09.2026) — patrz
     # `stages.popraw_bez_pokrycia`. Artykul wychodzi zawsze, jak dotad; zmienia
     # sie tylko to, ze wskazane zdanie nie idzie do czytelnika w ciemno.
-    if bez_pokrycia:
+    _do_poprawy = list(bez_pokrycia) + stages.zdania_o_warsztacie(draft["body"])
+    if _do_poprawy:
         draft["body"], _poprawki = stages.popraw_bez_pokrycia(
-            conn, run_id, draft["body"], card, bez_pokrycia)
+            conn, run_id, draft["body"], card, _do_poprawy)
         for _p in _poprawki:
             print("   [poprawka] %s" % _p, flush=True)
             uwagi.append({"gate": "POPRAWKA", "detail": _p})
