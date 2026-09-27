@@ -231,6 +231,13 @@ print()
 print("=== 5. KOLEJKA: JEDNO PRZESLANIE NA DOBE ===")
 sprawdz("pusta kolejka — nic", sledztwo.wez_przeslanie() is None)
 sledztwo.dodaj_do_kolejki(pr, DUZA, KARTA, run_id=7)
+# Sledztwo bierze czolo radaru, ktore tego samego dnia poszlo juz zwykla notka
+# (27.09: 11:22 notka o Medicare, 13:11 sledztwo o tym samym).
+sprawdz("KONTRDOWOD: w dniu sledztwa przeslanie czeka do jutra", sledztwo.wez_przeslanie() is None)
+_kol = json.loads((config.DATA_DIR / sledztwo.PLIK_KOLEJKI).read_text(encoding="utf-8"))
+for p in _kol:
+    p["kiedy"] = (TERAZ - timedelta(days=1)).isoformat()
+(config.DATA_DIR / sledztwo.PLIK_KOLEJKI).write_text(json.dumps(_kol), encoding="utf-8")
 p1 = sledztwo.wez_przeslanie()
 sprawdz("pierwsze idzie ustalenie", (p1 or {}).get("rodzaj") == "USTALENIE", p1)
 fakt, material = sledztwo.material_notki(p1)

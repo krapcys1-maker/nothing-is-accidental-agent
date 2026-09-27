@@ -462,13 +462,22 @@ def wez_przeslanie() -> dict[str, Any] | None:
 
     Nie zmienia kolejki: przeslanie jest zuzyte dopiero wtedy, gdy notka z nim
     wyszla (dziennik ma `przeslanie_id`). Nieudana publikacja nic nie traci.
+
+    PRZESLANIE DOJRZEWA DO NASTEPNEGO DNIA. Sledztwo bierze czolo radaru, a to
+    samo czolo karmi bank: 27.09.2026 notka 11:22 poszla o agencie OpenAI
+    w australijskim Medicare, a podglad pokazal, ze sledztwo 13:11 wybierze te
+    sama historie (10 zrodel z 7 serwisow). Bez tej bramki przebieg 17:06 dalby
+    drugi tekst o tym samym jeszcze tego dnia. Od jutra przeslanie idzie
+    pierwsze w przebiegu, a zwykle notki omijaja jego historie (`juz_o_tym`).
     """
     wydane, dzisiaj = _wydane_przeslania()
     if dzisiaj:
         return None
-    teraz = _teraz().isoformat()
-    czekaja = [p for p in _kolejka() if str(p.get("wazny_do") or "") >= teraz
-               and str(p.get("id")) not in wydane]
+    teraz = _teraz()
+    dzis = teraz.date().isoformat()
+    czekaja = [p for p in _kolejka() if str(p.get("wazny_do") or "") >= teraz.isoformat()
+               and str(p.get("id")) not in wydane
+               and str(p.get("kiedy") or "")[:10] < dzis]
     if not czekaja:
         return None
     czekaja.sort(key=lambda p: (str(p.get("kiedy") or ""), int(p.get("kolejnosc") or 0)))
