@@ -33,6 +33,29 @@ Ten sam odczyt, nowym kodem (`robocze/spizarnia_po.py`, zero wywołań modelu):
   produkcyjny, który dobierze bank (linie `[spizarnia]`, `[ciekawostki] styk:`
   i `[kwota]` w logu).
 
+## Testy na żywo po wdrożeniu (26–27.09)
+
+- **26.09 19:35, przebieg produkcyjny:** spiżarnia 8 tekstów z 8 źródeł, 2 branżowe;
+  skaut oddał 7 faktów, 6 spoza branży, wszystkie ze stykiem dopasowanym po adresie;
+  5 weszło do banku ze stykiem; notka z 19:38 ma w dzienniku `styk: branza`.
+- **Błąd złapany tym przebiegiem:** notka poszła prosto ze świeżych faktów skauta,
+  a kwota stała tylko w `wez_kandydatow` — wyszła notka o Gemini. Poprawione
+  (`wybierz_material(kwota=...)`, commit `7e7f76b`).
+- **Drugi błąd, zgłoszony przez właściciela:** wykrywacz ogłosił „PREMIERA 3.8”
+  dwadzieścia dni po premierze Gemini 3.8 (6.09). Poprawione pamięcią wersji
+  (`korpus_kanalow.pamiec_wersji`, `6d28854` i `e3573e2`). Na żywo 27.09: stary
+  kod nadal widział „PREMIERA 3.8”, nowy widzi tylko zwykłe fale tematów.
+- **27.09 04:25, przebieg testowy na produkcyjnym banku i prawdziwych modelach,
+  bez publikacji (poza godzinami czytelników):**
+  `[kwota] dzis jeszcze nic spoza branzy — pierwszy idzie fakt ze stykiem szkody`,
+  `[kwota] notka spoza branzy (szkody)`; notka CIEKAWOSTKA o agencie OpenAI
+  w portalu statystyk Medicare (źródło: AI Incident Database), bezpieczna do
+  publikacji; styk do dziennika: `szkody`. Bank przywrócony po teście.
+- Uwaga poboczna z tego testu: `zwroc_kandydatow` nie zdejmuje `uzyty_kiedy`
+  z faktów, które zostają „nowe” z powodu niewykorzystanych kątów — takie fakty
+  liczą się potem jako „wzięte dziś” przy szukaniu bliźniaków. Stare zachowanie,
+  nie zmieniane.
+
 ## Źródła o ludziach — sprawdzone z serwera, nie z wyszukiwarki
 
 | źródło | styk | wpisy o AI z 30 dni | decyzja |
