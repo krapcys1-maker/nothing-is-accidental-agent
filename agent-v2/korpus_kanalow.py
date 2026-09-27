@@ -117,7 +117,8 @@ ZRODLA = {
     "Microsoft Res":   "https://www.microsoft.com/en-us/research/feed/",
     "PyTorch":         "https://pytorch.org/blog/feed.xml",
     "Ollama":          "https://github.com/ollama/ollama/releases.atom",
-    "llama.cpp":       "https://github.com/ggml-org/llama.cpp/releases.atom",
+    # llama.cpp USUNIETE 27.09.2026: tytuly wydan to numery kompilacji („b6543"),
+    # `przetworz` odrzucal kazdy jako krotszy niz cztery slowa — zero wpisow.
     "Together AI":     "https://www.together.ai/blog/rss.xml",
     "Awarie OpenAI":   "https://status.openai.com/history.rss",
     # WYPADKI I SZKODY — material, ktorego zaden blog producenta nie da.
@@ -145,13 +146,9 @@ ZRODLA = {
     # nazwie zrodla, wiec dwa rozne feedy pod jedna nazwa byly by nierozroznialne
     # w logu i w polu `kanal_zrodlowy` przy fakcie.
     "MLST podcast":    "https://anchor.fm/s/1e4a0eac/podcast/rss",
-    # Biuletyn i strona autora — ten sam czlowiek, tresc pokrewna, nie
-    # identyczna z filmami. Nazwa feedu inna niz nazwa kanalu i to jest w
-    # porzadku: „Forward Future" to biuletyn Matthew Bermana, a strona
-    # Károly'ego Zsolnai-Fehéra to zaplecze Two Minute Papers.
-    "Forward Future":  "https://matthewberman.substack.com/feed",
-    "Dr Waku pisany":  "https://drwaku.substack.com/feed",
-    "Zsolnai-Fehér":   "https://users.cg.tuwien.ac.at/zsolnai/feed/",
+    # USUNIETE 27.09.2026 (audyt zrodel, `robocze/audyt_zrodel.py`): „Forward
+    # Future" (ostatni wpis 2024-02), „Dr Waku pisany" (2025-06) i
+    # „Zsolnai-Fehér" (2019-06) — martwe feedy, ktore tylko wydluzaly przebieg.
     # ODRZUCONE PRZY TEJ SAMEJ PROBIE, i warto zapisac dlaczego:
     #   * `aiexplained.substack.com` — HTTP 200, osiem wpisow, TYTUL FEEDU
     #     „Discover_AI". To CUDZY Substack, nie kanal AI Explained. Kontrola
@@ -209,6 +206,44 @@ ZRODLA_LUDZIE = {
     "Rest of World":  "https://restofworld.org/feed/latest",
     "arXiv cs.CY":    "https://rss.arxiv.org/rss/cs.CY",
     "arXiv cs.HC":    "https://rss.arxiv.org/rss/cs.HC",
+    # SERWISY, KTORE CZYTAJA LUDZIE — 27.09.2026, wlasciciel: „sprawdz tez
+    # zrodla, chce pisac ciekawe notki".
+    #
+    # ZMIERZONE tego ranka (`robocze/audyt_zrodel.py`): notki z blogow
+    # laboratoriow mialy najslabszy odbior (latent.space 3 notki po 10
+    # wyswietlen i 0 odwiedzin profilu, pytorch.org 0), a najlepsze notki konta
+    # dotyczyly pieniedzy, praw i codziennego doswiadczenia czytelnika.
+    # Najwieksza historia dnia (OpenAI wstrzymuje trening najmocniejszych
+    # modeli; agenci OpenAI na stronach rzadu USA) byla w The Verge, BBC i NPR,
+    # a w naszym korpusie — tylko z jednej strony.
+    #
+    # SPRAWDZONE Z SERWERA (`robocze/sonda_nowych_zrodel.py`): feed odpowiada,
+    # wpisy o AI z ostatnich 3 dni, tekst najnowszego da sie pobrac:
+    #     The Verge AI 9, BBC Tech 6 (z 13), NPR Tech 4 (z 10), Ars Technica
+    #     AI 6, The Conversation AI 12, TechXplore AI 14, Wired AI 5, MIT
+    #     Technology Review AI 1 (4 w tygodniu), Retraction Watch 2, Futurism
+    #     AI 9 — wszystkie „tekst: OK" (6-12 tys. znakow).
+    # ODRZUCONE przy tej samej probie: TechCrunch AI (15 w 3 dni, ale glownie
+    # rundy finansowania — zajelyby oba miejsca branzy w spizarni), Guardian
+    # (404), Nieman Lab i Stanford HAI (nieczytelny XML), ProPublica, Quanta
+    # i Our World in Data (0 o AI), The Markup, AI Snake Oil, One Useful Thing,
+    # Understanding AI i Platformer (0 wpisow z 7 dni), Techdirt (glownie
+    # felietony prawne).
+    #
+    # Wszystkie przechodza `FILTR_O_AI` (jak reszta tej tabeli), a styk
+    # dostaja z TYTULU — patrz `STYK_Z_TYTULU`.
+    "The Verge AI":   "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml",
+    "BBC Tech":       "https://feeds.bbci.co.uk/news/technology/rss.xml",
+    "NPR Tech":       "https://feeds.npr.org/1019/rss.xml",
+    "Ars Technica AI": "https://arstechnica.com/ai/feed/",
+    "The Conversation AI": "https://theconversation.com/us/topics/"
+                           "artificial-intelligence-ai-90/articles.atom",
+    "TechXplore AI":  "https://techxplore.com/rss-feed/machine-learning-ai-news/",
+    "Wired AI":       "https://www.wired.com/feed/tag/ai/latest/rss",
+    "MIT Tech Review AI": "https://www.technologyreview.com/topic/"
+                          "artificial-intelligence/feed",
+    "Retraction Watch": "https://retractionwatch.com/feed/",
+    "Futurism AI":    "https://futurism.com/categories/ai-artificial-intelligence/feed",
 }
 
 # STYK ZRODLA — gdzie ludzie spotykaja to, o czym zrodlo pisze. NIE PYTAMY
@@ -226,7 +261,17 @@ STYK_ZRODLA = {
 # wartosc tutaj. Rest of World pisze w tym miesiacu glownie o wyscigu z Chinami,
 # a to jest branza, nie praca; arXiv cs.CY i cs.HC to badania o ludziach.
 STYK_Z_TYTULU = {"Rest of World": "branza", "404 Media": "codziennosc",
-                 "arXiv cs.CY": "ludzie", "arXiv cs.HC": "ludzie"}
+                 "arXiv cs.CY": "ludzie", "arXiv cs.HC": "ludzie",
+                 # Serwisy ogolne (27.09.2026) pisza i o branzy, i o ludziach:
+                 # bez slowa z mapy tytul zostaje branza, zeby kwota spoza
+                 # branzy (E6) nie liczyla premiery modelu jako „codziennosci".
+                 "The Verge AI": "branza", "BBC Tech": "branza",
+                 "NPR Tech": "branza", "Ars Technica AI": "branza",
+                 "TechXplore AI": "branza", "Wired AI": "branza",
+                 "MIT Tech Review AI": "branza", "Futurism AI": "branza",
+                 # Te dwa pisza z definicji o ludziach i instytucjach: badacze
+                 # o skutkach AI i uczciwosc nauki.
+                 "The Conversation AI": "ludzie", "Retraction Watch": "ludzie"}
 # Kolejnosc ma znaczenie: pierwsze trafienie wygrywa, a szkola i zdrowie sa
 # wezsze niz praca czy prawo.
 MAPA_STYKU = (

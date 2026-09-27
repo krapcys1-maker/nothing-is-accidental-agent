@@ -255,5 +255,22 @@ sprawdz("browser.py zapisuje ja w obu wpisach dziennika notki",
         _kod("agent-v2/browser.py").count("zrodlo_data=zrodlo_data") == 2)
 
 print()
+print("=== 7. ZRODLA PO AUDYCIE 27.09 ===")
+NOWE = ("The Verge AI", "BBC Tech", "NPR Tech", "Ars Technica AI", "The Conversation AI",
+        "TechXplore AI", "Wired AI", "MIT Tech Review AI", "Retraction Watch", "Futurism AI")
+sprawdz("serwisy czytane przez ludzi w korpusie", all(n in kk.ZRODLA_LUDZIE for n in NOWE),
+        [n for n in NOWE if n not in kk.ZRODLA_LUDZIE])
+sprawdz("kazdy przechodzi filtr o AI", all(n in kk.FILTR_O_AI for n in NOWE))
+sprawdz("kazdy ma styk z tytulu", all(n in kk.STYK_Z_TYTULU for n in NOWE))
+sprawdz("premiera modelu z serwisu ogolnego to branza, nie codziennosc",
+        kk.styk_wpisu("The Verge AI", "OpenAI pauses training of its most capable models")
+        == "branza")
+sprawdz("KONTRDOWOD: tytul o szkole z serwisu ogolnego to szkola",
+        kk.styk_wpisu("BBC Tech", "AI tutors arrive in primary schools") == "szkola")
+MARTWE = ("Forward Future", "Dr Waku pisany", "Zsolnai-Fehér", "llama.cpp")
+sprawdz("martwe feedy usuniete",
+        not any(n in kk.ZRODLA or n in kk.ZRODLA_LUDZIE for n in MARTWE))
+
+print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))
 sys.exit(1 if oblane else 0)
