@@ -1,11 +1,10 @@
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-3245 wierszy, 28 funkcji na poziomie modułu, 1 klas
+3225 wierszy, 27 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
-| `_wersja_kodu()` *(wewn.)* | Skrot commita, z ktorego dziala przebieg — albo pusto, gdy gita nie ma. |
 | `_utf8_stdout()` *(wewn.)* | Konsola Windows domyślnie cp1252 i wywala się na polskich znakach. |
 | `cached(stage, produce, use_cache)` | Zapisuje wynik etapu i oddaje go z dysku zamiast płacić drugi raz. |
 | `odmow_publikacji_z_kopii(wyslij)` | Kopia testowa nie ma prawa nic opublikowac. Nigdy. |
@@ -36,7 +35,7 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-10760 wierszy, 173 funkcji na poziomie modułu, 0 klas
+10782 wierszy, 174 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -91,6 +90,7 @@
 | `ostatnie_otwarcia(rodzaj, ile)` | Pierwsze slowa ostatnich notek — zeby kolejna nie zaczela sie tak samo. |
 | `ostatnie_zakonczenia(rodzaj, ile)` | Ostatnie zdania ostatnich notek — zeby kolejna nie konczyla sie tak samo. |
 | `rozbior(conn, run_id, evidence)` | Przepytanie materialu, ZANIM powstanie notka. |
+| `_wersja_kodu()` *(wewn.)* | Skrot commita, z ktorego dziala przebieg — albo pusto, gdy gita nie ma. |
 | `ramie(nazwa, miejsce, dzien)` | Ramie notki w eksperymencie przeplatanym: "on", "off" albo "" (nie trwa). |
 | `wniosek(conn, run_id, evidence)` | NIESZTANDAROWY WNIOSEK przed pisaniem — albo `{}`, gdy go nie ma. |
 | `wiek_zrodla_w_dniach(data_zrodla, teraz)` | Ile dni ma zrodlo. None, gdy daty nie da sie odczytac. |

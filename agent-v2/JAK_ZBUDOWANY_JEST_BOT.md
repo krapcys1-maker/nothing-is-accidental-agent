@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **35 plików**, 39 421 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **35 plików**, 39 423 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -114,7 +114,7 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
 się testować bez przeglądarki i bez pieniędzy**. 194 zestawów
-testów, 4844 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+testów, 4845 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -143,11 +143,10 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-3245 wierszy, 28 funkcji na poziomie modułu, 1 klas
+3225 wierszy, 27 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
-| `_wersja_kodu()` *(wewn.)* | Skrot commita, z ktorego dziala przebieg — albo pusto, gdy gita nie ma. |
 | `_utf8_stdout()` *(wewn.)* | Konsola Windows domyślnie cp1252 i wywala się na polskich znakach. |
 | `cached(stage, produce, use_cache)` | Zapisuje wynik etapu i oddaje go z dysku zamiast płacić drugi raz. |
 | `odmow_publikacji_z_kopii(wyslij)` | Kopia testowa nie ma prawa nic opublikowac. Nigdy. |
@@ -178,7 +177,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-10760 wierszy, 173 funkcji na poziomie modułu, 0 klas
+10782 wierszy, 174 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -233,6 +232,7 @@ wiec nie da sie go rozjechac z kodem.
 | `ostatnie_otwarcia(rodzaj, ile)` | Pierwsze slowa ostatnich notek — zeby kolejna nie zaczela sie tak samo. |
 | `ostatnie_zakonczenia(rodzaj, ile)` | Ostatnie zdania ostatnich notek — zeby kolejna nie konczyla sie tak samo. |
 | `rozbior(conn, run_id, evidence)` | Przepytanie materialu, ZANIM powstanie notka. |
+| `_wersja_kodu()` *(wewn.)* | Skrot commita, z ktorego dziala przebieg — albo pusto, gdy gita nie ma. |
 | `ramie(nazwa, miejsce, dzien)` | Ramie notki w eksperymencie przeplatanym: "on", "off" albo "" (nie trwa). |
 | `wniosek(conn, run_id, evidence)` | NIESZTANDAROWY WNIOSEK przed pisaniem — albo `{}`, gdy go nie ma. |
 | `wiek_zrodla_w_dniach(data_zrodla, teraz)` | Ile dni ma zrodlo. None, gdy daty nie da sie odczytac. |

@@ -195,8 +195,16 @@ def _kod(sciezka):
 
 
 _run, _st = _kod("agent-v2/run.py"), _kod("agent-v2/stages.py")
-sprawdz("run.py zapisuje wersje kodu i ramiona przy notce",
-        '"wersja": WERSJA_KODU' in _run and '"eksperymenty":' in _run and "def _wersja_kodu" in _run)
+# Pola pomiaru liczy `stages.notki_dnia`, `run.py` tylko przekazuje — blok
+# publikacji z `run.py` jest wykonywany w tescie bez globali modulu
+# (`test_note_publication_count`), wiec nie moze siegac po nic spoza `n`.
+sprawdz("stages dopisuje wersje kodu do wyniku, run.py tylko przekazuje ja i ramiona",
+        '"wersja": n.get("wersja")' in _run and '"eksperymenty":' in _run
+        and "def _wersja_kodu" in _st and 'wynik["wersja"] = WERSJA_KODU' in _st
+        and "WERSJA_KODU" not in _run)
+sprawdz("wersja kodu to skrot commita albo pusto (bez gita)",
+        stages.WERSJA_KODU == "" or (4 <= len(stages.WERSJA_KODU) <= 12 and stages.WERSJA_KODU.isalnum()),
+        stages.WERSJA_KODU)
 sprawdz("notki_dnia: ramie wniosku zerowane przy kazdej notce i zapisywane w wyniku",
         '_ramie_wniosku = ""' in _st and 'wynik["eksperymenty"]' in _st
         and _st.index('_ramie_wniosku = ""') < _st.index('_ramie_wniosku = ramie("wniosek", od + nr)'))
