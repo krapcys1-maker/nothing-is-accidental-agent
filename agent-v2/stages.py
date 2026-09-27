@@ -1728,9 +1728,20 @@ def _przebiegi_z_bankiem_dzis(conn: sqlite3.Connection) -> int:
         return 0
     dzis = datetime.now(timezone.utc).date().isoformat()
     try:
+        # TYLKO PRZEBIEGI PRODUKCYJNE (27.09.2026). Przebieg trybu `test` ma
+        # osobna ksiege kosztow, a liczyl sie do dobowego limitu konta: moj
+        # pomiar skauta o 5:00 zjadal jedyne dzisiejsze dobieranie i produkcja
+        # o 11:25 slyszalaby „dzis juz dobieralismy". Baza bez tabeli `runs`
+        # (atrapy w testach) liczy jak dawniej.
+        _z_runs = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'runs'"
+        ).fetchone()
         r = conn.execute(
             "SELECT COUNT(DISTINCT run_id) FROM calls"
-            " WHERE purpose = ? AND substr(at, 1, 10) = ?",
+            " WHERE purpose = ? AND substr(at, 1, 10) = ?"
+            + (" AND run_id NOT IN (SELECT id FROM runs"
+               " WHERE COALESCE(tryb, 'produkcja') != 'produkcja')"
+               if _z_runs else ""),
             ("curiosity", dzis)).fetchone()
         return int(r[0]) if r and r[0] is not None else 0
     except sqlite3.Error:

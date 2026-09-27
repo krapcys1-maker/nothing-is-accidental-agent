@@ -117,6 +117,14 @@ try:
         baza_z_przebiegami(3)) == 3)
     sprawdz("wczorajsze wywolania nie licza sie do dzisiaj",
             stages._przebiegi_z_bankiem_dzis(baza_z_przebiegami(0)) == 0)
+    # PRZEBIEG TESTOWY NIE ZJADA LIMITU PRODUKCJI (27.09.2026).
+    _b = baza_z_przebiegami(3)
+    _b.execute("CREATE TABLE runs (id INTEGER PRIMARY KEY, tryb TEXT)")
+    _b.executemany("INSERT INTO runs (id, tryb) VALUES (?, ?)",
+                   [(100, "test"), (101, "produkcja"), (102, None)])
+    sprawdz("przebieg trybu test nie liczy sie do limitu konta",
+            stages._przebiegi_z_bankiem_dzis(_b) == 2,
+            stages._przebiegi_z_bankiem_dzis(_b))
 
     print()
     print("=== 2. TO SAMO WYDARZENIE OTWIERA FURTKE RAZ ===")
