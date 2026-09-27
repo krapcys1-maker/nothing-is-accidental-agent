@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **34 plików**, 39 019 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **34 plików**, 39 036 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -114,7 +114,7 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
 się testować bez przeglądarki i bez pieniędzy**. 193 zestawów
-testów, 4813 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+testów, 4816 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -759,7 +759,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `radar.py` — radar ciekawości — świeże nagłówki ustawione od najciekawszej historii, warianty jednej sprawy razem
 
-212 wierszy, 4 funkcji na poziomie modułu, 0 klas
+229 wierszy, 4 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -9425,7 +9425,7 @@ point at an entry in `beliefs`.
 
 #### `prompts/glebia.md`
 
-**32 wierszy.** Pola wejsciowe: `fakt`, `linki`, `pierwotny`, `tekst`
+**34 wierszy.** Pola wejsciowe: `fakt`, `linki`, `pierwotny`, `tekst`
 
 ````markdown
 Build a DEPTH CARD for one short note from the full source text below. The note
@@ -9447,6 +9447,8 @@ From the SOURCE TEXT (and the PRIMARY DOCUMENT, if one is given) take:
   dataset) — only from the list of links given below.
 
 Only what the text states. No outside knowledge, no guesses.
+
+Write every value in English; quotes stay exactly as the text has them.
 
 Return only valid JSON:
 {{"data_points": [{{"value": "<number with unit>", "compared_to": "<baseline or comparison stated in the text, or empty>", "who": "<who says or measured it>", "quote": "<exact words from the text>"}}], "most_surprising": {{"detail": "<one sentence>", "quote": "<exact words>"}}, "reader_question": "<question>", "answer": {{"text": "<answer in plain words, or empty>", "quote": "<exact words, or empty>"}}, "primary_documents": ["<url from the list below>"]}}
@@ -10478,7 +10480,7 @@ Return only valid JSON:
 
 #### `prompts/radar.md`
 
-**38 wierszy.** Pola wejsciowe: `dni`, `ile`, `marka`, `naglowki`, `najlepsze`, `najslabsze`
+**40 wierszy.** Pola wejsciowe: `dni`, `ile`, `marka`, `naglowki`, `najlepsze`, `najslabsze`
 
 ````markdown
 You choose stories for {marka}, a Substack account that explains AI to curious
@@ -10512,6 +10514,8 @@ Best received:
 
 Least received:
 {najslabsze}
+
+Write every value in English.
 
 Return only valid JSON, best group first, at most {ile} groups:
 {{"grupy": [{{"ids": [<ids of all headlines in this story>], "najlepszy": <id>, "hak": "<one sentence>", "glebia": "<the number, document or comparison to dig for>"}}]}}

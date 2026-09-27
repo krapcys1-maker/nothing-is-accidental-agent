@@ -188,6 +188,42 @@ sprawdz("KONTRDOWOD: notka sprzed przestawienia (najlepszy wynik) nie jest wzore
 (config.DATA_DIR / "statystyki.jsonl").unlink()
 
 print()
+print("=== 1c. SKURCZ DO SREDNIEJ: MALY MIANOWNIK NIE WYGRYWA, ZERO PRZY TLUMIE PRZEGRYWA ===")
+# Liczby jak na produkcji 27.09 (srednia konta ok. 2-3 odwiedzin na 100
+# wyswietlen): notka 10 wysw./3 odwiedziny, najlepsza notka konta 250/3 + 2
+# zapisy, „maly" 12/1 (surowo 8,3 pkt — wiecej niz panel), zera przy 10 i przy
+# 55 wyswietleniach i szesc zwyklych zer po 40.
+_dz, _st = [], []
+for nid, wysw, odw, tekst in ([("fuks", 10, 3, "fuks z dziesieciu wyswietlen"),
+                               ("panel", 250, 3, "panel myslenia"),
+                               ("maly", 12, 1, "jedna odwiedzina przy dwunastu"),
+                               ("zero_male", 10, 0, "zero przy dziesieciu"),
+                               ("zero_duze", 55, 0, "zero przy tlumie")]
+                              + [("z%d" % i, 40, 0, "zwykle zero %d" % i) for i in range(6)]):
+    _dz.append({"rodzaj": "notka", "udane": True, "id": nid, "kiedy": _t0.isoformat(), "tekst": tekst})
+    for godz in (1, 80):
+        _st.append({"rodzaj": "notka", "id": nid, "wystawione": _t0.isoformat(),
+                    "kiedy": (_t0 + timedelta(hours=godz)).isoformat(),
+                    "wyswietlenia": wysw, "odwiedziny_profilu": odw})
+(config.DATA_DIR / "dziennik.jsonl").write_text(
+    "".join(json.dumps(w) + "\n" for w in _dz), encoding="utf-8")
+(config.DATA_DIR / "statystyki.jsonl").write_text(
+    "".join(json.dumps(w) + "\n" for w in _st), encoding="utf-8")
+import statystyki as _statyst  # noqa: E402
+_zp = _statyst.zapisy_przypisane
+_statyst.zapisy_przypisane = lambda *a, **k: {"panel": 2}
+try:
+    _naj, _sla = radar.przyklady_odbioru(ile=2, min_wyswietlen=10)
+finally:
+    _statyst.zapisy_przypisane = _zp
+sprawdz("najlepsza notka konta (250 wysw., 2 zapisy) we wzorach — surowo wypychala ja jedna odwiedzina przy 12",
+        "- panel myslenia" in _naj and "- jedna odwiedzina przy dwunastu" not in _naj, _naj)
+sprawdz("KONTRDOWOD: najslabsze to zero przy tlumie, nie zero przy dziesieciu wyswietleniach",
+        _sla[:1] == ["- zero przy tlumie"] and "- zero przy dziesieciu" not in _sla, _sla)
+(config.DATA_DIR / "dziennik.jsonl").unlink()
+(config.DATA_DIR / "statystyki.jsonl").unlink()
+
+print()
 print("=== 2. SPIZARNIA WG RADARU ===")
 
 
@@ -399,6 +435,12 @@ for nazwa in ("radar.md", "glebia.md", "notka.md", "rozbior.md"):
     except (KeyError, ValueError, IndexError) as exc:
         _ok = exc
     sprawdz("%s formatuje sie bez bledu" % nazwa, _ok is True, _ok)
+# A/B radaru 27.09: bez przykladow odbioru Flash oddal haczyki PO POLSKU, a haczyk
+# idzie dalej do skauta i do sledztwa. Karta glebi: opis po angielsku, cytat
+# doslownie (kod szuka go w tekscie zrodla).
+for nazwa in ("radar.md", "glebia.md"):
+    sprawdz("%s: wszystko po angielsku" % nazwa,
+            "Write every value in English" in (pathlib.Path("agent-v2/prompts") / nazwa).read_text(encoding="utf-8"))
 sprawdz("etapy maja model, sufit i wylaczone rozumowanie",
         all(config.MODEL_FOR.get(e) and config.MAX_TOKENS.get(e)
             and config.myslenie_deepseek(e) == {"type": "disabled"} for e in ("radar", "glebia")))

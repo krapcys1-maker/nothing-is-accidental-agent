@@ -77,7 +77,7 @@
 {{"beliefs": [{{"belief": "<in your own words, one sentence>", "first_stated": "<verbatim sentence from the article>"}}], "support_only": [{{"quote": "<verbatim sentence>", "supports": <index into beliefs>}}], "hardest_fact": {{"quote": "<verbatim>", "why": "<one clause>"}}, "procedural_nearby": {{"quote": "<verbatim>"}}, "same_register": true|false, "reader_moment": {{"quote": "<verbatim>", "object": "<the one thing out of the reader's own life that is named>"}}, "opening_claim": {{"quote": "<verbatim>", "already_familiar": true|false}}, "summary": "<one sentence>"}}
 ```
 
-#### `glebia.md` (32 wierszy)
+#### `glebia.md` (34 wierszy)
 
 **Pola wejściowe:** `fakt`, `linki`, `pierwotny`, `tekst`
 
@@ -225,7 +225,7 @@
 {{"przeslania": [{{"rodzaj": "USTALENIE"|"MOTYW"|"ZA_DWA_LATA", "przeslanie": "<the one-sentence message of this note>", "tresc": "<3-5 sentences of reasoning the writer should convey, in plain words>", "fakty": [<claim numbers>], "za": "<the evidence for this reading>", "przeciw": "<the strongest evidence against it, or the main uncertainty>", "co_obali": "<what would prove this wrong>", "pominac": false, "powod": ""}}]}}
 ```
 
-#### `radar.md` (38 wierszy)
+#### `radar.md` (40 wierszy)
 
 **Pola wejściowe:** `dni`, `ile`, `marka`, `naglowki`, `najlepsze`, `najslabsze`
 

@@ -18,6 +18,8 @@ From the SOURCE TEXT (and the PRIMARY DOCUMENT, if one is given) take:
 
 Only what the text states. No outside knowledge, no guesses.
 
+Write every value in English; quotes stay exactly as the text has them.
+
 Return only valid JSON:
 {{"data_points": [{{"value": "<number with unit>", "compared_to": "<baseline or comparison stated in the text, or empty>", "who": "<who says or measured it>", "quote": "<exact words from the text>"}}], "most_surprising": {{"detail": "<one sentence>", "quote": "<exact words>"}}, "reader_question": "<question>", "answer": {{"text": "<answer in plain words, or empty>", "quote": "<exact words, or empty>"}}, "primary_documents": ["<url from the list below>"]}}
 

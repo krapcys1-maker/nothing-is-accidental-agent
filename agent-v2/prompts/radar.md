@@ -30,6 +30,8 @@ Best received:
 Least received:
 {najslabsze}
 
+Write every value in English.
+
 Return only valid JSON, best group first, at most {ile} groups:
 {{"grupy": [{{"ids": [<ids of all headlines in this story>], "najlepszy": <id>, "hak": "<one sentence>", "glebia": "<the number, document or comparison to dig for>"}}]}}
 

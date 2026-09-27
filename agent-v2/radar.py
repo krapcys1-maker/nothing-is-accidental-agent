@@ -51,6 +51,11 @@ ILE_GRUP = 15
 MIN_NAGLOWKOW = 8
 # Strony, z ktorych spizarnia i tak nie wezmie tekstu (patrz `tresc_zrodel`).
 NIE_DO_POBRANIA = ("youtube.com", "youtu.be")
+# ILE WYSWIETLEN „O SREDNIEJ KONTA" DOKLADAMY KAZDEJ NOTCE w przykladach odbioru
+# (`przyklady_odbioru`). Mediana notki to 19 wyswietlen, wiec 50 to mniej wiecej
+# trzy notki danych: notka z 10 wyswietleniami zostaje blisko sredniej, a z 250
+# mowi juz sama za siebie.
+SILA_SKURCZU = 50
 
 RADAR_SYSTEM = (
     "You rank fresh AI news headlines for an editorial account that explains AI to "
@@ -109,7 +114,7 @@ def przyklady_odbioru(ile: int = 5, min_wyswietlen: int = 10) -> tuple[list[str]
                         and w.get("udane") and w.get("id") and w.get("tekst")
                         and str(w.get("kiedy") or "")[:10] >= config.DATA_PRZESTAWIENIA):
                     teksty[str(w["id"])] = str(w["tekst"])
-        oceny = []
+        surowe = []
         for nid, s in pomiary.items():
             tekst = teksty.get(str(nid))
             wysw = int(s.get("wyswietlenia") or 0)
@@ -117,8 +122,20 @@ def przyklady_odbioru(ile: int = 5, min_wyswietlen: int = 10) -> tuple[list[str]
                 continue
             odw = int(s.get("odwiedziny_profilu") if s.get("odwiedziny_profilu") is not None
                       else (s.get("interakcje") or {}).get("Profile visit", 0))
-            oceny.append((st.wynik_odbioru(wysw, odw, zapisy.get(str(nid), 0)) or 0.0,
-                          wysw, " ".join(tekst.split())[:130]))
+            surowe.append((wysw, odw + st.WAGA_ZAPISU * zapisy.get(str(nid), 0),
+                           " ".join(tekst.split())[:130]))
+        # SKURCZ DO SREDNIEJ KONTA (27.09.2026). Surowy wynik na 100 wyswietlen
+        # nagradzal male mianowniki: na czele stala notka z 10 wyswietleniami
+        # i 3 odwiedzinami (30 pkt), a najlepsza notka w historii konta (250
+        # wyswietlen, 3 odwiedziny, 2 zapisy) nie miescila sie w piatce. Na
+        # koncu staly zera z NAJMNIEJSZA liczba wyswietlen — najmniej mowiace
+        # zera. 72 ze 105 notek nie mialo ani jednej odwiedziny. Kazda notka
+        # dostaje SILA_SKURCZU wyswietlen „o sredniej konta": malo danych =
+        # blisko sredniej, a zero przy wielu wyswietleniach schodzi na dol.
+        wysw_razem = sum(w for w, _, _ in surowe)
+        srednia = (sum(o for _, o, _ in surowe) / wysw_razem) if wysw_razem else 0.0
+        oceny = [(100.0 * (o + SILA_SKURCZU * srednia) / (w + SILA_SKURCZU), w, t)
+                 for w, o, t in surowe]
         oceny.sort(key=lambda x: (x[0], x[1]), reverse=True)
         if len(oceny) < 2 * ile:
             return [], []
