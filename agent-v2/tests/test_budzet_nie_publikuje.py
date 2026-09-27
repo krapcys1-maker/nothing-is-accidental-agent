@@ -291,6 +291,14 @@ class AtrapaStages:
     def swiezosc_karty(self, card):
         return []
 
+    # POPRAWKI ZDAN BEZ POKRYCIA (27.09.2026) — ten test mierzy budzet i
+    # publikacje, nie poprawki; atrapa oddaje tekst bez zmian.
+    def zdania_o_warsztacie(self, body):
+        return []
+
+    def popraw_bez_pokrycia(self, conn, run_id, body, card, bez_pokrycia):
+        return body, []
+
     def bank_fragmentow(self, conn):
         return []
 

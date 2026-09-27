@@ -35,8 +35,11 @@ class VoiceRoutingTest(unittest.TestCase):
         self.assertEqual(config.MODEL_FOR["write"], config.FABLE)
 
     def test_other_text_stages_use_flash(self):
+        # `przeslania` (sledztwo, 27.09.2026) swiadomie na Opusie — zywe A/B
+        # trzech modeli na tym samym sledztwie, patrz config.MODEL_FOR.
+        self.assertEqual(config.MODEL_FOR["przeslania"], config.CLAUDE)
         for purpose, model in config.MODEL_FOR.items():
-            if purpose not in {"write", "obraz"}:
+            if purpose not in {"write", "obraz", "przeslania"}:
                 with self.subTest(purpose=purpose):
                     self.assertEqual(model, config.DEEPSEEK)
 
