@@ -63,6 +63,7 @@ MODULY = [
     ("tresc_zrodel.py", "treść źródeł z korpusu pobrana za darmo — spiżarnia przed zakupami"),
     ("radar.py", "radar ciekawości — świeże nagłówki ustawione od najciekawszej historii, warianty jednej sprawy razem"),
     ("glebia.py", "karta głębi — liczby, dokument pierwotny i odpowiedź z pełnego tekstu źródła, każdy cytat sprawdzony kodem"),
+    ("sledztwo.py", "śledztwo — historia z radaru, bramka nowości sprawdzana kodem, trzy przesłania (ustalenie, motyw, za dwa lata) i kolejka notek"),
     ("aktualne_modele.py", "jakie modele istnieją DZIŚ; pytane na żywo, nie z pamięci"),
     ("nowe_modele.py", "nowe modele wchodzą same: w tej samej rodzinie i dopiero po próbie"),
     ("model_registry.py", "rodzina modelu dla każdej roli i porównywanie wersji — wspólne dla `nowe_modele` i wczytania wyboru"),

@@ -640,6 +640,39 @@
 | `_znakow_spizarni()` *(wewn.)* | — |
 | `dla_weryfikatora(karta)` | Cytaty z karty w postaci wierszy rekordu dla weryfikatora faktow. |
 
+### `sledztwo.py` — śledztwo — historia z radaru, bramka nowości sprawdzana kodem, trzy przesłania (ustalenie, motyw, za dwa lata) i kolejka notek
+
+491 wierszy, 26 funkcji na poziomie modułu, 0 klas
+
+| funkcja | co robi |
+|---|---|
+| `_teraz()` *(wewn.)* | — |
+| `_host(url)` *(wewn.)* | — |
+| `_klucz(url)` *(wewn.)* | — |
+| `historie(korpus, conn, run_id, ile)` | Grupy naglowkow z radaru: najlepszy naglowek na poczatku, potem warianty. |
+| `zrodla_historii(h)` | Adresy historii do pobrania, w ksztalcie `stages.fetch` — bez powtorek. |
+| `_rekordy(dni)` *(wewn.)* | — |
+| `ile_sledztw(dni)` | — |
+| `ile_artykulow(dni)` | — |
+| `ocena_historii(h)` | Czy te historie warto badac: dosc niezaleznych zrodel i jeszcze nie badana. |
+| `fakt_z_historii(h)` | Historia w ksztalcie faktu, ktory przyjmuje `artykul_z_puli.temat_z_faktu`. |
+| `_twierdzenia(card)` *(wewn.)* | — |
+| `_karta_do_promptu(card, limit)` *(wewn.)* | — |
+| `_znaczniki(tekst)` *(wewn.)* | Daty (miesiac + dzien albo sam miesiac) i liczby z tekstu, w jednej postaci. |
+| `w_jednym_zrodle(ustalenie, teksty)` | Adres zrodla, ktore samo zawiera wszystkie daty i liczby ustalenia, albo pusto. |
+| `nowosc(conn, run_id, card, h, teksty_zrodel)` | Czy laczenie zrodel ustalilo cos, czego nie mowi zadne z nich. |
+| `pelny_obraz(card, min_twierdzen, min_serwisow)` | Czy karta daje czytelnikowi pelny obraz historii: dosc potwierdzonych |
+| `_hipotezy_do_promptu(dossier)` *(wewn.)* | — |
+| `przeslania(conn, run_id, card, dossier, h)` | Trzy notki z roznym przeslaniem — albo mniej, gdy karta ktores nie uniesie. |
+| `zapisz_sledztwo(rekord)` | Jedna linia na sledztwo — pamiec dla bramki i limitow. Nigdy nie wywala. |
+| `oznacz_artykul(run_id)` | Artykul ze sledztwa z tego przebiegu wyszedl — liczy sie do limitu tygodnia. |
+| `_kolejka()` *(wewn.)* | — |
+| `_zapisz_kolejke(kolejka)` *(wewn.)* | — |
+| `dodaj_do_kolejki(lista, h, card, run_id)` | Przeslania do kolejki notek, kazde wazne `MAKS_WIEK_TEMATU_DNI` dni. |
+| `_wydane_przeslania()` *(wewn.)* | (identyfikatory juz opublikowanych, czy dzis wyszlo juz jakies). |
+| `wez_przeslanie()` | Nastepne przeslanie do notki — JEDNO na dobe, najstarsza historia pierwsza. |
+| `material_notki(p)` | (fakt do dziennika i straznikow, material dla pisarza) z przeslania. |
+
 ### `aktualne_modele.py` — jakie modele istnieją DZIŚ; pytane na żywo, nie z pamięci
 
 186 wierszy, 4 funkcji na poziomie modułu, 0 klas
