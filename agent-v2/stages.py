@@ -5275,6 +5275,9 @@ def notki_dnia(
     # SERIA — jedna część na przebieg. Patrz `seria.py` i miejsce, gdzie ta
     # flaga się zapala.
     seria_wzieta: bool = False
+    # PRZESLANIE ZE SLEDZTWA (27.09.2026) — jedno na przebieg, a `sledztwo.
+    # wez_przeslanie` pilnuje jednego na dobe. Patrz `sledztwo.py`.
+    przeslanie_wziete: bool = False
     if karta:
         juz_o_tym.append("%s %s" % (karta.get("article_title") or "",
                                     (karta.get("article_text") or "")[:400]))
@@ -5298,7 +5301,27 @@ def notki_dnia(
         # czescia serii — i wyszlaby z zapowiedzia ciagu dalszego, ktorego nie
         # ma. Dokladnie ta klasa wady co `promowany` przed 1 wrzesnia.
         seria_kontekst: dict[str, Any] | None = None
-        if typ == "MYSL":
+        # PRZESLANIE ZE SLEDZTWA — przed zwyklym wyborem faktu, jak seria:
+        # historia zbadana i przemyslana ma pierwszenstwo przed pojedynczym
+        # faktem. Typ notki wyznacza rodzaj przeslania (`sledztwo.TYP_NOTKI`).
+        _przes = None
+        if not przeslanie_wziete and typ != "ARTYKUL":
+            try:
+                import sledztwo as _sledztwo
+                _przes = _sledztwo.wez_przeslanie()
+            except Exception as exc:
+                print("  [przeslanie] pominiete (%s)" % type(exc).__name__, flush=True)
+                _przes = None
+        if _przes:
+            przeslanie_wziete = True
+            typ = _przes.get("typ_notki") or typ
+            fakt, material = _sledztwo.material_notki(_przes)
+            juz_o_tym.append("%s %s" % (_przes.get("historia") or "",
+                                        (_przes.get("perspektywa") or {}).get("przeslanie") or ""))
+            print("  [przeslanie] %s — %s: %s" % (
+                _przes.get("rodzaj"), str(_przes.get("historia"))[:60],
+                str((_przes.get("perspektywa") or {}).get("przeslanie"))[:90]), flush=True)
+        elif typ == "MYSL":
             # JEDYNY TYP BEZ KARTY DOWODOWEJ — i dlatego nie zabiera faktu z
             # puli. Fakt zuzyty na notke, ktorej nie wolno go uzyc, przepadlby
             # bez sladu: pula jest platna i wystarcza na kilka dni.
@@ -5542,6 +5565,9 @@ def notki_dnia(
         wynik["glebia"] = len(_glb.get("data_points") or [])
         wynik["glebia_odpowiedz"] = bool(_glb.get("answer"))
         wynik["zrodlo_host"] = _host_faktu(fakt) if isinstance(fakt, dict) else ""
+        # PRZESLANIE ZE SLEDZTWA — identyfikator do dziennika; po nim
+        # `sledztwo.wez_przeslanie` wie, ze przeslanie wyszlo.
+        wynik["przeslanie_id"] = _przes.get("id") if _przes else None
         # KONCOWKA — patrz `KONCOWKA_OCENIA`. Na gotowym tekscie kazdego
         # kandydata, bo `run.py` publikuje pierwszego bezpiecznego.
         for _kand in wynik.get("candidates") or []:
@@ -5941,6 +5967,16 @@ def _rekord_do_weryfikacji(note_type: str, evidence: dict[str, Any]) -> str:
         _z_karty = _glebia.dla_weryfikatora((evidence or {}).get("depth"))
     except Exception:
         _z_karty = ""
+    # PRZESLANIE ZE SLEDZTWA (27.09.2026): twierdzenia, na ktorych stoi, z cytatami
+    # ze zrodel pobranych w sledztwie — ta sama zasada co karta glebi.
+    _sledztwo = (evidence or {}).get("investigation") or {}
+    _tw = [c for c in (_sledztwo.get("supporting_claims") or []) if isinstance(c, dict)]
+    if _tw:
+        _z_karty += ("\n\nClaims from our investigation of this story, each with a "
+                     "passage from its source:\n" + "\n".join(
+                         "- %s — \"%s\" (%s)" % (" ".join(str(c.get("claim")).split())[:300],
+                                                 " ".join(str(c.get("evidence") or "").split())[:300],
+                                                 c.get("url")) for c in _tw[:6]))
     return (naglowek + "\n\nThe text was written from this record, which was "
             "already checked and paid for when the fact entered our bank. "
             "Check the text against it FIRST, and search only for what the "

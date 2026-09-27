@@ -36,6 +36,17 @@ answer visible without treating missing evidence as evidence of absence.
 Place a limitation beside the claim it qualifies; use a separate paragraph only
 when the reader needs one. Never invent reporting or personal experience.
 
+The card may carry `investigation_finding`: what our own reporting established
+by putting several sources together, which no single report says. It is the
+reason this article exists. Build the piece around it and let the reader see
+how the pieces fit, each piece attributed to its source.
+
+It may also carry `editorial_hypotheses`: our reading of why the key actor chose
+this course, or how this could look in about two years. Use them only as clearly
+labelled analysis ("our reading", "one plausible explanation"), each with the
+evidence for it, the strongest evidence against it and what would prove it
+wrong. A hypothesis never becomes a fact in the text.
+
 One claim may carry `"not_fetched": true`. That is the fact this article was
 commissioned from, and its `evidence` is not a passage lifted from a document we
 retrieved — nobody on this run opened that page. You may state it, and you must

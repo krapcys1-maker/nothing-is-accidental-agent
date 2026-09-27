@@ -1,0 +1,13 @@
+[Unit]
+Description=Zegar sledztwa (codziennie; limity tygodniowe pilnuje kod)
+
+[Timer]
+# 13:10 UTC = 9:10 rano u czytelnikow w Nowym Jorku — w oknie porannym, miedzy
+# przebiegami notek (11:20 i 17:00 UTC). Codziennie, bo historia ma byc zbadana
+# „max dzien po"; to, czy wolno badac, rozstrzyga `sledztwo.ile_sledztw`.
+OnCalendar=*-*-* 13:10:00
+Persistent=true
+RandomizedDelaySec=600
+
+[Install]
+WantedBy=timers.target

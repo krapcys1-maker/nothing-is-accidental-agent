@@ -299,6 +299,9 @@ MODEL_FOR = {
     # RADAR I KARTA GLEBI (27.09.2026) — patrz `radar.py` i `glebia.py`.
     "radar": DEEPSEEK,
     "glebia": DEEPSEEK,
+    # SLEDZTWO (27.09.2026) — patrz `sledztwo.py`.
+    "nowosc": DEEPSEEK,
+    "przeslania": DEEPSEEK,
     "grafika": DEEPSEEK,
     "cele": DEEPSEEK,
     "wybor": DEEPSEEK,
@@ -375,6 +378,11 @@ DEEPSEEK_MYSLENIE: dict[str, dict[str, str]] = {
     # Kazdy cytat z karty sprawdza potem KOD, nie model (`glebia._w_tekscie`).
     "radar": {"type": "disabled"},
     "glebia": {"type": "disabled"},
+    # Sledztwo: tu jest MYSLENIE, nie wyciaganie — ocena, czy laczenie zrodel
+    # cos ustalilo, i hipotezy o motywie i scenariuszu. Wybor modelu po zywym
+    # A/B z 27.09 (patrz `docs/SLEDZTWO_2026-09-27.md`).
+    "nowosc": {"type": "enabled"},
+    "przeslania": {"type": "enabled"},
 }
 
 
@@ -1448,6 +1456,10 @@ MAX_TOKENS = {
     "radar": 6000,
     # Karta glebi: do pieciu liczb z cytatem, dwa cytaty, pytanie.
     "glebia": 4000,
+    # Sledztwo: werdykt nowosci (jedno zdanie + numery) i trzy przeslania po
+    # kilka zdan. Rozumowanie wlaczone, stad zapas.
+    "nowosc": 12000,
+    "przeslania": 16000,
     "grafika": 4000,
     "cele": 6000,
     "wybor": 6000,

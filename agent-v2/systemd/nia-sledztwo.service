@@ -1,0 +1,20 @@
+[Unit]
+Description=Nothing Is Accidental — sledztwo z historii nr 1 radaru
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=/home/ubuntu/nothing-is-accidental-agent
+Environment=AGENT_V2_SERVER=1
+Environment=PYTHONUNBUFFERED=1
+# SLEDZTWO (27.09.2026) — patrz `agent-v2/sledztwo.py`. Historia z czolowki
+# radaru, jej zrodla z korpusu, badanie, karta, bramka nowosci; artykul tylko
+# wtedy, gdy laczenie zrodel cos ustalilo, a trzy przeslania (ustalenie, motyw,
+# za dwa lata) zawsze ida do kolejki notek. Limity w `sledztwo.py`: 2 sledztwa
+# i 1 artykul na 7 dni; artykul ze sledztwa zastepuje w tym tygodniu artykul
+# z puli (`nia-artykul`).
+ExecStart=/home/ubuntu/nothing-is-accidental-agent/.venv/bin/python agent-v2/artykul_z_puli.py --sledztwo --wyslij
+MemoryMax=3G
+TimeoutStartSec=5400

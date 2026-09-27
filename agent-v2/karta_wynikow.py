@@ -334,6 +334,30 @@ def odbior_radar_glebia(statystyki: list[dict], dziennik: list[dict],
                               ("koncowka", _grupa_koncowki))}
 
 
+def zrodla_z_problemem(dane: Path, dni_bez_wpisow: int = 14, porazek: int = 3) -> list[str]:
+    """Zrodla, ktore nie odpowiadaja albo od dawna nic nie maja (27.09.2026) —
+    z pliku zdrowia zapisywanego przy kazdym pobraniu korpusu."""
+    import json as _json
+    try:
+        stan = _json.loads((dane / "zdrowie_zrodel.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    out = []
+    for nazwa, d in sorted((stan or {}).items()):
+        if not isinstance(d, dict):
+            continue
+        if int(d.get("porazek_z_rzedu") or 0) >= porazek:
+            out.append("%s: nie odpowiada (%s)" % (nazwa, d.get("blad") or "?"))
+            continue
+        try:
+            wiek = (date.today() - date.fromisoformat(str(d.get("najnowszy") or "")[:10])).days
+        except ValueError:
+            continue
+        if wiek > dni_bez_wpisow:
+            out.append("%s: nic nowego od %d dni" % (nazwa, wiek))
+    return out
+
+
 def zapisy(zrodla: list[dict], dziennik: list[dict]) -> dict:
     """Zapisy z ostatniego odczytu Substacka (okno 30 dni) i przypisania do
     naszych tresci — ze wszystkich odczytow, maksimum na tresc."""
@@ -398,6 +422,7 @@ def karta(nazwa: str, dane: Path, od: date, do: date, wlasne: set[str]) -> dict:
         "odbior_radar_glebia": odbior_radar_glebia(
             _jsonl(dane / "statystyki.jsonl"), dziennik,
             _jsonl(dane / "zrodla.jsonl"), od, do),
+        "zrodla_z_problemem": zrodla_z_problemem(dane),
         "zapisy": zapisy(_jsonl(dane / "zrodla.jsonl"), dziennik),
         "koszt": koszt(dane / "agent-v2.db", od, do),
     }
@@ -452,6 +477,7 @@ def _wiersze(k: dict) -> list[tuple[str, str]]:
          podzial("glebia", ("z_karta", "bez_karty"))),
         ("odbior 72 h: koniec mysla / ocena materialu (n)",
          podzial("koncowka", ("konczy_mysl", "ocenia"))),
+        ("zrodla z problemem", "; ".join(k.get("zrodla_z_problemem") or []) or "—"),
         ("koszt USD (na dobe)", f"{ko.get('usd', '—')} ({ko.get('usd_na_dobe', '—')})"),
         ("najdrozsze etapy", ", ".join(f"{e} {v}" for e, v in ko.get("etapy", [])) or "—"),
         ("przebiegi", ", ".join(f"{s} {n}" for s, n in sorted(ko.get("przebiegi", {}).items())) or "—"),

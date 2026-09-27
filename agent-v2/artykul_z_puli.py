@@ -501,6 +501,24 @@ def _przebieg(conn, run_id: int) -> int:
         print("  pytanie: %s" % str(brief.get("question"))[:130], flush=True)
         return _napisz_i_zapisz(conn, run_id, brief, card)
 
+    # SLEDZTWO (27.09.2026) — osobna droga do tematu, te same etapy badania
+    # i pisania. Patrz `sledztwo.py` i `_przebieg_sledztwa`.
+    if "--sledztwo" in sys.argv:
+        return _przebieg_sledztwa(conn, run_id)
+    # ARTYKUL ZE SLEDZTWA ZASTEPUJE ARTYKUL Z PULI w tym tygodniu — wlasciciel
+    # 27.09: sledztwo ma byc unikatowe, a koszt ma zostac jak jest.
+    try:
+        import sledztwo as _sledztwo
+        if (_sledztwo.ile_artykulow(6) >= _sledztwo.ARTYKULOW_NA_TYDZIEN
+                and "--mimo-sledztwa" not in sys.argv):
+            print("  w ostatnich 6 dniach wyszedl artykul ze sledztwa — artykul"
+                  " z puli pomijam (--mimo-sledztwa, zeby napisac mimo to)",
+                  flush=True)
+            return 1
+    except Exception as exc:
+        print("  [sledztwo] nie sprawdzilem limitu (%s)" % type(exc).__name__,
+              flush=True)
+
     fakt = wybierz_fakt(conn, run_id)
     print()
     print("  FAKT:   %s" % (fakt.get("fact") or "")[:200], flush=True)
@@ -892,6 +910,132 @@ def _przebieg(conn, run_id: int) -> int:
 # jako `.karta.json`, w DOKLADNIE tym ksztalcie, ktory czyta `--z-karty`
 # (linia ~441): material nie jest skasowany, tylko czeka na swiadoma decyzje
 # czlowieka zamiast wchodzic do obiegu sam.
+def _przebieg_sledztwa(conn, run_id: int) -> int:
+    """Sledztwo: historia z radaru -> pytania -> zrodla -> badanie -> karta ->
+    bramka nowosci -> artykul (tylko z ustaleniem) i trzy przeslania do notek.
+
+    Bez `--wyslij` nic nie trafia do produkcji: ani artykul (zostaje na dysku),
+    ani przeslania (kolejka notek), ani zapis sledztwa (limity i pamiec).
+    """
+    import korpus_kanalow
+    import sledztwo
+
+    na_serio = "--wyslij" in sys.argv
+    print("== sledztwo ==", flush=True)
+    if (sledztwo.ile_sledztw(7) >= sledztwo.SLEDZTW_NA_TYDZIEN
+            and "--mimo-limitu" not in sys.argv):
+        print("  limit tygodnia: %d sledztw w 7 dni — nie badam"
+              % sledztwo.ile_sledztw(7), flush=True)
+        return 1
+    historie = sledztwo.historie(korpus_kanalow.korpus_kanalow(400),
+                                 conn=conn, run_id=run_id)
+    wybrana = None
+    for h in historie:
+        ok, powod = sledztwo.ocena_historii(h)
+        print("  [radar %d] %s — %s" % (h["miejsce"], h["tytul"][:80], powod),
+              flush=True)
+        if ok:
+            wybrana = h
+            break
+    if wybrana is None:
+        print(">> zadna historia z czolowki radaru nie nadaje sie na sledztwo",
+              flush=True)
+        return 1
+    zrodla = sledztwo.zrodla_historii(wybrana)
+    print("  ZRODLA HISTORII (%d):" % len(zrodla), flush=True)
+    for z in zrodla:
+        print("    - %s | %s" % (z["publisher"], z["title"][:90]), flush=True)
+
+    brief = temat_z_faktu(conn, run_id, sledztwo.fakt_z_historii(wybrana))
+    print()
+    print("  PYTANIE: %s" % brief.get("question"), flush=True)
+    pod = [q for q in (brief.get("sub_questions") or []) if str(q).strip()]
+    for q in pod:
+        print("    - %s" % str(q)[:110], flush=True)
+    pytanie = brief["question"] + (
+        ("\n\nThe investigation must also answer:\n"
+         + "\n".join("- %s" % q for q in pod)) if pod else "")
+
+    print()
+    print("-- pobieranie zrodel historii --", flush=True)
+    corpus = stages.fetch(conn, run_id, zrodla)
+    _z_trescia = [c for c in corpus if c.get("text")]
+    _pierwotnych = sum(1 for c in _z_trescia if c.get("class") == "PRIMARY")
+    if _pierwotnych < config.MIN_PRIMARY_SOURCES:
+        # DOKUMENT PIERWOTNY TO GLEBIA — komunikat firmy, stenogram, pismo
+        # urzedu. Serwisy go streszczaja; sledztwo ma go przeczytac samo.
+        print("-- dokumenty pierwotne (%d/%d) --"
+              % (_pierwotnych, config.MIN_PRIMARY_SOURCES), flush=True)
+        juz = {c.get("host") or c.get("url", "") for c in corpus}
+        recent = db.recent_domains(conn, config.DIVERSITY_LOOKBACK)
+        dodatkowe = [s for s in stages.discovery(conn, run_id, pytanie, recent,
+                                                 tylko_pierwotne=True)
+                     if (s.get("host") or s.get("url", "")) not in juz]
+        if dodatkowe:
+            corpus = corpus + stages.fetch(conn, run_id, dodatkowe)
+
+    print()
+    print("-- klasyfikacja --", flush=True)
+    evidence = stages.classify(conn, run_id, brief["question"], corpus)
+    print("\n-- sledztwo: hipotezy i brakujace odpowiedzi --", flush=True)
+    evidence, dossier = research.deepen(conn, run_id, pytanie, evidence, corpus)
+    print()
+    print("-- synteza --", flush=True)
+    try:
+        card = stages.synthesis(conn, run_id,
+                                research.synthesis_question(brief["question"], dossier),
+                                evidence)
+    except PRZERYWAJA:
+        raise
+    except Exception as exc:
+        print("  synteza padla (%s) — karta zapasowa" % type(exc).__name__,
+              flush=True)
+        card = stages.fallback_card(brief["question"], evidence)
+    research.attach(card, dossier)
+    card.setdefault("broken_belief", brief.get("broken_belief") or "")
+    card.setdefault("why_they_believe_it", brief.get("why_they_believe_it") or "")
+
+    print()
+    print("-- czy laczenie zrodel cos ustalilo --", flush=True)
+    nowe = sledztwo.nowosc(conn, run_id, card, wybrana)
+    print("  %s: %s" % ("USTALENIE" if nowe.get("jest") else "BRAK USTALENIA",
+                        nowe.get("ustalenie") or nowe.get("powod")), flush=True)
+    print()
+    print("-- trzy przeslania --", flush=True)
+    przes = sledztwo.przeslania(conn, run_id, card, dossier, wybrana)
+    for p in przes:
+        print("  [%s] %s" % (p["rodzaj"], p["przeslanie"]), flush=True)
+    if na_serio:
+        print("  do kolejki notek: %d"
+              % sledztwo.dodaj_do_kolejki(przes, wybrana, card, run_id), flush=True)
+        sledztwo.zapisz_sledztwo({
+            "run_id": run_id, "historia": wybrana.get("tytul"),
+            "zrodla": sorted({sledztwo._klucz(z["url"]) for z in zrodla}),
+            "pytanie": brief.get("question"), "nowosc": nowe,
+            "przeslania": [p["rodzaj"] for p in przes],
+            "artykul_opublikowany": False})
+    else:
+        print("  (bez --wyslij: przeslania NIE ida do kolejki notek)", flush=True)
+
+    if not nowe.get("jest"):
+        print(">> brak ustalenia ponad pojedyncze artykuly — artykulu nie pisze;"
+              " przeslania ida do notek", flush=True)
+        return 1
+    twierdzenia = sledztwo._twierdzenia(card)
+    card["investigation_finding"] = {
+        "finding": nowe["ustalenie"],
+        "why_no_single_report_says_it": nowe.get("powod") or "",
+        "claims": [twierdzenia[i - 1].get("claim") for i in nowe.get("twierdzenia") or []
+                   if 1 <= i <= len(twierdzenia)]}
+    card["editorial_hypotheses"] = [
+        {k: p.get(k) for k in ("rodzaj", "przeslanie", "tresc", "za", "przeciw", "co_obali")}
+        for p in przes if p["rodzaj"] in ("MOTYW", "ZA_DWA_LATA")]
+    kod = _napisz_i_zapisz(conn, run_id, brief, card, evidence)
+    if kod == 0 and na_serio:
+        sledztwo.oznacz_artykul(run_id)
+    return kod
+
+
 NAZWA_KATALOGU_RATUNKU = "artykuly-przerwane"
 NAZWA_SPISU = "CZYTAJ_TO.txt"
 

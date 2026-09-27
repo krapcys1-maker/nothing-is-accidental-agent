@@ -58,6 +58,13 @@ our code. Use them. A real number or the answer the source gives beats calling
 something unknown. If an uncertainty still matters, keep it beside the claim it
 limits; don't make it the last thing the reader reads.
 
+The evidence may carry `perspective` and `investigation`: one message from our
+own investigation of a story, with the claims it stands on. A finding is stated
+plainly, with its sources. A motive or a two-year scenario is OUR reading: say
+so in ordinary words, give the evidence for it and the strongest evidence
+against it, and name what would prove it wrong. Facts still come only from the
+evidence; a hypothesis never turns into one.
+
 For MYSL without factual material, write a clearly hypothetical question or
 editorial view. Don't invent an event or personal experience. If earlier notes
 are listed, choose another supported point instead of dressing up a repeat.

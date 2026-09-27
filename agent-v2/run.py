@@ -1467,6 +1467,9 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
                                                      n.get("zrodlo_host") or "",
                                                  "koncowka_ocena": gotowe[0].get(
                                                      "koncowka_ocena") or "",
+                                                 # przeslanie ze sledztwa
+                                                 "przeslanie_id":
+                                                     n.get("przeslanie_id"),
                                              })
                 # Fakt odhaczamy DOPIERO po potwierdzonej publikacji. Wczesniej
                 # znikal juz przy znalezieniu, wiec przepadal takze wtedy, gdy

@@ -762,6 +762,86 @@ def wielkie_wydarzenia(korpus: list[dict[str, Any]], min_kanalow: int = 3,
 _ZAPAS: dict[str, Any] = {"kiedy": 0.0, "wpisy": None}
 ZAPAS_WAZNY_S = 1800
 
+# ZDROWIE ZRODEL — wlasciciel 27.09.2026: „sprawdzaj, czy zrodla sie nie
+# wywalily". Audyt tego dnia znalazl cztery feedy martwe od miesiecy (ostatnie
+# wpisy z 2019, 2024 i 2025) — nikt tego nie zauwazyl, bo zrodlo, ktore nic nie
+# oddaje, w logu wyglada jak zrodlo, ktore dzis nic nie napisalo. Kazde pobranie
+# korpusu zapisuje wiec stan kazdego zrodla, a `zle_zrodla` mowi glosno o tych,
+# ktore nie odpowiadaja kilka razy z rzedu albo od dawna nie maja nic nowego.
+ZDROWIE_PLIK = "zdrowie_zrodel.json"
+PORAZEK_DO_ALARMU = 3
+DNI_BEZ_WPISOW = 14
+
+
+def _zapisz_zdrowie(stan: dict[str, dict[str, Any]]) -> None:
+    """Dopisuje wynik tego pobrania do stanu zrodel. Nigdy nie podnosi wyjatku."""
+    import json
+    import os
+    from datetime import datetime, timezone
+
+    import config
+    try:
+        plik = config.DATA_DIR / ZDROWIE_PLIK
+        try:
+            dane = json.loads(plik.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            dane = {}
+        if not isinstance(dane, dict):
+            dane = {}
+        teraz = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        for nazwa, s in stan.items():
+            d = dane.get(nazwa) if isinstance(dane.get(nazwa), dict) else {}
+            d["ostatnio"] = teraz
+            if s.get("ok"):
+                d.update(porazek_z_rzedu=0, ostatni_sukces=teraz, blad="")
+            else:
+                d["porazek_z_rzedu"] = int(d.get("porazek_z_rzedu") or 0) + 1
+                d["blad"] = s.get("blad") or "?"
+            if s.get("najnowszy"):
+                d["najnowszy"] = s["najnowszy"]
+            d["wpisow"] = int(s.get("wpisow") or 0)
+            dane[nazwa] = d
+        # Zrodlo usuniete z listy wypada z pliku — inaczej wisialoby jako „martwe".
+        dane = {k: v for k, v in dane.items() if k in stan}
+        plik.parent.mkdir(parents=True, exist_ok=True)
+        tymczasowy = plik.with_suffix(".tmp")
+        tymczasowy.write_text(json.dumps(dane, ensure_ascii=False, indent=1),
+                              encoding="utf-8")
+        os.replace(tymczasowy, plik)
+    except Exception as exc:
+        print("  [zrodla] nie zapisalem zdrowia zrodel (%s)" % type(exc).__name__,
+              flush=True)
+
+
+def zle_zrodla() -> list[tuple[str, str]]:
+    """(zrodlo, co z nim nie tak) — nie odpowiada od kilku pobran z rzedu albo
+    od `DNI_BEZ_WPISOW` dni nie ma nic nowego (o AI, gdy zrodlo jest filtrowane)."""
+    import json
+    from datetime import date
+
+    import config
+    try:
+        dane = json.loads((config.DATA_DIR / ZDROWIE_PLIK).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    out: list[tuple[str, str]] = []
+    for nazwa in {**ZRODLA, **ZRODLA_LUDZIE}:
+        d = dane.get(nazwa) if isinstance(dane, dict) else None
+        if not isinstance(d, dict):
+            continue
+        if int(d.get("porazek_z_rzedu") or 0) >= PORAZEK_DO_ALARMU:
+            out.append((nazwa, "nie odpowiada od %d pobran: %s"
+                        % (d["porazek_z_rzedu"], d.get("blad") or "?")))
+            continue
+        try:
+            wiek = (date.today() - date.fromisoformat(str(d.get("najnowszy") or "")[:10])).days
+        except ValueError:
+            continue
+        if wiek > DNI_BEZ_WPISOW:
+            out.append((nazwa, "nic nowego%s od %d dni" % (
+                " o AI" if nazwa in FILTR_O_AI else "", wiek)))
+    return out
+
 
 # KANAL, KTORY NIE ODPOWIADA, IDZIE NA PRZERWE — grzecznie, nie sprytnie.
 #
@@ -976,20 +1056,26 @@ def korpus_kanalow(ile: int = 30) -> list[dict[str, Any]]:
         # roznica jest w formacie feedu (RSS 2.0 zamiast Atoma) i obsluguje ja
         # `_pole`. Awaria jednego zrodla nie moze zabrac reszty, wiec kazde
         # ma wlasny `try`, tak jak kanaly.
+        # ZDROWIE ZRODEL (27.09.2026) — patrz `zle_zrodla`.
+        stan: dict[str, dict[str, Any]] = {}
         for nazwa, adres in {**ZRODLA, **ZRODLA_LUDZIE}.items():
             # TEN SAM ZAPAS CO PRZY KANALACH. Zrodlo pierwotne tez ma prawo
             # miec zla godzine, a jego zla godzina nie moze znaczyc dziury w
             # spizarni — bo pusta spizarnia to platne szukanie.
             surowy = ""
+            stan[nazwa] = {"ok": False, "blad": "", "wpisow": 0, "najnowszy": ""}
             try:
                 r = c.get(adres)
                 if r.status_code == 200:
                     surowy = r.text
+                    stan[nazwa]["ok"] = True
                     _zapamietaj_tresc("zrodlo:" + nazwa, surowy)
                 else:
+                    stan[nazwa]["blad"] = "HTTP %s" % r.status_code
                     print("  [zrodla] %s: HTTP %s" % (nazwa, r.status_code),
                           flush=True)
             except Exception as exc:
+                stan[nazwa]["blad"] = type(exc).__name__
                 print("  [zrodla] %s: %s" % (nazwa, type(exc).__name__),
                       flush=True)
             if not surowy:
@@ -1008,6 +1094,8 @@ def korpus_kanalow(ile: int = 30) -> list[dict[str, Any]]:
                 # dawaloby jeden, dwa tematy zamiast osmiu.
                 if nazwa in FILTR_O_AI:
                     poz = [e for e in poz if o_ai(e)]
+                if poz:
+                    stan[nazwa]["najnowszy"] = str(_data_wpisu(poz[0]))[:10]
                 # WIEK ODCINAMY JUZ TUTAJ, inaczej niz przy kanalach. YouTube
                 # oddaje 15 ostatnich filmow i to sa z natury rzeczy filmy
                 # swieze; feed OpenAI ma 1164 wpisow, a Epoch AI publikuje
@@ -1018,8 +1106,16 @@ def korpus_kanalow(ile: int = 30) -> list[dict[str, Any]]:
                     if _data_wpisu(e) < prog_wieku:
                         continue
                     wpisy.append((nazwa, e))
+                    stan[nazwa]["wpisow"] += 1
             except Exception as exc:
+                stan[nazwa]["ok"] = False
+                stan[nazwa]["blad"] = "nieczytelny feed (%s)" % type(exc).__name__
                 print("  [zrodla] %s: %s" % (nazwa, type(exc).__name__), flush=True)
+        _zapisz_zdrowie(stan)
+        _zle = zle_zrodla()
+        if _zle:
+            print("  [zrodla] UWAGA — zrodla z problemem: %s"
+                  % "; ".join("%s (%s)" % kv for kv in _zle), flush=True)
 
     k = przetworz(wpisy)
     print("  [kanaly] %d wpisow z %d kanalow i %d zrodel (w tym %d o ludziach) -> %d tematow"
