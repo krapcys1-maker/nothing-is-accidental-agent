@@ -334,6 +334,8 @@ PRAWDZIWE = [  # ostatnie zdania notek z 20-26.09.2026
     "Wait for someone without a launch blog to put it through its paces.",
     "No launch document has surfaced yet, and the reporting doesn't say whether the standards would bind anyone.",
     "What the review might find, nobody's saying yet.",
+    # Zywy test karty glebi 27.09 — przyrzad tego nie zlapal, poprawione.
+    "When OpenAI first noticed is a different question the material doesn't answer.",
 ]
 for z in PRAWDZIWE:
     sprawdz("lapie: %s..." % z[:50], bool(stages.konczy_ocena_materialu("Some context. " + z)))
