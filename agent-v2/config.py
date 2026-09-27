@@ -309,6 +309,15 @@ MODEL_FOR = {
     # samoregulacji ryzyko ponosza inni — z uczciwym „przeciw" (0,080 USD).
     # Dwa sledztwa na tydzien: ok. 0,7 USD miesiecznie.
     "przeslania": CLAUDE,
+    # NOTKA Z PRZESLANIA — tez Opus (`stages.notki_dnia` przelacza pisarza tylko
+    # dla notki niosacej przeslanie). Podglad 27.09: Flash gubil hipoteze
+    # (MOTYW konczyl pytaniem, ZA_DWA_LATA opowiadal sam incydent). Trzy rundy
+    # promptu nie pomogly ponad szum; A/B pisarza na MOTYW i ZA_DWA_LATA (szesc
+    # par, slepi sedziowie z materialem): dowiezienie przeslania Opus 4,50/4,33
+    # wobec Flash 3,83/3,50, uczciwosc 5,00/5,00 wobec 4,50/3,83. Koszt 0,055
+    # zamiast 0,004 USD za notke; ok. 6 takich notek tygodniowo = ok. 1,3 USD
+    # miesiecznie. Patrz `agent-v2/docs/WNIOSEK_2026-09-27.md`.
+    "notka_przeslania": CLAUDE,
     # Poprawki zdan bez pokrycia w artykule — `stages.popraw_bez_pokrycia`.
     "naprawa_artykulu": DEEPSEEK,
     # NIESZTANDAROWY WNIOSEK przed pisaniem notki — `stages.wniosek`; model po
@@ -1381,6 +1390,12 @@ EFFORT = {
     # samego tekstu znaczylyby, ze druga wersja mysli inaczej niz pierwsza.
     "note": "medium",
     "naprawa": "medium",
+    # Notka z przeslania na Opusie — ten sam wysilek, co w A/B 27.09.
+    "notka_przeslania": "medium",
+    # Przeslania sledztwa: WPISANE to, co i tak dzialalo. Bez wpisu nie szlo
+    # zadne `effort`, a domyslny poziom Opusa 5.5 to `medium` (dokumentacja
+    # Claude API) — tak przeszlo A/B z 27.09, wiec zachowanie sie nie zmienia.
+    "przeslania": "medium",
     # PONIZEJ: piec wpisow, ktore NIC NIE ROBIA — wszystkie te etapy chodza na
     # DeepSeeku, ktory tego pokretla nie czyta. Zostaja jako zapis intencji na
     # wypadek przepiecia etapu na Claude, i `llm.call` mowi raz na proces,
@@ -1452,6 +1467,7 @@ MAX_TOKENS = {
     "forma": 24000,
     "note": _tokens_for(400) + 8000,
     "note_tani": _tokens_for(400) + 8000,   # ten sam kontrakt, inny pisarz
+    "notka_przeslania": _tokens_for(400) + 8000,   # ten sam kontrakt, Opus
     "comment": _tokens_for(600) + 8000,
     "reply": _tokens_for(600) + 8000,
     "bank": 24000,

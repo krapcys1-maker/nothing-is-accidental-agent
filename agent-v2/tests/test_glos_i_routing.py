@@ -38,8 +38,10 @@ class VoiceRoutingTest(unittest.TestCase):
         # `przeslania` (sledztwo, 27.09.2026) swiadomie na Opusie — zywe A/B
         # trzech modeli na tym samym sledztwie, patrz config.MODEL_FOR.
         self.assertEqual(config.MODEL_FOR["przeslania"], config.CLAUDE)
+        # `notka_przeslania` tez: Flash gubil hipoteze z przeslania (A/B 27.09).
+        self.assertEqual(config.MODEL_FOR["notka_przeslania"], config.CLAUDE)
         for purpose, model in config.MODEL_FOR.items():
-            if purpose not in {"write", "obraz", "przeslania"}:
+            if purpose not in {"write", "obraz", "przeslania", "notka_przeslania"}:
                 with self.subTest(purpose=purpose):
                     self.assertEqual(model, config.DEEPSEEK)
 

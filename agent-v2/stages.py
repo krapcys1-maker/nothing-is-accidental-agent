@@ -5572,12 +5572,34 @@ def notki_dnia(
         # to `_doba` sprawia, ze pisarz nie przywiazuje sie do rodzaju notki.
         _pisarze = tuple(config.PISARZE_NOTEK) or ("note",)
         etap_pisarza = _pisarze[(od + nr + _doba) % len(_pisarze)]
+        # NOTKE Z PRZESLANIA PISZE OPUS (27.09.2026) — ten sam, ktory napisal
+        # przeslanie. Flash gubil w niej hipoteze; A/B i koszt przy
+        # `config.MODEL_FOR["notka_przeslania"]`.
+        if _przes:
+            etap_pisarza = "notka_przeslania"
         print("  [pisarz] %s (%s)" % (config.MODEL_FOR.get(etap_pisarza, "?"),
                                       etap_pisarza), flush=True)
         wynik = note(conn, run_id, typ, material,
                      link=link_artykulu if typ == "ARTYKUL" else None,
                      note_form=forma, etap=etap_pisarza,
                      seria=seria_kontekst)
+        # OPUS NIE NAPISAL NOTKI Z PRZESLANIA — pisze zwykly pisarz. Opus 5.5
+        # ma klasyfikatory bezpieczenstwa („cyber", „bio"), a sledztwa bywaja
+        # o agentach obchodzacych zabezpieczenia: 27.09 pisarz ARTYKULU odmowil
+        # wlasnie w kategorii „cyber". `note` lapie odmowe jako „notka nie
+        # wyszla", przeslanie zostaje niewydane i bez tej linii Opus
+        # odmawialby przy nim w kazdym przebiegu az do wygasniecia.
+        if (etap_pisarza == "notka_przeslania"
+                and not any((k.get("note") or "").strip()
+                            for k in wynik.get("candidates") or [])):
+            etap_pisarza = _pisarze[(od + nr + _doba) % len(_pisarze)]
+            print("  [przeslanie] Opus nie napisal notki — pisze %s (%s)"
+                  % (config.MODEL_FOR.get(etap_pisarza, "?"), etap_pisarza),
+                  flush=True)
+            wynik = note(conn, run_id, typ, material,
+                         link=link_artykulu if typ == "ARTYKUL" else None,
+                         note_form=forma, etap=etap_pisarza,
+                         seria=seria_kontekst)
         # NUMER CZESCI JEDZIE Z NOTKA, tak samo jak fakt i ranga: `run.py`
         # odhacza czesc DOPIERO po potwierdzonej publikacji. Bez tych dwoch
         # pol seria zapisywalaby sie przy pisaniu, wiec nieudana publikacja

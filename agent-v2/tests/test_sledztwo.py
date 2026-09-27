@@ -295,6 +295,11 @@ sprawdz("odmowa dostawcy przy artykule sledztwa konczy przebieg komunikatem, po 
 sprawdz("nowe sledztwo dopiero, gdy kolejka przeslan zejdzie (przed wyborem historii)",
         "czeka = sledztwo.czekajace_przeslania()" in _art
         and _art.index("sledztwo.czekajace_przeslania()") < _art.index("sledztwo.historie("))
+sprawdz("notke z przeslania pisze Opus, zwykla notka zostaje przy rotacji pisarzy",
+        'etap_pisarza = "notka_przeslania"' in _st
+        and _st.index("etap_pisarza = _pisarze[") < _st.index('etap_pisarza = "notka_przeslania"')
+        and config.MODEL_FOR.get("notka_przeslania") == config.CLAUDE
+        and config.MAX_TOKENS.get("notka_przeslania") and config.EFFORT.get("notka_przeslania"))
 sprawdz("notka bierze przeslanie i zapisuje jego identyfikator",
         "_sledztwo.wez_przeslanie()" in _st and 'wynik["przeslanie_id"]' in _st
         and '"przeslanie_id":' in _run)
@@ -329,6 +334,61 @@ for nazwa in ("nowosc.md", "przeslania.md", "pisarz.md", "notka.md"):
     except (KeyError, ValueError, IndexError) as exc:
         _ok = exc
     sprawdz("%s formatuje sie bez bledu" % nazwa, _ok is True, _ok)
+
+print()
+print("=== 7. NOTKA Z PRZESLANIA: OPUS, A GDY ODMOWI — ZWYKLY PISARZ (prawdziwe notki_dnia) ===")
+# Opus 5.5 ma klasyfikatory „cyber"; 27.09 odmowil artykulu o agentach na
+# stronach rzadow. `note` lapie odmowe jako pusta liste kandydatow.
+sledztwo.dodaj_do_kolejki(pr, DUZA, KARTA, run_id=8)
+_kol = json.loads((config.DATA_DIR / sledztwo.PLIK_KOLEJKI).read_text(encoding="utf-8"))
+for p in _kol:
+    p["kiedy"] = (TERAZ - timedelta(days=1)).isoformat()
+(config.DATA_DIR / sledztwo.PLIK_KOLEJKI).write_text(json.dumps(_kol), encoding="utf-8")
+ETAPY = []
+
+
+def _atrapa_note(conn, run_id, typ, material, link=None, note_form="PROSTA", etap="note", **k):
+    ETAPY.append(etap)
+    if etap == "notka_przeslania":
+        return {"type": typ, "forma": note_form, "candidates": []}
+    return {"type": typ, "forma": note_form,
+            "candidates": [{"note": "A plain note.", "safe_to_post": True}]}
+
+
+_zastepcze = {"artykul_do_promocji": lambda: None, "pamiec_wystawionych": lambda: [],
+              "znajdz_ciekawostki": lambda conn, run_id, ile=8: [],
+              "opublikowane_teksty": lambda *a, **k: [], "teksty_ostatnich_notek": lambda *a, **k: [],
+              "note": _atrapa_note}
+_oryginaly = {n: getattr(stages, n) for n in _zastepcze}
+try:
+    for n, f in _zastepcze.items():
+        setattr(stages, n, f)
+    with contextlib.redirect_stdout(io.StringIO()) as _log:
+        _n = stages.notki_dnia(None, 0, ciekawostki=[], ile=1)
+finally:
+    for n, f in _oryginaly.items():
+        setattr(stages, n, f)
+sprawdz("najpierw pisze Opus, po pustym wyniku zwykly pisarz",
+        ETAPY[:2] == ["notka_przeslania", "note"], ETAPY)
+sprawdz("notka wychodzi i niesie identyfikator przeslania",
+        bool(_n) and bool(_n[0].get("przeslanie_id"))
+        and (_n[0].get("candidates") or [{}])[0].get("note") == "A plain note.", _n)
+sprawdz("log mowi, ze Opus nie napisal i kto pisze zamiast niego",
+        "Opus nie napisal notki" in _log.getvalue(), _log.getvalue()[-400:])
+ETAPY.clear()
+_zastepcze["note"] = lambda conn, run_id, typ, material, link=None, note_form="PROSTA", etap="note", **k: (
+    ETAPY.append(etap) or {"type": typ, "forma": note_form,
+                           "candidates": [{"note": "Opus note.", "safe_to_post": True}]})
+try:
+    for n, f in _zastepcze.items():
+        setattr(stages, n, f)
+    with contextlib.redirect_stdout(io.StringIO()):
+        _n = stages.notki_dnia(None, 0, ciekawostki=[], ile=1)
+finally:
+    for n, f in _oryginaly.items():
+        setattr(stages, n, f)
+sprawdz("KONTRDOWOD: gdy Opus napisze, zwykly pisarz nie jest wolany",
+        ETAPY == ["notka_przeslania"], ETAPY)
 
 print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))
