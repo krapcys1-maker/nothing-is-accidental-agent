@@ -562,7 +562,8 @@ def _call_deepseek(purpose: str, system: str, user: str) -> tuple[str, int, int,
     # dostaje ustawienie dopiero wtedy, gdy pomiar pokaze, ze jego DECYZJA sie
     # nie zmienia — bo tanszy etap, ktory wybiera dwa razy wiecej celow,
     # kosztuje wiecej w dole potoku, niz oszczedzil u siebie.
-    _mysl = config.myslenie_deepseek(purpose)
+    # Ta droga NIE SZUKA w sieci — patrz `config.DEEPSEEK_MYSLENIE_BEZ_SIECI`.
+    _mysl = config.myslenie_deepseek(purpose, siec=False)
     if _mysl:
         cialo["thinking"] = _mysl
     if purpose in config.DEEPSEEK_EFFORT_FOR:

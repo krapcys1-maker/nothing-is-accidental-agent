@@ -1903,8 +1903,10 @@ def znajdz_ciekawostki(
         # „nowa premiera" dwadziescia dni po premierze.
         _wersje = korpus_kanalow.pamiec_wersji(
             korpus_kanalow.korpus_kanalow(1000), dodatkowe=_historia_wersji())
+        # „max dzien po" — patrz `config.WYDARZENIE_SWIEZOSC_DNI`.
         wydarzenia = korpus_kanalow.wielkie_wydarzenia(
-            korpus_kanalow.korpus_kanalow(200), wersje_widziane=_wersje)
+            korpus_kanalow.korpus_kanalow(200), wersje_widziane=_wersje,
+            swiezosc_dni=config.WYDARZENIE_SWIEZOSC_DNI)
     except Exception as exc:
         print("  [wydarzenia] nie sprawdzilem (%s)" % type(exc).__name__,
               flush=True)
@@ -4879,6 +4881,15 @@ def wybierz_material(zapas: list[dict[str, Any]],
         kolejnosc.sort(key=lambda j: styk_faktu(zapas[j]) == "branza")
     for i in kolejnosc:
         f = zapas[i]
+        # SWIEZOSC TEMATU (27.09.2026) — patrz `config.MAKS_WIEK_TEMATU_DNI`.
+        # Fakt prosto ze skauta nie przechodzi przez `wez_kandydatow`, gdzie
+        # bank odsiewa przeterminowane, a dokupione szukanie w sieci potrafi
+        # przyniesc strone sprzed tygodni. Kazda notka przechodzi tedy.
+        if _po_terminie(f):
+            print("  [swiezosc] pomijam — zrodlo z %s: %s"
+                  % (str(f.get("source_date") or "?")[:10],
+                     str(f.get("fact") or "")[:60]), flush=True)
+            continue
         temat = _slowa("%s %s" % (f.get("domain") or "", f.get("fact") or ""))
         if any(_zderzenie(temat, u) for u in unikaj_rdzenie):
             continue
@@ -9159,8 +9170,9 @@ def wez_kandydatow(ile: int = 1) -> list[dict[str, Any]]:
     for k in wolni:
         if _po_terminie(k):
             przeterminowani.append(
-                (k, "po terminie przydatnosci (%s)"
-                    % (k.get("wazny_do") or "termin liczony z daty dopisania")))
+                (k, "po terminie przydatnosci (zrodlo z %s, termin %s)"
+                    % (str(k.get("source_date") or "?")[:10],
+                       k.get("wazny_do") or "liczony z daty dopisania")))
             continue
         wolno, powod = swiezosc_faktu(k)
         (swiezi if wolno else przeterminowani).append((k, powod))
@@ -9761,9 +9773,13 @@ def posortuj_bank(conn: sqlite3.Connection, run_id: int | None = None,
     zapisuje range, kasuje wyrzuconych i nic nie liczy z jego not.
     """
     indeks = wczytaj_indeks()
+    # PO TERMINIE NIE IDZIE DO SEDZIEGO (27.09.2026). Sedzia placil za
+    # ustawianie faktow, ktorych zaden przebieg juz nie wezmie — kazdy wpis to
+    # kilkaset tokenow wejscia i rozumowania nad nim.
     wolni = [k for k in indeks
              if k.get("status") == "nowy"
-             and str(k.get("kiedy") or "")[:10] >= config.DATA_PRZESTAWIENIA]
+             and str(k.get("kiedy") or "")[:10] >= config.DATA_PRZESTAWIENIA
+             and not _po_terminie(k)]
     if len(wolni) < 2:
         print("  [bank] za malo kandydatow do rankingu (%d)" % len(wolni),
               flush=True)
@@ -10099,7 +10115,11 @@ def _po_terminie(k: dict[str, Any]) -> bool:
                     - _d.strptime(zrodlo, "%Y-%m-%d").date()).days
         except ValueError:
             wiek = None
-        if wiek is not None and wiek > config.MAKS_WIEK_ZRODLA_DNI:
+        # SWIEZOSC TEMATU (27.09.2026) — patrz `config.MAKS_WIEK_TEMATU_DNI`.
+        # Prog 30 dni zostaje dla twierdzen o stanie swiata; tematem na notke
+        # zrodlo przestaje byc duzo wczesniej.
+        if wiek is not None and wiek > min(config.MAKS_WIEK_ZRODLA_DNI,
+                                          config.MAKS_WIEK_TEMATU_DNI):
             return True
     termin = str(k.get("wazny_do") or "")
     if not termin:

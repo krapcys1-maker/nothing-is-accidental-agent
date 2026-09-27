@@ -168,8 +168,14 @@ def tresci_zrodel(wpisy: list[dict[str, Any]], ile: int = ILE_ZRODEL,
     # Adres, ktory raz nie dal tekstu, nie jest probowany drugi raz w kolejnym
     # etapie — to byloby drugie zapytanie o te sama sciane zgody.
     sprobowane: set[str] = set()
-    ludzie = kolejnosc_ludzi(wpisy, frozenset(styki_w_banku or ()))
-    branza = [w for w in wpisy if _styk(w) == "branza"]
+    # TYLKO SWIEZE WPISY (27.09.2026) — patrz `config.MAKS_WIEK_SPIZARNI_DNI`.
+    # Fakt dostaje date strony, z ktorej go wyjeto, a bank wyrzuca temat starszy
+    # niz ten sam prog — tekst sprzed tygodnia bylby wiec oplacony i martwy.
+    # Zmierzone rano: pierwsze zrodlo o ludziach w kolejce (KFF Health) mialo
+    # najnowszy wpis sprzed osmiu dni.
+    swieze, starsze = _podziel_po_wieku(wpisy)
+    ludzie = kolejnosc_ludzi(swieze, frozenset(styki_w_banku or ()))
+    branza = [w for w in swieze if _styk(w) == "branza"]
     naglowki = {"User-Agent": config.FETCH_USER_AGENT}
     try:
         klient = httpx.Client(timeout=config.FETCH_TIMEOUT_S,
@@ -218,7 +224,29 @@ def tresci_zrodel(wpisy: list[dict[str, Any]], ile: int = ILE_ZRODEL,
         wez(ludzie, lambda: len(out) < ile - MAKS_BRANZA, 1)
         wez(branza, lambda: len(out) < ile and _branzy() < MAKS_BRANZA, 1)
         wez(ludzie + branza, lambda: len(out) < ile, MAKS_Z_JEDNEGO_ZRODLA)
+        # STARSZE TYLKO NA RATUNEK: gdy swiezych nie starczylo nawet na polowe
+        # spizarni. Pusta spizarnia to platne szukanie w sieci.
+        if len(out) < ile // 2 and starsze:
+            print("  [spizarnia] swiezych tekstow tylko %d — dobieram starsze"
+                  " niz %d dni" % (len(out), config.MAKS_WIEK_SPIZARNI_DNI),
+                  flush=True)
+            wez(kolejnosc_ludzi(starsze, frozenset(styki_w_banku or ()))
+                + [w for w in starsze if _styk(w) == "branza"],
+                lambda: len(out) < ile // 2, MAKS_Z_JEDNEGO_ZRODLA)
     return out
+
+
+def _podziel_po_wieku(wpisy: list[dict[str, Any]]
+                      ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """(swieze, starsze) wzgledem `config.MAKS_WIEK_SPIZARNI_DNI`, w kolejnosci
+    korpusu. Wpis bez daty idzie do starszych — nie wiemy, ile ma dni."""
+    from datetime import datetime, timedelta, timezone
+    granica = (datetime.now(timezone.utc)
+               - timedelta(days=config.MAKS_WIEK_SPIZARNI_DNI)).strftime("%Y-%m-%d")
+    swieze, starsze = [], []
+    for w in wpisy:
+        (swieze if str(w.get("data") or "")[:10] >= granica else starsze).append(w)
+    return swieze, starsze
 
 
 def sklad(gotowe: list[dict[str, str]]) -> str:

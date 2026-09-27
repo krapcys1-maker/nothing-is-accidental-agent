@@ -332,6 +332,13 @@ DEEPSEEK_EFFORT = "low"
 DEEPSEEK_EFFORT_FOR: dict[str, str] = {
     "cele": "low", "investigation": "low",
     "investigation_search": "low", "investigation_extract": "low",
+    # SEDZIA BANKU — zywy test A/B 27.09.2026 na produkcyjnym banku (21 faktow,
+    # ten sam prompt): domyslne rozumowanie dwa razy dalo te sama pierwsza
+    # trojke i zgodnosc kolejnosci Spearmana 0,89; `low` — ta sama trojka
+    # i 0,895, przy 10,5 tys. tokenow wyjscia zamiast 20-26 tys. (0,0069 USD
+    # zamiast 0,012-0,016). Bez rozumowania trojka rozjechala sie calkiem
+    # (0 wspolnych, 0,55) — dlatego `low`, nie wylaczenie.
+    "bank": "low",
 }
 
 # Pamiec brzmienia z juz potwierdzonych publikacji, bez dodatkowego modelu.
@@ -363,9 +370,30 @@ DEEPSEEK_MYSLENIE: dict[str, dict[str, str]] = {
 }
 
 
-def myslenie_deepseek(etap: str) -> dict[str, str] | None:
-    """Kopia ustawienia thinking; None pozostawia domyslne ustawienie API."""
-    w = DEEPSEEK_MYSLENIE.get(etap)
+# TYLKO NA DRODZE BEZ SIECI (`chat/completions`) — ustawienie wygrywa tam
+# z `DEEPSEEK_MYSLENIE`. Droga z wyszukiwaniem zostaje przy swoim, bo tego
+# nikt nie mierzyl: szukanie DeepSeeka przez endpoint zgodny z Anthropic moze
+# zachowywac sie inaczej bez rozumowania.
+#
+# SKAUT NA SPIZARNI — zywy test A/B 27.09.2026, ten sam prompt (8 tekstow
+# spizarni, 13,4 tys. tokenow): domyslne rozumowanie 8 faktow z CZTERECH zrodel
+# (trzy z jednej konferencji prasowej), 15 tys. tokenow wyjscia, 0,0111 USD;
+# bez rozumowania 8 faktow z OSMIU zrodel, wszystkie adresy i 19/19 liczb
+# obecne w tekscie spizarni, pole `wrong_belief` puste tam, gdzie zrodlo nie
+# dokumentuje bledu (prompt wymaga dokladnie tego), 3 tys. tokenow, 0,0038 USD.
+# Wszystkie fakty obu wariantow przeszly `bramka_kandydata`.
+DEEPSEEK_MYSLENIE_BEZ_SIECI: dict[str, dict[str, str]] = {
+    "curiosity": {"type": "disabled"},
+}
+
+
+def myslenie_deepseek(etap: str, siec: bool = True) -> dict[str, str] | None:
+    """Kopia ustawienia thinking; None pozostawia domyslne ustawienie API.
+
+    `siec=False` — wywolanie bez wyszukiwania; wtedy najpierw
+    `DEEPSEEK_MYSLENIE_BEZ_SIECI`."""
+    w = None if siec else DEEPSEEK_MYSLENIE_BEZ_SIECI.get(etap)
+    w = w or DEEPSEEK_MYSLENIE.get(etap)
     return dict(w) if isinstance(w, dict) and w else None
 
 # Tryb tani: wszystko na DeepSeeku poza dyskoveria, ktora ten jawny override
@@ -2233,6 +2261,29 @@ WYDARZENIE_PROB_MAKS = 3
 # sprzed tygodnia bywa prawdziwy i martwy zarazem — korpus kanalow obraca sie
 # w dniach, wiec tydzien to w tej dziedzinie zamierzchlosc.
 BANK_MAKS_DNI = 7
+
+# SWIEZOSC TEMATU — wlasciciel 27.09.2026: „maja byc swieze notki".
+#
+# Zmierzone tego ranka na produkcji: wolne fakty w banku staly na zrodlach
+# sprzed 2-8 dni, bo termin w banku liczyl sie od DOPISANIA (7 dni), a zrodlo
+# moglo miec juz wtedy tydzien — prog wieku zrodla wynosil 30 dni. Jeden zegar
+# dla calego banku (notki, artykul z puli, serie): fakt, ktorego STRONA ZRODLOWA
+# ma wiecej dni niz ten prog, jest po terminie. Podloga banku (15, decyzja
+# wlasciciela) liczy wiec tylko swieze tematy — dobieranie rusza, gdy swiezych
+# brakuje, a nie wtedy, gdy bank jest pelen starych.
+MAKS_WIEK_TEMATU_DNI = 3
+
+# Spizarnia skauta bierze teksty z tych samych dni, bo `source_date` faktu to
+# data strony, z ktorej go wyjal. Starsze teksty wchodza TYLKO wtedy, gdy
+# swiezych nie starczy nawet na polowe spizarni — pusta spizarnia to platne
+# szukanie w sieci, a to kosztuje wiecej niz caly przebieg.
+MAKS_WIEK_SPIZARNI_DNI = MAKS_WIEK_TEMATU_DNI
+
+# FALA I PREMIERA — wlasciciel: „chce napisac o tym w tym samym dniu, max dzien
+# po". Wykrywacz liczyl fale z czterech dni, wiec te same fale (Opus 5.5, Grok
+# 4.7, Gemini 3.8) otwieraly furtke skauta w KAZDYM przebiegu 26.09: trzy platne
+# szukania na dobe przy regule jednego, a bank urosl ponad sufit (27 przy 20).
+WYDARZENIE_SWIEZOSC_DNI = 1
 
 # MIESZANKA DNIA. Ostatnia pozycja to MYSL — notka bez zadnego dowodu.
 #

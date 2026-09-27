@@ -1446,7 +1446,12 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
                                              # PUNKT STYKU FAKTU (E6) — odbior
                                              # liczony per rodzina, patrz
                                              # `stages.co_zadzialalo`.
-                                             styk=n.get("styk") or "")
+                                             styk=n.get("styk") or "",
+                                             # DATA STRONY ZRODLOWEJ — swiezosc
+                                             # notki w dzienniku wprost.
+                                             zrodlo_data=str(
+                                                 (n.get("fakt_wpis") or {})
+                                                 .get("source_date") or "")[:10])
                 # Fakt odhaczamy DOPIERO po potwierdzonej publikacji. Wczesniej
                 # znikal juz przy znalezieniu, wiec przepadal takze wtedy, gdy
                 # notka nie poszla albo gdy przebieg byl tylko sprawdzeniem.

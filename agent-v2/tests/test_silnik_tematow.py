@@ -159,8 +159,11 @@ def _w(kanal, nr, dni_temu):
 # KORPUS JAK NA PRODUKCJI: najnowsze sa blogi branzowe, bo pisza najczesciej.
 BRANZA = [_w(k, n, 0) for k in ("Latent Space", "DeepMind", "HuggingFace",
                                  "Epoch AI", "PyTorch") for n in (1, 2)]
-LUDZIE = [_w("Pew", 1, 2), _w("Pew", 2, 2), _w("EdSurge", 1, 3), _w("The 74", 1, 3),
-          _w("KFF Health", 1, 4), _w("EFF", 1, 4), _w("CourtListener", 1, 5)]
+# Wszystko w oknie swiezosci spizarni (`config.MAKS_WIEK_SPIZARNI_DNI`, od
+# 27.09.2026) — ten plik sprawdza sklad WSROD swiezych; sam prog wieku pilnuje
+# `test_swiezosc_tematu.py`.
+LUDZIE = [_w("Pew", 1, 1), _w("Pew", 2, 1), _w("EdSurge", 1, 2), _w("The 74", 1, 2),
+          _w("KFF Health", 1, 3), _w("EFF", 1, 3), _w("CourtListener", 1, 3)]
 KORPUS = BRANZA + LUDZIE
 sprawdz("KONTROLA: pierwsze osiem korpusu to sama branza (stara spizarnia)",
         all(w["styk"] == "branza" for w in KORPUS[:8]))

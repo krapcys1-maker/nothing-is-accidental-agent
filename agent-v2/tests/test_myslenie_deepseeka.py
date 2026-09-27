@@ -78,5 +78,25 @@ class ThinkingTest(unittest.TestCase):
         with patch.dict(config.DEEPSEEK_MYSLENIE, {"cele": {}}):
             self.assertIsNone(config.myslenie_deepseek("cele"))
 
+    def test_bank_judge_low_effort_and_scout_without_thinking_only_offline(self):
+        # 27.09.2026, zywe testy A/B — patrz config.DEEPSEEK_EFFORT_FOR["bank"]
+        # i config.DEEPSEEK_MYSLENIE_BEZ_SIECI. Sedzia banku rozumuje nisko,
+        # skaut na spizarni nie rozumuje, a skaut SZUKAJACY w sieci zostaje przy
+        # domyslnym ustawieniu dostawcy, bo tego nikt nie mierzyl.
+        with patch.object(llm.httpx, "post", return_value=Response()) as post:
+            llm._call_deepseek("bank", "system", "source")
+        body = post.call_args.kwargs["json"]
+        self.assertEqual(body["reasoning_effort"], "low")
+        self.assertNotIn("thinking", body)
+        with patch.object(llm.httpx, "post", return_value=Response()) as post:
+            llm._call_deepseek("curiosity", "system", "source")
+        self.assertEqual(post.call_args.kwargs["json"]["thinking"], {"type": "disabled"})
+        with patch.object(llm.httpx, "post", return_value=Response()) as post:
+            llm._call_deepseek_z_siecia("curiosity", "system", "source")
+        self.assertNotIn("thinking", post.call_args.kwargs["json"])
+        self.assertIsNone(config.myslenie_deepseek("curiosity"))
+        self.assertEqual(config.myslenie_deepseek("curiosity", siec=False),
+                         {"type": "disabled"})
+
 if __name__ == "__main__":
     unittest.main()

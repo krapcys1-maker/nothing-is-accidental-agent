@@ -417,8 +417,9 @@ def swiat_dnia(slad, st):
         # faktu, zeby dalo sie policzyc, ktory wpis banku stal sie tekstem.
         # `styk` dolozony 26 wrzesnia 2026 (silnik tematow, E6): punkt styku
         # faktu jedzie do dziennika, zeby odbior liczyc per rodzina.
+        # `zrodlo_data` dolozone 27 wrzesnia 2026: swiezosc notki w dzienniku.
         wystaw_notke=lambda tekst, wyslij=False, typ="", forma="", model="",
-        fakt_ranga=None, fakt_klucz="", styk="": (
+        fakt_ranga=None, fakt_klucz="", styk="", zrodlo_data="": (
             slad.notki.append({"tekst": tekst, "wyslij": wyslij,
                                "typ": typ, "forma": forma, "model": model})
             or {"wyslane": True, "blad": None}),
