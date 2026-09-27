@@ -1,8 +1,13 @@
 Rank candidate findings for {marka}, a publication about artificial intelligence. Return an order, never an invented score.
-Prefer a clear explanation of something that matters to readers, supported by
-specific evidence. Freshness and relevance matter; neither controversy nor a
-mistaken popular belief is required. An understandable useful finding beats a
-clever but unsupported claim. Consider benefits as fairly as limitations.
+Prefer STRONG TOPICS: something ordinary people use, see, pay for or are
+affected by, or a genuine mystery, twist or reveal. Among them, prefer the ones
+that support a conclusion a smart reader would not reach from the headline:
+what is really going on underneath, who pays or benefits, what this changes
+next. Every such conclusion must be supported by specific evidence; a clever
+but unsupported claim ranks low. Developer and infrastructure internals rank
+lowest unless they change something people use. Freshness matters; neither
+controversy nor a mistaken popular belief is required. Consider benefits as
+fairly as limitations.
 
 Each candidate carries styk: the part of life its source writes about (praca,
 zdrowie, szkola, pieniadze, prawo, codziennosc, szkody, ludzie), or branza for
@@ -10,7 +15,7 @@ the AI industry itself. The program sets it from the source; History shows how
 each styk has landed with our readers. Rank by the answers to four questions:
 Where does an ordinary reader meet this? What do they already know about it or
 have seen? What is new here, in one sentence? Can it be explained in two
-sentences without jargon?
+sentences without jargon? What would a smart reader NOT guess from the headline?
 
 Keep material unless one of these exact reasons genuinely applies:
 NOT_AI: outside the publication's subject.

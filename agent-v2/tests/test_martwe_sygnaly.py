@@ -500,11 +500,17 @@ POJEDYNCZY = _re.compile(r"(?<!\{)\{([a-z_][a-z0-9_]*)\}(?!\})")
 import stages as _st_pola   # noqa: E402
 _WSTRZYKIWANE = set(_st_pola.POLA_WSTRZYKIWANE)
 braki = []
+# WSZYSTKIE MODULY AGENTA, nie tylko stages.py (27.09.2026). Prompty wolaja
+# takze `research.py` (wlasny `_prompt`), `radar.py`, `glebia.py` i `sledztwo.py`
+# (przez `stages._prompt`) — skan samego stages.py zglaszal ich argumenty jako
+# brakujace, choc stoja w miejscu wywolania.
+_wszystkie_moduly = "\n".join(p.read_text(encoding="utf-8")
+                              for p in sorted(pathlib.Path("agent-v2").glob("*.py")))
 for plik in sorted(pathlib.Path("agent-v2/prompts").glob("*.md")):
     for pole in set(POJEDYNCZY.findall(plik.read_text(encoding="utf-8"))):
         if pole in _WSTRZYKIWANE:
             continue
-        if ("%s=" % pole) not in st:
+        if ("%s=" % pole) not in _wszystkie_moduly:
             braki.append("%s -> %s" % (plik.name, pole))
 sprawdz("zaden prompt nie ma placeholdera bez argumentu", not braki, braki)
 

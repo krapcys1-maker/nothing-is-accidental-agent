@@ -14,8 +14,14 @@ For each one give: the conclusion in one plain sentence; the short chain of
 reasoning from the evidence to it; an everyday example that makes it click for
 someone who has never heard the technical term; and the strongest objection.
 Every factual step comes from the evidence. The conclusion itself may be our
-judgment, but it must follow from the steps. No invented facts, numbers or
-quotes. A conclusion that merely restates the news is worthless here.
+judgment, but it must follow from the steps and be no stronger than they
+allow: an incentive is not proof of intent. No invented facts, numbers or
+quotes. A conclusion that merely restates the news is worthless here. The
+everyday example must be instantly clear to someone who has never heard of the
+case and must map onto the mechanism — no references the reader must already
+know.
+
+Write every value in English.
 
 Then choose the ONE that is most surprising while still well supported.
 

@@ -1470,6 +1470,8 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
                                                  # przeslanie ze sledztwa
                                                  "przeslanie_id":
                                                      n.get("przeslanie_id"),
+                                                 # rodzaj niesztandarowego wniosku
+                                                 "wniosek": n.get("wniosek") or "",
                                              })
                 # Fakt odhaczamy DOPIERO po potwierdzonej publikacji. Wczesniej
                 # znikal juz przy znalezieniu, wiec przepadal takze wtedy, gdy

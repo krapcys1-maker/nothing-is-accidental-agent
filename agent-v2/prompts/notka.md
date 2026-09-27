@@ -63,6 +63,12 @@ deliver — something the reader would not get from the headline — with its
 reasoning, an everyday example and the strongest objection. Build the note so
 that conclusion lands. If the idea is technical, use the example to make it
 click. Mention the objection only where it genuinely changes the picture.
+Keep the conclusion exactly as strong as the evidence: an incentive is not
+proof of intent, and the source's own wording ("unauthorised access") is not
+yours to upgrade ("broke in"). The example must be instantly clear to someone
+who has never heard of the case, and it must map onto the mechanism without a
+second read. The conclusion and the example replace detail rather than add to
+it: stay inside the word range.
 
 The evidence may carry `perspective` and `investigation`: one message from our
 own investigation of a story, with the claims it stands on. A finding is stated

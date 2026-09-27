@@ -311,6 +311,9 @@ MODEL_FOR = {
     "przeslania": CLAUDE,
     # Poprawki zdan bez pokrycia w artykule — `stages.popraw_bez_pokrycia`.
     "naprawa_artykulu": DEEPSEEK,
+    # NIESZTANDAROWY WNIOSEK przed pisaniem notki — `stages.wniosek`; model po
+    # zywym A/B 27.09 (`docs/WNIOSEK_2026-09-27.md`).
+    "wniosek": DEEPSEEK,
     "grafika": DEEPSEEK,
     "cele": DEEPSEEK,
     "wybor": DEEPSEEK,
@@ -394,6 +397,8 @@ DEEPSEEK_MYSLENIE: dict[str, dict[str, str]] = {
     "przeslania": {"type": "enabled"},
     # Jak `naprawa` notek: trzeba zwazyc zdanie wobec dowodow.
     "naprawa_artykulu": {"type": "enabled"},
+    # Wniosek to MYSLENIE — szukanie tego, czego nie ma w naglowku.
+    "wniosek": {"type": "enabled"},
 }
 
 
@@ -1473,6 +1478,8 @@ MAX_TOKENS = {
     "przeslania": 16000,
     # Do szesciu zdan, kazde jedno zdanie odpowiedzi.
     "naprawa_artykulu": 6000,
+    # Trzy wnioski po kilka krotkich pol.
+    "wniosek": 6000,
     "grafika": 4000,
     "cele": 6000,
     "wybor": 6000,
@@ -2329,6 +2336,8 @@ WYDARZENIE_SWIEZOSC_DNI = 1
 # ktores z nich psulo przebieg — oba zawodza na pusto i tak.
 RADAR_WLACZONY = True
 GLEBIA_WLACZONA = True
+# Niesztandarowy wniosek przed pisaniem notki (`stages.wniosek`).
+WNIOSEK_WLACZONY = True
 
 # MIESZANKA DNIA. Ostatnia pozycja to MYSL — notka bez zadnego dowodu.
 #
