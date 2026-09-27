@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **31 plików**, 36 892 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **31 plików**, 37 068 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -113,8 +113,8 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 > w głównej ścieżce artykułu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
-się testować bez przeglądarki i bez pieniędzy**. 188 zestawów
-testów, 4613 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+się testować bez przeglądarki i bez pieniędzy**. 189 zestawów
+testów, 4638 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -177,7 +177,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-10305 wierszy, 165 funkcji na poziomie modułu, 0 klas
+10375 wierszy, 166 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -216,6 +216,7 @@ wiec nie da sie go rozjechac z kodem.
 | `wybierz_cele(conn, run_id, posty)` | Które posty z kanału zasługują na komentarz. |
 | `zamowienia_z_banku(ile)` | Czego bank kazal doszukac — jako lista dla nastepnego szukania. |
 | `zaczyn_z_kanalow(ile)` | Tematy, o ktorych mowi sie w tym tygodniu — do promptu, nie do cytowania. |
+| `_historia_wersji()` *(wewn.)* | Nasza wlasna historia dla pamieci wersji: (tekst, data, tylko_z_rodzina). |
 | `_rdzen_wydarzenia(w)` *(wewn.)* | Klucz zdarzenia: posortowane slowa rdzenia, zeby ta sama premiera |
 | `_nowe_wydarzenia(wydarzenia)` *(wewn.)* | Ktore z tych zdarzen sa NOWE — czyli nie dobieralismy juz o nich materialu. |
 | `faktow_o_wydarzeniu(wydarzenie, fakty)` | Ile z tych faktow dotyczy TEGO wydarzenia. |
@@ -274,7 +275,7 @@ wiec nie da sie go rozjechac z kodem.
 | `_fakt_do_pisarza(fakt)` *(wewn.)* | Wpis banku obciety do tego, co jest dowodem. |
 | `_host_faktu(fakt)` *(wewn.)* | Host zrodla, bez `www.` — do pilnowania ROZNORODNOSCI ZRODEL. |
 | `_tematy_zrodel()` *(wewn.)* | Tematy z korpusu kanalow — drugi mianownik dla rzadkosci nazw. |
-| `wybierz_material(zapas, unikaj, wczesniej, teksty, korpus_zrodel, conn, run_id)` | Bierze fakt, ktory NIE jest o tym samym, co juz dzis wystawiamy. |
+| `wybierz_material(zapas, unikaj, wczesniej, teksty, korpus_zrodel, conn, run_id, kwota)` | Bierze fakt, ktory NIE jest o tym samym, co juz dzis wystawiamy. |
 | `notki_dnia(conn, run_id, dzien_artykulu, karta, ciekawostki, link_artykulu, ile, od)` | Do pieciu notek z dziennego planu, kazda z innego materialu. |
 | `ocen_restack(conn, run_id, notka)` | Czy podac te notke dalej i z jakim zdaniem. |
 | `_podloga_z_pamieci(tekst)` *(wewn.)* | Dwie podlogi, ktore dzialaja BEZ karty dowodowej. |
@@ -703,7 +704,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `korpus_kanalow.py` — o czym mówi się w tym tygodniu — zaczyn tematów, nigdy źródło
 
-869 wierszy, 21 funkcji na poziomie modułu, 1 klas
+975 wierszy, 23 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -716,7 +717,9 @@ wiec nie da sie go rozjechac z kodem.
 | `przetworz(wpisy)` | (nazwa_kanalu, element) -> kandydaci. Czysta funkcja, testowalna. |
 | `_rdzen(temat)` *(wewn.)* | Slowa nosne tytulu — do porownywania, czy dwa kanaly mowia o tym samym. |
 | `_numer_wersji(slowo)` *(wewn.)* | Czy token wyglada na numer wydania: ma cyfre i nie jest rokiem. |
-| `wielkie_wydarzenia(korpus, min_kanalow, min_wspolnych, swiezosc_dni, min_kanalow_premiery)` | Rzeczy, o ktorych mowi NARAZ kilka roznych kanalow. |
+| `klucze_wersji(tekst, tylko_z_rodzina)` | Klucze wersji z tekstu: „gemini 3.8", „gpt-6" albo sam „3.8", gdy rodziny brak. |
+| `pamiec_wersji(korpus, dodatkowe)` | {klucz wersji: najwczesniejszy dzien, w ktorym go widzielismy}. Trwala. |
+| `wielkie_wydarzenia(korpus, min_kanalow, min_wspolnych, swiezosc_dni, min_kanalow_premiery, wersje_widziane)` | Rzeczy, o ktorych mowi NARAZ kilka roznych kanalow. |
 | `_plik_przerw()` *(wewn.)* | — |
 | `_wczytaj_przerwy()` *(wewn.)* | — |
 | `_zapisz_przerwy(dane)` *(wewn.)* | — |

@@ -440,9 +440,98 @@ def _numer_wersji(slowo: str) -> bool:
     return any(c.isdigit() for c in slowo) and not _ROK.match(slowo)
 
 
+# PAMIEC WERSJI — dopisana 27.09.2026 po premierze, ktora nia nie byla.
+#
+# 26.09 wykrywacz oglosil PREMIERE „3.8" i otworzyl furtke szukania, choc Gemini
+# 3.8 obsluzylismy jako premiere juz 6.09 — dwadziescia dni wczesniej. Nowosc
+# numeru liczyl wzgledem korpusu sprzed okna, a korpus to 200 najnowszych
+# tematow, czyli kilka dni; po dolozeniu zrodel o ludziach — jeszcze mniej.
+# Wlasciciel: pisanie o premierze dwa tygodnie po premierze jest niewybaczalne.
+#
+# Dlatego pierwsze pojawienie sie wersji zapisujemy NA STALE, z data wpisu,
+# nie z data przebiegu. Klucz laczy numer z nazwa rodziny z tego samego tytulu
+# („gemini 3.8"), zeby Opus 5.5 z wrzesnia nie zablokowal kiedys premiery innego
+# modelu o numerze 5.5. Numer ze swoja nazwa w srodku („gpt-6", „glm-5.3-flash")
+# jest kluczem sam dla siebie.
+RODZINY_MODELI = ("gemini", "gemma", "claude", "opus", "sonnet", "haiku", "fable",
+                  "grok", "llama", "deepseek", "qwen", "glm", "kimi", "minimax",
+                  "mistral", "phi", "nova", "veo", "sora", "imagen", "codex")
+
+
+def klucze_wersji(tekst: str, tylko_z_rodzina: bool = False) -> set[str]:
+    """Klucze wersji z tekstu: „gemini 3.8", „gpt-6" albo sam „3.8", gdy rodziny brak.
+
+    `tylko_z_rodzina`: bez gołych numerów — dla tekstu ciaglego (fakty, notki),
+    w ktorym „5.5" to rownie dobrze „5.5 miliarda".
+    """
+    slowa = _rdzen(str(tekst or ""))
+    rodziny = {r for r in RODZINY_MODELI if r in slowa}
+    klucze: set[str] = set()
+    for w in slowa:
+        if not _numer_wersji(w):
+            continue
+        if w[0].isalpha():
+            klucze.add(w)
+        elif rodziny:
+            klucze |= {"%s %s" % (r, w) for r in rodziny}
+        elif not tylko_z_rodzina:
+            klucze.add(w)
+    return klucze
+
+
+def pamiec_wersji(korpus: list[dict[str, Any]],
+                  dodatkowe: list[tuple[str, str, bool]] | None = None) -> dict[str, str]:
+    """{klucz wersji: najwczesniejszy dzien, w ktorym go widzielismy}. Trwala.
+
+    `korpus` — tytuly z kanalow i zrodel, z data wpisu. `dodatkowe` — trojki
+    (tekst, data, tylko_z_rodzina) z naszej wlasnej historii: obsluzone
+    wydarzenia, bank faktow, wystawione notki. Plik lezy w katalogu danych
+    instancji; nieudany zapis nie zatrzymuje przebiegu.
+    """
+    import json
+
+    import config
+    plik = config.DATA_DIR / "wersje_widziane.json"
+    try:
+        znane = json.loads(plik.read_text(encoding="utf-8"))
+        if not isinstance(znane, dict):
+            znane = {}
+    except (OSError, ValueError):
+        znane = {}
+    zmiana = False
+
+    def _dopisz(tekst: str, data: str, tylko_z_rodzina: bool) -> None:
+        nonlocal zmiana
+        data = str(data or "")[:10]
+        if len(data) != 10:
+            return
+        for k in klucze_wersji(tekst, tylko_z_rodzina):
+            if k not in znane or data < str(znane[k]):
+                znane[k] = data
+                zmiana = True
+
+    for p in korpus or []:
+        _dopisz(p.get("temat") or "", p.get("data") or "", False)
+    for tekst, data, tylko_z_rodzina in dodatkowe or []:
+        _dopisz(tekst, data, tylko_z_rodzina)
+    if zmiana:
+        try:
+            plik.parent.mkdir(parents=True, exist_ok=True)
+            tymczasowy = plik.with_suffix(".json.tmp")
+            tymczasowy.write_text(json.dumps(znane, ensure_ascii=False, indent=1,
+                                             sort_keys=True), encoding="utf-8")
+            tymczasowy.replace(plik)
+        except OSError as exc:
+            print("  [wydarzenia] nie zapisalem pamieci wersji (%s)"
+                  % type(exc).__name__, flush=True)
+    return znane
+
+
 def wielkie_wydarzenia(korpus: list[dict[str, Any]], min_kanalow: int = 3,
                        min_wspolnych: int = 2, swiezosc_dni: int = 4,
-                       min_kanalow_premiery: int = 2) -> list[dict[str, Any]]:
+                       min_kanalow_premiery: int = 2,
+                       wersje_widziane: dict[str, str] | None = None,
+                       ) -> list[dict[str, Any]]:
     """Rzeczy, o ktorych mowi NARAZ kilka roznych kanalow.
 
     PO CO. Wlasciciel: „jak wychodzi nowy model albo jest duze wydarzenie AI,
@@ -525,10 +614,27 @@ def wielkie_wydarzenia(korpus: list[dict[str, Any]], min_kanalow: int = 3,
     for p in korpus or []:
         if (p.get("data") or "") < granica:
             znane |= _rdzen(p.get("temat") or "")
+    # WERSJA WIDZIANA PRZED OKNEM NIE JEST PREMIERA — takze wtedy, gdy korpus
+    # jej juz nie pamieta. Patrz `pamiec_wersji`.
+    stare_wersje = {k for k, d in (wersje_widziane or {}).items()
+                    if str(d)[:10] < granica}
+
+    def _juz_byla(s: str, temat: str) -> bool:
+        klucze = klucze_wersji(temat)
+        if any(k == s or k.endswith(" " + s) for k in klucze & stare_wersje):
+            return True
+        # TYTUL BEZ NAZWY RODZINY („3.8 Live gets a face") — goly numer pod
+        # koniec wrzesnia to Gemini 3.8, ktore juz bylo. Tytul Z nazwa innej
+        # rodziny („Grok 5.5") tu nie trafia, wiec cudza premiera nie przepada.
+        if s in klucze:
+            return any(k == s or k.endswith(" " + s) for k in stare_wersje)
+        return False
+
     premiery: dict[str, list[dict[str, Any]]] = {}
     for p in swieze:
         for s in _rdzen(p.get("temat") or ""):
-            if s not in znane and _numer_wersji(s):
+            if (s not in znane and _numer_wersji(s)
+                    and not _juz_byla(s, p.get("temat") or "")):
                 premiery.setdefault(s, []).append(p)
     for _s, pozycje in sorted(premiery.items()):
         kanaly = {p.get("kanal", "") for p in pozycje}

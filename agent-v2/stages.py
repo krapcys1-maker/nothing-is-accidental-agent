@@ -1509,6 +1509,40 @@ def zaczyn_z_kanalow(ile: int = 26) -> str:
 WYDARZENIA_OBSLUZONE = config.DATA_DIR / "wydarzenia_obsluzone.json"
 
 
+def _historia_wersji() -> list[tuple[str, str, bool]]:
+    """Nasza wlasna historia dla pamieci wersji: (tekst, data, tylko_z_rodzina).
+
+    Obsluzone wydarzenia (ich klucze to rdzenie tytulow, wiec gole numery sa tam
+    wiarygodne), bank faktow i wystawione notki oraz artykuly — w tych dwoch
+    tylko numery z nazwa rodziny, bo w tekscie ciaglym „5.5" to tez „5,5 mld".
+    """
+    wynik: list[tuple[str, str, bool]] = []
+    try:
+        znane = json.loads(WYDARZENIA_OBSLUZONE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        znane = {}
+    for klucz, wpis in (znane.items() if isinstance(znane, dict) else ()):
+        kiedy = wpis.get("kiedy") if isinstance(wpis, dict) else wpis
+        wynik.append((str(klucz).replace(",", " "), str(kiedy or ""), False))
+    try:
+        for k in wczytaj_indeks():
+            wynik.append((str(k.get("fact") or ""), str(k.get("kiedy") or ""), True))
+    except Exception:
+        pass
+    try:
+        with (config.DATA_DIR / "dziennik.jsonl").open(encoding="utf-8") as f:
+            for linia in f:
+                try:
+                    w = json.loads(linia)
+                except ValueError:
+                    continue
+                if w.get("rodzaj") in ("notka", "artykul") and w.get("udane"):
+                    wynik.append((str(w.get("tekst") or ""), str(w.get("kiedy") or ""), True))
+    except OSError:
+        pass
+    return wynik
+
+
 def _rdzen_wydarzenia(w: dict[str, Any]) -> str:
     """Klucz zdarzenia: posortowane slowa rdzenia, zeby ta sama premiera
     opisana raz jako „glm, 5.3", a raz „5.3, glm" byla JEDNYM zdarzeniem."""
@@ -1866,8 +1900,14 @@ def znajdz_ciekawostki(
     wydarzenia = []
     try:
         import korpus_kanalow
+        # PAMIEC WERSJI — patrz `korpus_kanalow.pamiec_wersji`. Premiera to
+        # wersja, ktorej wczesniej nie widzielismy NIGDZIE, a nie tylko w 200
+        # najnowszych tematach korpusu: 26.09.2026 Gemini 3.8 wyszlo jako
+        # „nowa premiera" dwadziescia dni po premierze.
+        _wersje = korpus_kanalow.pamiec_wersji(
+            korpus_kanalow.korpus_kanalow(1000), dodatkowe=_historia_wersji())
         wydarzenia = korpus_kanalow.wielkie_wydarzenia(
-            korpus_kanalow.korpus_kanalow(200))
+            korpus_kanalow.korpus_kanalow(200), wersje_widziane=_wersje)
     except Exception as exc:
         print("  [wydarzenia] nie sprawdzilem (%s)" % type(exc).__name__,
               flush=True)
