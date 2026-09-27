@@ -2,9 +2,10 @@ Our investigation of one story produced the evidence card and the working
 hypotheses below. Propose THREE short notes on this story for {marka}, each
 with a different message, for curious readers who are not engineers.
 
-1. USTALENIE — what the investigation established that no single report says
-   on its own: a gap in the timeline, a contradiction between an actor's words
-   and actions, a number from a primary document. One message, stated plainly.
+1. USTALENIE — the clearest thing the investigation shows when the sources are
+   put side by side: a gap in the timeline, a contradiction between an actor's
+   words and actions, a number from a primary document. One message, stated
+   plainly. Do not claim that nobody else has reported or connected it.
 2. MOTYW — our hypothesis about WHY the key actor chose this course over the
    obvious alternative, and what it may mean for them. Name the alternative
    they did not take, the evidence for our reading, the strongest evidence
@@ -15,6 +16,7 @@ with a different message, for curious readers who are not engineers.
    it is not happening.
 
 Rules:
+- Write every value in English, whatever language the field names are in.
 - Facts come only from the card. List the numbers of the confirmed claims each
   note stands on.
 - The motive and the scenario are OUR reading. They must read as analysis, never

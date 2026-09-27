@@ -997,7 +997,16 @@ def _przebieg_sledztwa(conn, run_id: int) -> int:
 
     print()
     print("-- czy laczenie zrodel cos ustalilo --", flush=True)
-    nowe = sledztwo.nowosc(conn, run_id, card, wybrana)
+    # PELNE TEKSTY ZRODEL do sprawdzenia, czy ustalenie nie stoi juz w jednym
+    # z nich — pobrane strony plus fragmenty dograne w sledztwie.
+    teksty_zrodel: dict[str, str] = {}
+    for c in corpus:
+        if c.get("text"):
+            teksty_zrodel[str(c.get("url"))] = str(c.get("text"))
+    for e in evidence:
+        if isinstance(e, dict) and e.get("url"):
+            teksty_zrodel.setdefault(str(e["url"]), " ".join(str(x) for x in e.get("excerpts") or []))
+    nowe = sledztwo.nowosc(conn, run_id, card, wybrana, teksty_zrodel=teksty_zrodel)
     print("  %s: %s" % ("USTALENIE" if nowe.get("jest") else "BRAK USTALENIA",
                         nowe.get("ustalenie") or nowe.get("powod")), flush=True)
     print()
@@ -1017,16 +1026,29 @@ def _przebieg_sledztwa(conn, run_id: int) -> int:
     else:
         print("  (bez --wyslij: przeslania NIE ida do kolejki notek)", flush=True)
 
-    if not nowe.get("jest"):
-        print(">> brak ustalenia ponad pojedyncze artykuly — artykulu nie pisze;"
-              " przeslania ida do notek", flush=True)
+    # KIEDY ARTYKUL. Nowe ustalenie (sprawdzone kodem) to premia, nie warunek:
+    # pierwszy zywy test pokazal, ze prawdziwie nowe ustalenia sa rzadkie, a
+    # artykul z pelnym obrazem historii i NASZA analiza (motyw, za dwa lata)
+    # jest tym, czego nie da zaden pojedynczy serwis. Bez pelnego obrazu albo
+    # bez analiz — tylko notki.
+    obraz_ok, obraz_opis = sledztwo.pelny_obraz(card)
+    rodzaje = {p["rodzaj"] for p in przes}
+    analiza_ok = {"MOTYW", "ZA_DWA_LATA"} <= rodzaje
+    print("  pelny obraz: %s (%s); nasze analizy: %s"
+          % ("TAK" if obraz_ok else "NIE", obraz_opis,
+             "TAK" if analiza_ok else "NIE (%s)" % ", ".join(sorted(rodzaje)) or "brak"),
+          flush=True)
+    if not nowe.get("jest") and not (obraz_ok and analiza_ok):
+        print(">> ani nowego ustalenia, ani pelnego obrazu z analiza — artykulu nie"
+              " pisze; przeslania ida do notek", flush=True)
         return 1
     twierdzenia = sledztwo._twierdzenia(card)
-    card["investigation_finding"] = {
-        "finding": nowe["ustalenie"],
-        "why_no_single_report_says_it": nowe.get("powod") or "",
-        "claims": [twierdzenia[i - 1].get("claim") for i in nowe.get("twierdzenia") or []
-                   if 1 <= i <= len(twierdzenia)]}
+    if nowe.get("jest"):
+        card["investigation_finding"] = {
+            "finding": nowe["ustalenie"],
+            "how_the_sources_combine": nowe.get("powod") or "",
+            "claims": [twierdzenia[i - 1].get("claim") for i in nowe.get("twierdzenia") or []
+                       if 1 <= i <= len(twierdzenia)]}
     card["editorial_hypotheses"] = [
         {k: p.get(k) for k in ("rodzaj", "przeslanie", "tresc", "za", "przeciw", "co_obali")}
         for p in przes if p["rodzaj"] in ("MOTYW", "ZA_DWA_LATA")]
@@ -1538,6 +1560,15 @@ def _napisz_i_zapisz(conn, run_id, brief, card, evidence=None) -> int:
     uwagi.extend(stages.swiezosc_karty(card))
     for item in bez_pokrycia:
         uwagi.append({"gate": "FAKT_BEZ_POKRYCIA", "detail": item.get("text", "")})
+    # ZDANIA BEZ POKRYCIA POPRAWIANE (27.09.2026) — patrz
+    # `stages.popraw_bez_pokrycia`. Artykul wychodzi zawsze, jak dotad; zmienia
+    # sie tylko to, ze wskazane zdanie nie idzie do czytelnika w ciemno.
+    if bez_pokrycia:
+        draft["body"], _poprawki = stages.popraw_bez_pokrycia(
+            conn, run_id, draft["body"], card, bez_pokrycia)
+        for _p in _poprawki:
+            print("   [poprawka] %s" % _p, flush=True)
+            uwagi.append({"gate": "POPRAWKA", "detail": _p})
 
     print()
     print("-- uwagi (nic nie blokuje) --", flush=True)

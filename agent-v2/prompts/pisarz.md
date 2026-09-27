@@ -37,9 +37,10 @@ Place a limitation beside the claim it qualifies; use a separate paragraph only
 when the reader needs one. Never invent reporting or personal experience.
 
 The card may carry `investigation_finding`: what our own reporting established
-by putting several sources together, which no single report says. It is the
-reason this article exists. Build the piece around it and let the reader see
-how the pieces fit, each piece attributed to its source.
+by putting several sources together. Build the piece around it and let the
+reader see how the pieces fit, each piece attributed to its source. Do not claim
+that nobody else has reported or connected it; you cannot know that. Say what
+the sources show when they are put side by side.
 
 It may also carry `editorial_hypotheses`: our reading of why the key actor chose
 this course, or how this could look in about two years. Use them only as clearly

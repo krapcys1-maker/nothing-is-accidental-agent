@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Any
 from urllib.parse import urlparse
@@ -196,14 +197,60 @@ def _karta_do_promptu(card: dict[str, Any], limit: int = 14000) -> str:
     return "\n".join(wiersze)[:limit]
 
 
-def nowosc(conn, run_id, card: dict[str, Any], h: dict[str, Any]) -> dict[str, Any]:
+_MIESIACE = ("january", "february", "march", "april", "may", "june", "july", "august",
+             "september", "october", "november", "december")
+_DZIEN_MIESIAC = re.compile(r"\b(\d{1,2})(?:st|nd|rd|th)?\s+(%s)\b" % "|".join(_MIESIACE))
+_MIESIAC_DZIEN = re.compile(r"\b(%s)\s+(\d{1,2})(?:st|nd|rd|th)?\b" % "|".join(_MIESIACE))
+
+
+def _znaczniki(tekst: Any) -> set[str]:
+    """Daty (miesiac + dzien albo sam miesiac) i liczby z tekstu, w jednej postaci.
+
+    Do sprawdzenia, czy ustalenie nie stoi JUZ w jednym zrodle — slowa da sie
+    sparafrazowac, daty i liczby nie.
+    """
+    t = " ".join(str(tekst or "").lower().replace(",", " ").split())
+    out: set[str] = set()
+    zajete: list[tuple[int, int]] = []
+    for wz, mies, dzien in ((_DZIEN_MIESIAC, 2, 1), (_MIESIAC_DZIEN, 1, 2)):
+        for m in wz.finditer(t):
+            out.add("%s %d" % (m.group(mies), int(m.group(dzien))))
+            zajete.append(m.span())
+    for mies in _MIESIACE:
+        if mies != "may" and re.search(r"\b%s\b" % mies, t):
+            out.add(mies)
+    for m in re.finditer(r"\b\d+(?:\.\d+)?%?", t):
+        if not any(a <= m.start() < b for a, b in zajete):
+            out.add(m.group(0))
+    return out
+
+
+def w_jednym_zrodle(ustalenie: str, teksty: dict[str, str]) -> str:
+    """Adres zrodla, ktore samo zawiera wszystkie daty i liczby ustalenia, albo pusto.
+
+    Pusto takze wtedy, gdy ustalenie ma mniej niz dwa znaczniki — wtedy nie da
+    sie tego sprawdzic kodem i zostaje ocena modelu.
+    """
+    potrzebne = _znaczniki(ustalenie)
+    if len(potrzebne) < 2:
+        return ""
+    for adres, tekst in (teksty or {}).items():
+        if potrzebne <= _znaczniki(tekst):
+            return adres
+    return ""
+
+
+def nowosc(conn, run_id, card: dict[str, Any], h: dict[str, Any],
+           teksty_zrodel: dict[str, str] | None = None) -> dict[str, Any]:
     """Czy laczenie zrodel ustalilo cos, czego nie mowi zadne z nich.
 
     Oddaje `{"jest", "ustalenie", "twierdzenia", "zrodla", "powod"}`. „Jest"
     tylko wtedy, gdy model wskazal twierdzenia karty, a te stoja na CO NAJMNIEJ
     DWOCH roznych adresach — jedno zrodlo to streszczenie, nie ustalenie.
-    Nigdy nie podnosi wyjatku: awaria = brak ustalenia (artykul z tej historii
-    nie powstaje, przeslania i tak ida do notek).
+    I tylko wtedy, gdy ZADNE pojedyncze zrodlo nie zawiera wszystkich dat i
+    liczb ustalenia (`w_jednym_zrodle`): pierwszy zywy test 27.09 przepuscil
+    „luke w osi czasu", ktora ABC wylozylo w calosci w jednym artykule.
+    Nigdy nie podnosi wyjatku: awaria = brak ustalenia.
     """
     twierdzenia = _twierdzenia(card)
     if len(twierdzenia) < 2:
@@ -237,8 +284,22 @@ def nowosc(conn, run_id, card: dict[str, Any], h: dict[str, Any]) -> dict[str, A
     if len(adresy) < 2:
         return {"jest": False, "ustalenie": ustalenie,
                 "powod": "ustalenie stoi na %d adresie — to streszczenie jednego zrodla" % len(adresy)}
+    jedno = w_jednym_zrodle(ustalenie, teksty_zrodel or {})
+    if jedno:
+        return {"jest": False, "ustalenie": ustalenie,
+                "powod": "wszystkie daty i liczby ustalenia sa juz w jednym zrodle: %s" % jedno}
     return {"jest": True, "ustalenie": ustalenie, "twierdzenia": nr, "zrodla": adresy,
             "powod": " ".join(str(dane.get("dlaczego_nie_w_jednym") or "").split())[:300]}
+
+
+def pelny_obraz(card: dict[str, Any], min_twierdzen: int = 8, min_serwisow: int = 4) -> tuple[bool, str]:
+    """Czy karta daje czytelnikowi pelny obraz historii: dosc potwierdzonych
+    twierdzen z dosc roznych serwisow. Artykul ze sledztwa bez nowego ustalenia
+    stoi na tym i na naszych analizach (motyw, za dwa lata)."""
+    tw = _twierdzenia(card)
+    serwisy = {_host(c.get("url")) for c in tw} - {""}
+    ok = len(tw) >= min_twierdzen and len(serwisy) >= min_serwisow
+    return ok, "%d potwierdzonych twierdzen z %d serwisow" % (len(tw), len(serwisy))
 
 
 # --- trzy przeslania -------------------------------------------------------------------
@@ -295,7 +356,8 @@ def przeslania(conn, run_id, card: dict[str, Any], dossier: dict[str, Any] | Non
                 continue
             if 1 <= i <= len(twierdzenia) and i not in nr:
                 nr.append(i)
-        powod = ("rodzaj %r" % rodzaj if rodzaj not in RODZAJE or rodzaj in {o["rodzaj"] for o in out}
+        powod = ("nieznany rodzaj %r" % rodzaj if rodzaj not in RODZAJE
+                 else "powtorzony rodzaj" if rodzaj in {o["rodzaj"] for o in out}
                  else "brak przeslania" if not tekst["przeslanie"] or not tekst["tresc"]
                  else "bez twierdzen karty" if not nr
                  else "motyw bez dowodu przeciw" if rodzaj == "MOTYW" and not tekst["przeciw"]

@@ -301,7 +301,16 @@ MODEL_FOR = {
     "glebia": DEEPSEEK,
     # SLEDZTWO (27.09.2026) — patrz `sledztwo.py`.
     "nowosc": DEEPSEEK,
-    "przeslania": DEEPSEEK,
+    # TRZY PRZESLANIA — Opus, po zywym A/B 27.09 na tym samym sledztwie:
+    # Flash bez rozumowania odpisal po polsku i podal „nikt nie monitorowal"
+    # jak fakt (0,0018 USD); Flash z rozumowaniem ostrozny, ale motyw plaski
+    # (0,003 USD); Opus 5.5 dal hipoteze, o jaka prosil wlasciciel — test na
+    # zywym internecie zamiast w piaskownicy, bo realistyczniej, a przy
+    # samoregulacji ryzyko ponosza inni — z uczciwym „przeciw" (0,080 USD).
+    # Dwa sledztwa na tydzien: ok. 0,7 USD miesiecznie.
+    "przeslania": CLAUDE,
+    # Poprawki zdan bez pokrycia w artykule — `stages.popraw_bez_pokrycia`.
+    "naprawa_artykulu": DEEPSEEK,
     "grafika": DEEPSEEK,
     "cele": DEEPSEEK,
     "wybor": DEEPSEEK,
@@ -383,6 +392,8 @@ DEEPSEEK_MYSLENIE: dict[str, dict[str, str]] = {
     # A/B z 27.09 (patrz `docs/SLEDZTWO_2026-09-27.md`).
     "nowosc": {"type": "enabled"},
     "przeslania": {"type": "enabled"},
+    # Jak `naprawa` notek: trzeba zwazyc zdanie wobec dowodow.
+    "naprawa_artykulu": {"type": "enabled"},
 }
 
 
@@ -1460,6 +1471,8 @@ MAX_TOKENS = {
     # kilka zdan. Rozumowanie wlaczone, stad zapas.
     "nowosc": 12000,
     "przeslania": 16000,
+    # Do szesciu zdan, kazde jedno zdanie odpowiedzi.
+    "naprawa_artykulu": 6000,
     "grafika": 4000,
     "cele": 6000,
     "wybor": 6000,
