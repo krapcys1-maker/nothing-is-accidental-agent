@@ -77,6 +77,16 @@
 {{"beliefs": [{{"belief": "<in your own words, one sentence>", "first_stated": "<verbatim sentence from the article>"}}], "support_only": [{{"quote": "<verbatim sentence>", "supports": <index into beliefs>}}], "hardest_fact": {{"quote": "<verbatim>", "why": "<one clause>"}}, "procedural_nearby": {{"quote": "<verbatim>"}}, "same_register": true|false, "reader_moment": {{"quote": "<verbatim>", "object": "<the one thing out of the reader's own life that is named>"}}, "opening_claim": {{"quote": "<verbatim>", "already_familiar": true|false}}, "summary": "<one sentence>"}}
 ```
 
+#### `glebia.md` (32 wierszy)
+
+**Pola wejściowe:** `fakt`, `linki`, `pierwotny`, `tekst`
+
+**Kontrakt wyjścia:**
+
+```json
+{{"data_points": [{{"value": "<number with unit>", "compared_to": "<baseline or comparison stated in the text, or empty>", "who": "<who says or measured it>", "quote": "<exact words from the text>"}}], "most_surprising": {{"detail": "<one sentence>", "quote": "<exact words>"}}, "reader_question": "<question>", "answer": {{"text": "<answer in plain words, or empty>", "quote": "<exact words, or empty>"}}, "primary_documents": ["<url from the list below>"]}}
+```
+
 #### `glos_krotkich.md` (66 wierszy)
 
 **Pola wejściowe:** *(brak)*
@@ -131,7 +141,7 @@
 {{"text": "the full corrected text", "co_zmienione": "one line: what you changed and what evidence you changed it to"}}
 ```
 
-#### `notka.md` (99 wierszy)
+#### `notka.md` (105 wierszy)
 
 **Pola wejściowe:** `evidence`, `form_brief`, `language`, `marka`, `max_words`, `min_words`, `note_form`, `note_type`, `ostatnie_otwarcia_json`, `ostatnie_zakonczenia_json`, `rozbior`, `type_brief`
 
@@ -185,6 +195,16 @@
 {{"powtorka_nr": <number of the bank fact it repeats, or 0 if none>, "powod": "<one short sentence>"}}
 ```
 
+#### `radar.md` (38 wierszy)
+
+**Pola wejściowe:** `dni`, `ile`, `marka`, `naglowki`, `najlepsze`, `najslabsze`
+
+**Kontrakt wyjścia:**
+
+```json
+{{"grupy": [{{"ids": [<ids of all headlines in this story>], "najlepszy": <id>, "hak": "<one sentence>", "glebia": "<the number, document or comparison to dig for>"}}]}}
+```
+
 #### `recenzent.md` (33 wierszy)
 
 **Pola wejściowe:** `body`, `card_json`
@@ -235,7 +255,7 @@
 {{"restack": true|false, "reason": "<why this is or is not worth sharing>", "sentence": "<your reaction, or empty when false>", "mechanism_named": "<supported connection if there is one, otherwise empty>"}}
 ```
 
-#### `rozbior.md` (43 wierszy)
+#### `rozbior.md` (47 wierszy)
 
 **Pola wejściowe:** `evidence`, `marka`
 
