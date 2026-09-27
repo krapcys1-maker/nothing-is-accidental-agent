@@ -611,7 +611,7 @@
 
 ### `radar.py` — radar ciekawości — świeże nagłówki ustawione od najciekawszej historii, warianty jednej sprawy razem
 
-208 wierszy, 4 funkcji na poziomie modułu, 0 klas
+212 wierszy, 4 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|

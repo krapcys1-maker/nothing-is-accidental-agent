@@ -102,8 +102,12 @@ def przyklady_odbioru(ile: int = 5, min_wyswietlen: int = 10) -> tuple[list[str]
                     w = json.loads(linia)
                 except ValueError:
                     continue
+                # TYLKO OD PRZESTAWIENIA KONTA NA AI — w czolowce odbioru stoja
+                # notki z sierpnia o odszkodowaniu za spozniony lot i o polisie
+                # na zycie; jako wzor dla radaru AI uczylyby innego konta.
                 if (isinstance(w, dict) and w.get("rodzaj") == "notka"
-                        and w.get("udane") and w.get("id") and w.get("tekst")):
+                        and w.get("udane") and w.get("id") and w.get("tekst")
+                        and str(w.get("kiedy") or "")[:10] >= config.DATA_PRZESTAWIENIA):
                     teksty[str(w["id"])] = str(w["tekst"])
         oceny = []
         for nid, s in pomiary.items():

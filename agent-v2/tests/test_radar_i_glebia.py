@@ -163,6 +163,31 @@ finally:
     radar.przyklady_odbioru = _przyklady
 
 print()
+print("=== 1b. WZORY ODBIORU TYLKO OD PRZESTAWIENIA KONTA NA AI ===")
+_t0 = datetime.now(timezone.utc) - timedelta(days=6)
+_dz, _st = [], []
+for nid, kiedy, wysw, odw, tekst in (
+        ("stara", "2026-08-23T10:00:00+00:00", 20, 9, "EUR 250 for a late flight"),
+        ("a", _t0.isoformat(), 50, 5, "notka a o rachunku za chatbota"),
+        ("b", _t0.isoformat(), 50, 1, "notka b o kluczach API")):
+    _dz.append({"rodzaj": "notka", "udane": True, "id": nid, "kiedy": kiedy, "tekst": tekst})
+    for godz in (1, 80):
+        _st.append({"rodzaj": "notka", "id": nid, "wystawione": _t0.isoformat(),
+                    "kiedy": (_t0 + timedelta(hours=godz)).isoformat(),
+                    "wyswietlenia": wysw, "odwiedziny_profilu": odw})
+(config.DATA_DIR / "dziennik.jsonl").write_text(
+    "".join(json.dumps(w) + "\n" for w in _dz), encoding="utf-8")
+(config.DATA_DIR / "statystyki.jsonl").write_text(
+    "".join(json.dumps(w) + "\n" for w in _st), encoding="utf-8")
+_naj, _sla = radar.przyklady_odbioru(ile=1)
+sprawdz("najlepsza po przestawieniu na czele", _naj == ["- notka a o rachunku za chatbota"], _naj)
+sprawdz("najslabsza na koncu", _sla == ["- notka b o kluczach API"], _sla)
+sprawdz("KONTRDOWOD: notka sprzed przestawienia (najlepszy wynik) nie jest wzorem",
+        all("late flight" not in x for x in _naj + _sla), _naj + _sla)
+(config.DATA_DIR / "dziennik.jsonl").unlink()
+(config.DATA_DIR / "statystyki.jsonl").unlink()
+
+print()
 print("=== 2. SPIZARNIA WG RADARU ===")
 
 

@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **33 plików**, 37 941 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **33 plików**, 37 945 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -114,7 +114,7 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
 się testować bez przeglądarki i bez pieniędzy**. 191 zestawów
-testów, 4732 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+testów, 4735 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -753,7 +753,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `radar.py` — radar ciekawości — świeże nagłówki ustawione od najciekawszej historii, warianty jednej sprawy razem
 
-208 wierszy, 4 funkcji na poziomie modułu, 0 klas
+212 wierszy, 4 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
