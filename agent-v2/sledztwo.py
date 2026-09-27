@@ -457,6 +457,14 @@ def _wydane_przeslania() -> tuple[set[str], bool]:
     return wydane, dzisiaj
 
 
+def czekajace_przeslania() -> int:
+    """Ile przeslan czeka na notke: wazne i jeszcze nie wydane."""
+    wydane, _ = _wydane_przeslania()
+    teraz = _teraz().isoformat()
+    return sum(1 for p in _kolejka() if str(p.get("wazny_do") or "") >= teraz
+               and str(p.get("id")) not in wydane)
+
+
 def wez_przeslanie() -> dict[str, Any] | None:
     """Nastepne przeslanie do notki — JEDNO na dobe, najstarsza historia pierwsza.
 

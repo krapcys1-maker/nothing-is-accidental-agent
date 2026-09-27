@@ -643,7 +643,7 @@
 
 ### `sledztwo.py` — śledztwo — historia z radaru, bramka nowości sprawdzana kodem, trzy przesłania (ustalenie, motyw, za dwa lata) i kolejka notek
 
-500 wierszy, 26 funkcji na poziomie modułu, 0 klas
+508 wierszy, 27 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -671,6 +671,7 @@
 | `_zapisz_kolejke(kolejka)` *(wewn.)* | — |
 | `dodaj_do_kolejki(lista, h, card, run_id)` | Przeslania do kolejki notek, kazde wazne `MAKS_WIEK_TEMATU_DNI` dni. |
 | `_wydane_przeslania()` *(wewn.)* | (identyfikatory juz opublikowanych, czy dzis wyszlo juz jakies). |
+| `czekajace_przeslania()` | Ile przeslan czeka na notke: wazne i jeszcze nie wydane. |
 | `wez_przeslanie()` | Nastepne przeslanie do notki — JEDNO na dobe, najstarsza historia pierwsza. |
 | `material_notki(p)` | (fakt do dziennika i straznikow, material dla pisarza) z przeslania. |
 
@@ -791,7 +792,7 @@
 
 ### `artykul_z_puli.py` — artykuł bierze temat z tej samej puli, co notki
 
-1722 wierszy, 15 funkcji na poziomie modułu, 0 klas
+1732 wierszy, 15 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|

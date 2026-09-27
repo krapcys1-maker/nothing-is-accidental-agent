@@ -230,7 +230,10 @@ finally:
 print()
 print("=== 5. KOLEJKA: JEDNO PRZESLANIE NA DOBE ===")
 sprawdz("pusta kolejka — nic", sledztwo.wez_przeslanie() is None)
+sprawdz("pusta kolejka — nic nie czeka, mozna badac", sledztwo.czekajace_przeslania() == 0)
 sledztwo.dodaj_do_kolejki(pr, DUZA, KARTA, run_id=7)
+sprawdz("po sledztwie czekaja trzy przeslania", sledztwo.czekajace_przeslania() == 3,
+        sledztwo.czekajace_przeslania())
 # Sledztwo bierze czolo radaru, ktore tego samego dnia poszlo juz zwykla notka
 # (27.09: 11:22 notka o Medicare, 13:11 sledztwo o tym samym).
 sprawdz("KONTRDOWOD: w dniu sledztwa przeslanie czeka do jutra", sledztwo.wez_przeslanie() is None)
@@ -255,11 +258,14 @@ sprawdz("KONTRDOWOD: po przeslaniu dzis — drugie dopiero jutro", sledztwo.wez_
      "przeslanie_id": p1["id"]}) + "\n", encoding="utf-8")
 p2 = sledztwo.wez_przeslanie()
 sprawdz("nazajutrz: motyw, a wydane ustalenie nie wraca", (p2 or {}).get("rodzaj") == "MOTYW", p2)
+sprawdz("wydane ustalenie nie czeka — zostaja dwa", sledztwo.czekajace_przeslania() == 2,
+        sledztwo.czekajace_przeslania())
 _kol = json.loads((config.DATA_DIR / sledztwo.PLIK_KOLEJKI).read_text(encoding="utf-8"))
 for p in _kol:
     p["wazny_do"] = (TERAZ - timedelta(hours=1)).isoformat()
 (config.DATA_DIR / sledztwo.PLIK_KOLEJKI).write_text(json.dumps(_kol), encoding="utf-8")
 sprawdz("KONTRDOWOD: przeslanie po terminie nie wychodzi", sledztwo.wez_przeslanie() is None)
+sprawdz("KONTRDOWOD: przeterminowane nie blokuja nowego sledztwa", sledztwo.czekajace_przeslania() == 0)
 (config.DATA_DIR / "dziennik.jsonl").unlink()
 
 print()
@@ -280,6 +286,9 @@ sprawdz("artykul: droga --sledztwo i pominiecie artykulu z puli po artykule ze s
         '"--sledztwo" in sys.argv' in _art and "_sledztwo.ile_artykulow(6)" in _art)
 sprawdz("sledztwo bez --wyslij nie rusza kolejki ani pamieci",
         "if na_serio:" in _art and "sledztwo.dodaj_do_kolejki" in _art)
+sprawdz("nowe sledztwo dopiero, gdy kolejka przeslan zejdzie (przed wyborem historii)",
+        "czeka = sledztwo.czekajace_przeslania()" in _art
+        and _art.index("sledztwo.czekajace_przeslania()") < _art.index("sledztwo.historie("))
 sprawdz("notka bierze przeslanie i zapisuje jego identyfikator",
         "_sledztwo.wez_przeslanie()" in _st and 'wynik["przeslanie_id"]' in _st
         and '"przeslanie_id":' in _run)

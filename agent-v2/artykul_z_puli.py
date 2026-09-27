@@ -927,6 +927,16 @@ def _przebieg_sledztwa(conn, run_id: int) -> int:
         print("  limit tygodnia: %d sledztw w 7 dni — nie badam"
               % sledztwo.ile_sledztw(7), flush=True)
         return 1
+    # NOWE SLEDZTWO DOPIERO, GDY KOLEJKA ZEJDZIE. Zegar budzi sledztwo co dobe,
+    # a jedno daje trzy przeslania wydawane po jednym na dobe i wazne trzy dni.
+    # Drugie sledztwo dzien po pierwszym stanelo by w kolejce za nim i dwa z
+    # trzech jego przeslan (oplaconych Opusem) wygasly by, zanim przyjdzie ich
+    # kolej. Pusta kolejka = poprzednia historia opowiedziana do konca.
+    czeka = sledztwo.czekajace_przeslania()
+    if czeka and "--mimo-limitu" not in sys.argv:
+        print("  kolejka: %d przeslan z poprzedniego sledztwa jeszcze czeka"
+              " — nowe sledztwo, gdy zejda" % czeka, flush=True)
+        return 1
     historie = sledztwo.historie(korpus_kanalow.korpus_kanalow(400),
                                  conn=conn, run_id=run_id)
     wybrana = None

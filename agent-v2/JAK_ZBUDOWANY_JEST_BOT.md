@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **34 plików**, 38 989 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **34 plików**, 39 007 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -114,7 +114,7 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
 się testować bez przeglądarki i bez pieniędzy**. 193 zestawów
-testów, 4807 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+testów, 4812 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -785,7 +785,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `sledztwo.py` — śledztwo — historia z radaru, bramka nowości sprawdzana kodem, trzy przesłania (ustalenie, motyw, za dwa lata) i kolejka notek
 
-500 wierszy, 26 funkcji na poziomie modułu, 0 klas
+508 wierszy, 27 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -813,6 +813,7 @@ wiec nie da sie go rozjechac z kodem.
 | `_zapisz_kolejke(kolejka)` *(wewn.)* | — |
 | `dodaj_do_kolejki(lista, h, card, run_id)` | Przeslania do kolejki notek, kazde wazne `MAKS_WIEK_TEMATU_DNI` dni. |
 | `_wydane_przeslania()` *(wewn.)* | (identyfikatory juz opublikowanych, czy dzis wyszlo juz jakies). |
+| `czekajace_przeslania()` | Ile przeslan czeka na notke: wazne i jeszcze nie wydane. |
 | `wez_przeslanie()` | Nastepne przeslanie do notki — JEDNO na dobe, najstarsza historia pierwsza. |
 | `material_notki(p)` | (fakt do dziennika i straznikow, material dla pisarza) z przeslania. |
 
@@ -933,7 +934,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `artykul_z_puli.py` — artykuł bierze temat z tej samej puli, co notki
 
-1722 wierszy, 15 funkcji na poziomie modułu, 0 klas
+1732 wierszy, 15 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
