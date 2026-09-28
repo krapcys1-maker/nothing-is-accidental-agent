@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **36 plików**, 40 498 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **36 plików**, 40 527 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -114,7 +114,7 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
 się testować bez przeglądarki i bez pieniędzy**. 195 zestawów
-testów, 4907 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+testów, 4910 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -842,7 +842,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `obserwatorium.py` — obserwatorium obu kont — dane dnia (wzrost, lejek, działania, koszt), dziennik zmian z reflogu i rejestru, tempo wzrostu i skutek zmian
 
-1020 wierszy, 43 funkcji na poziomie modułu, 0 klas
+1049 wierszy, 44 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -855,6 +855,7 @@ wiec nie da sie go rozjechac z kodem.
 | `_liczniki(s)` *(wewn.)* | — |
 | `pozycje_tresci(statystyki, dziennik)` | Pomiary pogrupowane PO NUMERZE pozycji: {numer: {rodzaj, punkty, cudza, rodzaje}}. |
 | `tresci_na_doby(statystyki, dziennik)` | Przyrosty licznikow tresci, przypisane do doby pomiaru. |
+| `pokrycie_pomiaru(statystyki)` | `pomiar_tresci: 1` dla kazdej doby od pierwszego do ostatniego NASZEGO pomiaru tresci. |
 | `dzialania_na_doby(dziennik, siostra)` | Udane dzialania bota na dobe, plus ile z nich trafilo w siostre. |
 | `koszt_na_doby(baza)` | Koszt na dobe w trzech czesciach, ktore razem daja caly rachunek z bazy. |
 | `zrodla_zapisow(zrodla)` | Ostatni odczyt „skad przychodza czytelnicy i zapisy" (okno Substacka, 30 dni). |
@@ -882,7 +883,7 @@ wiec nie da sie go rozjechac z kodem.
 | `netto(dni, pole)` | Zmiana stanu (np. subskrybentow) doba do doby — tylko miedzy sasiednimi dobami. |
 | `okno(dni, do, ile)` | — |
 | `tempo(dni, do, ile)` | Wzrost i lejek w oknie `ile` dob konczacym sie `do` (wlacznie). |
-| `_srednia_dobowa(dni, daty, pole)` *(wewn.)* | — |
+| `_srednia_dobowa(dni, daty, pole)` *(wewn.)* | (srednia dobowa, ile dob z danymi). Liczniki tresci — tylko doby z `pomiar_tresci`. |
 | `skutek(dni, dni_kontrola, kiedy, ile, dzis)` | Przed/po zmianie (srednie dobowe) i roznica roznic wzgledem drugiego konta. |
 | `_f(v, znak)` *(wewn.)* | — |
 | `_zrodla(konto)` *(wewn.)* | — |

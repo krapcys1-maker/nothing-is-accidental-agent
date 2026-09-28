@@ -276,6 +276,27 @@ def tresci_na_doby(statystyki: list[dict], dziennik: list[dict] | None = None) -
     return {d: dict(c) for d, c in out.items()}
 
 
+def pokrycie_pomiaru(statystyki: list[dict]) -> dict[str, dict]:
+    """`pomiar_tresci: 1` dla kazdej doby od pierwszego do ostatniego NASZEGO pomiaru tresci.
+
+    Brak klucza `wyswietlenia` w dobie znaczy „zero przyrostu" ALBO „nikt nie
+    mierzyl" — i tego nie da sie odroznic bez tej flagi. Srednia „przed zmiana"
+    liczyla doby sprzed pierwszego pomiaru jako zera (audyt 28.09.2026: skutek
+    PR-ow NIA z 7.09 wychodzil „20 → 236 wyswietlen/dobe", bo NIA mierzy od 7.09).
+    Liczymy od `kiedy` (nasz odczyt), nie od `zmierzone` — pierwszy odczyt niesie
+    wstecz wszystko od publikacji i nie czyni wczesniejszych dob zmierzonymi.
+    """
+    doby = sorted({_dzien(s.get("kiedy")) for s in statystyki
+                   if "wyswietlenia" in s and s.get("id")} - {""})
+    if not doby:
+        return {}
+    out, d, koniec = {}, _d(doby[0]), _d(doby[-1])
+    while d <= koniec:
+        out[d.isoformat()] = {"pomiar_tresci": 1}
+        d += timedelta(days=1)
+    return out
+
+
 def dzialania_na_doby(dziennik: list[dict], siostra: str = "") -> dict[str, dict]:
     """Udane dzialania bota na dobe, plus ile z nich trafilo w siostre."""
     out: dict[str, Counter] = defaultdict(Counter)
@@ -545,10 +566,11 @@ def jakosc_konta(k: dict, dzis: str | None = None) -> dict[str, Any]:
 def podsumuj_konto(k: dict) -> dict[str, dict]:
     """Wszystkie doby konta: stan, nowi, przyrosty tresci, dzialania, koszt."""
     dane = Path(k["dane"])
-    dziennik = _jsonl(dane / "dziennik.jsonl")
+    dziennik, statystyki = _jsonl(dane / "dziennik.jsonl"), _jsonl(dane / "statystyki.jsonl")
     czesci = (stan_na_doby(_jsonl(dane / "wzrost.jsonl")),
               nowi_na_doby(_jsonl(dane / "czytelnicy.jsonl"), k.get("siostra", "")),
-              tresci_na_doby(_jsonl(dane / "statystyki.jsonl"), dziennik),
+              tresci_na_doby(statystyki, dziennik),
+              pokrycie_pomiaru(statystyki),
               dzialania_na_doby(dziennik, k.get("siostra", "")),
               koszt_na_doby(dane / "agent-v2.db"))
     out = {}
@@ -749,13 +771,14 @@ def tempo(dni: dict[str, dict], do: str, ile: int = 7) -> dict[str, Any]:
     return wynik
 
 
-def _srednia_dobowa(dni: dict[str, dict], daty: list[str], pole: str) -> float | None:
+def _srednia_dobowa(dni: dict[str, dict], daty: list[str], pole: str) -> tuple[float | None, int]:
+    """(srednia dobowa, ile dob z danymi). Liczniki tresci — tylko doby z `pomiar_tresci`."""
     if pole in ("subskrybenci", "obserwujacy"):
         n = netto(dni, pole)
         wart = [n[d] for d in daty if d in n]
     else:
-        wart = [float((dni.get(d) or {}).get(pole) or 0) for d in daty if d in dni]
-    return round(sum(wart) / len(wart), 3) if wart else None
+        wart = [float((dni.get(d) or {}).get(pole) or 0) for d in daty if (dni.get(d) or {}).get("pomiar_tresci")]
+    return (round(sum(wart) / len(wart), 3) if wart else None), len(wart)
 
 
 def skutek(dni: dict[str, dict], dni_kontrola: dict[str, dict] | None, kiedy: str, ile: int = 14,
@@ -774,12 +797,16 @@ def skutek(dni: dict[str, dict], dni_kontrola: dict[str, dict] | None, kiedy: st
     po = [(start + timedelta(days=i)).isoformat() for i in range(ile)
           if (start + timedelta(days=i)).isoformat() < dzis]
     out: dict[str, Any] = {"dni_po": len(po), "dni_przed": ile}
+    minimum = min(MIN_DNI_PO, ile)
     for pole in ("subskrybenci", "obserwujacy", "wyswietlenia", "odwiedziny_profilu", "obcy"):
-        a, b = _srednia_dobowa(dni, przed, pole), _srednia_dobowa(dni, po, pole)
-        wpis = {"przed": a, "po": b, "zmiana": (round(b - a, 3) if a is not None and b is not None else None)}
+        (a, na), (b, nb) = _srednia_dobowa(dni, przed, pole), _srednia_dobowa(dni, po, pole)
+        wpis = {"przed": a, "po": b, "zmiana": (round(b - a, 3) if a is not None and b is not None else None),
+                "dni_przed_z_danymi": na, "dni_po_z_danymi": nb}
         if dni_kontrola is not None:
-            ka, kb = _srednia_dobowa(dni_kontrola, przed, pole), _srednia_dobowa(dni_kontrola, po, pole)
-            if None not in (a, b, ka, kb):
+            (ka, kna), (kb, knb) = _srednia_dobowa(dni_kontrola, przed, pole), _srednia_dobowa(dni_kontrola, po, pole)
+            # RR TYLKO PRZY PELNYCH OKNACH OBU KONT: srednia z jednej doby
+            # „przed" dawala na NIA roznice roznic +352 wyswietlen/dobe.
+            if None not in (a, b, ka, kb) and min(na, nb, kna, knb) >= minimum:
                 wpis["roznica_roznic"] = round((b - a) - (kb - ka), 3)
         out[pole] = wpis
     return out
@@ -917,6 +944,8 @@ def raport(dni_raportu: int = 14, dzis: str | None = None) -> str:
             if s["dni_po"] < MIN_DNI_PO:
                 return "za wczesnie (%d dni po)" % s["dni_po"]
             w = s[p]
+            if w.get("dni_przed_z_danymi", 0) < MIN_DNI_PO:
+                return "za malo danych przed (%d dni)" % w.get("dni_przed_z_danymi", 0)
             rr = w.get("roznica_roznic")
             return "%s → %s%s" % (_f(w["przed"]), _f(w["po"]), (" (%s)" % _f(rr, True)) if rr is not None else "")
         L.append("| %s | %s | %s | %d | %s | %s |" % (doba, konto, nazwy_zmian[:120], s["dni_po"],

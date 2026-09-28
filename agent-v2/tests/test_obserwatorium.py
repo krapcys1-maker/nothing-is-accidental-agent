@@ -304,8 +304,10 @@ sprawdz("KONTRDOWOD: ta sama konfiguracja podlaczona ponownie nie jest zmiana (2
 
 print()
 print("=== 6. SILNIK ===")
-dni_x = {"2026-09-%02d" % d: {"subskrybenci": 10 + max(0, d - 14) * 2, "wyswietlenia": 100} for d in range(1, 29)}
-dni_y = {"2026-09-%02d" % d: {"subskrybenci": 10 + d // 3, "wyswietlenia": 100} for d in range(1, 29)}
+dni_x = {"2026-09-%02d" % d: {"subskrybenci": 10 + max(0, d - 14) * 2, "wyswietlenia": 100, "pomiar_tresci": 1}
+         for d in range(1, 29)}
+dni_y = {"2026-09-%02d" % d: {"subskrybenci": 10 + d // 3, "wyswietlenia": 100, "pomiar_tresci": 1}
+         for d in range(1, 29)}
 t = obs.tempo(dni_x, "2026-09-27", 7)
 sprawdz("tempo: +14 subskrybentow w 7 dniach (po 2 na dobe), na 1000 wyswietlen = 20",
         t["subskrybenci_netto"] == 14 and t["subskr_na_1000_wysw"] == 20.0, t)
@@ -315,6 +317,22 @@ sprawdz("skutek: przed 0/dobe, po 2/dobe, roznica roznic dodatnia",
         and s["subskrybenci"]["roznica_roznic"] > 1.5, s["subskrybenci"])
 sprawdz("KONTRDOWOD: wyswietlenia bez zmiany — roznica roznic 0",
         s["wyswietlenia"].get("roznica_roznic") == 0, s["wyswietlenia"])
+# AUDYT 28.09: konto mierzone od 7.09, zmiana 7.09 — doby „przed" bez pomiaru to NIE zera.
+_mlode_dni = {"2026-09-%02d" % d: ({"wyswietlenia": 230, "pomiar_tresci": 1} if d >= 7 else {"koszt_usd": 0.5})
+              for d in range(1, 28)}
+_s_mlode = obs.skutek(_mlode_dni, dni_y, "2026-09-07", 14, dzis="2026-09-28")
+sprawdz("KONTRDOWOD: doby sprzed pierwszego pomiaru nie sa zerami — przed = brak, bez roznicy roznic",
+        _s_mlode["wyswietlenia"]["przed"] is None and _s_mlode["wyswietlenia"]["dni_przed_z_danymi"] == 0
+        and "roznica_roznic" not in _s_mlode["wyswietlenia"], _s_mlode["wyswietlenia"])
+_s_mlode2 = obs.skutek(_mlode_dni, dni_y, "2026-09-09", 14, dzis="2026-09-28")
+sprawdz("dwie doby danych przed zmiana: srednia jest, ale roznicy roznic nie liczymy",
+        _s_mlode2["wyswietlenia"]["dni_przed_z_danymi"] == 2 and "roznica_roznic" not in _s_mlode2["wyswietlenia"],
+        _s_mlode2["wyswietlenia"])
+_pp = obs.pokrycie_pomiaru([{"id": "1", "wyswietlenia": 5, "kiedy": "2026-09-10T01:00:00+00:00",
+                             "zmierzone": "2026-09-03T10:00:00Z"},
+                            {"id": "1", "wyswietlenia": 9, "kiedy": "2026-09-12T01:00:00+00:00"}])
+sprawdz("pokrycie pomiaru: doby 10-12.09 ciagiem, a doba `zmierzone` sprzed pierwszego odczytu nie",
+        sorted(_pp) == ["2026-09-10", "2026-09-11", "2026-09-12"], sorted(_pp))
 _pozno = {"2026-09-%02d" % d: {"subskrybenci": 10 + d - 20} for d in range(20, 28)}
 t = obs.tempo(_pozno, "2026-09-27", 28)
 sprawdz("tempo od pierwszego pomiaru, gdy pomiary ruszyly w srodku okna: +7/tydzien, 51,9% sredniego poziomu",
