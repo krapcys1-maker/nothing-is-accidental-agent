@@ -246,6 +246,12 @@ poprawki (sformułowanie w prompcie, forma) rozstrzyga warstwa 1 plus strażnicy
     tekstów.
     - Stan przed: polecamy 1 (publikacja dodana ręcznie 11.07), polecają nas
       0, zapisy z rekomendacji 0. Stan po: polecamy 5.
+    - Skutek uboczny: przy każdej dodanej rekomendacji Substack SAM publikuje
+      notkę z kartą polecenia i pustą treścią. 28.09 powstały 4 takie notki,
+      od 18:07:57 do 18:09:46 UTC. Nie ma ich w dzienniku bota, więc nie
+      wchodzą do porównań notek, ale są publiczne i liczą się do zasięgu
+      konta. Przy kolejnych rekomendacjach trzeba sprawdzić, czy okno ma
+      przełącznik udostępniania.
     - Przy okazji wyszło, że `browser.kogo_polecamy` był ślepy: API oddawało
       `{rows}` zamiast listy, a `publication/self` nie podawało numeru.
       Naprawione — źródłem jest teraz `recommendations/stats/from`.
@@ -253,6 +259,29 @@ poprawki (sformułowanie w prompcie, forma) rozstrzyga warstwa 1 plus strażnicy
       z rekomendacji — liczniki panelu), źródła zapisów w panelu, obserwatorium.
     - Reguła: po 6 tygodniach (ok. **9.11**), gdy ktoś nas poleca albo przyszedł
       choć jeden zapis — dokładamy 2–3 kolejne. Przy zerze zostaje jak jest.
+- **Żywy test z publikacją, 28.09 (polecenie właściciela „przetestuj live,
+  czy wszystko działa, łącznie z publikacją").** Jeden prawdziwy przebieg dnia
+  (nr 324, 18:32–19:49 UTC, DONE, 0 błędów, 0,111 USD), kod i dane produkcji.
+  Tylko w tym procesie wymuszono ramiona E12–E18 i wyłączono cichy dzień
+  (`robocze/zywy_test_pakietu.py`). E10 i E11 były w nim wyłączone, żeby
+  notka testowa nie weszła do ich porównania. Pozycje mają datę 28.09, a
+  oceny liczą od dat startu, więc test nie miesza się z pomiarem.
+  - Budżet: `[E12 restacki: on]`, 4 restacki. Przydział komentarzy E14: 2 pod
+    artykułami, 1 pod notką.
+  - Notka z przesłania (Opus, 114 słów): opublikowana. Ma tylko ramię E16 —
+    zgodnie z projektem jest poza E17/E18.
+  - Notka z banku (Flash): opublikowana. Ma 47 słów, ramiona E16/E17/E18
+    i `konczy_pytaniem: true`. Pytanie w osobnym akapicie, czyli dopięte
+    kodem.
+  - Komentarz pod notką: potwierdzony w wątku. Dziennik: `pod: notka`,
+    `cel_komentarza: on`, `swiezosc_celu: off`.
+  - Pod artykułami żaden z 2 celów nie przyjmował komentarzy (brak pola,
+    tylko dla płacących), więc dziennika dla artykułów w tym przebiegu nie ma.
+  - Restack: opublikowany, numer znaleziony na profilu. Dziennik:
+    `model: claude-opus-5-5`, ramiona E12/E13 „on"; ocena Opusem 0,0175 USD.
+  - Pomiar: `[rekomendacje] polecamy 5, polecaja nas 0`, plik
+    `rekomendacje.jsonl` zapisany. Raport obserwatorium ma wiersz
+    rekomendacji, a E12–E18 widnieją w nim jako „zaplanowane".
 - **Zbieranie danych dołożone 28.09 razem z pakietem:**
   - alarm `pomiar-statystyk`: pomiar treści, licznika i panelu oraz komentarzy
     z dwóch dób;
