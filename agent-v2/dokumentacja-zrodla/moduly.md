@@ -216,7 +216,7 @@
 
 ### `browser.py` — cała styczność z Substackiem; nie woła modelu
 
-5501 wierszy, 104 funkcji na poziomie modułu, 0 klas
+5528 wierszy, 104 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -700,7 +700,7 @@
 
 ### `obserwatorium.py` — obserwatorium obu kont — dane dnia (wzrost, lejek, działania, koszt), dziennik zmian z reflogu i rejestru, tempo wzrostu i skutek zmian
 
-790 wierszy, 32 funkcji na poziomie modułu, 0 klas
+1020 wierszy, 43 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -709,14 +709,24 @@
 | `_jsonl(p)` *(wewn.)* | — |
 | `_dzien(ts)` *(wewn.)* | — |
 | `stan_na_doby(wzrost)` | Stan konta na koniec doby UTC (ostatni pomiar dnia). |
-| `nowi_na_doby(czytelnicy, siostra)` | Ilu NOWYCH obserwujacych i subskrybentow pojawilo sie danego dnia. |
+| `nowi_na_doby(czytelnicy, siostra)` | Ilu NOWYCH ludzi pojawilo sie danego dnia na LISTACH profilu. |
 | `_liczniki(s)` *(wewn.)* | — |
-| `tresci_na_doby(statystyki)` | Przyrosty licznikow wszystkich tresci, przypisane do doby pomiaru. |
+| `pozycje_tresci(statystyki, dziennik)` | Pomiary pogrupowane PO NUMERZE pozycji: {numer: {rodzaj, punkty, cudza, rodzaje}}. |
+| `tresci_na_doby(statystyki, dziennik)` | Przyrosty licznikow tresci, przypisane do doby pomiaru. |
 | `dzialania_na_doby(dziennik, siostra)` | Udane dzialania bota na dobe, plus ile z nich trafilo w siostre. |
-| `koszt_na_doby(baza)` | Koszt przebiegow produkcyjnych na dobe. `immutable=1`: zadnych plikow obok bazy. |
+| `koszt_na_doby(baza)` | Koszt na dobe w trzech czesciach, ktore razem daja caly rachunek z bazy. |
 | `zrodla_zapisow(zrodla)` | Ostatni odczyt „skad przychodza czytelnicy i zapisy" (okno Substacka, 30 dni). |
+| `_ile_zapisow(wezel)` *(wewn.)* | — |
+| `_razem_panelu(w)` *(wewn.)* | Zapisy, ktore panel podaje jako RAZEM (`totals`) — obok rozbicia na zrodla. |
+| `_suma_zrodel(w)` *(wewn.)* | — |
 | `autorzy_notek(zrodla, podpis)` | {numer notki: "nasza" | "cudza"} z drzewa panelu zrodel. |
 | `przypisane_tresciom(zrodla, dziennik, statystyki, podpis)` | Zapisy, ktore Substack przypisal konkretnym pozycjom (panel zrodel), wg rodzaju. |
+| `_czas(s)` *(wewn.)* | — |
+| `zgodnosc_panelu(zrodla)` | Czy panel sie sumuje: RAZEM (`totals`) == suma zrodel, w kazdym odczycie. |
+| `brutto_netto(zrodla, wzrost)` | Zapisy brutto z panelu (okno 30 dni) wobec przyrostu licznika w TYM SAMYM oknie. |
+| `pokrycie_list(czytelnicy, wzrost)` | Dlugosc list z profilu wobec licznika z najblizszej chwili (ostatni odczyt). |
+| `pokrycie_komentarzy(dziennik, statystyki, dzis, dni)` | Ile naszych komentarzy i odpowiedzi z ostatnich `dni` pelnych dob ma choc jeden pomiar. |
+| `jakosc_konta(k, dzis)` | Uzgodnienia jednego konta — zapisywane do `jakosc_<konto>.json`, czytane przez raport. |
 | `podsumuj_konto(k)` | Wszystkie doby konta: stan, nowi, przyrosty tresci, dzialania, koszt. |
 | `_zapisz_json(p, dane)` *(wewn.)* | — |
 | `wczytaj_dni(konto)` | — |
@@ -734,6 +744,7 @@
 | `skutek(dni, dni_kontrola, kiedy, ile, dzis)` | Przed/po zmianie (srednie dobowe) i roznica roznic wzgledem drugiego konta. |
 | `_f(v, znak)` *(wewn.)* | — |
 | `_zrodla(konto)` *(wewn.)* | — |
+| `_jakosc(konto)` *(wewn.)* | — |
 | `raport(dni_raportu, dzis)` | — |
 | `main(argv)` | — |
 

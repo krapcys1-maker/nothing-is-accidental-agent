@@ -18,6 +18,7 @@ BEZ PYTESTA, bez sieci, bez platnych wywolan. Uruchamiac z korzenia repozytorium
 import json
 import os
 import pathlib
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -65,8 +66,12 @@ cz = [{"kiedy": "2026-09-20T05:00:00+00:00", "obserwujacy": [{"nazwa": "Ala", "u
       {"kiedy": "2026-09-22T05:00:00+00:00", "blad": "HTTP 500"}]
 nowi = obs.nowi_na_doby(cz, siostra="siostra")
 sprawdz("KONTRDOWOD: pierwszy odczyt nie jest przyrostem", "2026-09-20" not in nowi, nowi)
-sprawdz("nowi dnia 21.09: jeden obserwujacy, jeden subskrybent",
-        nowi.get("2026-09-21") == {"nowi_obserwujacy": 1, "nowi_subskrybenci": 1}, nowi)
+sprawdz("nowi na profilu dnia 21.09: jeden obserwujacy, jeden subskrybent (nazwa mowi: z listy profilu)",
+        nowi.get("2026-09-21") == {"nowi_na_profilu_obserwujacy": 1, "nowi_na_profilu_subskrybenci": 1}, nowi)
+_st_prog = obs.stan_na_doby([{"kiedy": "2026-09-20T05:00:00+00:00", "subskrybenci": 27,
+                              "subskrybenci_darmowi": 10, "obserwujacy": 41}])
+sprawdz("KONTRDOWOD 28.09: `subskrybenci_darmowi` to prog (1/10), nie liczba — nie wchodzi do stanu",
+        _st_prog["2026-09-20"] == {"subskrybenci": 27, "obserwujacy": 41}, _st_prog)
 sprawdz("wynik to same liczby — zadnych uchwytow ani nazw", "ewa" not in json.dumps(nowi) and "Jan" not in json.dumps(nowi))
 
 print()
@@ -93,6 +98,33 @@ sprawdz("zapis przypisany notce (karta new subscribers) liczony raz",
 sprawdz("KONTRDOWOD 28.09: signups_within_1_day artykulu to OKNO, nie przypisanie — osobne pole",
         tr["2026-09-21"].get("zapisy_okno_artykulu") == 5 and not tr["2026-09-21"].get("zapisy_przypisane")
         and "subskrypcje" not in tr["2026-09-21"], tr["2026-09-21"])
+# AUDYT 28.09: ta sama notka mierzona jako „notka" i jako „odpowiedz" (numer z `gdzie`),
+# cudzy wpis mierzony jako nasza odpowiedz, nasz komentarz poza glownym licznikiem.
+_stat2 = [{"rodzaj": "notka", "id": "50", "zmierzone": "2026-09-20T10:00:00Z", "wyswietlenia": 30},
+          {"rodzaj": "odpowiedz", "id": "50", "zmierzone": "2026-09-21T10:00:00Z", "wyswietlenia": 32},
+          {"rodzaj": "odpowiedz", "id": "60", "zmierzone": "2026-09-21T10:00:00Z", "wyswietlenia": 25},
+          {"rodzaj": "komentarz", "id": "70", "zmierzone": "2026-09-21T11:00:00Z", "wyswietlenia": 4,
+           "zapisy_darmowe": 1}]
+_dz2 = [{"rodzaj": "komentarz", "nasz_id": "70", "udane": True},
+        {"rodzaj": "odpowiedz", "gdzie": "https://substack.com/@obcy/note/c-60", "udane": True}]
+_tr2 = obs.tresci_na_doby(_stat2, _dz2)
+sprawdz("jedna pozycja pod dwoma rodzajami = jeden szereg (21.09: +2, nie +32)",
+        _tr2["2026-09-21"].get("wyswietlenia") == 2 and _tr2["2026-09-21"].get("wyswietlenia_notka") == 2,
+        _tr2)
+sprawdz("KONTRDOWOD: bez scalania ta sama notka dalaby 30 + 32 = 62 wyswietlenia",
+        sum(int(s["wyswietlenia"]) for s in _stat2 if s["id"] == "50") == 62)
+sprawdz("cudzy numer (numer watku z `gdzie`) odrzucony",
+        not _tr2["2026-09-21"].get("wyswietlenia_odpowiedz"), _tr2["2026-09-21"])
+sprawdz("nasz komentarz osobno: w polu rodzaju, NIE w glownym liczniku ani glownych zapisach",
+        _tr2["2026-09-21"].get("wyswietlenia_komentarz") == 4
+        and _tr2["2026-09-21"].get("zapisy_przypisane_komentarz") == 1
+        and not _tr2["2026-09-21"].get("zapisy_przypisane"), _tr2["2026-09-21"])
+_poz2 = obs.pozycje_tresci(_stat2, _dz2)
+sprawdz("pozycje: 1 pod dwoma rodzajami, 1 cudza",
+        sum(1 for p in _poz2.values() if len(p["rodzaje"]) > 1) == 1
+        and [i for i, p in _poz2.items() if p["cudza"]] == ["60"])
+sprawdz("bez dziennika nic nie odrzucamy (wolajacy bez dziennika dostaje stare zachowanie)",
+        not any(p["cudza"] for p in obs.pozycje_tresci(_stat2).values()))
 _prz = obs.przypisane_tresciom(
     [{"podsumowanie": {"zapisy_per_notka": {"11": 1, "12": 2}}},
      {"podsumowanie": {"zapisy_per_notka": {"11": 3, "13": 1}}}],
@@ -121,6 +153,48 @@ sprawdz("KONTRDOWOD: nazwisk autorow cudzych notek nie ma w wyniku",
 sprawdz("ostatnie okno (30 dni) osobno od sumy wszystkich odczytow", _prz["ostatnie_okno"] == 4, _prz)
 
 print()
+print("=== 2b. JAKOSC DANYCH: UZGODNIENIA MIEDZY ZRODLAMI (audyt 28.09) ===")
+
+
+def _panel(kiedy, od, razem, zrodla_zapisow):
+    return {"kiedy": kiedy, "okno": {"od": od, "do": "x", "dni": 30},
+            "zapisy": {"totals": [{"name": "subscribers", "total": razem}],
+                       "sourceMetrics": [{"sourceName": n, "metrics": [{"name": "Subscribers", "total": v}]}
+                                         for n, v in zrodla_zapisow]}}
+
+
+_zr = [_panel("2026-09-25T10:00:00+00:00", "2026-08-26", 17, [("Substack", 12), ("Direct to App", 8)]),
+       _panel("2026-09-27T23:46:00+00:00", "2026-08-28", 21, [("Substack", 13), ("Direct to App", 8)])]
+_zg = obs.zgodnosc_panelu(_zr)
+sprawdz("panel: odczyt z „razem\" 17 przy sumie zrodel 20 wykryty, zgodny nie",
+        _zg == {"odczytow": 2, "niezgodnych": 1, "doby": ["2026-09-25"]}, _zg)
+_wz = [{"kiedy": "2026-08-27T22:00:00+00:00", "subskrybenci": 6},
+       {"kiedy": "2026-09-10T12:00:00+00:00", "subskrybenci": 15},
+       {"kiedy": "2026-09-27T23:45:00+00:00", "subskrybenci": 27},
+       {"kiedy": "2026-09-28T02:00:00+00:00", "subskrybenci": 28}]
+_bn = obs.brutto_netto(_zr, _wz)
+sprawdz("brutto 21 z panelu wobec netto +21 licznika w tym samym oknie (koniec = ostatni stan PRZED odczytem)",
+        _bn.get("brutto") == 21 and _bn.get("netto") == 21 and _bn.get("roznica") == 0, _bn)
+_bn2 = obs.brutto_netto(_zr, _wz[1:])
+sprawdz("KONTRDOWOD: licznik bez pomiaru na poczatku okna — brak porownania, z data startu licznika",
+        "brak" in _bn2 and "2026-09-10" in _bn2["brak"], _bn2)
+_pl = obs.pokrycie_list([{"kiedy": "2026-09-27T23:45:00+00:00", "obserwujacy": [{"uchwyt": "a"}] * 36,
+                          "subskrybenci": [{"uchwyt": "b"}] * 24}],
+                        [{"kiedy": "2026-09-27T23:45:00+00:00", "subskrybenci": 27, "obserwujacy": 41}])
+sprawdz("listy profilu vs licznik: 36/41 i 24/27, bez uchwytow w wyniku",
+        _pl.get("obserwujacy_lista") == 36 and _pl.get("obserwujacy_licznik") == 41
+        and _pl.get("subskrybenci_lista") == 24 and _pl.get("subskrybenci_licznik") == 27
+        and "\"a\"" not in json.dumps(_pl), _pl)
+_pk = obs.pokrycie_komentarzy(
+    [{"kiedy": "2026-09-26T10:00:00+00:00", "rodzaj": "komentarz", "udane": True, "nasz_id": "1"},
+     {"kiedy": "2026-09-26T11:00:00+00:00", "rodzaj": "komentarz", "udane": True, "nasz_id": "2"},
+     {"kiedy": "2026-09-26T12:00:00+00:00", "rodzaj": "odpowiedz", "udane": True},
+     {"kiedy": "2026-09-10T12:00:00+00:00", "rodzaj": "komentarz", "udane": True, "nasz_id": "3"}],
+    [{"id": "1", "wyswietlenia": 3}, {"id": "3", "wyswietlenia": 1}], dzis="2026-09-28")
+sprawdz("komentarze z 7 dob: 3 wystawione, 1 bez numeru, 1 zmierzony (stary spoza okna sie nie liczy)",
+        _pk == {"od": "2026-09-21", "wystawione": 3, "bez_numeru": 1, "zmierzone": 1}, _pk)
+
+print()
 print("=== 3. DZIALANIA ===")
 dz = obs.dzialania_na_doby([
     {"kiedy": "2026-09-21T10:00:00+00:00", "rodzaj": "komentarz", "udane": True, "komu": "Duze Konto"},
@@ -145,6 +219,19 @@ for katalog_konta, subs in ((config.DATA_DIR, (5, 6, 8)), (NIA, (3, 3, 4))):
                                            "zapisy": {"sourceMetrics": [{"sourceName": "Substack",
                                                                          "metrics": [{"name": "Subscribers", "total": 3}]}]},
                                            "podsumowanie": {"zapisy_per_notka": {"1": 2}}}])
+for katalog_konta in (config.DATA_DIR, NIA):
+    _c = sqlite3.connect(str(katalog_konta / "agent-v2.db"))
+    _c.execute("CREATE TABLE runs (id INTEGER PRIMARY KEY, tryb TEXT)")
+    _c.execute("CREATE TABLE calls (id INTEGER PRIMARY KEY, run_id INTEGER, at TEXT, purpose TEXT, cost_usd REAL)")
+    _c.executemany("INSERT INTO runs (id, tryb) VALUES (?, ?)", [(1, "produkcja"), (2, "test"), (3, None)])
+    # produkcja 0,50 + przebieg bez trybu 0,25 (= produkcja), test 0,10,
+    # BEZ przebiegu: pusty run_id 0,20 i wiszacy 0,05 — pierwsza wersja gubila te dwa.
+    _c.executemany("INSERT INTO calls (run_id, at, purpose, cost_usd) VALUES (?, ?, ?, ?)",
+                   [(1, "2026-09-21T10:00:00", "note", 0.5), (3, "2026-09-21T11:00:00", "note", 0.25),
+                    (2, "2026-09-21T12:00:00", "note", 0.1), (None, "2026-09-21T13:00:00", "note", 0.2),
+                    (99, "2026-09-21T14:00:00", "note", 0.05)])
+    _c.commit()
+    _c.close()
 przed_nia = sorted(p.name for p in NIA.iterdir())
 wynik = obs.zbierz()
 sprawdz("zebrane oba konta", wynik.get("NIE") and wynik.get("NIA"), wynik)
@@ -152,6 +239,12 @@ dni_nie = obs.wczytaj_dni("NIE")
 sprawdz("doba 21.09 NIE: stan, przyrosty tresci i dzialania w jednym wpisie",
         dni_nie["2026-09-21"].get("subskrybenci") == 6 and dni_nie["2026-09-21"].get("wyswietlenia") == 45
         and dni_nie["2026-09-21"].get("dz_notki") == 1, dni_nie.get("2026-09-21"))
+sprawdz("koszt w trzech czesciach: produkcja 0,75 / test 0,10 / bez przebiegu 0,25",
+        (dni_nie["2026-09-21"].get("koszt_usd"), dni_nie["2026-09-21"].get("koszt_test_usd"),
+         dni_nie["2026-09-21"].get("koszt_bez_przebiegu_usd")) == (0.75, 0.1, 0.25), dni_nie.get("2026-09-21"))
+_jak = json.loads((config.DATA_DIR / "obserwatorium" / "jakosc_NIE.json").read_text(encoding="utf-8"))
+sprawdz("plik jakosci zapisany: panel, brutto/netto, listy, komentarze, pozycje",
+        {"panel", "brutto_netto", "listy", "komentarze", "pozycje"} <= set(_jak), sorted(_jak))
 _wszystko = "".join(p.read_text(encoding="utf-8") for p in (config.DATA_DIR / "obserwatorium").iterdir())
 sprawdz("KONTRDOWOD: w plikach obserwatorium nie ma nazw ani uchwytow czytelnikow",
         not any(x in _wszystko for x in ("Tajny Czytelnik", "\"ewa\"", "Ola", "\"jan\"")))
@@ -242,6 +335,9 @@ sprawdz("dwie zmiany z tej samej doby = jeden wiersz, a przy 2 dniach po — za 
         and "za wczesnie" in _wiersze_21[0], _wiersze_21)
 sprawdz("raport ma oba konta, zmiany i jakosc danych",
         "| NIE | NIA |" in tekst and "Zmiany i ich skutek" in tekst and "Jakosc danych" in tekst, tekst[:400])
+sprawdz("jakosc danych z liczbami: koszt w trzech czesciach i uzgodnienie panelu",
+        "koszt 28 dni USD: produkcja / test / bez przebiegu" in tekst
+        and "„razem\" != suma zrodel" in tekst, tekst[tekst.find("## Jakosc danych"):][:900])
 sprawdz("KONTRDOWOD: raport bez nazw czytelnikow", "Tajny Czytelnik" not in tekst and "Ola" not in tekst)
 
 print()
