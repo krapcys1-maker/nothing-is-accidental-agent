@@ -105,6 +105,19 @@ _prz2 = obs.przypisane_tresciom([{"podsumowanie": {"zapisy_per_notka": {"21": 2}
                                 [{"rodzaj": "notka", "id": "21"}])
 sprawdz("KONTRDOWOD: notka ze statystyk profilu, ktorej bot nie wystawil, nie udaje notki bota",
         _prz2["wg_rodzaju"] == {"notka_spoza_dziennika": 2}, _prz2)
+_drzewo = {"sourceMetrics": [{"sourceName": "Substack", "children": [{"sourceName": "Notes", "children": [
+    {"noteId": "31", "sourceName": "NASZE: nasza notka"},
+    {"noteId": "32", "sourceName": "Ktos Obcy: jego notka"},
+    {"noteId": "33", "sourceName": "Inny Obcy: tez jego"}]}]}]}
+_prz3 = obs.przypisane_tresciom(
+    [{"zapisy": _drzewo, "podsumowanie": {"zapisy_per_notka": {"31": 1, "32": 2, "33": 1}}}],
+    [{"rodzaj": "notka", "id": "31"},
+     {"rodzaj": "komentarz", "gdzie": "https://substack.com/@obcy/note/c-32", "udane": True}],
+    [], podpis="NASZE")
+sprawdz("cudza notka z naszym komentarzem = komentarz pod cudza notka, bez niego = cudza notka",
+        _prz3["wg_rodzaju"] == {"komentarz_pod_cudza_notka": 2, "notka": 1, "cudza_notka": 1}, _prz3)
+sprawdz("KONTRDOWOD: nazwisk autorow cudzych notek nie ma w wyniku",
+        "Ktos Obcy" not in json.dumps(_prz3) and "Inny Obcy" not in json.dumps(_prz3))
 sprawdz("ostatnie okno (30 dni) osobno od sumy wszystkich odczytow", _prz["ostatnie_okno"] == 4, _prz)
 
 print()

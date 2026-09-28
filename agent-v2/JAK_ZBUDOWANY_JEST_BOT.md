@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **36 plików**, 40 198 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **36 plików**, 40 241 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -114,7 +114,7 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
 się testować bez przeglądarki i bez pieniędzy**. 195 zestawów
-testów, 4882 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+testów, 4884 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -842,7 +842,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `obserwatorium.py` — obserwatorium obu kont — dane dnia (wzrost, lejek, działania, koszt), dziennik zmian z reflogu i rejestru, tempo wzrostu i skutek zmian
 
-747 wierszy, 31 funkcji na poziomie modułu, 0 klas
+790 wierszy, 32 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -857,7 +857,8 @@ wiec nie da sie go rozjechac z kodem.
 | `dzialania_na_doby(dziennik, siostra)` | Udane dzialania bota na dobe, plus ile z nich trafilo w siostre. |
 | `koszt_na_doby(baza)` | Koszt przebiegow produkcyjnych na dobe. `immutable=1`: zadnych plikow obok bazy. |
 | `zrodla_zapisow(zrodla)` | Ostatni odczyt „skad przychodza czytelnicy i zapisy" (okno Substacka, 30 dni). |
-| `przypisane_tresciom(zrodla, dziennik, statystyki)` | Zapisy, ktore Substack przypisal konkretnym pozycjom (panel zrodel), wg rodzaju. |
+| `autorzy_notek(zrodla, podpis)` | {numer notki: "nasza" | "cudza"} z drzewa panelu zrodel. |
+| `przypisane_tresciom(zrodla, dziennik, statystyki, podpis)` | Zapisy, ktore Substack przypisal konkretnym pozycjom (panel zrodel), wg rodzaju. |
 | `podsumuj_konto(k)` | Wszystkie doby konta: stan, nowi, przyrosty tresci, dzialania, koszt. |
 | `_zapisz_json(p, dane)` *(wewn.)* | — |
 | `wczytaj_dni(konto)` | — |

@@ -107,10 +107,12 @@ def konta() -> list[dict[str, Any]]:
     """Oba konta: katalog danych, repozytorium (dla reflogu), uchwyt i siostra."""
     dom = Path.home()
     nie_uchwyt, nia_uchwyt = config.SUBSTACK_HANDLE, "nia1503032"
+    # PODPIS = nazwa, ktora panel zrodel stawia przed notka („Autor: tekst").
     return [
         {"konto": "NIE", "dane": Path(config.DATA_DIR), "uchwyt": nie_uchwyt, "siostra": nia_uchwyt,
+         "podpis": getattr(config, "MARKA", "Nothing Is Accidental"),
          "repo": Path(os.environ.get("OBS_NIE_REPO", str(REPO_NIE)))},
-        {"konto": "NIA", "uchwyt": nia_uchwyt, "siostra": nie_uchwyt,
+        {"konto": "NIA", "uchwyt": nia_uchwyt, "siostra": nie_uchwyt, "podpis": "NIA",
          "dane": Path(os.environ.get("KARTA_NIA_DANE",
                                      str(dom / "nia-agent/agent-v2/instancje/nia-serwer"))),
          "repo": Path(os.environ.get("OBS_NIA_REPO", str(dom / "nia-agent")))},
@@ -287,13 +289,42 @@ def zrodla_zapisow(zrodla: list[dict]) -> dict[str, Any]:
     return {}
 
 
-def przypisane_tresciom(zrodla: list[dict], dziennik: list[dict], statystyki: list[dict]) -> dict[str, Any]:
+def autorzy_notek(zrodla: list[dict], podpis: str) -> dict[str, str]:
+    """{numer notki: "nasza" | "cudza"} z drzewa panelu zrodel.
+
+    Panel podpisuje kazda notke „Autor: poczatek tekstu". Zapis przypisany
+    CUDZEJ notce to czlowiek, ktory zapisal sie do nas spod cudzej notki —
+    28.09 w NIA oba takie przypadki mialy nasz komentarz pod ta notka. Nazwisk
+    autorow nie zapisujemy: tylko to, czy notka jest nasza.
+    """
+    out: dict[str, str] = {}
+    stos: list[Any] = [w.get("zapisy") for w in zrodla]
+    while stos:
+        w = stos.pop()
+        if isinstance(w, dict):
+            if w.get("noteId") not in (None, ""):
+                nazwa = str(w.get("sourceName") or "")
+                out[str(w["noteId"])] = "nasza" if nazwa.startswith(podpis + ":") else "cudza"
+            stos.extend(w.values())
+        elif isinstance(w, list):
+            stos.extend(w)
+    return out
+
+
+def przypisane_tresciom(zrodla: list[dict], dziennik: list[dict], statystyki: list[dict],
+                        podpis: str = "") -> dict[str, Any]:
     """Zapisy, ktore Substack przypisal konkretnym pozycjom (panel zrodel), wg rodzaju.
 
     Kazdy odczyt panelu to okno 30 dni, wiec pozycja liczy sie MAKSIMUM po
     odczytach (tak samo jak `statystyki.zapisy_przypisane`). Rodzaj z dziennika
-    bota (restack, notka, komentarz…); pozycji spoza dziennika bot nie
-    wystawil — to np. reczne notki wlasciciela. Tylko numery tresci i liczby.
+    bota (restack, notka, komentarz…); cudza notka z naszym komentarzem to
+    `komentarz_pod_cudza_notka`; pozycji spoza dziennika bot nie wystawil —
+    to np. reczne notki wlasciciela. Tylko numery tresci i liczby.
+
+    TO JEST WSZYSTKO, CO SUBSTACK PRZYPISUJE TRESCI. Panel ma rozbicie na
+    pozycje wylacznie w galezi „Notes"; „Other", „Direct to App" i „Direct"
+    nie maja zadnego glebszego podzialu, a artykuly nie wystepuja w drzewie
+    zrodel zapisow wcale (sprawdzone 28.09 na surowym drzewie obu kont).
     """
     naj: dict[str, int] = {}
     for w in zrodla:
@@ -314,9 +345,16 @@ def przypisane_tresciom(zrodla: list[dict], dziennik: list[dict], statystyki: li
         for pole in ("id", "nasz_id"):
             if w.get(pole) and w.get("rodzaj"):
                 rodzaj_id[str(w[pole])] = str(w["rodzaj"])
+    autor = autorzy_notek(zrodla, podpis) if podpis else {}
     wg: Counter = Counter()
     for ident, ile in naj.items():
-        wg[rodzaj_id.get(ident) or "spoza_dziennika"] += ile
+        rodzaj = rodzaj_id.get(ident)
+        if autor.get(ident) == "cudza":
+            # Nasz komentarz/odpowiedz pod ta cudza notka w dzienniku bota?
+            pod = any(ident in str(w.get("gdzie") or "") for w in dziennik
+                      if w.get("rodzaj") in ("komentarz", "odpowiedz", "odpowiedz_pod_artykulem"))
+            rodzaj = "komentarz_pod_cudza_notka" if pod else "cudza_notka"
+        wg[rodzaj or "spoza_dziennika"] += ile
     # OSTATNIE OKNO (30 dni) osobno: „razem" to wszystkie odczyty od poczatku,
     # a etykieta „30 dni" w raporcie musi znaczyc 30 dni.
     ostatnie = next(((w.get("podsumowanie") or {}).get("zapisy_per_notka") or {}
@@ -377,7 +415,8 @@ def zbierz() -> dict[str, int]:
         _zapisz_json(katalog() / ("zrodla_%s.json" % k["konto"]),
                      dict(zrodla_zapisow(zrodla),
                           przypisane=przypisane_tresciom(zrodla, _jsonl(Path(k["dane"]) / "dziennik.jsonl"),
-                                                         _jsonl(Path(k["dane"]) / "statystyki.jsonl"))))
+                                                         _jsonl(Path(k["dane"]) / "statystyki.jsonl"),
+                                                         k.get("podpis", ""))))
         wynik[k["konto"]] = len(polaczone)
     wynik["zmiany_nowe"] = zasiej() + sum(importuj_reflog(k) for k in konta()) + importuj_aktywacje()
     return wynik
@@ -634,8 +673,10 @@ def raport(dni_raportu: int = 14, dzis: str | None = None) -> str:
                 _f(w.get("dz_komentarze")), _f(w.get("koszt_usd"))))
         L.append("| %s | %s |" % (d, " | ".join(kom)))
     L += ["", "## Skad przychodza subskrybenci", "",
-          "Panel Substacka (okno 30 dni) i zapisy przypisane konkretnym pozycjom. „Okno doby po artykule\"",
-          "to KAZDY zapis w dobie po wysylce, skadkolwiek przyszedl — nie przypisanie i nie sumuje sie z reszta.", ""]
+          "Panel Substacka (okno 30 dni) i zapisy przypisane konkretnym pozycjom. Substack rozbija na tresci",
+          "TYLKO galaz „Notes\"; „Other\", „Direct to App\" i „Direct\" nie maja glebszego podzialu, a artykuly",
+          "w zrodlach zapisow nie wystepuja wcale. „Okno doby po artykule\" to KAZDY zapis w dobie po wysylce,",
+          "skadkolwiek przyszedl — nie przypisanie i nie sumuje sie z reszta.", ""]
     for n in nazwy:
         z = _zrodla(n)
         zap = sorted((x for x in z.get("zapisy") or [] if x.get("zapisy")), key=lambda x: -(x["zapisy"] or 0))
@@ -649,6 +690,8 @@ def raport(dni_raportu: int = 14, dzis: str | None = None) -> str:
         L.append("  - przypisane pozycjom (wszystkie odczyty): %s zapisow przy %s pozycjach — %s" % (
             _f(prz.get("razem")), _f(prz.get("pozycji")),
             ", ".join("%s %s" % (r, v) for r, v in (prz.get("wg_rodzaju") or {}).items()) or "—"))
+        L.append("  - bez przypisania do tresci w ostatnim oknie: %s z %d (Other, Direct to App, Direct — Substack nie podaje wiecej)" % (
+            _f(razem - int(prz.get("ostatnie_okno") or 0)) if razem else "—", razem))
         L.append("  - okno doby po artykule (28 dni): %s; ruch: %s" % (
             _f(t28[n]["zapisy_okno_artykulu"]),
             ", ".join("%s %s" % (x["zrodlo"], x["wyswietlenia"]) for x in ruch[:4]) or "—"))

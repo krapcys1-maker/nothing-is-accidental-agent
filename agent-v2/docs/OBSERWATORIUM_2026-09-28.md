@@ -124,6 +124,41 @@ restacki. Pierwsze pytanie badawcze (B1) brzmi więc:
 - co kryje się za „Direct to App" i „Other", których nie da się przypisać
   treści.
 
+## Dlaczego nie mamy pełnych danych o źródłach zapisów
+
+Pytanie właściciela z 28.09: „czemu pełnych danych nie mamy, o co chodzi?".
+Sprawdzone na surowym drzewie panelu źródeł obu kont (to, co Substack oddaje
+przez `/api/v1/publication/stats/growth/sources`):
+
+| gałąź panelu | rozbicie | co wiemy |
+|---|---|---|
+| Substack → **Notes** | **na konkretne notki** (numer + „Autor: początek tekstu") | która notka przyniosła zapis, także cudza (wtedy zwykle był pod nią nasz komentarz) |
+| Substack → **Other** | brak | zapis w Substacku poza notką: profil, Explore, wyszukiwarka, strona wpisu, ekran główny aplikacji |
+| Substack → Recommendations, Trackbacks | brak (dziś 0) | polecenia innych publikacji, linki z innych wpisów |
+| **Direct to App** | brak | zapis w aplikacji bez zapisanego źródła |
+| Direct, e-mail, wyszukiwarki | brak | ruch spoza Substacka |
+| **artykuły** | **nie występują jako źródło** | przy artykule jest tylko `signups_within_1_day` — okno doby po wysyłce, nie przypisanie |
+
+Czyli:
+
+- **Braku po stronie Substacka nie da się dociągnąć.** „Other" i „Direct to
+  App" to u nas ponad połowa zapisów (NIE: 14 z 21), a przypisanie do
+  artykułu nie istnieje w API. Substack sam tego nie wie albo nie pokazuje.
+  Jedyna droga do tych odpowiedzi to eksperyment: zmieniamy jedną dźwignię,
+  a drugą zostawiamy, i patrzymy na całkowity przyrost (np. tydzień z
+  artykułem wobec tygodnia bez; więcej restacków wobec mniej).
+- **Co było naszą dziurą i jest poprawione (28.09):**
+  - obserwatorium brało okno doby po artykule za przypisanie i nie czytało
+    kart notek;
+  - nie rozróżniało notek własnych od cudzych — zapis spod cudzej notki z
+    naszym komentarzem to teraz `komentarz_pod_cudza_notka`.
+- **Co zostaje do decyzji:**
+  - drugie konto nie czyta kart „new subscribers" przy notkach (fork sprzed
+    03.09); jego panel źródeł działa, więc przypisanie mamy, ale bez imion
+    i dat pojedynczych zapisów;
+  - historia sprzed pierwszego odczytu (NIE 02.09, drugie konto 07.09) jest
+    tylko w oknach 30 dni.
+
 ## Badania: jak rośnie konto na Substacku
 
 Pytania uszeregowane według tego, ile mogą dać i czy nasze dane na nie odpowiedzą:

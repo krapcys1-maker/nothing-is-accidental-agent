@@ -700,7 +700,7 @@
 
 ### `obserwatorium.py` — obserwatorium obu kont — dane dnia (wzrost, lejek, działania, koszt), dziennik zmian z reflogu i rejestru, tempo wzrostu i skutek zmian
 
-747 wierszy, 31 funkcji na poziomie modułu, 0 klas
+790 wierszy, 32 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -715,7 +715,8 @@
 | `dzialania_na_doby(dziennik, siostra)` | Udane dzialania bota na dobe, plus ile z nich trafilo w siostre. |
 | `koszt_na_doby(baza)` | Koszt przebiegow produkcyjnych na dobe. `immutable=1`: zadnych plikow obok bazy. |
 | `zrodla_zapisow(zrodla)` | Ostatni odczyt „skad przychodza czytelnicy i zapisy" (okno Substacka, 30 dni). |
-| `przypisane_tresciom(zrodla, dziennik, statystyki)` | Zapisy, ktore Substack przypisal konkretnym pozycjom (panel zrodel), wg rodzaju. |
+| `autorzy_notek(zrodla, podpis)` | {numer notki: "nasza" | "cudza"} z drzewa panelu zrodel. |
+| `przypisane_tresciom(zrodla, dziennik, statystyki, podpis)` | Zapisy, ktore Substack przypisal konkretnym pozycjom (panel zrodel), wg rodzaju. |
 | `podsumuj_konto(k)` | Wszystkie doby konta: stan, nowi, przyrosty tresci, dzialania, koszt. |
 | `_zapisz_json(p, dane)` *(wewn.)* | — |
 | `wczytaj_dni(konto)` | — |
