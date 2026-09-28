@@ -46,7 +46,8 @@ def sprawdz(nazwa, warunek, szczegol=""):
 
 KLUCZE = {"anthropic": "ANTHROPIC_API_KEY",
           "deepseek": "DEEPSEEK_API_KEY",
-          "openai": "OPENAI_API_KEY"}
+          "openai": "OPENAI_API_KEY",
+          "mimo": "MIMO_API_KEY"}   # E11 (28.09.2026): pisarz notek Xiaomi
 
 
 class Polaczenie:

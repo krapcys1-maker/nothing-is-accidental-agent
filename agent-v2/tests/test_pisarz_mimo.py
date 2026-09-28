@@ -56,6 +56,9 @@ sprawdz("cena MiMo z cennika Xiaomi (0,14 / 0,28 / cache 0,0028)",
         config.PRICING[config.MIMO] == {"in": 0.14, "out": 0.28, "cache": 0.0028, "verified": False})
 conn = db.connect()
 run = db.start_run(conn, "test-pisarz-mimo")
+# Kazde wywolanie modelu w tym tescie idzie na atrape `httpx.post` — bez tego
+# bezpiecznik darmowych testow (serwer) odmawia juz w kontroli wstepnej.
+config.WOLNO_WOLAC_MODEL = True
 stary_klucz = config.MIMO_API_KEY
 config.MIMO_API_KEY = ""
 try:
