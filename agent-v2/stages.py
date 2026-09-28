@@ -1132,12 +1132,24 @@ def budzet_dnia(conn: sqlite3.Connection) -> dict[str, int]:
         "komentarze": losuj(config.KOMENTARZE_DZIENNIE),
         "follow": z_miesiaca(config.FOLLOW_MIESIECZNIE),
         "subskrypcje": z_miesiaca(config.SUBSKRYPCJE_MIESIECZNIE),
-        "restacki": losuj(config.RESTACK_DZIENNIE),
+        # E12 — widelki restackow z ramienia TYGODNIA (`config.EKSPERYMENTY
+        # ["restacki_norma"]`). Losowanie zostaje ostatnie w kolejce, wiec inne
+        # widelki nie zmieniaja pozostalych pozycji budzetu z tego samego ziarna.
+        "restacki": losuj(widelki_restackow(dzis)),
     }
+    _e12 = ramie("restacki_norma", 0, dzis)
     print(f"  [budżet dnia{' — rozbieg' if rozbieg else ''}] "
-          + "  ".join(f"{k}={v}" for k, v in budzet.items()), flush=True)
+          + "  ".join(f"{k}={v}" for k, v in budzet.items())
+          + (f"  [E12 restacki: {_e12}]" if _e12 else ""), flush=True)
     _zapisz_budzet_dnia(dzis, budzet, rozbieg)
     return budzet
+
+
+def widelki_restackow(dzien: str | None = None) -> tuple[int, int]:
+    """Dobowe widelki restackow: z ramienia E12, a poza eksperymentem zwykle."""
+    r = ramie("restacki_norma", 0, dzien)
+    return tuple(getattr(config, "RESTACK_DZIENNIE_E12", {}).get(r)
+                 or config.RESTACK_DZIENNIE)
 
 
 BUDZETY = config.DATA_DIR / "budzety.json"
@@ -2785,7 +2797,7 @@ def _wersja_kodu() -> str:
 WERSJA_KODU = _wersja_kodu()
 
 
-def ramie(nazwa: str, miejsce: int, dzien: str | None = None) -> str:
+def ramie(nazwa: str, miejsce: int | str, dzien: str | None = None) -> str:
     """Ramie notki w eksperymencie przeplatanym: "on", "off" albo "" (nie trwa).
 
     `config.EKSPERYMENTY` = {nazwa: udzial notek ze zmiana}. Przydzial jest
@@ -2805,10 +2817,23 @@ def ramie(nazwa: str, miejsce: int, dzien: str | None = None) -> str:
         if ((ustaw.get("od") and dzien < str(ustaw["od"]))
                 or (ustaw.get("do") and dzien > str(ustaw["do"]))):
             return ""
+        # RAMIE Z KALENDARZA (E12 tygodnie, E16 dni na przemian): okres numer k
+        # od `od` dostaje `plan[k % len(plan)]`; `miejsce` nie ma znaczenia.
+        if ustaw.get("plan"):
+            from datetime import date as _date
+            try:
+                dni = (_date.fromisoformat(str(dzien)[:10])
+                       - _date.fromisoformat(str(ustaw["od"])[:10])).days
+            except (KeyError, ValueError):
+                return ""
+            plan = [str(r) for r in ustaw["plan"]]
+            return plan[(dni // max(1, int(ustaw.get("okres_dni", 7)))) % len(plan)]
         udzial = float(ustaw.get("udzial", 0.5))
     else:
         udzial = float(ustaw)
-    los = int(hashlib.sha256(("%s|%s|%d" % (nazwa, dzien, miejsce)).encode())
+    # `%s`, nie `%d`: dla liczby daje ten sam napis (te same ramiona E10/E11),
+    # a przyjmuje tez klucz tekstowy — E13 losuje po tresci ocenianej notki.
+    los = int(hashlib.sha256(("%s|%s|%s" % (nazwa, dzien, miejsce)).encode())
               .hexdigest()[:8], 16) / 0x100000000
     return "on" if los < udzial else "off"
 
@@ -3711,10 +3736,33 @@ def za_duzo_zargonu(tekst: str) -> list[str]:
     return t if len(t) >= MAKS_TERMINOW else []
 
 
+# E18 — PYTANIE NA KONIEC. Zdanie `notka.md` o dowolnym zakonczeniu, ktore ramie
+# „on" podmienia na polecenie. Zgodne z `glos_krotkich.md` („a genuine unanswered
+# question is welcome; do not add one merely to collect replies"): pytanie ma
+# wynikac z tresci notki, nie zbierac odpowiedzi.
+ZDANIE_O_ZAKONCZENIU = "No fixed sentence length, paragraph count or ending."
+POLECENIE_PYTANIA = (
+    "No fixed sentence length or paragraph count. End with one short, genuine "
+    "question to the reader that grows out of the point, one they can answer "
+    "from their own work, experience or view. Not a rhetorical question, not a "
+    "quiz, and not a request to follow, subscribe or comment.")
+
+
+def z_pytaniem_na_koncu(prompt: str) -> str:
+    """Prompt notki z poleceniem zakonczenia pytaniem (E18, ramie „on").
+
+    Podmienia JEDNO zdanie; gdy go nie ma (ktos zmienil `notka.md`), dopisuje
+    polecenie na koncu — ramie nie moze cicho przestac dzialac.
+    """
+    if ZDANIE_O_ZAKONCZENIU in prompt:
+        return prompt.replace(ZDANIE_O_ZAKONCZENIU, POLECENIE_PYTANIA, 1)
+    return prompt + "\n\n" + POLECENIE_PYTANIA
+
+
 def note(
     conn: sqlite3.Connection, run_id: int, note_type: str, evidence: dict[str, Any],
     link: str | None = None, note_form: str = "PROSTA", etap: str = "note",
-    seria: dict[str, Any] | None = None,
+    seria: dict[str, Any] | None = None, wariant: dict[str, bool] | None = None,
 ) -> dict[str, Any]:
     """Jedna notka danego typu i danej FORMY — do szuflady.
 
@@ -3731,6 +3779,12 @@ def note(
     odpadalaby wtedy za to, ze posluchala.
     """
     _min_slow, _maks_slow = config.zakres_slow(note_form)
+    # E17 — KROTKA NOTKA (`wariant["krotka"]`, ramie „on" eksperymentu
+    # `krotka_notka`): krotsze okno dla promptu, pomiaru i naprawy naraz, bo
+    # wszystkie trzy czytaja `_min_slow`/`_maks_slow` stad. Dluga forma ma
+    # wlasne okno i w E17 nie bierze udzialu (`notki_dnia`).
+    if (wariant or {}).get("krotka") and note_form not in config.FORMY_DLUGIE:
+        _min_slow, _maks_slow = config.KROTKA_NOTKA_SLOW
     # ROZBIOR IDZIE PRZED PISANIEM, nie po. Pisarz, ktory dostaje sam material,
     # napisze wyjasnienie, bo bez zdania o materiale nie da sie napisac nic
     # innego. Patrz `rozbior` — zawodzi na pusto, wiec notka powstaje takze
@@ -3767,6 +3821,10 @@ def note(
             sorted(ostatnie_otwarcia()) or ["(zadnych jeszcze nie ma)"],
             ensure_ascii=False),
     )
+    # E18 — PYTANIE NA KONIEC (`wariant["pytanie"]`, ramie „on" eksperymentu
+    # `pytanie_na_koncu`). Ramie „off" dostaje prompt bez zmian.
+    if (wariant or {}).get("pytanie"):
+        prompt = z_pytaniem_na_koncu(prompt)
     # SERIA — patrz `seria.py`. Blok idzie do promptu TYLKO wtedy, gdy ta
     # notka naprawde jest czescia serii; `notki_dnia` zeruje kontekst przy
     # kazdej notce, zeby zwykla notka nie dostala zapowiedzi ciagu dalszego,
@@ -5424,6 +5482,8 @@ def notki_dnia(
         # je tylko galaz faktu z banku (przeslanie i MYSL wniosku nie dostaja).
         _ramie_wniosku = ""
         _ramie_pisarza = ""   # E11 — ustawiane przy wyborze pisarza
+        _wariant: dict[str, bool] = {}   # E17/E18 — ustawiane przy wyborze pisarza
+        _ramie_krotkiej = _ramie_pytania = ""
         # PRZESLANIE ZE SLEDZTWA — przed zwyklym wyborem faktu, jak seria:
         # historia zbadana i przemyslana ma pierwszenstwo przed pojedynczym
         # faktem. Typ notki wyznacza rodzaj przeslania (`sledztwo.TYP_NOTKI`).
@@ -5643,12 +5703,26 @@ def notki_dnia(
                 else:
                     print("  [pisarz] E11: brak MIMO_API_KEY — notka zostaje u %s"
                           % config.MODEL_FOR.get(etap_pisarza, "?"), flush=True)
+            # E17 KROTKA NOTKA i E18 PYTANIE NA KONIEC — kazdy z wlasnym
+            # losowaniem, jak E10 i E11. Notka z przeslania nie bierze udzialu
+            # (hipoteza, dowody i „przeciw" nie mieszcza sie w 60 slowach), dluga
+            # forma nie bierze udzialu w E17 (ma wlasne okno, `FORMY_DLUGIE`).
+            if forma not in config.FORMY_DLUGIE:
+                _ramie_krotkiej = ramie("krotka_notka", od + nr)
+            # Czesc serii konczy sie znacznikiem „Temat — 2/4", wiec E18 jej nie dotyczy.
+            if not seria_kontekst:
+                _ramie_pytania = ramie("pytanie_na_koncu", od + nr)
+            _wariant = {"krotka": _ramie_krotkiej == "on",
+                        "pytanie": _ramie_pytania == "on"}
+            if any(_wariant.values()):
+                print("  [notka] wariant: %s" % ", ".join(
+                    k for k, v in _wariant.items() if v), flush=True)
         print("  [pisarz] %s (%s)" % (config.MODEL_FOR.get(etap_pisarza, "?"),
                                       etap_pisarza), flush=True)
         wynik = note(conn, run_id, typ, material,
                      link=link_artykulu if typ == "ARTYKUL" else None,
                      note_form=forma, etap=etap_pisarza,
-                     seria=seria_kontekst)
+                     seria=seria_kontekst, wariant=_wariant)
         # OPUS NIE NAPISAL NOTKI Z PRZESLANIA — pisze zwykly pisarz. Opus 5.5
         # ma klasyfikatory bezpieczenstwa („cyber", „bio"), a sledztwa bywaja
         # o agentach obchodzacych zabezpieczenia: 27.09 pisarz ARTYKULU odmowil
@@ -5680,7 +5754,7 @@ def notki_dnia(
             wynik = note(conn, run_id, typ, material,
                          link=link_artykulu if typ == "ARTYKUL" else None,
                          note_form=forma, etap=etap_pisarza,
-                         seria=seria_kontekst)
+                         seria=seria_kontekst, wariant=_wariant)
             wynik["pisarz_zastepczy"] = True
         # NUMER CZESCI JEDZIE Z NOTKA, tak samo jak fakt i ranga: `run.py`
         # odhacza czesc DOPIERO po potwierdzonej publikacji. Bez tych dwoch
@@ -5748,8 +5822,12 @@ def notki_dnia(
         # `sledztwo.wez_przeslanie` wie, ze przeslanie wyszlo.
         wynik["przeslanie_id"] = _przes.get("id") if _przes else None
         # RAMIONA EKSPERYMENTOW PRZEPLATANYCH I WERSJA KODU — do dziennika (`run.py`).
-        wynik["eksperymenty"] = {nazwa: r for nazwa, r in (("wniosek", _ramie_wniosku),
-                                                           ("pisarz", _ramie_pisarza)) if r}
+        # E16 (pora) to ramie DOBY — liczy je tez `run.py`, gdy wstrzymuje notki.
+        wynik["eksperymenty"] = {nazwa: r for nazwa, r in (
+            ("wniosek", _ramie_wniosku), ("pisarz", _ramie_pisarza),
+            ("pora_notki", ramie("pora_notki", 0)),
+            ("krotka_notka", _ramie_krotkiej),
+            ("pytanie_na_koncu", _ramie_pytania)) if r}
         wynik["wersja"] = WERSJA_KODU
         # RODZAJ WNIOSKU — karta wynikow policzy, ktory rodzaj chwyta.
         wynik["wniosek"] = ((material.get("our_angle") or {}).get("kind") or ""
@@ -5759,6 +5837,8 @@ def notki_dnia(
         for _kand in wynik.get("candidates") or []:
             if isinstance(_kand, dict):
                 _kand["koncowka_ocena"] = konczy_ocena_materialu(_kand.get("note") or "")
+                # E18 — sprawdzenie, ze zmiana zaszla (w obu ramionach).
+                _kand["konczy_pytaniem"] = str(_kand.get("note") or "").rstrip().endswith("?")
         # Ta sama zasada co przy faktach: dzien promocji odhacza ten, kto notke
         # NAPRAWDE wystawil. Wystarczylo, ze kandydat przeszedl bramke — wiec
         # nieudana publikacja albo zwykle sprawdzenie zjadaly po cichu jeden
@@ -5836,12 +5916,22 @@ def ocen_restack(
     if not czysty:
         return {"restack": False,
                 "reason": "material odrzucony przez zapore: %s" % powod}
+    # E13 — KTO PISZE ZDANIE (`config.EKSPERYMENTY["pisarz_restackow"]`). Los
+    # po TRESCI ocenianej notki: ta sama notka zawsze trafia do tego samego
+    # ramienia, a kolejnosc w kanale nie ma na to wplywu. E12 idzie obok —
+    # ramie tygodnia, zeby dziennik restacka mial oba.
+    _e13 = ramie("pisarz_restackow",
+                 hashlib.sha256(" ".join(tekst.split())[:500].encode()).hexdigest()[:12])
+    etap = "restack_opus" if _e13 == "on" else "restack"
     surowy = llm.call(
-        "restack", RESTACK_SYSTEM,
+        etap, RESTACK_SYSTEM,
         _prompt("restack.md", autor=notka.get("autor", "")[:80], tekst=tekst[:2500]),
         conn=conn, run_id=run_id,
     )
     o = llm.parse_json(surowy)
+    o["model"] = config.MODEL_FOR.get(etap, "")
+    o["eksperymenty"] = {n: r for n, r in (("restacki_norma", ramie("restacki_norma", 0)),
+                                           ("pisarz_restackow", _e13)) if r}
     zdanie = str(o.get("sentence") or "").strip()
 
     # Deklaracja bez zdania to nie decyzja. I odwrotnie: zdanie za dlugie

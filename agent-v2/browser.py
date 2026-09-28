@@ -1990,6 +1990,14 @@ def nasze_pozycje_do_pomiaru(page=None, ile: int = 60) -> list[dict[str, Any]]:
             if ilu:
                 print("  [obserwowani] znamy %d kont, ktore juz obserwujemy"
                       % ilu, flush=True)
+            # E20 — REKOMENDACJE W OBIE STRONY (`rekomendacje.jsonl`): ilu
+            # polecamy, ilu poleca NAS i ile zapisow przyszlo ta droga. Trzy
+            # zapytania wiecej na pomiar; porazka nie przerywa reszty.
+            rek = zapisz_rekomendacje(page)
+            if rek:
+                print("  [rekomendacje] polecamy %d, polecaja nas %d, zapisow"
+                      " z rekomendacji %d" % (rek["polecamy"], rek["polecaja_nas"],
+                                              rek["zapisy_z_rekomendacji"]), flush=True)
             if isinstance(profil, dict) and profil.get("id"):
                 feed = api_json(page, f"/api/v1/reader/feed/profile/{profil['id']}"
                                       "?types%5B%5D=note") or {}
@@ -3488,11 +3496,19 @@ def obserwuj_profil(handle: str, wyslij: bool = False) -> dict[str, Any]:
 
 
 def kogo_polecamy(page=None) -> list[dict[str, Any]]:
-    """Kogo nasza publikacja poleca — z API, nie z pamieci.
+    """Kogo nasza publikacja poleca — z API panelu, nie z pamieci.
 
-    `/api/v1/recommendations/from/<id publikacji>` oddaje liste. Pusta lista
-    znaczy, ze nie polecamy nikogo — i tak bylo do 30 sierpnia 2026, przy
-    zerowej liczbie subskrypcji przyslanych ta droga.
+    ZRODLO OD 28.09.2026: `/api/v1/recommendations/stats/from` — o to samo pyta
+    panel `/publish/recommendations`. Wiersz na polecana publikacje: `target_pub`
+    (nazwa, subdomena), `target_publication_id`, `is_active`, `is_mutual`
+    i `xp_signups` (zapisy, ktore IM wyslalismy).
+
+    STARA DROGA OSLEPLA PO CICHU. Bylo `/api/v1/publication/self` -> numer ->
+    `/api/v1/recommendations/from/<numer>`. Sprawdzone na zywo 28.09.2026:
+    `publication/self` nie oddaje juz numeru, a `from/<numer>` oddaje slownik
+    `{"rows", "total"}` zamiast listy — i to z zerem wierszy przy jednej
+    aktywnej rekomendacji. Funkcja zwracala pusta liste, wiec `polec_publikacje`
+    nie umialby potwierdzic ani jednej nowej rekomendacji.
     """
     wlasny = page is None
     if wlasny:
@@ -3501,22 +3517,83 @@ def kogo_polecamy(page=None) -> list[dict[str, Any]]:
         page = ctx.new_page()
     try:
         baza = f"https://{config.SUBSTACK_HANDLE}.substack.com"
-        prof = api_json(page, "/api/v1/publication/self", baza=baza)
-        ident = (prof or {}).get("id") if isinstance(prof, dict) else None
-        if not ident:
-            # Numer publikacji stoi tez przy kazdym naszym poscie.
-            posty = api_json(page, "/api/v1/archive?limit=1", baza=baza)
-            if isinstance(posty, list) and posty and isinstance(posty[0], dict):
-                ident = posty[0].get("publication_id")
-        if not ident:
+        st = api_json(page, "/api/v1/recommendations/stats/from", baza=baza)
+        wiersze = st.get("rows") if isinstance(st, dict) else st
+        if not isinstance(wiersze, list):
             return []
-        lista = api_json(page, f"/api/v1/recommendations/from/{ident}", baza=baza)
-        return lista if isinstance(lista, list) else []
+        return [w for w in wiersze
+                if isinstance(w, dict) and w.get("is_active", True) is not False]
     finally:
         if wlasny:
             page.close()
             br.close()
             p.stop()
+
+
+def _numer_polecanej(w: dict[str, Any]) -> str:
+    """Numer polecanej publikacji z wiersza `kogo_polecamy` (nowy i stary ksztalt)."""
+    pub = w.get("target_pub") if isinstance(w.get("target_pub"), dict) else {}
+    return str(w.get("target_publication_id") or pub.get("id")
+               or w.get("id") or w.get("publication_id") or "")
+
+
+def stan_rekomendacji(page) -> dict[str, Any] | None:
+    """Rekomendacje w obie strony — do `rekomendacje.jsonl` (E20).
+
+    `/api/v1/recommendations/exist` (liczniki z panelu: ilu polecamy, ilu
+    poleca NAS, ile zapisow przyszlo z rekomendacji), `stats/from` (kogo my)
+    i `stats/to` (kto nas). Odczyt nieudany oddaje None, nie zera — zero
+    w szeregu czasowym znaczyloby „nikt nas nie poleca", a nie „nie wiem".
+    """
+    from datetime import datetime, timezone
+
+    baza = f"https://{config.SUBSTACK_HANDLE}.substack.com"
+    liczniki = api_json(page, "/api/v1/recommendations/exist", baza=baza)
+    if not isinstance(liczniki, dict) or "recommendingOthers" not in liczniki:
+        return None
+
+    def wiersze(sciezka: str) -> list[dict]:
+        x = api_json(page, sciezka, baza=baza)
+        x = x.get("rows") if isinstance(x, dict) else x
+        return [w for w in x if isinstance(w, dict)] if isinstance(x, list) else []
+
+    def opis(w: dict, pole: str) -> dict[str, Any]:
+        pub = w.get(pole) if isinstance(w.get(pole), dict) else {}
+        return {"sub": pub.get("subdomain") or pub.get("custom_domain") or "",
+                "od": str(w.get("created_at") or "")[:10],
+                "aktywna": w.get("is_active"), "wzajemna": w.get("is_mutual"),
+                "zapisy": int(w.get("xp_signups") or 0)}
+
+    return {"kiedy": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "polecamy": int(liczniki.get("recommendingOthers") or 0),
+            "polecaja_nas": int(liczniki.get("beingRecommended") or 0),
+            "zapisy_z_rekomendacji": int(liczniki.get("totalSignups") or 0),
+            "my": [opis(w, "target_pub") for w in wiersze("/api/v1/recommendations/stats/from")],
+            "nas": [opis(w, "source_pub") if "source_pub" in w else opis(w, "publication")
+                    for w in wiersze("/api/v1/recommendations/stats/to")]}
+
+
+REKOMENDACJE = config.DATA_DIR / "rekomendacje.jsonl"
+
+
+def zapisz_rekomendacje(page) -> dict[str, Any] | None:
+    """Dopisuje `stan_rekomendacji` do pliku; porazka nie przerywa pomiaru."""
+    import json as _json
+
+    try:
+        stan = stan_rekomendacji(page)
+    except Exception as exc:
+        print("  [rekomendacje] odczyt nieudany: %s" % type(exc).__name__, flush=True)
+        return None
+    if not stan:
+        return None
+    try:
+        REKOMENDACJE.parent.mkdir(parents=True, exist_ok=True)
+        with REKOMENDACJE.open("a", encoding="utf-8") as f:
+            f.write(_json.dumps(stan, ensure_ascii=False) + chr(10))
+    except OSError as exc:
+        print("  [rekomendacje] nie zapisalem: %s" % type(exc).__name__, flush=True)
+    return stan
 
 
 def polec_publikacje(fraza: str, powod: str,
@@ -3555,8 +3632,7 @@ def polec_publikacje(fraza: str, powod: str,
     wynik: dict[str, Any] = {"fraza": fraza, "wpisane": False,
                              "zrobione": False, "blad": None}
     try:
-        przed = {str(x.get("id") or x.get("publication_id"))
-                 for x in kogo_polecamy(page) if isinstance(x, dict)}
+        przed = {_numer_polecanej(x) for x in kogo_polecamy(page)}
 
         page.goto(f"https://{config.SUBSTACK_HANDLE}.substack.com"
                   "/publish/recommendations",
@@ -3583,13 +3659,20 @@ def polec_publikacje(fraza: str, powod: str,
         # Wybor z podpowiedzi. Bierzemy pozycje, ktora NAPRAWDE zawiera fraze —
         # klikniecie „w zastepstwie" to ten sam blad, przez ktory agent
         # subskrybowal zamiast obserwowac.
-        trafienie = page.get_by_role("option", name=re.compile(
-            re.escape(fraza.split()[0]), re.I)).first
-        if trafienie.count() == 0:
-            trafienie = page.get_by_text(fraza, exact=False).last
-        if trafienie.count() == 0:
+        #
+        # CALA FRAZA, NIE PIERWSZE SLOWO (28.09.2026). Bylo `fraza.split()[0]`:
+        # dla „AI as Normal Technology" to samo „AI", a takich podpowiedzi jest
+        # kilka — pierwsza z brzegu polecilaby publicznie kogos innego. Znikl
+        # tez zapasowy `get_by_text(fraza).last`, ktory mogl trafic w dowolny
+        # napis na stronie. Brak pelnego trafienia = blad z lista podpowiedzi.
+        trafienia = page.get_by_role("option", name=re.compile(re.escape(fraza), re.I))
+        if trafienia.count() == 0:
             wynik["blad"] = f"wyszukiwarka nie znalazla {fraza!r}"
+            wynik["podpowiedzi"] = [t.strip()[:80] for t in
+                                    page.get_by_role("option").all_inner_texts()[:8]]
             return wynik
+        trafienie = trafienia.first
+        wynik["wybrana"] = (trafienie.inner_text(timeout=5000) or "").strip()[:120]
         trafienie.click(timeout=10_000)
         page.wait_for_timeout(3000)
 
@@ -3611,10 +3694,10 @@ def polec_publikacje(fraza: str, powod: str,
         # SPRAWDZAMY SKUTEK, NIE TO, ZE KLIKNIECIE SIE NIE WYWALILO. Tak samo
         # jak przy pamieci platnych hostow: oslona `try` juz raz zamienila
         # blad w wypisane ostrzezenie, a funkcja po cichu nie robila nic.
-        po = {str(x.get("id") or x.get("publication_id"))
-              for x in kogo_polecamy(page) if isinstance(x, dict)}
+        po = {_numer_polecanej(x) for x in kogo_polecamy(page)}
         wynik["zrobione"] = len(po) > len(przed)
         wynik["polecanych_teraz"] = len(po)
+        wynik["nowe"] = sorted(po - przed)
         dopisz_wynik("rekomendacja", wynik, komu=fraza)
         print("  REKOMENDACJA DODANA" if wynik["zrobione"]
               else "  KLIKNIETE, ALE LISTA SIE NIE ZMIENILA", flush=True)
@@ -5465,10 +5548,14 @@ def restackuj_w_kanale(
                 # `udane` powinno od niego zalezec. Nie zgaduje, jak Substack
                 # nazywa stan przycisku po restacku, i nie ruszam tego bez tej
                 # liczby.
+                # MODEL I RAMIONA E12/E13 — bez nich restack nie trafia do
+                # zadnej grupy (`eksperymenty.py --rodzaj restack`).
                 zapisz_w_dzienniku("restack", udane=True,
                                    komu=notka.get("autor", ""),
                                    slow=len(zdanie.split()),
-                                   tekst=zdanie[:300], id=numer_restacka)
+                                   tekst=zdanie[:300], id=numer_restacka,
+                                   **{k: ocena[k] for k in ("model", "eksperymenty")
+                                      if ocena.get(k)})
                 print(f"    podane dalej {wynik['restackowane']}/{ile}", flush=True)
             except Exception as exc:
                 # Tak samo jak przy polubieniach: porazka szla do logu i nigdzie

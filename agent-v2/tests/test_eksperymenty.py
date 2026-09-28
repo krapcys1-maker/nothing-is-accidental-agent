@@ -220,9 +220,12 @@ sprawdz("notki_dnia: ramie wniosku zerowane przy kazdej notce i zapisywane w wyn
 sprawdz("E10 zatwierdzone przez wlasciciela 27.09: wniosek 70/30, 28.09-25.10 (bez zmian)",
         config.EKSPERYMENTY.get("wniosek") == {"udzial": 0.7, "od": "2026-09-28", "do": "2026-10-25"},
         config.EKSPERYMENTY)
-sprawdz("E11 na polecenie wlasciciela 28.09: pisarz MiMo 50/50, to samo okno — i nic wiecej nie trwa",
+sprawdz("E11 na polecenie wlasciciela 28.09: pisarz MiMo 50/50, to samo okno; obok tylko E12-E18"
+        " zatwierdzone tego samego dnia (okna pilnuje test_eksperymenty_e12_e20)",
         config.EKSPERYMENTY.get("pisarz") == {"udzial": 0.5, "od": "2026-09-28", "do": "2026-10-25"}
-        and set(config.EKSPERYMENTY) == {"wniosek", "pisarz"}, config.EKSPERYMENTY)
+        and set(config.EKSPERYMENTY) == {"wniosek", "pisarz", "restacki_norma", "pisarz_restackow",
+                                         "cel_komentarza", "swiezosc_celu", "pora_notki",
+                                         "krotka_notka", "pytanie_na_koncu"}, config.EKSPERYMENTY)
 # NIEZALEZNE LOSOWANIE: ramiona E10 i E11 w tych samych slotach nie moga sie
 # pokrywac systematycznie (osobny klucz = osobny hash), inaczej jeden
 # eksperyment mierzylby drugi.

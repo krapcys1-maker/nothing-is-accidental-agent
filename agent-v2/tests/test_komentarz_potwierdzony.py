@@ -436,10 +436,14 @@ latki = [
      '                    print("  (pominiete — nie licze do normy dnia)",'
      " flush=True)\n                    continue\n",
      ""),
+    # Od 28.09.2026 kontekst niesie tez rodzaj celu i ramiona E14/E15
+    # (`ramiona_komentarza`); kod sprzed poprawki nie mial zadnego z tych pol.
     ("postawa i otwarcie w dyskusjach",
      '                    kontekst={**opis_celu(cel),\n'
      '                              "otwarcie": (out.get("otwarcie") or "")[:60],\n'
-     '                              "postawa": out.get("postawa") or ""},\n'
+     '                              "postawa": out.get("postawa") or "",\n'
+     '                              **ramiona_komentarza(cel, "notka",\n'
+     '                                                   przydzial["e14"])},\n'
      '                    rodzaj="komentarz")',
      "                    kontekst=opis_celu(cel),\n"
      '                    rodzaj="komentarz")'),

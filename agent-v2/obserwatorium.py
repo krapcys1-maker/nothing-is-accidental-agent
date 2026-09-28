@@ -276,6 +276,23 @@ def tresci_na_doby(statystyki: list[dict], dziennik: list[dict] | None = None) -
     return {d: dict(c) for d, c in out.items()}
 
 
+def rekomendacje_na_doby(rekomendacje: list[dict]) -> dict[str, dict]:
+    """Rekomendacje na koniec doby UTC (E20): ilu polecamy, ilu poleca NAS i ile
+    zapisow przyszlo z rekomendacji (licznik panelu, narastajacy).
+
+    Plik `rekomendacje.jsonl` pisze `browser.zapisz_rekomendacje` przy kazdym
+    pomiarze — od 28.09.2026 i tylko NIE; brak pliku = brak pol, nie zera.
+    """
+    out: dict[str, dict] = {}
+    for w in sorted(rekomendacje, key=lambda w: str(w.get("kiedy") or "")):
+        d = _dzien(w.get("kiedy"))
+        if d and w.get("polecamy") is not None:
+            out[d] = {"rek_polecamy": int(w["polecamy"]),
+                      "rek_polecaja_nas": int(w.get("polecaja_nas") or 0),
+                      "rek_zapisy": int(w.get("zapisy_z_rekomendacji") or 0)}
+    return out
+
+
 def pokrycie_pomiaru(statystyki: list[dict]) -> dict[str, dict]:
     """`pomiar_tresci: 1` dla kazdej doby od pierwszego do ostatniego NASZEGO pomiaru tresci.
 
@@ -580,7 +597,8 @@ def podsumuj_konto(k: dict) -> dict[str, dict]:
               tresci_na_doby(statystyki, dziennik),
               pokrycie_pomiaru(statystyki),
               dzialania_na_doby(dziennik, k.get("siostra", "")),
-              koszt_na_doby(dane / "agent-v2.db"))
+              koszt_na_doby(dane / "agent-v2.db"),
+              rekomendacje_na_doby(_jsonl(dane / "rekomendacje.jsonl")))
     out = {}
     for d in sorted(set().union(*czesci)):
         w: dict[str, Any] = {}
@@ -878,6 +896,10 @@ def raport(dni_raportu: int = 14, dzis: str | None = None) -> str:
         ("dzialania 7 dni: notki / komentarze / restacki", lambda n: "%s / %s / %s" % (
             t7[n]["dz_notki"], t7[n]["dz_komentarze"], t7[n]["dz_restacki"])),
         ("w tym do siostry (7 dni)", lambda n: _f(t7[n]["dz_do_siostry"])),
+        # E20 — ostatni znany stan (pole jest tylko tam, gdzie bot je mierzy).
+        ("rekomendacje: polecamy / polecaja nas / zapisy z rekomendacji", lambda n: (lambda r: "%s / %s / %s" % (
+            _f(r.get("rek_polecamy")), _f(r.get("rek_polecaja_nas")), _f(r.get("rek_zapisy"))) if r else "—")(
+            dane[n].get(max((d for d in dane[n] if "rek_polecamy" in dane[n][d]), default=""), {}))),
     ]
     for etykieta, fn in wiersze:
         L.append("| %s | %s |" % (etykieta, " | ".join(fn(n) for n in nazwy)))

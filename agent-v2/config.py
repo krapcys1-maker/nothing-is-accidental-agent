@@ -151,10 +151,58 @@ KWOTA_SPOZA_BRANZY = True
 # ida naraz bez mieszania). Notka z przeslania (Opus) nie bierze udzialu. Gdy MiMo
 # nie napisze notki, w tym samym przebiegu pisze DeepSeek (`pisarz_zastepczy`).
 # Ocena jak E10: `python agent-v2/eksperymenty.py --pole eksperyment:pisarz`.
+#
+# E12-E18 — ZATWIERDZONE PRZEZ WLASCICIELA 28.09.2026 („przygotuj caly test,
+# zeby to dzialalo i zeby zbieralo dane"). Kazdy ma WLASNE losowanie (nazwa
+# w haszu), wiec ida naraz bez mieszania. Rejestr i reguly decyzji:
+# `agent-v2/docs/POMIAR_I_EKSPERYMENTY_2026-09-27.md`.
+#
+# `plan` + `okres_dni` = ramie z KALENDARZA, nie z losowania: okres numer k
+# od `od` dostaje `plan[k % len(plan)]`. Dla tygodni (E12) to jedyny uczciwy
+# uklad: szesc tygodni to za malo, zeby losowanie wyrownalo trend konta,
+# a uklad ABBAAB rozklada go prawie po rowno (srednie polozenie 2,3 wobec 2,7).
+#
+# E12 — ILE RESTACKOW: tygodnie na przemian, „on" = 3-5 dziennie, „off" = 1-3
+#   (`RESTACK_DZIENNIE_E12`). Restacki daly polowe zapisow przypisanych tresciom
+#   (NIE 5 z 10, NIA 9 z 12). Miary tygodniowe: zapisy przypisane restackom,
+#   przyrost subskrybentow, odwiedziny profilu — `eksperymenty.py --tygodnie`.
+# E13 — KTO PISZE ZDANIE RESTACKA: „on" = Opus (etap `restack_opus`), „off" =
+#   Flash; los po tresci ocenianej notki. Restack jest mierzony jak notka
+#   (35 z 35 od 1.09 ma numer i pomiar) — `--rodzaj restack`.
+# E14 — GDZIE KOMENTARZ: kazde miejsce na komentarz w przebiegu losuje „on" =
+#   pod notka, „off" = pod artykulem; laczna liczba miejsc bez zmian
+#   (`run.przydzial_komentarzy`). Miara: reakcje na komentarz — `--rodzaj komentarz`.
+# E15 — SWIEZY CEL: „on" = najswiezszy cel do 2 h od publikacji, jesli jest;
+#   startuje po E14.
+# E16 — PORA NOTKI: dni na przemian (kazdy dzien tygodnia po rowno), „on" =
+#   notki dopiero od trzeciego przebiegu doby (15:20-19:40 ET), „off" = jak dotad
+#   (od pierwszego, 7:20 ET).
+# E17 — KROTKA NOTKA: „on" = okno `KROTKA_NOTKA_SLOW` zamiast zwyklego.
+# E18 — PYTANIE NA KONIEC: „on" = notka konczy sie jednym prawdziwym pytaniem.
+# E16-E18 startuja po E10 i E11 (26.10), bo notek jest ok. trzech dziennie.
 EKSPERYMENTY: dict = {
     "wniosek": {"udzial": 0.7, "od": "2026-09-28", "do": "2026-10-25"},
     "pisarz": {"udzial": 0.5, "od": "2026-09-28", "do": "2026-10-25"},
+    "restacki_norma": {"plan": ["on", "off", "off", "on", "on", "off"],
+                       "okres_dni": 7, "od": "2026-09-29", "do": "2026-11-09"},
+    "pisarz_restackow": {"udzial": 0.5, "od": "2026-09-29", "do": "2026-10-26"},
+    "cel_komentarza": {"udzial": 0.5, "od": "2026-09-29", "do": "2026-10-19"},
+    "swiezosc_celu": {"udzial": 0.5, "od": "2026-10-20", "do": "2026-11-09"},
+    "pora_notki": {"plan": ["on", "off"], "okres_dni": 1,
+                   "od": "2026-10-26", "do": "2026-11-22"},
+    "krotka_notka": {"udzial": 0.5, "od": "2026-10-26", "do": "2026-11-22"},
+    "pytanie_na_koncu": {"udzial": 0.5, "od": "2026-10-26", "do": "2026-11-22"},
 }
+
+# E12 — dobowe widelki restackow w obu ramionach (srednio 4 i 2). Widelki, nie
+# stala: ta sama liczba dzien po dniu to podpis maszyny (`stages.budzet_dnia`).
+RESTACK_DZIENNIE_E12 = {"on": (3, 5), "off": (1, 3)}
+# E15 — „swiezy cel" to wpis mlodszy niz tyle minut.
+SWIEZY_CEL_MIN = 120
+# E16 — w ramieniu „on" notki wychodza od tego przebiegu doby (liczac od 1).
+PORA_NOTKI_OD_PRZEBIEGU = 3
+# E17 — okno krotkiej notki (obecne: `NOTE_MIN_WORDS`-`NOTE_MAX_WORDS`).
+KROTKA_NOTKA_SLOW = (33, 60)
 
 # ILE RAZY ODPISUJEMY W JEDNEJ ROZMOWIE. Rozmowa to galaz komentarzy: ten,
 # ktory ja zaczal, i wszystko pod nim. Liczy `browser.nasze_odpowiedzi_w_rozmowie`
@@ -375,6 +423,11 @@ MODEL_FOR = {
     "bibliotekarz": DEEPSEEK,
     "warto_pisac": DEEPSEEK,
     "restack": DEEPSEEK,
+    # E13 — zdanie restacka pisze Opus w ramieniu „on" eksperymentu
+    # `pisarz_restackow` (decyzja wlasciciela 28.09.2026). Ocena to 6-15
+    # wywolan na dobe, Flash kosztuje przy nich grosze; Opus na polowie
+    # to ok. 0,03 USD na dobe.
+    "restack_opus": CLAUDE,
     "fedreg": DEEPSEEK,
 }
 
@@ -1451,6 +1504,9 @@ EFFORT = {
     "naprawa": "medium",
     # Notka z przeslania na Opusie — ten sam wysilek, co w A/B 27.09.
     "notka_przeslania": "medium",
+    # E13 — jedno zdanie do 40 slow: niski wysilek, bo rozumowanie liczy sie
+    # jak wyjscie (25 USD/mln), a Flash pisze to zdanie bez rozumowania.
+    "restack_opus": "low",
     # Przeslania sledztwa: WPISANE to, co i tak dzialalo. Bez wpisu nie szlo
     # zadne `effort`, a domyslny poziom Opusa 5.5 to `medium` (dokumentacja
     # Claude API) — tak przeszlo A/B z 27.09, wiec zachowanie sie nie zmienia.
@@ -1496,6 +1552,8 @@ MAX_TOKENS = {
     # Jedno zdanie do 40 slow plus uzasadnienie decyzji. Malo tekstu,
     # ale DeepSeek i tak rozumuje obficie — zapas zalatwia THINKING_HEADROOM.
     "restack": 3000,
+    # E13 — to samo zdanie Opusem; zapas na jego rozumowanie przy `low`.
+    "restack_opus": 4000,
     # Kilku kandydatow po cztery krotkie pola. Nie esej.
     "fedreg": 8000,
     # DOKŁADNIE tyle, ile prosi prompt: 12 fragmentów po 700 znaków plus liczby

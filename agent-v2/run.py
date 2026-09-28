@@ -174,6 +174,95 @@ def opis_celu(cel: dict) -> dict:
     }
 
 
+def _ramie(nazwa: str, miejsce: Any, dzien: str | None = None) -> str:
+    """Ramie eksperymentu z `stages.ramie` — a atrapa `stages` bez tej funkcji
+    znaczy „eksperyment nie trwa".
+
+    Testy `dzien()` podstawiaja okrojony modul `stages` (tylko to, czego dany
+    test potrzebuje). Bez tej furtki kazdy z nich zalezalby od kalendarza: od
+    29.09.2026 E14 dzieli miejsca na komentarze losowo, wiec test komentarzy pod
+    artykulami dostawalby w jedne dni cel, a w inne nie.
+    """
+    f = getattr(stages, "ramie", None)
+    return f(nazwa, miejsce, dzien) if callable(f) else ""
+
+
+def przydzial_komentarzy(n: int, klucz: Any = "", dzien: str | None = None) -> dict[str, Any]:
+    """Ile miejsc na komentarz dostaje blok pod ARTYKULAMI, a ile pod NOTKAMI.
+
+    Bez eksperymentu jak dotad: artykuly `n`, notki `max(1, n // 2)` (patrz
+    `dyskusje`). E14 (`config.EKSPERYMENTY["cel_komentarza"]`, decyzja wlasciciela
+    28.09.2026): TA SAMA liczba miejsc, ale kazde losuje rodzaj celu — „on" pod
+    notka, „off" pod artykulem. Miejsce, ktorego blok nie zapelni, przepada tak jak
+    dotad; nie przechodzi do drugiego bloku, bo wtedy rodzaj celu zalezalby od
+    tego, gdzie akurat byly cele. `klucz` = numer przebiegu: ten sam przebieg
+    zawsze da ten sam podzial.
+    """
+    if n <= 0:
+        return {"artykuly": 0, "notki": 0, "e14": False}
+    razem = n + max(1, n // 2)
+    ramiona = [_ramie("cel_komentarza", "%s-%d" % (klucz, i), dzien)
+               for i in range(razem)]
+    if not all(ramiona):
+        return {"artykuly": n, "notki": max(1, n // 2), "e14": False}
+    notki = sum(1 for r in ramiona if r == "on")
+    return {"artykuly": razem - notki, "notki": notki, "e14": True}
+
+
+def uloz_wedlug_swiezosci(cele: list[dict], klucz: Any = "",
+                          dzien: str | None = None) -> list[dict]:
+    """E15 (`swiezosc_celu`): kolejnosc celow, kazdy z ramieniem w polu `_e15`.
+
+    Miejsce z ramieniem „on" bierze NAJSWIEZSZY z pozostalych celow mlodszy niz
+    `config.SWIEZY_CEL_MIN` minut, jesli taki jest; „off" — nastepny w kolejnosci
+    wyboru. Nie obchodzi progu `kanal._za_swiezy` (1,5-15 h dla artykulu, 20-90 min
+    dla notki): swiezy cel to ten, ktory PRZESZEDL ten prog — wiec pod artykulami
+    ramie zwykle nie ma czego wziac. Poza eksperymentem lista bez zmian.
+    """
+    import kanal
+
+    if not cele or not _ramie("swiezosc_celu", "%s-0" % klucz, dzien):
+        return cele
+    pozostale, out = list(cele), []
+    while pozostale:
+        r = _ramie("swiezosc_celu", "%s-%d" % (klucz, len(out)), dzien)
+        nr = 0
+        if r == "on":
+            wieki = [kanal._wiek_minut(c.get("data", "")) for c in pozostale]
+            swieze = [i for i, w in enumerate(wieki) if w < config.SWIEZY_CEL_MIN]
+            if swieze:
+                nr = min(swieze, key=lambda i: wieki[i])
+        out.append({**pozostale.pop(nr), "_e15": r})
+    return out
+
+
+def notki_w_porze(ile: int, zostalo_przebiegow: int, dzien: str | None = None) -> int:
+    """Ile notek wolno w TYM przebiegu wedlug pory doby — E16 (`pora_notki`).
+
+    Trzy notki na dobe przy pieciu przebiegach wychodza dzis w pierwszych
+    trzech (7:20, 13:00 i 15:20 ET). W dniu „on" przebiegi przed
+    `config.PORA_NOTKI_OD_PRZEBIEGU` notek nie wystawiaja, wiec reszta dzieli sie
+    na pozostale (15:20, 17:30 i 19:40 ET). Numer przebiegu z tego samego
+    licznika co podzial normy (`ile_przebiegow_zostalo`). Dzien „off" i czas
+    poza eksperymentem — bez zmian.
+    """
+    nr = config.PRZEBIEGOW_DZIENNIE - zostalo_przebiegow + 1
+    if (ile and nr < config.PORA_NOTKI_OD_PRZEBIEGU
+            and _ramie("pora_notki", 0, dzien) == "on"):
+        return 0
+    return ile
+
+
+def ramiona_komentarza(cel: dict, pod: str, e14: bool) -> dict[str, Any]:
+    """Pola dziennika komentarza: rodzaj celu i ramiona E14/E15."""
+    ekspe = {}
+    if e14:
+        ekspe["cel_komentarza"] = "on" if pod == "notka" else "off"
+    if cel.get("_e15"):
+        ekspe["swiezosc_celu"] = cel["_e15"]
+    return {"pod": pod, **({"eksperymenty": ekspe} if ekspe else {})}
+
+
 _KONIEC_CZASU: float | None = None
 
 
@@ -1144,6 +1233,11 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
         config.UDZIAL_CZASU_NA_NOTKI_NADRABIANIE if _nadrabiamy
         else config.UDZIAL_CZASU_NA_NOTKI)
     na_teraz["komentarze"] = zmiesci_sie("komentarz", na_teraz["komentarze"])
+    # E14 — ile miejsc idzie pod artykuly, a ile pod notki (`przydzial_komentarzy`).
+    przydzial = przydzial_komentarzy(na_teraz["komentarze"], run_id)
+    if przydzial["e14"]:
+        print("   [E14 cel komentarza] pod artykulami %d, pod notkami %d"
+              % (przydzial["artykuly"], przydzial["notki"]), flush=True)
     print(f"   dzis juz: notki={juz.get('notki', 0)} "
           f"komentarze={juz.get('komentarze', 0)} lajki={juz.get('lajki', 0)}   "
           f"przebiegow zostalo: {zostalo_przebiegow}   "
@@ -1195,6 +1289,13 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
         na_teraz["notki"] = 0
         print("   (komentarze IDA — okno dotyczy naszych tresci, nie cudzych"
               " watkow)", flush=True)
+    # E16 — PORA NOTKI, patrz `notki_w_porze`.
+    _w_porze = notki_w_porze(na_teraz["notki"], zostalo_przebiegow)
+    if _w_porze != na_teraz["notki"]:
+        print("   [E16 pora notki] dzien wieczorny — przebieg %d z %d bez notek"
+              % (config.PRZEBIEGOW_DZIENNIE - zostalo_przebiegow + 1,
+                 config.PRZEBIEGOW_DZIENNIE), flush=True)
+        na_teraz["notki"] = _w_porze
 
     def blok(nazwa: str, robota) -> None:
         try:
@@ -1467,6 +1568,12 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
                                                      n.get("zrodlo_host") or "",
                                                  "koncowka_ocena": gotowe[0].get(
                                                      "koncowka_ocena") or "",
+                                                 # E18 — czy WYSTAWIONA notka
+                                                 # konczy sie pytaniem (w obu
+                                                 # ramionach: sprawdzenie, ze
+                                                 # zmiana naprawde zaszla)
+                                                 "konczy_pytaniem": gotowe[0].get(
+                                                     "konczy_pytaniem"),
                                                  # przeslanie ze sledztwa
                                                  "przeslanie_id":
                                                      n.get("przeslanie_id"),
@@ -1581,7 +1688,10 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
         #
         # `wybierz_cele` to 0,5326 USD tygodnia, wiec to nie jest grosz — ale
         # wazniejsze, ze przebieg wygladal w logu na pracujacy.
-        if na_teraz["komentarze"] <= 0:
+        # Miejsca pod artykulami — `przydzial_komentarzy` (poza E14 to caly
+        # `na_teraz["komentarze"]`, jak dotad).
+        ile = przydzial["artykuly"]
+        if ile <= 0:
             print("  przydzial komentarzy na ten przebieg: 0 — nie oceniam"
                   " celow", flush=True)
             return
@@ -1708,12 +1818,12 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
         # `rytm()` nadal trzyma 5-15 minut miedzy komentarzami. Wlasciciel byl
         # jednoznaczny: „nie chodzi o LICZBE, tylko o ODSTEPY".
         rundy = 1
-        while (len(cele) < na_teraz["komentarze"]
+        while (len(cele) < ile
                and rundy < config.RUNDY_SZUKANIA_CELOW
                and zostal_czas("komentarze")):
             rundy += 1
             print("  [cele] mam %d z %d — runda %d szukania"
-                  % (len(cele), na_teraz["komentarze"], rundy), flush=True)
+                  % (len(cele), ile, rundy), flush=True)
             dobrane = [x for x in kanal.szukaj_nowych()
                        if x.get("rodzaj") != "notka" and x.get("url")
                        and x["url"] not in widziane]
@@ -1750,7 +1860,9 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
             print("  [cele] po %d rundach: %d celow"
                   % (rundy, len(cele)), flush=True)
 
-        for cel in cele[: na_teraz["komentarze"]]:
+        # E15 — swiezy cel na wylosowanych miejscach (`uloz_wedlug_swiezosci`).
+        cele = uloz_wedlug_swiezosci(cele, "%s-artykuly" % run_id)
+        for cel in cele[:ile]:
             if not zostal_czas("komentarze"):
                 return
             # Pytamy o prawo do komentowania PRZED pisaniem. Inaczej caly koszt
@@ -1795,7 +1907,9 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
                     cel["url"], dobre[0]["comment"], wyslij=True,
                     kontekst={**opis_celu(cel),
                               "otwarcie": (out.get("otwarcie") or "")[:60],
-                              "postawa": out.get("postawa") or ""})
+                              "postawa": out.get("postawa") or "",
+                              **ramiona_komentarza(cel, "artykul",
+                                                   przydzial["e14"])})
                 # Rytm odmierza sie NIEZALEZNIE od wyniku: przegladarka byla
                 # otwarta, strona wczytana, tekst wpisany — nastepne dzialanie
                 # ma czekac tyle samo, co po komentarzu udanym.
@@ -1867,7 +1981,9 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
         rozmowa, a kanal promuje watki, ktore zyja. Komentarz pod artykulem
         czyta kilka osob; sensowna uwaga pod zywa notka trafia do calego watku.
         """
-        if not na_teraz["komentarze"]:
+        # Miejsca pod notkami — `przydzial_komentarzy` (poza E14 to
+        # `max(1, N // 2)`, jak dotad).
+        if not przydzial["notki"]:
             return
         # Dwa zrodla, bo jedno bylo glodowe: przeglad pokazal DWA cele na
         # przebieg, oba z zerem odpowiedzi. Wyszukiwarka oddaje notki spoza
@@ -1901,7 +2017,9 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
         # przekroczyla przez to budzetu dobowego. Powod jest strukturalny, nie
         # szczesliwy: `zostalo` liczy sie od nowa z dziennika na poczatku
         # KAZDEGO przebiegu, wiec nadmiar jednego zabiera z puli nastepnym.
-        for cel in cele[: max(1, na_teraz["komentarze"] // 2)]:
+        # E15 — swiezy cel na wylosowanych miejscach (`uloz_wedlug_swiezosci`).
+        cele = uloz_wedlug_swiezosci(cele, "%s-notki" % run_id)
+        for cel in cele[: przydzial["notki"]]:
             if not zostal_czas("dyskusje"):
                 return
             # Drugie miejsce, w ktorym ginelo `co_dodamy` — patrz komentarz przy
@@ -1940,7 +2058,9 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
                     cel["id"], dobre[0]["comment"], wyslij=True,
                     kontekst={**opis_celu(cel),
                               "otwarcie": (out.get("otwarcie") or "")[:60],
-                              "postawa": out.get("postawa") or ""},
+                              "postawa": out.get("postawa") or "",
+                              **ramiona_komentarza(cel, "notka",
+                                                   przydzial["e14"])},
                     rodzaj="komentarz")
                 rytm_stanu["komentarz"] = True
                 # Jak przy komentarzu pod artykulem: `wyslane` ustawia

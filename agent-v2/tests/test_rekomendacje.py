@@ -115,8 +115,10 @@ print()
 print("=== 8. ODCZYT LISTY DZIALA OSOBNO ===")
 # Zeby dalo sie zapytac „kogo polecamy" bez otwierania okna dodawania.
 sprawdz("jest `kogo_polecamy`", "def kogo_polecamy(" in zrodlo)
-sprawdz("czyta z API, nie z pamieci",
-        "recommendations/from/" in zrodlo)
+# Od 28.09.2026 `stats/from` — stara droga (`from/<numer>`) oddawala slownik
+# zamiast listy i zero wierszy przy aktywnej rekomendacji (patrz docstring).
+sprawdz("czyta z API panelu, nie z pamieci",
+        "recommendations/stats/from" in zrodlo)
 sprawdz("i nie zaklada, ze numer publikacji jest wpisany na sztywno",
         "9973418" not in zrodlo)
 

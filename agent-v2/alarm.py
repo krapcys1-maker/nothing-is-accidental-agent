@@ -536,6 +536,74 @@ def pomiar_wzajemnosci() -> str | None:
     return wzajemnosc.pomiar_oslepl()
 
 
+# POMIAR TRESCI: ile godzin bez odczytu to juz awaria. Przebiegi ida o 11:20,
+# 17:00, 19:20, 21:30 i 23:40 UTC, wiec najdluzsza zdrowa przerwa to noc
+# (23:40 -> 11:20, niecale 12 h). Panel zrodel i licznik subskrybentow czyta ten
+# sam pomiar, ale ich brak raz na dobe to jeszcze nie awaria.
+POMIAR_TRESCI_GODZIN = 14
+POMIAR_PANELU_GODZIN = 26
+
+
+def pomiar_statystyk(teraz: datetime | None = None) -> str | None:
+    """Czy bot nadal MIERZY swoje tresci — bez tego kazdy eksperyment jest slepy.
+
+    ALARM O POMIARZE, NIE O WYNIKU, jak `pomiar_wzajemnosci`. Audyt 28.09.2026
+    znalazl dwie takie dziury, ktore swiecily na zielono: od 4.09 do 28.09 bot
+    nie zmierzyl ANI JEDNEGO komentarza (limit 60 pozycji zjadaly notki), a pomiar
+    NIA do 7.09 nie istnial wcale. Obie wyszly dopiero przy liczeniu, po tygodniach.
+    Eksperymenty E10-E18 stoja na tych plikach, wiec dziura w pomiarze to dane
+    stracone na zawsze — dlatego mail tego samego dnia, a nie wniosek za miesiac.
+
+    Sprawdza: swiezy odczyt tresci (`statystyki.jsonl`), licznika
+    (`wzrost.jsonl`) i panelu zrodel (`zrodla.jsonl`), oraz czy komentarze
+    z ostatnich dwoch dob maja choc jeden pomiar.
+    """
+    import obserwatorium
+
+    teraz = teraz or datetime.now(timezone.utc)
+    dane = config.DATA_DIR
+    problemy: list[str] = []
+    # Kazdy plik czytany RAZ — statystyki maja kilkanascie MB.
+    pliki = {p: obserwatorium._jsonl(dane / p) for p in
+             ("statystyki.jsonl", "wzrost.jsonl", "zrodla.jsonl", "dziennik.jsonl")}
+
+    def ostatni(plik: str, warunek) -> datetime | None:
+        najp = None
+        for w in pliki[plik]:
+            if not warunek(w):
+                continue
+            t = obserwatorium._czas(w.get("kiedy"))
+            if t is not None and (najp is None or t > najp):
+                najp = t
+        return najp
+
+    for plik, warunek, prog, co in (
+            ("statystyki.jsonl", lambda w: w.get("id") and "wyswietlenia" in w
+             and w.get("rodzaj") in ("notka", "artykul"), POMIAR_TRESCI_GODZIN, "zasiegu notek"),
+            ("wzrost.jsonl", lambda w: w.get("subskrybenci") is not None,
+             POMIAR_TRESCI_GODZIN, "licznika subskrybentow"),
+            ("zrodla.jsonl", lambda w: not w.get("blad") and isinstance(w.get("zapisy"), dict),
+             POMIAR_PANELU_GODZIN, "panelu zrodel zapisow")):
+        t = ostatni(plik, warunek)
+        if t is None:
+            problemy.append("brak jakiegokolwiek udanego odczytu %s (%s)" % (co, plik))
+        elif (teraz - t).total_seconds() > prog * 3600:
+            problemy.append("ostatni udany odczyt %s %.0f h temu (%s, prog %d h)"
+                            % (co, (teraz - t).total_seconds() / 3600, plik, prog))
+
+    dzis = teraz.date().isoformat()
+    kom = obserwatorium.pokrycie_komentarzy(pliki["dziennik.jsonl"], pliki["statystyki.jsonl"],
+                                            dzis, dni=2)
+    if kom["wystawione"] >= 5 and not kom["zmierzone"]:
+        problemy.append("%d komentarzy i odpowiedzi z dwoch dob, zmierzonych 0 — dokladnie ta "
+                        "dziura, ktora od 4.09 do 28.09.2026 zjadla pomiar komentarzy"
+                        % kom["wystawione"])
+    if not problemy:
+        return None
+    return ("POMIAR OSLEPL — eksperymenty traca dane: " + "; ".join(problemy)
+            + ". Raport i eksperymenty.py beda liczyc z dziur jak z zer.")
+
+
 def wydarzenie_bez_pokrycia() -> str | None:
     """Wydarzenie odhaczone jako obsluzone, a w tresci ani slowa o nim.
 
@@ -672,6 +740,8 @@ def sprawdz_wszystko() -> list[str]:
          kopia_subskrybentow),
         ("pomiar-wzajemnosci", "POMIAR WZAJEMNOSCI OSLEPL",
          pomiar_wzajemnosci),
+        # Pomiar tresci, licznika i panelu — na nim stoja eksperymenty E10-E18.
+        ("pomiar-statystyk", "POMIAR TRESCI OSLEPL", pomiar_statystyk),
         # Gotowy, oplacony tekst lezacy na dysku to najdrozsza cisza, jaka to
         # konto potrafi wyprodukowac — i do 2 wrzesnia 2026 nie zglaszal jej
         # nikt: przebieg z nieudana publikacja zapisywal sie jako `DONE`.

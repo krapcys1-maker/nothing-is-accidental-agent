@@ -113,10 +113,16 @@ print("=== 4. PRZYDZIAL CELOWO NIETKNIETY ===")
 # Zapis, ze to bylo DECYZJA, a nie przeoczenie. Gdyby ktos przestawil takze
 # przydzial, ten test ma o tym powiedziec — nie dlatego, ze to zle, tylko
 # dlatego, ze wtedy trzeba na nowo policzyc, na czym ta zmiana stoi.
-sprawdz("artykuly nadal biora pelne `na_teraz[\"komentarze\"]`",
-        'cele[: na_teraz["komentarze"]]' in ZR)
-sprawdz("dyskusje nadal biora polowe",
-        'cele[: max(1, na_teraz["komentarze"] // 2)]' in ZR)
+# PRZESTAWIONY 28.09.2026 — ZATWIERDZONY EKSPERYMENT E14 (wlasciciel: „przygotuj
+# caly test"). Przydzial liczy `przydzial_komentarzy`: POZA eksperymentem nadal
+# artykuly N, dyskusje max(1, N // 2); w E14 ta sama suma miejsc, rodzaj celu
+# losowany na miejsce. Liczby pilnuje `test_eksperymenty_e12_e20`.
+sprawdz("artykuly biora swoja czesc z `przydzial_komentarzy`",
+        'ile = przydzial["artykuly"]' in ZR and "cele[:ile]" in ZR)
+sprawdz("dyskusje biora swoja czesc z `przydzial_komentarzy`",
+        'cele[: przydzial["notki"]]' in ZR)
+sprawdz("poza eksperymentem przydzial jak dotad: N i max(1, N // 2)",
+        'return {"artykuly": n, "notki": max(1, n // 2), "e14": False}' in ZR)
 
 print()
 print("=== 5. POWOD ZMIANY STOI PRZY KODZIE ===")

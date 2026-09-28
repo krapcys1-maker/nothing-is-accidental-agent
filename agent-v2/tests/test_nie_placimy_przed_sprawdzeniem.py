@@ -115,14 +115,16 @@ sprawdz("juz_sie_odezwalismy nadal wolane przy wystawianiu",
 
 print()
 print("=== 4. PRZYDZIAL ZERO — NIE ZACZYNAMY WCALE ===")
+# Od 28.09.2026 przydzial bloku to `przydzial["artykuly"]` (E14, patrz
+# `run.przydzial_komentarzy`) — warunek na wejsciu zostaje ten sam.
 sprawdz("komentarze() sprawdzaja przydzial na wejsciu",
-        'if na_teraz["komentarze"] <= 0:' in _run)
-i_przydzial = _run.find('if na_teraz["komentarze"] <= 0:')
+        'if ile <= 0:' in _run and 'ile = przydzial["artykuly"]' in _run)
+i_przydzial = _run.find('if ile <= 0:')
 sprawdz("i robia to PRZED ocena celow",
         0 < i_przydzial < i_ocena, (i_przydzial, i_ocena))
 # `dyskusje()` mial ten warunek od poczatku — ma go zachowac.
 sprawdz("dyskusje() nadal maja swoj warunek przydzialu",
-        'if not na_teraz["komentarze"]:' in _run)
+        'if not przydzial["notki"]:' in _run)
 
 print()
 print("=== 5. KOLEJNE RUNDY TEZ ODSIEWAJA JUZ SKOMENTOWANE ARTYKULY ===")
@@ -159,6 +161,9 @@ def ocenione_partie(druga, historia):
         stages=SimpleNamespace(wybierz_cele=wybierz),
         config=SimpleNamespace(RUNDY_SZUKANIA_CELOW=2),
         conn=None, run_id=1, na_teraz={"komentarze": 2},
+        przydzial={"artykuly": 2, "notki": 1, "e14": False},
+        uloz_wedlug_swiezosci=lambda cele, klucz="", dzien=None: cele,
+        ramiona_komentarza=lambda cel, pod, e14: {"pod": pod},
         zostal_czas=lambda *args: True,
     )
     exec(_kod, env)

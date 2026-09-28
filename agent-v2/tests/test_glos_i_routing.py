@@ -43,8 +43,12 @@ class VoiceRoutingTest(unittest.TestCase):
         # `note_mimo` — pisarz ramienia „on" eksperymentu E11 (polecenie
         # wlasciciela 28.09.2026: Xiaomi MiMo pisze polowe notek, tylko NIE).
         self.assertEqual(config.MODEL_FOR["note_mimo"], config.MIMO)
+        # `restack_opus` — zdanie restacka w ramieniu „on" eksperymentu E13
+        # (decyzja wlasciciela 28.09.2026: lepszy pisarz restackow, 50/50).
+        self.assertEqual(config.MODEL_FOR["restack_opus"], config.CLAUDE)
         for purpose, model in config.MODEL_FOR.items():
-            if purpose not in {"write", "obraz", "przeslania", "notka_przeslania", "note_mimo"}:
+            if purpose not in {"write", "obraz", "przeslania", "notka_przeslania", "note_mimo",
+                               "restack_opus"}:
                 with self.subTest(purpose=purpose):
                     self.assertEqual(model, config.DEEPSEEK)
 
