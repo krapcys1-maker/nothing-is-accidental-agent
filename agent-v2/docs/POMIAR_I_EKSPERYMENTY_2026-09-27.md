@@ -135,6 +135,24 @@ poprawki (sformułowanie w prompcie, forma) rozstrzyga warstwa 1 plus strażnicy
   - Ocena ok. **29.10** (ostatnie notki muszą dojrzeć 72 h):
     `python agent-v2/eksperymenty.py --pole eksperyment:wniosek --od 2026-09-28`.
   - Cena tej wiedzy: 30% notek z banku przez 4 tygodnie idzie bez wniosku.
+- **E11 — pisarz notek Xiaomi MiMo V2.6 Flash, na polecenie właściciela
+  28.09** („możesz mu dać notki na próbę, ale tylko na NIE"). Połowa notek
+  z banku, **28.09–25.10**, własne losowanie (`ramie("pisarz")`), niezależne
+  od E10, więc oba eksperymenty idą naraz, a każdy ma drugi rozłożony po
+  swoich ramionach.
+  - Dlaczego: w ślepym teście na 8 produkcyjnych promptach MiMo wygrał 11:5
+    u dwóch sędziów (Claude Opus 5.5, Fable 5.1) i miał wyższe oceny we
+    wszystkich kryteriach rubryki. Koszt notki jest podobny (0,00066 wobec
+    0,00057 USD), ale MiMo pisze 5× wolniej. Sędziowie nie przewidują zasięgu,
+    stąd eksperyment na żywo.
+  - Zasady: notka z przesłania (Opus) nie bierze udziału. Bez klucza zostaje
+    DeepSeek. Gdy MiMo nie napisze, w tym samym przebiegu pisze DeepSeek
+    (`pisarz_zastepczy`). Faktyczny pisarz zapisuje się w polu `model` dziennika.
+  - Miara i reguła jak w E10 (wyświetlenia po 72 h względem tła, 95% przedział):
+    `python agent-v2/eksperymenty.py --pole eksperyment:pisarz --od 2026-09-28`,
+    ocena ok. **29.10**. Próba to ok. 42 notki na ramię, co wykrywa różnicę
+    rzędu ±40%.
+  - Miary poboczne: ocena jakości, obalone fakty, koszt i czas.
 - **ok. 25.10 — ocena E8/E9:**
   - przesłania kontra zwykłe notki (`--pole przeslanie`),
   - artykuły ze śledztw (zapisy przypisane, wyświetlenia),
