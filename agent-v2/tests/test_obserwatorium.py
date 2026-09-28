@@ -193,8 +193,14 @@ sprawdz("KONTRDOWOD: wyswietlenia bez zmiany — roznica roznic 0",
         s["wyswietlenia"].get("roznica_roznic") == 0, s["wyswietlenia"])
 _pozno = {"2026-09-%02d" % d: {"subskrybenci": 10 + d - 20} for d in range(20, 28)}
 t = obs.tempo(_pozno, "2026-09-27", 28)
-sprawdz("tempo liczone od pierwszego pomiaru, gdy pomiary ruszyly w srodku okna (+7 z 10 w 7 dni = 70%)",
-        t["wzrost_proc_na_tydzien"] == 70.0, t["wzrost_proc_na_tydzien"])
+sprawdz("tempo od pierwszego pomiaru, gdy pomiary ruszyly w srodku okna: +7/tydzien, 51,9% sredniego poziomu",
+        t["subskrybenci_na_tydzien"] == 7.0 and t["wzrost_proc_na_tydzien"] == 51.9,
+        (t["subskrybenci_na_tydzien"], t["wzrost_proc_na_tydzien"]))
+_mlode = {"2026-09-%02d" % d: {"subskrybenci": s} for d, s in ((7, 2), (14, 8), (21, 13), (27, 19))}
+_mlode.update({"2026-09-%02d" % d: {"subskrybenci": 2 + (d - 7) * 17 // 20} for d in range(8, 27) if "2026-09-%02d" % d not in _mlode})
+t = obs.tempo(_mlode, "2026-09-27", 28)
+sprawdz("KONTRDOWOD: mlode konto (2 -> 19) nie wychodzi 280% tygodniowo — procent od sredniego poziomu",
+        t["subskrybenci_na_tydzien"] == 6.0 and t["wzrost_proc_na_tydzien"] < 80, t["wzrost_proc_na_tydzien"])
 for zid in ("E91", "E92"):
     obs.dodaj_zmiane({"id": zid, "kiedy": "2026-09-21T0%d:00:00+00:00" % (1 if zid == "E91" else 2),
                       "konto": "NIE", "rodzaj": "zmiana", "opis": "test " + zid})

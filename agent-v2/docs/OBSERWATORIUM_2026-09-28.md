@@ -95,6 +95,16 @@ Wyświetlenia wzrosły z ok. 50–60 dziennie (14–21.09) do ok. 90–130 (22�
 Zapisy przychodzą głównie ze środka Substacka (13 z 21 „Substack", 8 „Direct
 to App").
 
+**Najważniejsze na start: zapisy dają artykuły, zasięg dają notki.** W 28
+dniach:
+- artykuły: 78 wyświetleń, **11 zapisów** przypisanych przez Substack;
+- notki: 3860 wyświetleń, **0 zapisów** i 0 obserwacji przypisanych.
+
+Drugie konto pokazuje ten sam wzór. To potwierdza pomiar z 06.09 („notki dały 0
+subskrypcji, wszystkie z artykułów") i jest pierwszym pytaniem badawczym (B1):
+czy notka działa pośrednio (profil → artykuł → zapis), czy artykuły trzeba
+pisać częściej.
+
 ## Badania: jak rośnie konto na Substacku
 
 Pytania uszeregowane według tego, ile mogą dać i czy nasze dane na nie odpowiedzą:

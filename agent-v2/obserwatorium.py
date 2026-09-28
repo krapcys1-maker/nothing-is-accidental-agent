@@ -452,8 +452,16 @@ def tempo(dni: dict[str, dict], do: str, ile: int = 7) -> dict[str, Any]:
     wynik["subskr_na_1000_wysw"] = round(1000 * subs / wysw, 2) if wysw else None
     wynik["obcy_udzial"] = round(suma("obcy") / wysw, 3) if wysw else None
     wynik["koszt_na_subskr"] = round(koszt / subs, 2) if subs > 0 else None
-    wynik["wzrost_proc_na_tydzien"] = (round(100 * (koniec - start) / start * 7 / rozpietosc, 1)
-                                       if start and rozpietosc > 0 else None)
+    # TEMPO = subskrybenci na tydzien (od pierwszego do ostatniego stanu w oknie)
+    # i ten sam przyrost jako % SREDNIEGO poziomu w oknie. Procent od stanu
+    # poczatkowego klamal dla mlodego konta: NIA zaczynala od 2 subskrybentow,
+    # wiec wychodzilo 280% tygodniowo.
+    poziomy = [dni[d]["subskrybenci"] for d in z_pomiarem if not d_start or d >= d_start]
+    na_tydzien = (round((koniec - start) * 7 / rozpietosc, 1)
+                  if start is not None and koniec is not None and rozpietosc > 0 else None)
+    wynik["subskrybenci_na_tydzien"] = na_tydzien
+    wynik["wzrost_proc_na_tydzien"] = (round(100 * na_tydzien / (sum(poziomy) / len(poziomy)), 1)
+                                       if na_tydzien is not None and poziomy and sum(poziomy) else None)
     for dz in sorted(set(DZIALANIA.values())):
         wynik["dz_" + dz] = suma("dz_" + dz)
     wynik["dz_do_siostry"] = suma("dz_do_siostry")
@@ -527,7 +535,8 @@ def raport(dni_raportu: int = 14, dzis: str | None = None) -> str:
                                                                    _f(t28[n]["subskrybenci_netto"], True))),
         ("obserwujacy netto: 7 / 28 dni", lambda n: "%s / %s" % (_f(t7[n]["obserwujacy_netto"], True),
                                                                   _f(t28[n]["obserwujacy_netto"], True))),
-        ("tempo: % subskrybentow na tydzien (28 dni)", lambda n: _f(t28[n]["wzrost_proc_na_tydzien"])),
+        ("tempo: subskrybenci na tydzien (28 dni; % sredniego poziomu)",
+         lambda n: "%s (%s%%)" % (_f(t28[n]["subskrybenci_na_tydzien"], True), _f(t28[n]["wzrost_proc_na_tydzien"]))),
         ("wyswietlenia 7 dni (udzial obcych)", lambda n: "%s (%s)" % (_f(t7[n]["wyswietlenia"]),
                                                                      _f(t7[n]["obcy_udzial"]))),
         ("odwiedziny profilu 7 dni", lambda n: _f(t7[n]["odwiedziny_profilu"])),
