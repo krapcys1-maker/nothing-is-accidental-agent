@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **36 plików**, 40 666 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **36 plików**, 41 347 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -113,8 +113,8 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 > w głównej ścieżce artykułu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
-się testować bez przeglądarki i bez pieniędzy**. 197 zestawów
-testów, 4946 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+się testować bez przeglądarki i bez pieniędzy**. 198 zestawów
+testów, 5016 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -143,7 +143,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-3225 wierszy, 27 funkcji na poziomie modułu, 1 klas
+3345 wierszy, 32 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -152,6 +152,11 @@ wiec nie da sie go rozjechac z kodem.
 | `odmow_publikacji_z_kopii(wyslij)` | Kopia testowa nie ma prawa nic opublikowac. Nigdy. |
 | `zajmij_zamek()` | Nie pozwala dwóm przebiegom działać naraz. |
 | `opis_celu(cel)` | Co wiedzielismy o celu w chwili pisania — do dziennika. |
+| `_ramie(nazwa, miejsce, dzien)` *(wewn.)* | Ramie eksperymentu z `stages.ramie` — a atrapa `stages` bez tej funkcji |
+| `przydzial_komentarzy(n, klucz, dzien)` | Ile miejsc na komentarz dostaje blok pod ARTYKULAMI, a ile pod NOTKAMI. |
+| `uloz_wedlug_swiezosci(cele, klucz, dzien)` | E15 (`swiezosc_celu`): kolejnosc celow, kazdy z ramieniem w polu `_e15`. |
+| `notki_w_porze(ile, zostalo_przebiegow, dzien)` | Ile notek wolno w TYM przebiegu wedlug pory doby — E16 (`pora_notki`). |
+| `ramiona_komentarza(cel, pod, e14)` | Pola dziennika komentarza: rodzaj celu i ramiona E14/E15. |
 | `zostal_czas(na_co, potrzeba_s)` | Czy zdazymy jeszcze cokolwiek zrobic przed koncem czasu przebiegu. |
 | `_pod_rzad_w_bloku(co, na_co)` *(wewn.)* | Ile porazek pod rzad naliczyl TEN blok, odkad sie zaczal. |
 | `rytm(co, na_co, stan)` | Przerwa MIEDZY dwoma dzialaniami tego samego rodzaju. |
@@ -177,7 +182,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-10830 wierszy, 174 funkcji na poziomie modułu, 0 klas
+10922 wierszy, 176 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -204,6 +209,7 @@ wiec nie da sie go rozjechac z kodem.
 | `grafika(conn, run_id, draft, sciezka_artykulu)` | Nagłówek graficzny artykułu. |
 | `_wiek_konta_w_dniach(conn)` *(wewn.)* | Ile dni działa to konto — liczone od pierwszego przebiegu w bazie. |
 | `budzet_dnia(conn)` | Ile czego agent może dziś zrobić — losowane z widełek, nie stałe. |
+| `widelki_restackow(dzien)` | Dobowe widelki restackow: z ramienia E12, a poza eksperymentem zwykle. |
 | `_zapisz_budzet_dnia(dzien, budzet, rozbieg)` *(wewn.)* | Zapisuje, ile agent SOBIE ZALOZYL na ten dzien. |
 | `sesje_dnia()` | Rozkłada dzień na kilka posiedzeń zamiast jednego ciągu. |
 | `zakres_odstepu(co)` | Jaka przerwa OBOWIAZUJE teraz dla tego rodzaju dzialania. |
@@ -253,7 +259,8 @@ wiec nie da sie go rozjechac z kodem.
 | `odeslanie_donikad(tekst)` | Odeslanie w PIERWSZYM zdaniu do badania, ktorego czytelnik nie widzial. |
 | `konczy_ocena_materialu(tekst)` | Fraza, ktora OSTATNIE zdanie notki ocenia material („I'd want…"), albo pusto. |
 | `za_duzo_zargonu(tekst)` | Terminy insiderskie, gdy jest ich wiecej, niz notka udzwignie. Inaczej pusto. |
-| `note(conn, run_id, note_type, evidence, link, note_form, etap, seria)` | Jedna notka danego typu i danej FORMY — do szuflady. |
+| `z_pytaniem_na_koncu(prompt)` | Prompt notki z poleceniem zakonczenia pytaniem (E18, ramie „on"). |
+| `note(conn, run_id, note_type, evidence, link, note_form, etap, seria, wariant)` | Jedna notka danego typu i danej FORMY — do szuflady. |
 | `_host_adresu(url)` *(wewn.)* | — |
 | `_adres_bez_ogona(url)` *(wewn.)* | — |
 | `styk_ze_zrodla(fakt, tresci)` | (styk, skad): `skad` to `adres`, `host`, `rejestr` albo `brak`. |
@@ -358,7 +365,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `browser.py` — cała styczność z Substackiem; nie woła modelu
 
-5528 wierszy, 104 funkcji na poziomie modułu, 0 klas
+5615 wierszy, 107 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -433,7 +440,10 @@ wiec nie da sie go rozjechac z kodem.
 | `_otworz_menu_profilu(page)` *(wewn.)* | Klika kolko „..." w naglowku profilu. Otwarcie menu nie zmienia stanu. |
 | `potwierdz_obserwacje(page)` | Czy menu profilu mowi teraz, ze go OBSERWUJEMY. Otwiera menu i czyta. |
 | `obserwuj_profil(handle, wyslij)` | Obserwuje cudzy profil — jego notki trafiaja do naszego kanalu. |
-| `kogo_polecamy(page)` | Kogo nasza publikacja poleca — z API, nie z pamieci. |
+| `kogo_polecamy(page)` | Kogo nasza publikacja poleca — z API panelu, nie z pamieci. |
+| `_numer_polecanej(w)` *(wewn.)* | Numer polecanej publikacji z wiersza `kogo_polecamy` (nowy i stary ksztalt). |
+| `stan_rekomendacji(page)` | Rekomendacje w obie strony — do `rekomendacje.jsonl` (E20). |
+| `zapisz_rekomendacje(page)` | Dopisuje `stan_rekomendacji` do pliku; porazka nie przerywa pomiaru. |
 | `polec_publikacje(fraza, powod, wyslij)` | Dodaje REKOMENDACJE publikacji. Domyslnie wypelnia i NIE zatwierdza. |
 | `zasubskrybuj(handle, wyslij)` | Subskrybuje cudzy profil. Ląduje w skrzynce właściciela, więc wąsko. |
 | `_esc(t)` *(wewn.)* | — |
@@ -554,7 +564,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `alarm.py` — kontrola sesji, zdrowia i alarm do właściciela
 
-1056 wierszy, 23 funkcji na poziomie modułu, 0 klas
+1126 wierszy, 24 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -576,6 +586,7 @@ wiec nie da sie go rozjechac z kodem.
 | `powtorki()` | Czy agent nie zaczal pisac wciaz tego samego. |
 | `kopia_subskrybentow()` | Czy istnieje AKTUALNA kopia listy subskrybentow. |
 | `pomiar_wzajemnosci()` | Czy nadal mamy z czego liczyc, kto sie odwzajemnia. |
+| `pomiar_statystyk(teraz)` | Czy bot nadal MIERZY swoje tresci — bez tego kazdy eksperyment jest slepy. |
 | `wydarzenie_bez_pokrycia()` | Wydarzenie odhaczone jako obsluzone, a w tresci ani slowa o nim. |
 | `bank_bez_tematow()` | Czy w banku zostalo dosc ROZNYCH tematow na dzisiejsze notki. |
 | `sprawdz_wszystko()` | Uruchamia komplet kontroli i alarmuje o tym, co znalazl. |
@@ -608,7 +619,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-3788 wierszy, 43 funkcji na poziomie modułu, 0 klas
+3846 wierszy, 43 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -822,12 +833,12 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `eksperymenty.py` — pomiar zmian — odbiór notek w grupach względem tła tygodnia, 95% przedział i werdykt (lepiej / gorzej / brak dowodu / za mało danych)
 
-267 wierszy, 14 funkcji na poziomie modułu, 0 klas
+496 wierszy, 20 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
 | `_grupujacy(pole)` *(wewn.)* | Funkcja: wpis dziennika -> nazwa grupy. |
-| `wiersze(dziennik, pomiary, zapisy, od, do)` | Notki z pomiarem po 72 h: wpis dziennika + liczby odbioru. |
+| `wiersze(dziennik, pomiary, zapisy, od, do, rodzaj)` | Notki (albo restacki) z pomiarem po 72 h: wpis dziennika + liczby odbioru. |
 | `_dzien(x)` *(wewn.)* | — |
 | `odejmij_tlo(dane, okno, min_sasiadow)` | Kazdej notce: `lr` = log wyswietlen MINUS typowa notka konta z tego tygodnia. |
 | `_rozne_okresy(a, b)` *(wewn.)* | Czy grupy pochodza z roznych okresow — wtedy trend miesza sie ze zmiana. |
@@ -838,12 +849,18 @@ wiec nie da sie go rozjechac z kodem.
 | `_stosunek(a, b)` *(wewn.)* | Ile razy grupa `a` bije swoje tlo mocniej niz grupa `b` (patrz `odejmij_tlo`). |
 | `_sd_log(r)` *(wewn.)* | — |
 | `porownaj(dane, grupa, odniesienie)` | Grupy, ich miary i porownanie kazdej z grupa odniesienia. |
+| `wiersze_komentarzy(dziennik, pomiary, od, do)` | Nasze komentarze z pomiarem: wpis dziennika + reakcje pod komentarzem. |
+| `_odsetek(r)` *(wewn.)* | — |
+| `porownaj_komentarze(dane, grupa, odniesienie)` | Grupy komentarzy: odsetek z reakcja, polubienia i odpowiedzi na 100. |
+| `tygodnie(dni, nazwa, restacki)` | Tydzien po tygodniu eksperymentu z `plan` (`config.EKSPERYMENTY[nazwa]`). |
+| `restacki_dziennika(dziennik, najnowsze, zapisy)` | Nasze restacki: doba, ostatnie wyswietlenia i zapisy przypisane (do tygodni E12). |
 | `_wczytaj()` *(wewn.)* | — |
+| `_drukuj_tygodnie(nazwa)` *(wewn.)* | — |
 | `main(argv)` | — |
 
 ### `obserwatorium.py` — obserwatorium obu kont — dane dnia (wzrost, lejek, działania, koszt), dziennik zmian z reflogu i rejestru, tempo wzrostu i skutek zmian
 
-1059 wierszy, 44 funkcji na poziomie modułu, 0 klas
+1084 wierszy, 45 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -856,6 +873,7 @@ wiec nie da sie go rozjechac z kodem.
 | `_liczniki(s)` *(wewn.)* | — |
 | `pozycje_tresci(statystyki, dziennik)` | Pomiary pogrupowane PO NUMERZE pozycji: {numer: {rodzaj, punkty, cudza, rodzaje}}. |
 | `tresci_na_doby(statystyki, dziennik)` | Przyrosty licznikow tresci, przypisane do doby pomiaru. |
+| `rekomendacje_na_doby(rekomendacje)` | Rekomendacje na koniec doby UTC (E20): ilu polecamy, ilu poleca NAS i ile |
 | `pokrycie_pomiaru(statystyki)` | `pomiar_tresci: 1` dla kazdej doby od pierwszego do ostatniego NASZEGO pomiaru tresci. |
 | `dzialania_na_doby(dziennik, siostra)` | Udane dzialania bota na dobe, plus ile z nich trafilo w siostre. |
 | `koszt_na_doby(baza)` | Koszt na dobe w trzech czesciach, ktore razem daja caly rachunek z bazy. |
@@ -7834,10 +7852,15 @@ def budzet_dnia(conn: sqlite3.Connection) -> dict[str, int]:
         "komentarze": losuj(config.KOMENTARZE_DZIENNIE),
         "follow": z_miesiaca(config.FOLLOW_MIESIECZNIE),
         "subskrypcje": z_miesiaca(config.SUBSKRYPCJE_MIESIECZNIE),
-        "restacki": losuj(config.RESTACK_DZIENNIE),
+        # E12 — widelki restackow z ramienia TYGODNIA (`config.EKSPERYMENTY
+        # ["restacki_norma"]`). Losowanie zostaje ostatnie w kolejce, wiec inne
+        # widelki nie zmieniaja pozostalych pozycji budzetu z tego samego ziarna.
+        "restacki": losuj(widelki_restackow(dzis)),
     }
+    _e12 = ramie("restacki_norma", 0, dzis)
     print(f"  [budżet dnia{' — rozbieg' if rozbieg else ''}] "
-          + "  ".join(f"{k}={v}" for k, v in budzet.items()), flush=True)
+          + "  ".join(f"{k}={v}" for k, v in budzet.items())
+          + (f"  [E12 restacki: {_e12}]" if _e12 else ""), flush=True)
     _zapisz_budzet_dnia(dzis, budzet, rozbieg)
     return budzet
 ```
@@ -8684,10 +8707,14 @@ def restackuj_w_kanale(
                 # `udane` powinno od niego zalezec. Nie zgaduje, jak Substack
                 # nazywa stan przycisku po restacku, i nie ruszam tego bez tej
                 # liczby.
+                # MODEL I RAMIONA E12/E13 — bez nich restack nie trafia do
+                # zadnej grupy (`eksperymenty.py --rodzaj restack`).
                 zapisz_w_dzienniku("restack", udane=True,
                                    komu=notka.get("autor", ""),
                                    slow=len(zdanie.split()),
-                                   tekst=zdanie[:300], id=numer_restacka)
+                                   tekst=zdanie[:300], id=numer_restacka,
+                                   **{k: ocena[k] for k in ("model", "eksperymenty")
+                                      if ocena.get(k)})
                 print(f"    podane dalej {wynik['restackowane']}/{ile}", flush=True)
             except Exception as exc:
                 # Tak samo jak przy polubieniach: porazka szla do logu i nigdzie
@@ -11531,6 +11558,10 @@ wartosc i komentarz stojacy bezposrednio nad definicja.
 | `MARKA` | `_env("MARKA", "Nothing Is Accidental")` | NAZWA MARKI, ktora agent widzi w promptach. Wstawiana automatycznie przez `stages._prompt` jako pole `{marka}` — dziewiec plikow promptow mi |
 | `STYKI` | `("praca", "zdrowie", "szkola", "pieniadze", ` | STYK — silnik tematow, 26 wrzesnia 2026 (eksperyment E6, poligon). Miejsce, w ktorym zwykly czlowiek spotyka AI: praca, zdrowie, szkola, pie |
 | `KWOTA_SPOZA_BRANZY` | `True` | KWOTA „1 Z 3 NOTEK SPOZA BRANZY". Konto wystawia trzy notki na dobe (`NOTE_MIX_*`), wiec to znaczy: dopoki dzis nie wyszla notka spoza `bran |
+| `RESTACK_DZIENNIE_E12` | `{"on": (3, 5), "off": (1, 3)}` | E12 — dobowe widelki restackow w obu ramionach (srednio 4 i 2). Widelki, nie stala: ta sama liczba dzien po dniu to podpis maszyny (`stages. |
+| `SWIEZY_CEL_MIN` | `120` | E15 — „swiezy cel" to wpis mlodszy niz tyle minut. |
+| `PORA_NOTKI_OD_PRZEBIEGU` | `3` | E16 — w ramieniu „on" notki wychodza od tego przebiegu doby (liczac od 1). |
+| `KROTKA_NOTKA_SLOW` | `(33, 60)` | E17 — okno krotkiej notki (obecne: `NOTE_MIN_WORDS`-`NOTE_MAX_WORDS`). |
 | `MAKS_ODPOWIEDZI_W_ROZMOWIE` | `2` | ILE RAZY ODPISUJEMY W JEDNEJ ROZMOWIE. Rozmowa to galaz komentarzy: ten, ktory ja zaczal, i wszystko pod nim. Liczy `browser.nasze_odpowiedz |
 | `MAKS_ODPOWIEDZI_KONTU_SIOSTRZANEMU` | `1` | — |
 | `KONTA_SIOSTRZANE` | `frozenset( int(x) for x in _env("KONTA_SIOST` | — |

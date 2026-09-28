@@ -506,6 +506,9 @@ sprawdz("obserwatorium: stan rekomendacji na koniec doby",
 _konto = dict(obserwatorium.konta()[0], dane=KATALOG)
 sprawdz("doby konta maja pola rekomendacji z pliku bota",
         any("rek_polecamy" in w for w in obserwatorium.podsumuj_konto(_konto).values()))
+sprawdz("raport: eksperyment z data startu w przyszlosci to 'zaplanowane', nie 'za wczesnie'",
+        "if doba > dzis:" in _kod("agent-v2/obserwatorium.py")
+        and 'return "zaplanowane"' in _kod("agent-v2/obserwatorium.py"))
 _pol = _BR[_BR.index("def polec_publikacje("):_BR.index("def zasubskrybuj(")]
 sprawdz("wybor w wyszukiwarce po CALEJ nazwie, bez zgadywania po pierwszym slowie i bez `get_by_text`",
         "re.escape(fraza)" in _pol and "fraza.split()[0]" not in _pol and "get_by_text(fraza" not in _pol

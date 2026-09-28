@@ -25,6 +25,10 @@
 | `MARKA` | `_env("MARKA", "Nothing Is Accidental")` | NAZWA MARKI, ktora agent widzi w promptach. Wstawiana automatycznie przez `stages._prompt` jako pole `{marka}` — dziewiec plikow promptow mi |
 | `STYKI` | `("praca", "zdrowie", "szkola", "pieniadze", ` | STYK — silnik tematow, 26 wrzesnia 2026 (eksperyment E6, poligon). Miejsce, w ktorym zwykly czlowiek spotyka AI: praca, zdrowie, szkola, pie |
 | `KWOTA_SPOZA_BRANZY` | `True` | KWOTA „1 Z 3 NOTEK SPOZA BRANZY". Konto wystawia trzy notki na dobe (`NOTE_MIX_*`), wiec to znaczy: dopoki dzis nie wyszla notka spoza `bran |
+| `RESTACK_DZIENNIE_E12` | `{"on": (3, 5), "off": (1, 3)}` | E12 — dobowe widelki restackow w obu ramionach (srednio 4 i 2). Widelki, nie stala: ta sama liczba dzien po dniu to podpis maszyny (`stages. |
+| `SWIEZY_CEL_MIN` | `120` | E15 — „swiezy cel" to wpis mlodszy niz tyle minut. |
+| `PORA_NOTKI_OD_PRZEBIEGU` | `3` | E16 — w ramieniu „on" notki wychodza od tego przebiegu doby (liczac od 1). |
+| `KROTKA_NOTKA_SLOW` | `(33, 60)` | E17 — okno krotkiej notki (obecne: `NOTE_MIN_WORDS`-`NOTE_MAX_WORDS`). |
 | `MAKS_ODPOWIEDZI_W_ROZMOWIE` | `2` | ILE RAZY ODPISUJEMY W JEDNEJ ROZMOWIE. Rozmowa to galaz komentarzy: ten, ktory ja zaczal, i wszystko pod nim. Liczy `browser.nasze_odpowiedz |
 | `MAKS_ODPOWIEDZI_KONTU_SIOSTRZANEMU` | `1` | — |
 | `KONTA_SIOSTRZANE` | `frozenset( int(x) for x in _env("KONTA_SIOST` | — |

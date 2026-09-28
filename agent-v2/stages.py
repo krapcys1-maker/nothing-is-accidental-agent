@@ -12,6 +12,9 @@ import hashlib
 import json
 import re
 import sqlite3
+# TYLKO ARYTMETYKA KALENDARZA (`ramie`, plan tygodni). „Teraz" zostaje pobierane
+# wewnatrz funkcji, bo testy podmieniaja modul `datetime`, zeby ustawic dzien.
+from datetime import date as _DataKalendarza
 from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import urlparse
@@ -2820,10 +2823,9 @@ def ramie(nazwa: str, miejsce: int | str, dzien: str | None = None) -> str:
         # RAMIE Z KALENDARZA (E12 tygodnie, E16 dni na przemian): okres numer k
         # od `od` dostaje `plan[k % len(plan)]`; `miejsce` nie ma znaczenia.
         if ustaw.get("plan"):
-            from datetime import date as _date
             try:
-                dni = (_date.fromisoformat(str(dzien)[:10])
-                       - _date.fromisoformat(str(ustaw["od"])[:10])).days
+                dni = (_DataKalendarza.fromisoformat(str(dzien)[:10])
+                       - _DataKalendarza.fromisoformat(str(ustaw["od"])[:10])).days
             except (KeyError, ValueError):
                 return ""
             plan = [str(r) for r in ustaw["plan"]]

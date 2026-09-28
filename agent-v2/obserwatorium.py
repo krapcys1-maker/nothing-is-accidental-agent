@@ -971,6 +971,9 @@ def raport(dni_raportu: int = 14, dzis: str | None = None) -> str:
             for z in lista)
 
         def _komorka(p):
+            # Eksperyment wpisany z data startu w przyszlosci (E15-E18).
+            if doba > dzis:
+                return "zaplanowane"
             if s["dni_po"] < MIN_DNI_PO:
                 return "za wczesnie (%d dni po)" % s["dni_po"]
             w = s[p]

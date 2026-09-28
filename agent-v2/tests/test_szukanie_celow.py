@@ -106,8 +106,10 @@ print("=== 4. SZUKA, AZ ZNAJDZIE — I MA GDZIE PRZESTAC ===")
 rp = pathlib.Path("agent-v2/run.py").read_text(encoding="utf-8")
 sprawdz("przebieg dobiera kolejne partie celow",
         "runda %d szukania" in rp)
+# Plan bloku to od 28.09.2026 `ile = przydzial["artykuly"]` (E14, patrz
+# `run.przydzial_komentarzy`; poza eksperymentem to caly `na_teraz["komentarze"]`).
 sprawdz("warunkiem jest NIEDOBOR wobec planu",
-        'len(cele) < na_teraz["komentarze"]' in rp)
+        'len(cele) < ile' in rp and 'ile = przydzial["artykuly"]' in rp)
 sprawdz("jest sufit rund", "config.RUNDY_SZUKANIA_CELOW" in rp)
 sprawdz("i sufit stoi w configu, nie w kodzie przebiegu",
         isinstance(getattr(config, "RUNDY_SZUKANIA_CELOW", None), int)

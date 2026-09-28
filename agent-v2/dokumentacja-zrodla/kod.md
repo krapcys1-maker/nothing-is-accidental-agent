@@ -1176,10 +1176,15 @@ def budzet_dnia(conn: sqlite3.Connection) -> dict[str, int]:
         "komentarze": losuj(config.KOMENTARZE_DZIENNIE),
         "follow": z_miesiaca(config.FOLLOW_MIESIECZNIE),
         "subskrypcje": z_miesiaca(config.SUBSKRYPCJE_MIESIECZNIE),
-        "restacki": losuj(config.RESTACK_DZIENNIE),
+        # E12 — widelki restackow z ramienia TYGODNIA (`config.EKSPERYMENTY
+        # ["restacki_norma"]`). Losowanie zostaje ostatnie w kolejce, wiec inne
+        # widelki nie zmieniaja pozostalych pozycji budzetu z tego samego ziarna.
+        "restacki": losuj(widelki_restackow(dzis)),
     }
+    _e12 = ramie("restacki_norma", 0, dzis)
     print(f"  [budżet dnia{' — rozbieg' if rozbieg else ''}] "
-          + "  ".join(f"{k}={v}" for k, v in budzet.items()), flush=True)
+          + "  ".join(f"{k}={v}" for k, v in budzet.items())
+          + (f"  [E12 restacki: {_e12}]" if _e12 else ""), flush=True)
     _zapisz_budzet_dnia(dzis, budzet, rozbieg)
     return budzet
 ```
@@ -2026,10 +2031,14 @@ def restackuj_w_kanale(
                 # `udane` powinno od niego zalezec. Nie zgaduje, jak Substack
                 # nazywa stan przycisku po restacku, i nie ruszam tego bez tej
                 # liczby.
+                # MODEL I RAMIONA E12/E13 — bez nich restack nie trafia do
+                # zadnej grupy (`eksperymenty.py --rodzaj restack`).
                 zapisz_w_dzienniku("restack", udane=True,
                                    komu=notka.get("autor", ""),
                                    slow=len(zdanie.split()),
-                                   tekst=zdanie[:300], id=numer_restacka)
+                                   tekst=zdanie[:300], id=numer_restacka,
+                                   **{k: ocena[k] for k in ("model", "eksperymenty")
+                                      if ocena.get(k)})
                 print(f"    podane dalej {wynik['restackowane']}/{ile}", flush=True)
             except Exception as exc:
                 # Tak samo jak przy polubieniach: porazka szla do logu i nigdzie
