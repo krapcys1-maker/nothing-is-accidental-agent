@@ -1,0 +1,13 @@
+[Unit]
+Description=Zegar obserwatorium (codziennie, po nocnych przebiegach obu botow)
+
+[Timer]
+# 03:40 UTC: ostatni przebieg NIE konczy sie ok. 00:10, nocny NIA ok. 01:00,
+# a pierwsze poranne przebiegi ruszaja po 07:00 — doba poprzednia jest pelna,
+# a zaden bot nie pisze wtedy do plikow, ktore czytamy.
+OnCalendar=*-*-* 03:40:00
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

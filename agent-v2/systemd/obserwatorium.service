@@ -1,0 +1,16 @@
+[Unit]
+Description=Obserwatorium obu kont — dane dnia, dziennik zmian, raport (tylko odczyt danych botow)
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=/home/ubuntu/nothing-is-accidental-agent
+Environment=AGENT_V2_SERVER=1
+Environment=PYTHONUNBUFFERED=1
+# OBSERWATORIUM (28.09.2026) — patrz `agent-v2/obserwatorium.py`. Czyta pliki
+# obu botow (NIE i NIA) i git reflog obu repozytoriow; nie loguje sie do
+# Substacka i nie pisze nic do katalogu NIA. Zapis: agent-v2/data/obserwatorium/.
+ExecStart=/home/ubuntu/nothing-is-accidental-agent/.venv/bin/python agent-v2/obserwatorium.py zbierz --raport
+MemoryMax=1G
+TimeoutStartSec=900

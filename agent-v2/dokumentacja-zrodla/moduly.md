@@ -698,6 +698,42 @@
 | `_wczytaj()` *(wewn.)* | — |
 | `main(argv)` | — |
 
+### `obserwatorium.py` — obserwatorium obu kont — dane dnia (wzrost, lejek, działania, koszt), dziennik zmian z reflogu i rejestru, tempo wzrostu i skutek zmian
+
+663 wierszy, 29 funkcji na poziomie modułu, 0 klas
+
+| funkcja | co robi |
+|---|---|
+| `konta()` | Oba konta: katalog danych, repozytorium (dla reflogu), uchwyt i siostra. |
+| `katalog()` | — |
+| `_jsonl(p)` *(wewn.)* | — |
+| `_dzien(ts)` *(wewn.)* | — |
+| `stan_na_doby(wzrost)` | Stan konta na koniec doby UTC (ostatni pomiar dnia). |
+| `nowi_na_doby(czytelnicy, siostra)` | Ilu NOWYCH obserwujacych i subskrybentow pojawilo sie danego dnia. |
+| `_liczniki(s)` *(wewn.)* | — |
+| `tresci_na_doby(statystyki)` | Przyrosty licznikow wszystkich tresci, przypisane do doby pomiaru. |
+| `dzialania_na_doby(dziennik, siostra)` | Udane dzialania bota na dobe, plus ile z nich trafilo w siostre. |
+| `koszt_na_doby(baza)` | Koszt przebiegow produkcyjnych na dobe. `immutable=1`: zadnych plikow obok bazy. |
+| `zrodla_zapisow(zrodla)` | Ostatni odczyt „skad przychodza czytelnicy i zapisy" (okno Substacka, 30 dni). |
+| `podsumuj_konto(k)` | Wszystkie doby konta: stan, nowi, przyrosty tresci, dzialania, koszt. |
+| `_zapisz_json(p, dane)` *(wewn.)* | — |
+| `wczytaj_dni(konto)` | — |
+| `zbierz()` | Podsumowania dni obu kont + nowe zmiany z reflogu i aktywacji. Idempotentne. |
+| `zmiany()` | — |
+| `dodaj_zmiane(wpis)` | Dopisuje zmiane, gdy jej `id` jeszcze nie ma. Zwraca, czy dopisal. |
+| `zasiej()` | — |
+| `importuj_reflog(k)` | Wdrozenia z git reflog repozytorium konta: kiedy HEAD przeszedl na nowy commit. |
+| `importuj_aktywacje()` | Aktywacje presetow NIA (`aktywacje.jsonl`) — zmiany konfiguracji z odciskiem. |
+| `_d(s)` *(wewn.)* | — |
+| `netto(dni, pole)` | Zmiana stanu (np. subskrybentow) doba do doby — tylko miedzy sasiednimi dobami. |
+| `okno(dni, do, ile)` | — |
+| `tempo(dni, do, ile)` | Wzrost i lejek w oknie `ile` dob konczacym sie `do` (wlacznie). |
+| `_srednia_dobowa(dni, daty, pole)` *(wewn.)* | — |
+| `skutek(dni, dni_kontrola, kiedy, ile, dzis)` | Przed/po zmianie (srednie dobowe) i roznica roznic wzgledem drugiego konta. |
+| `_f(v, znak)` *(wewn.)* | — |
+| `raport(dni_raportu, dzis)` | — |
+| `main(argv)` | — |
+
 ### `aktualne_modele.py` — jakie modele istnieją DZIŚ; pytane na żywo, nie z pamięci
 
 186 wierszy, 4 funkcji na poziomie modułu, 0 klas

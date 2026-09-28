@@ -65,6 +65,7 @@ MODULY = [
     ("glebia.py", "karta głębi — liczby, dokument pierwotny i odpowiedź z pełnego tekstu źródła, każdy cytat sprawdzony kodem"),
     ("sledztwo.py", "śledztwo — historia z radaru, bramka nowości sprawdzana kodem, trzy przesłania (ustalenie, motyw, za dwa lata) i kolejka notek"),
     ("eksperymenty.py", "pomiar zmian — odbiór notek w grupach względem tła tygodnia, 95% przedział i werdykt (lepiej / gorzej / brak dowodu / za mało danych)"),
+    ("obserwatorium.py", "obserwatorium obu kont — dane dnia (wzrost, lejek, działania, koszt), dziennik zmian z reflogu i rejestru, tempo wzrostu i skutek zmian"),
     ("aktualne_modele.py", "jakie modele istnieją DZIŚ; pytane na żywo, nie z pamięci"),
     ("nowe_modele.py", "nowe modele wchodzą same: w tej samej rodzinie i dopiero po próbie"),
     ("model_registry.py", "rodzina modelu dla każdej roli i porównywanie wersji — wspólne dla `nowe_modele` i wczytania wyboru"),
