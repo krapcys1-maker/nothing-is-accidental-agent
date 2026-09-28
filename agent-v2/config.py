@@ -424,9 +424,10 @@ MODEL_FOR = {
     "warto_pisac": DEEPSEEK,
     "restack": DEEPSEEK,
     # E13 — zdanie restacka pisze Opus w ramieniu „on" eksperymentu
-    # `pisarz_restackow` (decyzja wlasciciela 28.09.2026). Ocena to 6-15
-    # wywolan na dobe, Flash kosztuje przy nich grosze; Opus na polowie
-    # to ok. 0,03 USD na dobe.
+    # `pisarz_restackow` (decyzja wlasciciela 28.09.2026). Zmierzone na zywo
+    # 28.09 na kopii danych: ocena Opusem 0,018 USD, Flashem 0,00023. Ocen jest
+    # 6-15 na dobe (w tygodniach E12 „on" wiecej), polowa na Opusie to ok.
+    # 0,05-0,15 USD na dobe, w tygodniach „on" do ok. 0,3 — przy sufcie 5 USD.
     "restack_opus": CLAUDE,
     "fedreg": DEEPSEEK,
 }

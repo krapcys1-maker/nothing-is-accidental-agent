@@ -3750,6 +3750,28 @@ POLECENIE_PYTANIA = (
     "quiz, and not a request to follow, subscribe or comment.")
 
 
+# E17 — KROTKA NOTKA. Samo okno 33-60 w zdaniu o planowanej dlugosci NIE
+# WYSTARCZA: zywy test 28.09.2026 na kopii danych dal 135 slow przy oknie 33-60
+# (model czyta to zdanie jako wskazowke, a dlugosc od decyzji wlasciciela jest
+# tylko pomiarem — „nic nie ma wycinac"). Ramie „on" dostaje wiec polecenie
+# wprost; strazem zrozumialosci jest ostatnie zdanie (3.09 wlasciciel nie
+# zrozumial notki scisnietej do 64 slow).
+ZDANIE_O_DLUGOSCI = "The planning range is %d–%d words; understanding comes first."
+POLECENIE_KROTKIEJ = (
+    "This is a SHORT note: %d–%d words, and no more than %d. Make one point and "
+    "explain it in ordinary words; leave out a second example and any caveat that "
+    "does not change the point. Short does not mean cryptic: a reader must still "
+    "get it on the first read.")
+
+
+def z_krotka_notka(prompt: str, dol: int, gora: int) -> str:
+    """Prompt notki z poleceniem krotkiej notki (E17, ramie „on")."""
+    stare, nowe = ZDANIE_O_DLUGOSCI % (dol, gora), POLECENIE_KROTKIEJ % (dol, gora, gora)
+    if stare in prompt:
+        return prompt.replace(stare, nowe, 1)
+    return prompt + "\n\n" + nowe
+
+
 def z_pytaniem_na_koncu(prompt: str) -> str:
     """Prompt notki z poleceniem zakonczenia pytaniem (E18, ramie „on").
 
@@ -3827,6 +3849,9 @@ def note(
     # `pytanie_na_koncu`). Ramie „off" dostaje prompt bez zmian.
     if (wariant or {}).get("pytanie"):
         prompt = z_pytaniem_na_koncu(prompt)
+    # E17 — okno juz przestawione wyzej; tu polecenie wprost (`z_krotka_notka`).
+    if (wariant or {}).get("krotka") and note_form not in config.FORMY_DLUGIE:
+        prompt = z_krotka_notka(prompt, _min_slow, _maks_slow)
     # SERIA — patrz `seria.py`. Blok idzie do promptu TYLKO wtedy, gdy ta
     # notka naprawde jest czescia serii; `notki_dnia` zeruje kontekst przy
     # kazdej notce, zeby zwykla notka nie dostala zapowiedzi ciagu dalszego,

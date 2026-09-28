@@ -306,15 +306,20 @@ finally:
     for n, f in _oryg.items():
         setattr(stages, n, f)
 _k = config.KROTKA_NOTKA_SLOW
-sprawdz("E17: prompt z oknem krotkiej notki (%d-%d)" % _k,
-        ("%d–%d words" % _k) in _z_wariantem, _z_wariantem[_z_wariantem.find("planning range"):][:60])
+sprawdz("E17: prompt z oknem krotkiej notki (%d-%d) i poleceniem wprost" % _k,
+        ("%d–%d words" % _k) in _z_wariantem
+        and (stages.POLECENIE_KROTKIEJ % (_k[0], _k[1], _k[1])) in _z_wariantem
+        and (stages.ZDANIE_O_DLUGOSCI % _k) not in _z_wariantem, _z_wariantem[-1500:][:300])
+sprawdz("zdanie, ktore E17 podmienia, stoi w notka.md",
+        stages.ZDANIE_O_DLUGOSCI.replace("%d", "{min_words}", 1).replace("%d", "{max_words}", 1) in _notka_md)
 sprawdz("E18: prompt z poleceniem pytania",
         stages.POLECENIE_PYTANIA in _z_wariantem and stages.ZDANIE_O_ZAKONCZENIU not in _z_wariantem)
 sprawdz("KONTRDOWOD: bez wariantu okno i zakonczenie jak dotad",
-        ("%d–%d words" % (config.NOTE_MIN_WORDS, config.NOTE_MAX_WORDS)) in _bez_wariantu
-        and stages.ZDANIE_O_ZAKONCZENIU in _bez_wariantu)
+        (stages.ZDANIE_O_DLUGOSCI % (config.NOTE_MIN_WORDS, config.NOTE_MAX_WORDS)) in _bez_wariantu
+        and stages.ZDANIE_O_ZAKONCZENIU in _bez_wariantu and "SHORT note" not in _bez_wariantu)
 sprawdz("KONTRDOWOD: dluga forma zostaje w swoim oknie mimo E17",
-        ("%d–%d words" % (config.NOTE_MIN_WORDS_DLUGA, config.NOTE_MAX_WORDS_DLUGA)) in _dluga)
+        (stages.ZDANIE_O_DLUGOSCI % (config.NOTE_MIN_WORDS_DLUGA, config.NOTE_MAX_WORDS_DLUGA)) in _dluga
+        and "SHORT note" not in _dluga)
 
 WARIANTY = []
 
