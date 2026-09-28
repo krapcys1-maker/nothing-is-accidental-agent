@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **36 plików**, 40 557 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **36 plików**, 40 666 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -113,8 +113,8 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 > w głównej ścieżce artykułu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
-się testować bez przeglądarki i bez pieniędzy**. 196 zestawów
-testów, 4921 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+się testować bez przeglądarki i bez pieniędzy**. 197 zestawów
+testów, 4946 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -177,7 +177,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-10801 wierszy, 174 funkcji na poziomie modułu, 0 klas
+10830 wierszy, 174 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -469,7 +469,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `llm.py` — JEDYNA warstwa dostępu do modeli i liczenia kosztu
 
-1017 wierszy, 17 funkcji na poziomie modułu, 4 klas
+1072 wierszy, 18 funkcji na poziomie modułu, 4 klas
 
 | funkcja | co robi |
 |---|---|
@@ -483,6 +483,7 @@ wiec nie da sie go rozjechac z kodem.
 | `_deepseek_pick_from_urls(purpose, system, user, urls, model)` *(wewn.)* | Drugie, tanie wywołanie: wybierz z adresów, które wyszukiwanie już zwróciło. |
 | `_call_deepseek_z_siecia(purpose, system, user, model)` *(wewn.)* | DeepSeek z wyszukiwaniem przez endpoint zgodny z API Anthropic. |
 | `_call_deepseek(purpose, system, user)` *(wewn.)* | — |
+| `_call_mimo(purpose, system, user)` *(wewn.)* | Xiaomi MiMo przez API zgodne z OpenAI (`/v1/chat/completions`), BEZ szukania. |
 | `przejsciowy(exc)` | Czy ten błąd ma szansę minąć sam. |
 | `call(purpose, system, user)` | Woła model właściwy dla etapu i zapisuje koszt. Zwraca tekst odpowiedzi. |
 | `koszt_obrazu(model, usage)` | Image API usage at published rates; unknown versions remain estimates. |
@@ -607,7 +608,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-3763 wierszy, 43 funkcji na poziomie modułu, 0 klas
+3788 wierszy, 43 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -6809,6 +6810,15 @@ def call(
                 text, tin, tout, searches, urls = _call_claude(
                     purpose, system, user, web_search, model=model)
                 cache_hit = 0
+            elif provider == "mimo":
+                # MiMo tylko pisze (E11). Jego szukanie jest platne osobno
+                # i nieobslugiwane tu — wywolanie z siecia to blad konfiguracji.
+                if web_search:
+                    raise PreflightFailed(
+                        f"etap {purpose!r}: MiMo bez szukania w tym kodzie")
+                text, tin, tout, searches, cache_hit = _call_mimo(
+                    purpose, system, user)
+                urls = []
             elif web_search:
                 text, tin, tout, searches, urls, cache_hit = _call_deepseek_z_siecia(
                     purpose, system, user, model=model)
@@ -6951,7 +6961,8 @@ def _preflight(purpose: str, conn: sqlite3.Connection, run_id: int | None,
     model = model or config.MODEL_FOR[purpose]
     KLUCZ = {"anthropic": ("ANTHROPIC_API_KEY", config.ANTHROPIC_API_KEY),
              "deepseek": ("DEEPSEEK_API_KEY", config.DEEPSEEK_API_KEY),
-             "openai": ("OPENAI_API_KEY", config.OPENAI_API_KEY)}
+             "openai": ("OPENAI_API_KEY", config.OPENAI_API_KEY),
+             "mimo": ("MIMO_API_KEY", config.MIMO_API_KEY)}
     nazwa_klucza, wartosc = KLUCZ[dostawca(model)]
     if not wartosc:
         raise PreflightFailed(
@@ -11510,6 +11521,7 @@ wartosc i komentarz stojacy bezposrednio nad definicja.
 | `ANTHROPIC_API_KEY` | `_env("ANTHROPIC_API_KEY")` | — |
 | `DEEPSEEK_API_KEY` | `_env("DEEPSEEK_API_KEY")` | — |
 | `OPENAI_API_KEY` | `_env("OPENAI_API_KEY")` | — |
+| `MIMO_API_KEY` | `_env("MIMO_API_KEY")` | — |
 | `IMAGE_MODEL` | `"gpt-image-1.5"` | Grafika do artykulu. Wybor NIE jest podyktowany cena: przy jednym obrazie na artykul nawet najdrozsza opcja to grosze miesiecznie, a taniej  |
 | `IMAGE_SIZE` | `"1536x1024"` | — |
 | `IMAGE_QUALITY` | `"high"` | — |
@@ -11534,6 +11546,8 @@ wartosc i komentarz stojacy bezposrednio nad definicja.
 | `DEEPSEEK` | `"deepseek-flash"` | DEEPSEEK V4.1 FLASH, OD 10 WRZESNIA 2026. Stara nazwa `deepseek-v4-flash` jest u DeepSeeka juz tylko przekierowaniem: model V4 Flash wycofan |
 | `DEEPSEEK_V4_FLASH` | `"deepseek-v4-flash"` | — |
 | `DEEPSEEK_PRO` | `"deepseek-v4-pro"` | V4 PRO ZOSTAJE. Ogloszenie z 10 wrzesnia zapowiadalo przekierowanie tej nazwy na V4.1 Flash od 14 wrzesnia 04:00 UTC, ale DeepSeek sie wycof |
+| `MIMO` | `"mimo-v2.6-flash"` | XIAOMI MiMo V2.6 FLASH (premiera 22.09.2026) — tylko pisarz notek w E11, tylko NIE. API zgodne z OpenAI (`/v1/chat/completions`); szukanie w |
+| `MIMO_BASE_URL` | `"https://api.xiaomimimo.com/v1"` | — |
 | `ROLE_MODELI` | `tuple(RODZINY_ROL)` | — |
 | `MODELE_Z_KODU` | `{rola: globals()[rola] for rola in ROLE_MODE` | — |
 | `_STAN_WYBORU` | `{} if _w_tescie_wczesnie() else _wybor_model` | — |

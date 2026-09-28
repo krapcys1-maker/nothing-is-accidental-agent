@@ -217,9 +217,24 @@ sprawdz("wersja kodu to skrot commita albo pusto (bez gita)",
 sprawdz("notki_dnia: ramie wniosku zerowane przy kazdej notce i zapisywane w wyniku",
         '_ramie_wniosku = ""' in _st and 'wynik["eksperymenty"]' in _st
         and _st.index('_ramie_wniosku = ""') < _st.index('_ramie_wniosku = ramie("wniosek", od + nr)'))
-sprawdz("E10 zatwierdzone przez wlasciciela 27.09: wniosek 70/30, 28.09-25.10, jedyny trwajacy",
-        config.EKSPERYMENTY == {"wniosek": {"udzial": 0.7, "od": "2026-09-28", "do": "2026-10-25"}},
+sprawdz("E10 zatwierdzone przez wlasciciela 27.09: wniosek 70/30, 28.09-25.10 (bez zmian)",
+        config.EKSPERYMENTY.get("wniosek") == {"udzial": 0.7, "od": "2026-09-28", "do": "2026-10-25"},
         config.EKSPERYMENTY)
+sprawdz("E11 na polecenie wlasciciela 28.09: pisarz MiMo 50/50, to samo okno — i nic wiecej nie trwa",
+        config.EKSPERYMENTY.get("pisarz") == {"udzial": 0.5, "od": "2026-09-28", "do": "2026-10-25"}
+        and set(config.EKSPERYMENTY) == {"wniosek", "pisarz"}, config.EKSPERYMENTY)
+# NIEZALEZNE LOSOWANIE: ramiona E10 i E11 w tych samych slotach nie moga sie
+# pokrywac systematycznie (osobny klucz = osobny hash), inaczej jeden
+# eksperyment mierzylby drugi.
+_pary = [(stages.ramie("wniosek", m, d), stages.ramie("pisarz", m, d))
+         for d in ("2026-10-%02d" % i for i in range(1, 21)) for m in range(4)]
+sprawdz("E10 i E11 losuja niezaleznie (wszystkie 4 kombinacje ramion wystepuja)",
+        {("on", "on"), ("on", "off"), ("off", "on"), ("off", "off")} <= set(_pary),
+        sorted(set(_pary)))
+sprawdz("notki_dnia: ramie pisarza zerowane przy kazdej notce, notka z przeslania poza E11",
+        '_ramie_pisarza = ""' in _st and '_ramie_pisarza = ramie("pisarz", od + nr)' in _st
+        and _st.index('_ramie_pisarza = ""') < _st.index('_ramie_pisarza = ramie("pisarz", od + nr)')
+        and '("pisarz", _ramie_pisarza)' in _st)
 
 print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))

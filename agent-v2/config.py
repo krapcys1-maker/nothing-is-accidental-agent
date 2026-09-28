@@ -69,6 +69,7 @@ def _env(name: str, default: str = "") -> str:
 ANTHROPIC_API_KEY = _env("ANTHROPIC_API_KEY")
 DEEPSEEK_API_KEY = _env("DEEPSEEK_API_KEY")
 OPENAI_API_KEY = _env("OPENAI_API_KEY")   # wylacznie do grafik
+MIMO_API_KEY = _env("MIMO_API_KEY")       # Xiaomi MiMo — pisarz notek w E11
 
 # Grafika do artykulu. Wybor NIE jest podyktowany cena: przy jednym obrazie na
 # artykul nawet najdrozsza opcja to grosze miesiecznie, a taniej znaczy tu
@@ -141,8 +142,18 @@ KWOTA_SPOZA_BRANZY = True
 # +-45% zasiegu wzgledem tla). Ocena ok. 29.10, gdy ostatnie notki dojrzeja
 # (72 h): `python agent-v2/eksperymenty.py --pole eksperyment:wniosek`.
 # Regula decyzji zapisana PRZED startem w dokumencie wyzej.
+#
+# E11 — PISARZ NOTEK XIAOMI MiMo V2.6 FLASH, na polecenie wlasciciela 28.09.2026
+# („mozesz mu dac notki na probe, ale tylko na NIE"). Slepy test na 8 produkcyjnych
+# promptach: MiMo 11:5 u dwoch sedziow Claude, wyzej we wszystkich kryteriach,
+# koszt notki ~rowny (0,00066 vs 0,00057 USD), 5x wolniej. Polowa notek z banku
+# (`ramie("pisarz")` — WLASNE losowanie, niezalezne od E10, wiec oba eksperymenty
+# ida naraz bez mieszania). Notka z przeslania (Opus) nie bierze udzialu. Gdy MiMo
+# nie napisze notki, w tym samym przebiegu pisze DeepSeek (`pisarz_zastepczy`).
+# Ocena jak E10: `python agent-v2/eksperymenty.py --pole eksperyment:pisarz`.
 EKSPERYMENTY: dict = {
     "wniosek": {"udzial": 0.7, "od": "2026-09-28", "do": "2026-10-25"},
+    "pisarz": {"udzial": 0.5, "od": "2026-09-28", "do": "2026-10-25"},
 }
 
 # ILE RAZY ODPISUJEMY W JEDNEJ ROZMOWIE. Rozmowa to galaz komentarzy: ten,
@@ -219,6 +230,14 @@ DEEPSEEK_V4_FLASH = "deepseek-v4-flash"  # stara nazwa: historia kosztow i rozli
 # ogloszenie z 10 wrzesnia nie zostalo poprawione — zrodla DeepSeeka mowily
 # tego dnia dwie rozne rzeczy, i rozstrzyga strona, z ktorej wynika rachunek.
 DEEPSEEK_PRO = "deepseek-v4-pro"
+
+# XIAOMI MiMo V2.6 FLASH (premiera 22.09.2026) — tylko pisarz notek w E11, tylko NIE.
+# API zgodne z OpenAI (`/v1/chat/completions`); szukanie w sieci jest tam platne
+# osobno (5 USD / 1000) i ten kod go NIE uzywa.
+MIMO = "mimo-v2.6-flash"
+MIMO_BASE_URL = "https://api.xiaomimimo.com/v1"
+# Myslenie jak u DeepSeeka dla notki (wylaczone) — w tym ustawieniu MiMo wygral slepy test.
+MIMO_MYSLENIE: dict[str, dict[str, str]] = {"note_mimo": {"type": "disabled"}}
 
 # --- automatyczna zamiana modeli ---------------------------------------------
 # Nowe modele wchodza SAME, ale nie z ogloszenia: `nowe_modele.py` raz na dobe
@@ -313,6 +332,7 @@ MODEL_FOR = {
     "review": DEEPSEEK,
     "forma": DEEPSEEK,
     "note": DEEPSEEK,
+    "note_mimo": MIMO,   # E11 — ramie „on" eksperymentu `pisarz`
     "note_tani": DEEPSEEK,
     "comment": DEEPSEEK,
     "reply": DEEPSEEK,
@@ -534,6 +554,10 @@ PRICING = {
     # 2026-09-10 04:00 UTC: wejscie 0,15 (miss), wyjscie 0,60, cache 0,003.
     # Szczyt dalej dwukrotnosc. Z cennika, nie z faktury, wiec `verified: False`.
     "deepseek-flash": {"in": 0.15, "out": 0.60, "cache": 0.003, "verified": False},
+    # XIAOMI MiMo V2.6 FLASH — cennik zagraniczny z mimo.mi.com (28.09.2026): wejscie
+    # 0,14 (miss), cache 0,0028, wyjscie 0,28; bez taryfy szczytowej. Z cennika,
+    # nie z faktury. Szukanie (5 USD/1000) nieuzywane.
+    "mimo-v2.6-flash": {"in": 0.14, "out": 0.28, "cache": 0.0028, "verified": False},
 }
 
 # NAJTANSZY I NAJDROZSZY WPIS KAZDEJ RODZINY — stawka dla modelu, ktorego nie ma
@@ -1502,6 +1526,7 @@ MAX_TOKENS = {
     "forma": 24000,
     "note": _tokens_for(400) + 8000,
     "note_tani": _tokens_for(400) + 8000,   # ten sam kontrakt, inny pisarz
+    "note_mimo": _tokens_for(400) + 8000,   # ten sam kontrakt, Xiaomi MiMo (E11)
     "notka_przeslania": _tokens_for(400) + 8000,   # ten sam kontrakt, Opus
     "comment": _tokens_for(600) + 8000,
     "reply": _tokens_for(600) + 8000,

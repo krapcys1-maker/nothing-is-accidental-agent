@@ -40,8 +40,11 @@ class VoiceRoutingTest(unittest.TestCase):
         self.assertEqual(config.MODEL_FOR["przeslania"], config.CLAUDE)
         # `notka_przeslania` tez: Flash gubil hipoteze z przeslania (A/B 27.09).
         self.assertEqual(config.MODEL_FOR["notka_przeslania"], config.CLAUDE)
+        # `note_mimo` — pisarz ramienia „on" eksperymentu E11 (polecenie
+        # wlasciciela 28.09.2026: Xiaomi MiMo pisze polowe notek, tylko NIE).
+        self.assertEqual(config.MODEL_FOR["note_mimo"], config.MIMO)
         for purpose, model in config.MODEL_FOR.items():
-            if purpose not in {"write", "obraz", "przeslania", "notka_przeslania"}:
+            if purpose not in {"write", "obraz", "przeslania", "notka_przeslania", "note_mimo"}:
                 with self.subTest(purpose=purpose):
                     self.assertEqual(model, config.DEEPSEEK)
 

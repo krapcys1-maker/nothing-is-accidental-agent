@@ -152,6 +152,15 @@ def call(
                 text, tin, tout, searches, urls = _call_claude(
                     purpose, system, user, web_search, model=model)
                 cache_hit = 0
+            elif provider == "mimo":
+                # MiMo tylko pisze (E11). Jego szukanie jest platne osobno
+                # i nieobslugiwane tu — wywolanie z siecia to blad konfiguracji.
+                if web_search:
+                    raise PreflightFailed(
+                        f"etap {purpose!r}: MiMo bez szukania w tym kodzie")
+                text, tin, tout, searches, cache_hit = _call_mimo(
+                    purpose, system, user)
+                urls = []
             elif web_search:
                 text, tin, tout, searches, urls, cache_hit = _call_deepseek_z_siecia(
                     purpose, system, user, model=model)
@@ -294,7 +303,8 @@ def _preflight(purpose: str, conn: sqlite3.Connection, run_id: int | None,
     model = model or config.MODEL_FOR[purpose]
     KLUCZ = {"anthropic": ("ANTHROPIC_API_KEY", config.ANTHROPIC_API_KEY),
              "deepseek": ("DEEPSEEK_API_KEY", config.DEEPSEEK_API_KEY),
-             "openai": ("OPENAI_API_KEY", config.OPENAI_API_KEY)}
+             "openai": ("OPENAI_API_KEY", config.OPENAI_API_KEY),
+             "mimo": ("MIMO_API_KEY", config.MIMO_API_KEY)}
     nazwa_klucza, wartosc = KLUCZ[dostawca(model)]
     if not wartosc:
         raise PreflightFailed(

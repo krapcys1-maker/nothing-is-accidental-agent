@@ -65,6 +65,8 @@ def dostawca(model: str) -> str:
         return "deepseek"
     if model.startswith("gpt-image-"):
         return "openai"
+    if model.startswith("mimo"):
+        return "mimo"
     return "anthropic"
 
 
@@ -125,7 +127,8 @@ def _preflight(purpose: str, conn: sqlite3.Connection, run_id: int | None,
     model = model or config.MODEL_FOR[purpose]
     KLUCZ = {"anthropic": ("ANTHROPIC_API_KEY", config.ANTHROPIC_API_KEY),
              "deepseek": ("DEEPSEEK_API_KEY", config.DEEPSEEK_API_KEY),
-             "openai": ("OPENAI_API_KEY", config.OPENAI_API_KEY)}
+             "openai": ("OPENAI_API_KEY", config.OPENAI_API_KEY),
+             "mimo": ("MIMO_API_KEY", config.MIMO_API_KEY)}
     nazwa_klucza, wartosc = KLUCZ[dostawca(model)]
     if not wartosc:
         raise PreflightFailed(
@@ -595,6 +598,49 @@ def _call_deepseek(purpose: str, system: str, user: str) -> tuple[str, int, int,
     )
 
 
+def _call_mimo(purpose: str, system: str, user: str) -> tuple[str, int, int, int, int]:
+    """Xiaomi MiMo przez API zgodne z OpenAI (`/v1/chat/completions`), BEZ szukania.
+
+    Tylko pisarz notek w eksperymencie E11 (`config.EKSPERYMENTY["pisarz"]`).
+    Ksztalt wyniku jak `_call_deepseek`: (tekst, wejscie bez cache, wyjscie,
+    wyszukiwania=0, trafienia w cache). Trafienia MiMo podaje w
+    `usage.prompt_tokens_details.cached_tokens` i sa WLICZONE w `prompt_tokens`
+    — odejmujemy je, bo `_cost` liczy je osobno po stawce cache.
+    """
+    cialo: dict[str, Any] = {
+        "model": config.MODEL_FOR[purpose],
+        "max_tokens": config.MAX_TOKENS[purpose],
+        "messages": [{"role": "system", "content": system},
+                     {"role": "user", "content": user}],
+    }
+    mysl = (config.MIMO_MYSLENIE or {}).get(purpose)
+    if mysl:
+        cialo["thinking"] = dict(mysl)
+    response = httpx.post(
+        f"{config.MIMO_BASE_URL}/chat/completions",
+        headers={"api-key": str(config.MIMO_API_KEY), "Content-Type": "application/json"},
+        json=cialo,
+        timeout=config.timeout_for(config.MAX_TOKENS[purpose]),
+    )
+    response.raise_for_status()
+    payload = response.json()
+    choice = (payload.get("choices") or [{}])[0]
+    if choice.get("finish_reason") == "length":
+        raise Truncated(
+            f"odpowiedź ucięta na suficie {config.MAX_TOKENS[purpose]} tokenów "
+            f"dla etapu {purpose!r} — bez tego wychodzi z tego niedomknięty JSON"
+        )
+    usage = payload.get("usage") or {}
+    trafienia = int(((usage.get("prompt_tokens_details") or {}).get("cached_tokens")) or 0)
+    return (
+        str((choice.get("message") or {}).get("content") or ""),
+        max(0, int(usage.get("prompt_tokens") or 0) - trafienia),
+        int(usage.get("completion_tokens") or 0),
+        0,
+        trafienia,
+    )
+
+
 def przejsciowy(exc: BaseException) -> bool:
     """Czy ten błąd ma szansę minąć sam.
 
@@ -725,6 +771,15 @@ def call(
                 text, tin, tout, searches, urls = _call_claude(
                     purpose, system, user, web_search, model=model)
                 cache_hit = 0
+            elif provider == "mimo":
+                # MiMo tylko pisze (E11). Jego szukanie jest platne osobno
+                # i nieobslugiwane tu — wywolanie z siecia to blad konfiguracji.
+                if web_search:
+                    raise PreflightFailed(
+                        f"etap {purpose!r}: MiMo bez szukania w tym kodzie")
+                text, tin, tout, searches, cache_hit = _call_mimo(
+                    purpose, system, user)
+                urls = []
             elif web_search:
                 text, tin, tout, searches, urls, cache_hit = _call_deepseek_z_siecia(
                     purpose, system, user, model=model)

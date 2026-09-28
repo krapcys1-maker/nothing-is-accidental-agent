@@ -35,7 +35,7 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-10801 wierszy, 174 funkcji na poziomie modułu, 0 klas
+10830 wierszy, 174 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -327,7 +327,7 @@
 
 ### `llm.py` — JEDYNA warstwa dostępu do modeli i liczenia kosztu
 
-1017 wierszy, 17 funkcji na poziomie modułu, 4 klas
+1072 wierszy, 18 funkcji na poziomie modułu, 4 klas
 
 | funkcja | co robi |
 |---|---|
@@ -341,6 +341,7 @@
 | `_deepseek_pick_from_urls(purpose, system, user, urls, model)` *(wewn.)* | Drugie, tanie wywołanie: wybierz z adresów, które wyszukiwanie już zwróciło. |
 | `_call_deepseek_z_siecia(purpose, system, user, model)` *(wewn.)* | DeepSeek z wyszukiwaniem przez endpoint zgodny z API Anthropic. |
 | `_call_deepseek(purpose, system, user)` *(wewn.)* | — |
+| `_call_mimo(purpose, system, user)` *(wewn.)* | Xiaomi MiMo przez API zgodne z OpenAI (`/v1/chat/completions`), BEZ szukania. |
 | `przejsciowy(exc)` | Czy ten błąd ma szansę minąć sam. |
 | `call(purpose, system, user)` | Woła model właściwy dla etapu i zapisuje koszt. Zwraca tekst odpowiedzi. |
 | `koszt_obrazu(model, usage)` | Image API usage at published rates; unknown versions remain estimates. |
@@ -465,7 +466,7 @@
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-3763 wierszy, 43 funkcji na poziomie modułu, 0 klas
+3788 wierszy, 43 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|

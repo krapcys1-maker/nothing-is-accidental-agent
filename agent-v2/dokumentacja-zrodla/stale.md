@@ -15,6 +15,7 @@
 | `ANTHROPIC_API_KEY` | `_env("ANTHROPIC_API_KEY")` | — |
 | `DEEPSEEK_API_KEY` | `_env("DEEPSEEK_API_KEY")` | — |
 | `OPENAI_API_KEY` | `_env("OPENAI_API_KEY")` | — |
+| `MIMO_API_KEY` | `_env("MIMO_API_KEY")` | — |
 | `IMAGE_MODEL` | `"gpt-image-1.5"` | Grafika do artykulu. Wybor NIE jest podyktowany cena: przy jednym obrazie na artykul nawet najdrozsza opcja to grosze miesiecznie, a taniej  |
 | `IMAGE_SIZE` | `"1536x1024"` | — |
 | `IMAGE_QUALITY` | `"high"` | — |
@@ -39,6 +40,8 @@
 | `DEEPSEEK` | `"deepseek-flash"` | DEEPSEEK V4.1 FLASH, OD 10 WRZESNIA 2026. Stara nazwa `deepseek-v4-flash` jest u DeepSeeka juz tylko przekierowaniem: model V4 Flash wycofan |
 | `DEEPSEEK_V4_FLASH` | `"deepseek-v4-flash"` | — |
 | `DEEPSEEK_PRO` | `"deepseek-v4-pro"` | V4 PRO ZOSTAJE. Ogloszenie z 10 wrzesnia zapowiadalo przekierowanie tej nazwy na V4.1 Flash od 14 wrzesnia 04:00 UTC, ale DeepSeek sie wycof |
+| `MIMO` | `"mimo-v2.6-flash"` | XIAOMI MiMo V2.6 FLASH (premiera 22.09.2026) — tylko pisarz notek w E11, tylko NIE. API zgodne z OpenAI (`/v1/chat/completions`); szukanie w |
+| `MIMO_BASE_URL` | `"https://api.xiaomimimo.com/v1"` | — |
 | `ROLE_MODELI` | `tuple(RODZINY_ROL)` | — |
 | `MODELE_Z_KODU` | `{rola: globals()[rola] for rola in ROLE_MODE` | — |
 | `_STAN_WYBORU` | `{} if _w_tescie_wczesnie() else _wybor_model` | — |

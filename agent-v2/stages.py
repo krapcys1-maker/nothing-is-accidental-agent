@@ -5423,6 +5423,7 @@ def notki_dnia(
         # RAMIE EKSPERYMENTU WNIOSKU — zerowane przy kazdej notce, bo ustawia
         # je tylko galaz faktu z banku (przeslanie i MYSL wniosku nie dostaja).
         _ramie_wniosku = ""
+        _ramie_pisarza = ""   # E11 — ustawiane przy wyborze pisarza
         # PRZESLANIE ZE SLEDZTWA — przed zwyklym wyborem faktu, jak seria:
         # historia zbadana i przemyslana ma pierwszenstwo przed pojedynczym
         # faktem. Typ notki wyznacza rodzaj przeslania (`sledztwo.TYP_NOTKI`).
@@ -5631,6 +5632,17 @@ def notki_dnia(
         # `config.MODEL_FOR["notka_przeslania"]`.
         if _przes:
             etap_pisarza = "notka_przeslania"
+        else:
+            # E11 — PISARZ MiMo NA POLOWIE NOTEK (`config.EKSPERYMENTY["pisarz"]`),
+            # wlasne losowanie, niezalezne od wniosku. BEZ KLUCZA ZOSTAJE DeepSeek:
+            # kontrola wstepna bez klucza przerwalaby caly przebieg dnia.
+            _ramie_pisarza = ramie("pisarz", od + nr)
+            if _ramie_pisarza == "on":
+                if config.MIMO_API_KEY:
+                    etap_pisarza = "note_mimo"
+                else:
+                    print("  [pisarz] E11: brak MIMO_API_KEY — notka zostaje u %s"
+                          % config.MODEL_FOR.get(etap_pisarza, "?"), flush=True)
         print("  [pisarz] %s (%s)" % (config.MODEL_FOR.get(etap_pisarza, "?"),
                                       etap_pisarza), flush=True)
         wynik = note(conn, run_id, typ, material,
@@ -5654,6 +5666,22 @@ def notki_dnia(
                          link=link_artykulu if typ == "ARTYKUL" else None,
                          note_form=forma, etap=etap_pisarza,
                          seria=seria_kontekst)
+        # MiMo NIE NAPISAL NOTKI (E11) — pisze DeepSeek, w tym samym przebiegu.
+        # Nowy dostawca bywa niedostepny albo odda zly JSON; fakt z banku nie
+        # moze przez to przepasc. Ramie zostaje „on", faktyczny pisarz idzie do
+        # dziennika w polu `model` — analiza widzi obie rzeczy.
+        if (etap_pisarza == "note_mimo"
+                and not any((k.get("note") or "").strip()
+                            for k in wynik.get("candidates") or [])):
+            etap_pisarza = _pisarze[(od + nr + _doba) % len(_pisarze)]
+            print("  [pisarz] E11: MiMo nie napisal notki — pisze %s (%s)"
+                  % (config.MODEL_FOR.get(etap_pisarza, "?"), etap_pisarza),
+                  flush=True)
+            wynik = note(conn, run_id, typ, material,
+                         link=link_artykulu if typ == "ARTYKUL" else None,
+                         note_form=forma, etap=etap_pisarza,
+                         seria=seria_kontekst)
+            wynik["pisarz_zastepczy"] = True
         # NUMER CZESCI JEDZIE Z NOTKA, tak samo jak fakt i ranga: `run.py`
         # odhacza czesc DOPIERO po potwierdzonej publikacji. Bez tych dwoch
         # pol seria zapisywalaby sie przy pisaniu, wiec nieudana publikacja
@@ -5720,7 +5748,8 @@ def notki_dnia(
         # `sledztwo.wez_przeslanie` wie, ze przeslanie wyszlo.
         wynik["przeslanie_id"] = _przes.get("id") if _przes else None
         # RAMIONA EKSPERYMENTOW PRZEPLATANYCH I WERSJA KODU — do dziennika (`run.py`).
-        wynik["eksperymenty"] = {"wniosek": _ramie_wniosku} if _ramie_wniosku else {}
+        wynik["eksperymenty"] = {nazwa: r for nazwa, r in (("wniosek", _ramie_wniosku),
+                                                           ("pisarz", _ramie_pisarza)) if r}
         wynik["wersja"] = WERSJA_KODU
         # RODZAJ WNIOSKU — karta wynikow policzy, ktory rodzaj chwyta.
         wynik["wniosek"] = ((material.get("our_angle") or {}).get("kind") or ""
