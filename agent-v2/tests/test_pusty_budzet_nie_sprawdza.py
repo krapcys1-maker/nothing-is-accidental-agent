@@ -83,6 +83,12 @@ sys.path.insert(0, "agent-v2")
 import config      # noqa: E402
 import llm         # noqa: E402
 
+# TEN TEST BADA SCIEZKE ZE SPRAWDZANIEM FAKTOW. Od 28.09.2026 komentarze
+# domyslnie go nie maja (`config.SPRAWDZANIE_FAKTOW_KOMENTARZY`, decyzja
+# wlasciciela) — tu wlaczamy je jawnie, bo pytanie brzmi, co sie dzieje, gdy
+# budzet pada W TRAKCIE sprawdzania. Wylacznik ma osobny test.
+config.SPRAWDZANIE_FAKTOW_KOMENTARZY = True
+
 zdane = oblane = 0
 
 

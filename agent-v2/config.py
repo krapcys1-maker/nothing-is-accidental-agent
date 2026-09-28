@@ -815,6 +815,15 @@ MODEL_DO_SZUKANIA: dict[str, str] = {}
 MAX_SZUKAN_NA_ETAP = {"factcheck": 3, "curiosity": 3, "aktualne_modele": 4, "reply": 2,
                      "investigation_search": 3}
 
+# SPRAWDZANIE FAKTOW W KOMENTARZACH — WYLACZONE decyzja wlasciciela 28.09.2026
+# („niech tak bedzie": sprawdzamy notki i artykuly, komentarzy nie). Zmierzone
+# na 7 dniach (kolumna `calls.akcja`): komentarze to 100 ze 124 sprawdzen
+# i 0,40 z 0,55 USD tygodniowo; przez 4 tygodnie cale sprawdzanie obalilo 36
+# zdan w 429 tekstach — drobiazgi (nazwa instytutu, cena, szczegol specyfikacji).
+# Zapory komentarza (wstrzykniecie, podlogi z pamieci) dzialaja dalej.
+# Odpowiedzi nie przechodzily przez `stages.zweryfikuj` nigdy.
+SPRAWDZANIE_FAKTOW_KOMENTARZY = False
+
 # Wyniki prob wyszukiwania z `nowe_modele.py`: {model: {"dziala": bool, "kiedy": iso}}.
 PROBY_WYSZUKIWANIA: dict[str, dict] = {
     str(m): w for m, w in ((_STAN_WYBORU.get("wyszukiwanie") or {}).items())

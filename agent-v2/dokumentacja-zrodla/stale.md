@@ -67,6 +67,7 @@
 | `SZUKANIE_POTWIERDZONE` | `frozenset({"deepseek-flash", "deepseek-v4-pr` | Modele DeepSeeka, ktorych wyszukiwanie POTWIERDZONO na zywo nowa droga. Nieznany DeepSeek domyslnie nie szuka, dopoki proba nie potwierdzi. |
 | `MODEL_DO_SZUKANIA_DOMYSLNY` | `DEEPSEEK_PRO` | Zastepca, gdy model etapu przestanie szukac: DeepSeek V4 Pro, ktory bot i tak ma w routingu. Tylko DeepSeek. Gdy nie szuka zaden, `llm.call` |
 | `MAX_SZUKAN_NA_ETAP` | `{"factcheck": 3, "curiosity": 3, "aktualne_m` | Ile wyszukiwan wolno jednemu wywolaniu Claude, gdy etap chodzi na Claude (np. dyskoveria w trybie tanim). Bez limitu Claude robil 17, potem  |
+| `SPRAWDZANIE_FAKTOW_KOMENTARZY` | `False` | SPRAWDZANIE FAKTOW W KOMENTARZACH — WYLACZONE decyzja wlasciciela 28.09.2026 („niech tak bedzie": sprawdzamy notki i artykuly, komentarzy ni |
 | `WEB_SEARCH_USD_PER_1K` | `10.00` | Wyszukiwanie po stronie Anthropic: USD za 1000 zapytań. |
 | `_DZIS_UTC` | `_dt_sufit.datetime.now(_dt_sufit.timezone.ut` | — |
 | `SUFIT_PODNIESIONY_NA` | `"2026-08-30"` | — |

@@ -6888,6 +6888,17 @@ def comment_on(
             # LOG, NIE BRAMKA. Ta sama decyzja wlasciciela z 9 wrzesnia 2026.
             data["podloga"] = podloga
             print("    UWAGA: %s (komentarz i tak idzie)" % podloga, flush=True)
+        # WYLACZNIK — patrz `config.SPRAWDZANIE_FAKTOW_KOMENTARZY` (decyzja
+        # wlasciciela 28.09.2026). Zapory wyzej juz zadzialaly; znika tylko
+        # platne sprawdzenie i naprawa. `nie_sprawdzone` JAWNIE, tak jak przy
+        # awarii weryfikacji — zapis ma odrozniac „nie sprawdzalem" od „czysto".
+        if not config.SPRAWDZANIE_FAKTOW_KOMENTARZY:
+            data["weryfikacja"] = {"nie_sprawdzone": True, "safe_to_post": True,
+                                   "verdict": "sprawdzanie faktow w komentarzach wylaczone"}
+            data["safe_to_post"] = True
+            print("    (komentarz bez sprawdzania faktow — wylaczone dla komentarzy)",
+                  flush=True)
+            break
         # SPRAWDZENIE FAKTOW JEST LOGIEM, NIE BRAMKA — tak samo jak przy notce
         # i artykule. Dwie bramki POWYZEJ zostaja i maja zostac: zapora przeciw
         # wstrzyknieciu (cudzy tekst probujacy pisac przez nasze konto) oraz

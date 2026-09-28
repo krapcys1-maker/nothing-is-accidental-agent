@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **36 plików**, 40 537 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **36 plików**, 40 557 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -113,8 +113,8 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 > w głównej ścieżce artykułu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
-się testować bez przeglądarki i bez pieniędzy**. 195 zestawów
-testów, 4910 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+się testować bez przeglądarki i bez pieniędzy**. 196 zestawów
+testów, 4921 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -177,7 +177,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-10790 wierszy, 174 funkcji na poziomie modułu, 0 klas
+10801 wierszy, 174 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -607,7 +607,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-3754 wierszy, 43 funkcji na poziomie modułu, 0 klas
+3763 wierszy, 43 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -11562,6 +11562,7 @@ wartosc i komentarz stojacy bezposrednio nad definicja.
 | `SZUKANIE_POTWIERDZONE` | `frozenset({"deepseek-flash", "deepseek-v4-pr` | Modele DeepSeeka, ktorych wyszukiwanie POTWIERDZONO na zywo nowa droga. Nieznany DeepSeek domyslnie nie szuka, dopoki proba nie potwierdzi. |
 | `MODEL_DO_SZUKANIA_DOMYSLNY` | `DEEPSEEK_PRO` | Zastepca, gdy model etapu przestanie szukac: DeepSeek V4 Pro, ktory bot i tak ma w routingu. Tylko DeepSeek. Gdy nie szuka zaden, `llm.call` |
 | `MAX_SZUKAN_NA_ETAP` | `{"factcheck": 3, "curiosity": 3, "aktualne_m` | Ile wyszukiwan wolno jednemu wywolaniu Claude, gdy etap chodzi na Claude (np. dyskoveria w trybie tanim). Bez limitu Claude robil 17, potem  |
+| `SPRAWDZANIE_FAKTOW_KOMENTARZY` | `False` | SPRAWDZANIE FAKTOW W KOMENTARZACH — WYLACZONE decyzja wlasciciela 28.09.2026 („niech tak bedzie": sprawdzamy notki i artykuly, komentarzy ni |
 | `WEB_SEARCH_USD_PER_1K` | `10.00` | Wyszukiwanie po stronie Anthropic: USD za 1000 zapytań. |
 | `_DZIS_UTC` | `_dt_sufit.datetime.now(_dt_sufit.timezone.ut` | — |
 | `SUFIT_PODNIESIONY_NA` | `"2026-08-30"` | — |
