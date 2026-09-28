@@ -72,13 +72,14 @@ sprawdz("wynik to same liczby — zadnych uchwytow ani nazw", "ewa" not in json.
 print()
 print("=== 2. PRZYROSTY TRESCI ===")
 stat = [{"rodzaj": "notka", "id": "1", "zmierzone": "2026-09-20T10:00:00Z", "wyswietlenia": 10,
-         "odbiorcy": {"Unconnected": 4}, "interakcje": {"Profile visit": 1}, "subskrypcje": 1},
+         "odbiorcy": {"Unconnected": 4}, "interakcje": {"Profile visit": 1}, "zapisy_darmowe": 1},
         {"rodzaj": "notka", "id": "1", "zmierzone": "2026-09-21T10:00:00Z", "wyswietlenia": 15,
-         "odbiorcy": {"Unconnected": 6}, "interakcje": {"Profile visit": 2}, "subskrypcje": 1},
+         "odbiorcy": {"Unconnected": 6}, "interakcje": {"Profile visit": 2}, "zapisy_darmowe": 1},
         {"rodzaj": "notka", "id": "1", "zmierzone": "2026-09-21T20:00:00Z", "wyswietlenia": 14},
         {"rodzaj": "notka", "id": "1", "zmierzone": "2026-09-22T10:00:00Z", "wyswietlenia": 17,
-         "kto_sie_zapisal": ["Tajny Czytelnik"]},
-        {"rodzaj": "artykul", "id": "9", "kiedy": "2026-09-21T11:00:00+00:00", "wyswietlenia": 40}]
+         "kto_sie_zapisal": ["Tajny Czytelnik"], "zapisy_darmowe": 1},
+        {"rodzaj": "artykul", "id": "9", "kiedy": "2026-09-21T11:00:00+00:00", "wyswietlenia": 40,
+         "subskrypcje": 5}]
 tr = obs.tresci_na_doby(stat)
 sprawdz("pierwszy pomiar niesie wszystko od publikacji", tr["2026-09-20"]["wyswietlenia"] == 10 and tr["2026-09-20"]["obcy"] == 4, tr)
 sprawdz("przyrost 21.09 = 5 wyswietlen notki + 40 artykulu, obcy +2, profil +1",
@@ -86,8 +87,25 @@ sprawdz("przyrost 21.09 = 5 wyswietlen notki + 40 artykulu, obcy +2, profil +1",
         and tr["2026-09-21"]["obcy"] == 2 and tr["2026-09-21"]["odwiedziny_profilu"] == 1, tr["2026-09-21"])
 sprawdz("KONTRDOWOD: chwilowy spadek 15 -> 14 -> 17 nie dubluje (22.09 = +2, nie +3)",
         tr["2026-09-22"]["wyswietlenia"] == 2, tr["2026-09-22"])
-sprawdz("zapis przypisany notce liczony raz", tr["2026-09-20"].get("subskrypcje") == 1
-        and not tr["2026-09-21"].get("subskrypcje"), tr)
+sprawdz("zapis przypisany notce (karta new subscribers) liczony raz",
+        tr["2026-09-20"].get("zapisy_przypisane") == 1 and not tr["2026-09-21"].get("zapisy_przypisane")
+        and not tr["2026-09-22"].get("zapisy_przypisane"), tr)
+sprawdz("KONTRDOWOD 28.09: signups_within_1_day artykulu to OKNO, nie przypisanie — osobne pole",
+        tr["2026-09-21"].get("zapisy_okno_artykulu") == 5 and not tr["2026-09-21"].get("zapisy_przypisane")
+        and "subskrypcje" not in tr["2026-09-21"], tr["2026-09-21"])
+_prz = obs.przypisane_tresciom(
+    [{"podsumowanie": {"zapisy_per_notka": {"11": 1, "12": 2}}},
+     {"podsumowanie": {"zapisy_per_notka": {"11": 3, "13": 1}}}],
+    [{"rodzaj": "restack", "id": "11"}, {"rodzaj": "notka", "nasz_id": "12"}],
+    [{"rodzaj": "notka", "id": "12"}])
+sprawdz("przypisanie z panelu: maksimum po odczytach, rodzaj z dziennika bota, reszta spoza dziennika",
+        _prz["razem"] == 6 and _prz["pozycji"] == 3
+        and _prz["wg_rodzaju"] == {"restack": 3, "notka": 2, "spoza_dziennika": 1}, _prz)
+_prz2 = obs.przypisane_tresciom([{"podsumowanie": {"zapisy_per_notka": {"21": 2}}}], [],
+                                [{"rodzaj": "notka", "id": "21"}])
+sprawdz("KONTRDOWOD: notka ze statystyk profilu, ktorej bot nie wystawil, nie udaje notki bota",
+        _prz2["wg_rodzaju"] == {"notka_spoza_dziennika": 2}, _prz2)
+sprawdz("ostatnie okno (30 dni) osobno od sumy wszystkich odczytow", _prz["ostatnie_okno"] == 4, _prz)
 
 print()
 print("=== 3. DZIALANIA ===")

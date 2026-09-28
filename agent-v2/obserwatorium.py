@@ -50,8 +50,19 @@ import config  # noqa: E402
 REPO_NIE = Path(__file__).resolve().parent.parent
 POLA_STANU = ("subskrybenci", "subskrybenci_darmowi", "obserwujacy", "nasze_subskrypcje",
               "nasze_rekomendacje")
+# ZAPISY Z TRESCI — DWIE ROZNE LICZBY, I TO JEST LEKCJA Z 28.09.2026.
+# `zapisy_przypisane` = karta „new subscribers" przy notce/komentarzu/restacku
+# (`zapisy_darmowe` + `zapisy_platne`): Substack przypisuje zapis TEJ pozycji.
+# `zapisy_okno_artykulu` = `signups_within_1_day` artykulu (u botow pod nazwa
+# `subskrypcje`): KAZDY zapis w dobie po wysylce, skadkolwiek przyszedl —
+# okno czasowe, nie przypisanie (pomiar 02.09, `browser.zapisz_zrodla_ruchu`).
+# Pierwsza wersja obserwatorium wziela to drugie za przypisanie, a pierwszego
+# nie czytala, i oglosila „zapisy daja artykuly, notki 0" — odwrotnie niz jest.
+# Wlasciciel: „z notek 0, to skad reszta subskrybentow? sprawdz, cos mi tu smierdzi".
+# Pole `obserwacje` przy tresci pochodzi z typu interakcji, ktorego Substack
+# dla notek nie przysyla (zawsze 0) — nie liczymy go wcale.
 LICZNIKI = ("wyswietlenia", "obcy", "odwiedziny_profilu", "polubienia", "odpowiedzi", "restacki",
-            "subskrypcje", "obserwacje")
+            "zapisy_przypisane", "zapisy_okno_artykulu")
 DZIALANIA = {"notka": "notki", "artykul": "artykuly", "komentarz": "komentarze",
              "odpowiedz": "odpowiedzi", "odpowiedz_pod_artykulem": "odpowiedzi",
              "restack": "restacki", "polubienie": "polubienia", "obserwacja": "obserwacje",
@@ -177,10 +188,12 @@ def _liczniki(s: dict) -> dict[str, int]:
     odw = s.get("odwiedziny_profilu")
     if odw is None:
         odw = inter.get("Profile visit", 0)
+    artykul = s.get("rodzaj") == "artykul"
     return {"wyswietlenia": int(s.get("wyswietlenia") or 0), "obcy": int(odb.get("Unconnected") or 0),
             "odwiedziny_profilu": int(odw or 0), "polubienia": int(s.get("polubienia") or 0),
             "odpowiedzi": int(s.get("odpowiedzi") or 0), "restacki": int(s.get("restacki") or 0),
-            "subskrypcje": int(s.get("subskrypcje") or 0), "obserwacje": int(s.get("obserwacje") or 0)}
+            "zapisy_przypisane": int(s.get("zapisy_darmowe") or 0) + int(s.get("zapisy_platne") or 0),
+            "zapisy_okno_artykulu": int(s.get("subskrypcje") or 0) if artykul else 0}
 
 
 def tresci_na_doby(statystyki: list[dict]) -> dict[str, dict]:
@@ -209,7 +222,7 @@ def tresci_na_doby(statystyki: list[dict]) -> dict[str, dict]:
                 if v[k] > dotad[k]:
                     przyrost = v[k] - dotad[k]
                     out[d][k] += przyrost
-                    if k in ("wyswietlenia", "subskrypcje", "obserwacje"):
+                    if k in ("wyswietlenia", "zapisy_przypisane"):
                         out[d]["%s_%s" % (k, rodzaj)] += przyrost
                     dotad[k] = v[k]
     return {d: dict(c) for d, c in out.items()}
@@ -254,19 +267,63 @@ def zrodla_zapisow(zrodla: list[dict]) -> dict[str, Any]:
         ruch = [{"zrodlo": r.get("source"), "kategoria": r.get("source_category"),
                  "wyswietlenia": r.get("views"), "osoby": r.get("users"), "zapisy": r.get("free_signup")}
                 for r in (w["ruch"].get("rows") or []) if isinstance(r, dict)]
+        def _ile(wezel):
+            return next((m.get("total") for m in wezel.get("metrics") or []
+                         if isinstance(m, dict) and m.get("name") == "Subscribers"), None)
         zapisy = []
         for z in ((w.get("zapisy") or {}).get("sourceMetrics") or []):
             if not isinstance(z, dict):
                 continue
-            ile = next((m.get("total") for m in z.get("metrics") or []
-                        if isinstance(m, dict) and m.get("name") == "Subscribers"), None)
+            # DZIECI ZRODLA: „Substack" dzieli sie na „Notes" (zapisy przypisane
+            # notkom) i „Other" (profil, rekomendacje, wyszukiwarka, aplikacja).
+            dzieci = [{"zrodlo": c.get("sourceName") or c.get("source"), "zapisy": _ile(c)}
+                      for c in z.get("children") or [] if isinstance(c, dict) and _ile(c)]
             zapisy.append({"zrodlo": z.get("sourceName") or z.get("source"), "kategoria": z.get("category"),
-                           "zapisy": ile})
+                           "zapisy": _ile(z), "w_tym": dzieci})
         pods = {k: v for k, v in (w.get("podsumowanie") or {}).items() if k != "zapisy_per_notka"}
         pods["tresci_z_zapisami"] = len((w.get("podsumowanie") or {}).get("zapisy_per_notka") or {})
         return {"kiedy": w.get("kiedy"), "okno": w.get("okno"), "ruch": ruch, "zapisy": zapisy,
                 "podsumowanie": pods}
     return {}
+
+
+def przypisane_tresciom(zrodla: list[dict], dziennik: list[dict], statystyki: list[dict]) -> dict[str, Any]:
+    """Zapisy, ktore Substack przypisal konkretnym pozycjom (panel zrodel), wg rodzaju.
+
+    Kazdy odczyt panelu to okno 30 dni, wiec pozycja liczy sie MAKSIMUM po
+    odczytach (tak samo jak `statystyki.zapisy_przypisane`). Rodzaj z dziennika
+    bota (restack, notka, komentarz…); pozycji spoza dziennika bot nie
+    wystawil — to np. reczne notki wlasciciela. Tylko numery tresci i liczby.
+    """
+    naj: dict[str, int] = {}
+    for w in zrodla:
+        for k, v in ((w.get("podsumowanie") or {}).get("zapisy_per_notka") or {}).items():
+            try:
+                naj[str(k)] = max(naj.get(str(k), 0), int(v))
+            except (TypeError, ValueError):
+                continue
+    # RODZAJ Z DZIENNIKA BOTA; pozycja, ktora statystyki profilu znaja, a bot
+    # jej nie wystawil, dostaje dopisek `_spoza_dziennika` (reczne notki
+    # wlasciciela, tresci sprzed dziennika) — inaczej wlasciciel i bot
+    # zlewaja sie w jedno „notka".
+    rodzaj_id: dict[str, str] = {}
+    for s in statystyki:
+        if s.get("id"):
+            rodzaj_id.setdefault(str(s["id"]), "%s_spoza_dziennika" % (s.get("rodzaj") or "tresc"))
+    for w in dziennik:
+        for pole in ("id", "nasz_id"):
+            if w.get(pole) and w.get("rodzaj"):
+                rodzaj_id[str(w[pole])] = str(w["rodzaj"])
+    wg: Counter = Counter()
+    for ident, ile in naj.items():
+        wg[rodzaj_id.get(ident) or "spoza_dziennika"] += ile
+    # OSTATNIE OKNO (30 dni) osobno: „razem" to wszystkie odczyty od poczatku,
+    # a etykieta „30 dni" w raporcie musi znaczyc 30 dni.
+    ostatnie = next(((w.get("podsumowanie") or {}).get("zapisy_per_notka") or {}
+                     for w in reversed(zrodla) if not w.get("blad") and w.get("podsumowanie")), {})
+    return {"razem": sum(naj.values()), "pozycji": len(naj), "wg_rodzaju": dict(wg.most_common()),
+            "ostatnie_okno": sum(int(v) for v in ostatnie.values() if str(v).isdigit()),
+            "najlepsze": sorted(naj.items(), key=lambda kv: -kv[1])[:10]}
 
 
 def podsumuj_konto(k: dict) -> dict[str, dict]:
@@ -316,8 +373,11 @@ def zbierz() -> dict[str, int]:
         # dopisac pomiar do wczorajszej tresci.
         polaczone = {**stare, **nowe}
         _zapisz_json(katalog() / ("dni_%s.json" % k["konto"]), polaczone)
+        zrodla = _jsonl(Path(k["dane"]) / "zrodla.jsonl")
         _zapisz_json(katalog() / ("zrodla_%s.json" % k["konto"]),
-                     zrodla_zapisow(_jsonl(Path(k["dane"]) / "zrodla.jsonl")))
+                     dict(zrodla_zapisow(zrodla),
+                          przypisane=przypisane_tresciom(zrodla, _jsonl(Path(k["dane"]) / "dziennik.jsonl"),
+                                                         _jsonl(Path(k["dane"]) / "statystyki.jsonl"))))
         wynik[k["konto"]] = len(polaczone)
     wynik["zmiany_nowe"] = zasiej() + sum(importuj_reflog(k) for k in konta()) + importuj_aktywacje()
     return wynik
@@ -447,7 +507,8 @@ def tempo(dni: dict[str, dict], do: str, ile: int = 7) -> dict[str, Any]:
     wynik = {"dni": ile, "dni_z_pomiarem": pokrycie, "subskrybenci_netto": subs, "obserwujacy_netto": obs,
              "nowi_subskrybenci": suma("nowi_subskrybenci"), "nowi_obserwujacy": suma("nowi_obserwujacy"),
              "wyswietlenia": wysw, "obcy": suma("obcy"), "odwiedziny_profilu": suma("odwiedziny_profilu"),
-             "zapisy_z_tresci": suma("subskrypcje"), "obserwacje_z_tresci": suma("obserwacje"),
+             "zapisy_przypisane_karty": suma("zapisy_przypisane"),
+             "zapisy_okno_artykulu": suma("zapisy_okno_artykulu"),
              "koszt_usd": round(koszt, 2)}
     wynik["subskr_na_1000_wysw"] = round(1000 * subs / wysw, 2) if wysw else None
     wynik["obcy_udzial"] = round(suma("obcy") / wysw, 3) if wysw else None
@@ -515,6 +576,13 @@ def _f(v: Any, znak: bool = False) -> str:
     return ("%+d" % v) if (znak and isinstance(v, int)) else str(v)
 
 
+def _zrodla(konto: str) -> dict[str, Any]:
+    try:
+        return json.loads((katalog() / ("zrodla_%s.json" % konto)).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
 def raport(dni_raportu: int = 14, dzis: str | None = None) -> str:
     dzis = dzis or datetime.now(timezone.utc).date().isoformat()
     wczoraj = (_d(dzis) - timedelta(days=1)).isoformat()
@@ -540,8 +608,8 @@ def raport(dni_raportu: int = 14, dzis: str | None = None) -> str:
         ("wyswietlenia 7 dni (udzial obcych)", lambda n: "%s (%s)" % (_f(t7[n]["wyswietlenia"]),
                                                                      _f(t7[n]["obcy_udzial"]))),
         ("odwiedziny profilu 7 dni", lambda n: _f(t7[n]["odwiedziny_profilu"])),
-        ("zapisy / obserwacje z tresci 7 dni", lambda n: "%s / %s" % (_f(t7[n]["zapisy_z_tresci"]),
-                                                                     _f(t7[n]["obserwacje_z_tresci"]))),
+        ("zapisy przypisane pozycjom (panel Substacka, 30 dni)",
+         lambda n: _f((_zrodla(n).get("przypisane") or {}).get("ostatnie_okno"))),
         ("subskrybenci na 1000 wyswietlen (28 dni)", lambda n: _f(t28[n]["subskr_na_1000_wysw"])),
         ("koszt 7 dni USD (na subskrybenta)", lambda n: "%s (%s)" % (_f(t7[n]["koszt_usd"]),
                                                                      _f(t7[n]["koszt_na_subskr"]))),
@@ -565,29 +633,33 @@ def raport(dni_raportu: int = 14, dzis: str | None = None) -> str:
                 _f(w.get("obcy")), _f(w.get("odwiedziny_profilu")), _f(w.get("dz_notki")),
                 _f(w.get("dz_komentarze")), _f(w.get("koszt_usd"))))
         L.append("| %s | %s |" % (d, " | ".join(kom)))
-    L += ["", "## Skad przychodza zapisy (Substack, okno 30 dni)", ""]
+    L += ["", "## Skad przychodza subskrybenci", "",
+          "Panel Substacka (okno 30 dni) i zapisy przypisane konkretnym pozycjom. „Okno doby po artykule\"",
+          "to KAZDY zapis w dobie po wysylce, skadkolwiek przyszedl — nie przypisanie i nie sumuje sie z reszta.", ""]
     for n in nazwy:
-        try:
-            z = json.loads((katalog() / ("zrodla_%s.json" % n)).read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            z = {}
+        z = _zrodla(n)
         zap = sorted((x for x in z.get("zapisy") or [] if x.get("zapisy")), key=lambda x: -(x["zapisy"] or 0))
         ruch = sorted((x for x in z.get("ruch") or [] if x.get("wyswietlenia")), key=lambda x: -(x["wyswietlenia"] or 0))
-        L.append("- **%s** — zapisy: %s; ruch: %s; tresci z zapisami: %s" % (
-            n, ", ".join("%s %s" % (x["zrodlo"], x["zapisy"]) for x in zap[:5]) or "—",
-            ", ".join("%s %s" % (x["zrodlo"], x["wyswietlenia"]) for x in ruch[:4]) or "—",
-            (z.get("podsumowanie") or {}).get("tresci_z_zapisami", "—")))
-    L += ["", "## Co przynosi wyswietlenia, zapisy i obserwacje (28 dni, wg rodzaju tresci)", ""]
+        razem = sum(int(x["zapisy"] or 0) for x in zap)
+        prz = z.get("przypisane") or {}
+        L.append("- **%s** — panel: %d zapisow = %s" % (n, razem, ", ".join(
+            "%s %s%s" % (x["zrodlo"], x["zapisy"], (" (" + ", ".join("%s %s" % (c["zrodlo"], c["zapisy"])
+                                                                   for c in x.get("w_tym") or []) + ")")
+                         if x.get("w_tym") else "") for x in zap) or "—"))
+        L.append("  - przypisane pozycjom (wszystkie odczyty): %s zapisow przy %s pozycjach — %s" % (
+            _f(prz.get("razem")), _f(prz.get("pozycji")),
+            ", ".join("%s %s" % (r, v) for r, v in (prz.get("wg_rodzaju") or {}).items()) or "—"))
+        L.append("  - okno doby po artykule (28 dni): %s; ruch: %s" % (
+            _f(t28[n]["zapisy_okno_artykulu"]),
+            ", ".join("%s %s" % (x["zrodlo"], x["wyswietlenia"]) for x in ruch[:4]) or "—"))
+    L += ["", "## Wyswietlenia wg rodzaju tresci (28 dni)", ""]
     for n in nazwy:
         daty = okno({}, wczoraj, 28)
         rodzaje = sorted({k.split("_", 1)[1] for d in daty for k in (dane[n].get(d) or {})
                           if k.startswith("wyswietlenia_")})
-        czesci = []
-        for r in rodzaje:
-            s_ = lambda pole: sum(int((dane[n].get(d) or {}).get("%s_%s" % (pole, r)) or 0) for d in daty)  # noqa: E731
-            czesci.append("%s: %d wysw., %d zapisow, %d obserwacji" % (r, s_("wyswietlenia"), s_("subskrypcje"),
-                                                                       s_("obserwacje")))
-        L.append("- **%s** — %s" % (n, "; ".join(czesci) or "—"))
+        L.append("- **%s** — %s" % (n, "; ".join(
+            "%s %d" % (r, sum(int((dane[n].get(d) or {}).get("wyswietlenia_" + r) or 0) for d in daty))
+            for r in rodzaje) or "—"))
     L += ["", "## Zmiany i ich skutek", "",
           "Zmiany nazwane (rejestr, eksperymenty, PR-y NIA, wpisy reczne), zgrupowane po dobie — zmian z tej",
           "samej doby nie da sie rozdzielic. Srednie dobowe 14 dni przed i po; RR = roznica roznic wzgledem",
@@ -623,7 +695,10 @@ def raport(dni_raportu: int = 14, dzis: str | None = None) -> str:
           "- Kazde konto ma drugie na liscie subskrybentow (+1 w liczniku); wzajemne dzialania botow to nie wzrost.",
           "- Koszt NIA sprzed 27.09 jest zawyzony (nowe modele liczone po podwojnej stawce, wiersze nieprzeliczone).",
           "- Nowi obserwujacy/subskrybenci liczeni z list czytelnikow (pierwsze pojawienie sie uchwytu).",
-          "- Przyrosty tresci przypisane do doby, w ktorej Substack je policzyl (`zmierzone`)."]
+          "- Przyrosty tresci przypisane do doby, w ktorej Substack je policzyl (`zmierzone`).",
+          "- Przypisanie zapisow tylko z panelu zrodel i kart notek. `signups_within_1_day` artykulu to okno",
+          "  czasowe (kazdy zapis w dobie po wysylce) — pierwsza wersja raportu wziela je za przypisanie.",
+          "- Obserwujacy nie maja przypisania do tresci (Substack go nie podaje); widac tylko wzrost konta."]
     return "\n".join(L) + "\n"
 
 

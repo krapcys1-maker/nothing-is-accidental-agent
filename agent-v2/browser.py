@@ -1894,9 +1894,17 @@ def _artykuly_z_panelu(page, baza: str) -> dict[str, dict[str, Any]]:
                                + int(post.get("child_comment_count") or 0)),
                 "polubienia": int(post.get("reaction_count") or 0),
                 "restacki": restacki.get(ident, 0),
-                # ZAPISY, NIE PLATNE SUBSKRYPCJE. `signups_within_1_day` to
-                # nowi czytelnicy przypisani do TEGO wpisu — jedyna liczba
-                # w calym API, ktora wiaze subskrybenta z konkretna trescia.
+                # OKNO CZASOWE, NIE PRZYPISANIE. `signups_within_1_day` liczy
+                # KAZDEGO, kto zapisal sie w ciagu doby po wyslaniu wpisu,
+                # skadkolwiek przyszedl — ustalone pomiarem 2 wrzesnia 2026
+                # (patrz `zapisz_zrodla_ruchu`). Stal tu komentarz, ze to
+                # „jedyna liczba w API, ktora wiaze subskrybenta z trescia",
+                # i 28.09 obserwatorium w to uwierzylo: ogloslo „zapisy daja
+                # artykuly, notki 0" — odwrotnie, niz jest (zapisy przypisane
+                # pozycjom to glownie restacki i notki). Nazwa pola zostaje dla
+                # zgodnosci ze starymi rekordami; przypisanie jest w panelu
+                # zrodel (`zapisy_per_notka`) i na kartach notek
+                # (`statystyki` -> `zapisy_darmowe`).
                 "subskrypcje": licz("signups_within_1_day"),
                 "klikniecia_w_link": int(s.get("clicks") or 0),
                 # POCZTA. Artykul, inaczej niz notka, jest tez wysylka — i to

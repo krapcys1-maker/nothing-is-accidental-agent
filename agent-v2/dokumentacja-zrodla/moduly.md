@@ -216,7 +216,7 @@
 
 ### `browser.py` — cała styczność z Substackiem; nie woła modelu
 
-5493 wierszy, 104 funkcji na poziomie modułu, 0 klas
+5501 wierszy, 104 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -700,7 +700,7 @@
 
 ### `obserwatorium.py` — obserwatorium obu kont — dane dnia (wzrost, lejek, działania, koszt), dziennik zmian z reflogu i rejestru, tempo wzrostu i skutek zmian
 
-672 wierszy, 29 funkcji na poziomie modułu, 0 klas
+747 wierszy, 31 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -715,6 +715,7 @@
 | `dzialania_na_doby(dziennik, siostra)` | Udane dzialania bota na dobe, plus ile z nich trafilo w siostre. |
 | `koszt_na_doby(baza)` | Koszt przebiegow produkcyjnych na dobe. `immutable=1`: zadnych plikow obok bazy. |
 | `zrodla_zapisow(zrodla)` | Ostatni odczyt „skad przychodza czytelnicy i zapisy" (okno Substacka, 30 dni). |
+| `przypisane_tresciom(zrodla, dziennik, statystyki)` | Zapisy, ktore Substack przypisal konkretnym pozycjom (panel zrodel), wg rodzaju. |
 | `podsumuj_konto(k)` | Wszystkie doby konta: stan, nowi, przyrosty tresci, dzialania, koszt. |
 | `_zapisz_json(p, dane)` *(wewn.)* | — |
 | `wczytaj_dni(konto)` | — |
@@ -731,6 +732,7 @@
 | `_srednia_dobowa(dni, daty, pole)` *(wewn.)* | — |
 | `skutek(dni, dni_kontrola, kiedy, ile, dzis)` | Przed/po zmianie (srednie dobowe) i roznica roznic wzgledem drugiego konta. |
 | `_f(v, znak)` *(wewn.)* | — |
+| `_zrodla(konto)` *(wewn.)* | — |
 | `raport(dni_raportu, dzis)` | — |
 | `main(argv)` | — |
 

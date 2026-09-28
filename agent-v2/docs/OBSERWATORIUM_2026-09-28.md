@@ -95,15 +95,34 @@ Wyświetlenia wzrosły z ok. 50–60 dziennie (14–21.09) do ok. 90–130 (22�
 Zapisy przychodzą głównie ze środka Substacka (13 z 21 „Substack", 8 „Direct
 to App").
 
-**Najważniejsze na start: zapisy dają artykuły, zasięg dają notki.** W 28
-dniach:
-- artykuły: 78 wyświetleń, **11 zapisów** przypisanych przez Substack;
-- notki: 3860 wyświetleń, **0 zapisów** i 0 obserwacji przypisanych.
+**Skąd są subskrybenci — po korekcie z 28.09.** Panel Substacka (30 dni,
+28.08–27.09) pokazuje 21 zapisów:
+- **Substack 13**, z tego **7 przypisanych notkom** i 6 z innych miejsc
+  (profil, rekomendacje, wyszukiwarka, aplikacja);
+- **Direct to App 8**.
 
-Drugie konto pokazuje ten sam wzór. To potwierdza pomiar z 06.09 („notki dały 0
-subskrypcji, wszystkie z artykułów") i jest pierwszym pytaniem badawczym (B1):
-czy notka działa pośrednio (profil → artykuł → zapis), czy artykuły trzeba
-pisać częściej.
+Zapisy przypisane konkretnym pozycjom (wszystkie odczyty, maksimum na pozycję)
+to 10 zapisów przy 6 pozycjach. Karty pozycji mówią: **5 z restacków, 3 z
+notek**, 1 spoza dziennika bota. Stan konta w tym czasie: 7 → 27.
+
+> **Korekta.** Pierwsza wersja tego dokumentu (i raportu) podała odwrotnie:
+> „zapisy dają artykuły, notki 0". Błąd przyrządu:
+> - za „zapisy z artykułu" wzięte zostało `signups_within_1_day`, czyli każdy
+>   zapis w dobie po wysłaniu artykułu, skądkolwiek przyszedł (16 przy 5
+>   artykułach);
+> - przypisania do notek (karta „new subscribers", pole `zapisy_darmowe`)
+>   obserwatorium nie czytało.
+>
+> Tę samą pułapkę projekt opisał 02.09 i 06.09, a komentarz w `browser.py`
+> wciąż mówił coś przeciwnego (poprawiony). Właściciel zauważył, że liczby się
+> nie sumują: „z notek 0, to skąd reszta subskrybentów?".
+
+Drugie konto pokazuje ten sam kierunek: zapisy przypisane pozycjom to głównie
+restacki. Pierwsze pytanie badawcze (B1) brzmi więc:
+- dlaczego restack (nasz komentarz do cudzego wpisu) zamienia czytelnika
+  w subskrybenta lepiej niż własna notka,
+- co kryje się za „Direct to App" i „Other", których nie da się przypisać
+  treści.
 
 ## Badania: jak rośnie konto na Substacku
 
