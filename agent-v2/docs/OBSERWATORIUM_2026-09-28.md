@@ -219,9 +219,10 @@ Każdą liczbę zestawiłem z drugim, niezależnym źródłem. Skrypty tylko czy
   je najwyżej tytuł. Substack i tak nie przypisuje artykułom zapisów w panelu
   źródeł. Poprawka w bocie czeka, bo właściciel zdecydował: „artykuły na razie
   zostaw".
-- **Pomiar komentarzy w drugim koncie.** To fork z tym samym limitem, więc
-  komentarze tam też nie są mierzone. Poprawka jest kandydatem do
-  przeniesienia, decyzja należy do właściciela.
+**Drugie konto (fork z tym samym kodem pomiaru):** ten sam limit i tam
+zablokował pomiar komentarzy. Poprawkę przeniesiono 28.09 na polecenie
+właściciela, osobnym PR-em w jego repozytorium. Żywy pomiar po wdrożeniu
+mierzy już komentarze i odpowiedzi.
 
 ## Badania: jak rośnie konto na Substacku
 
