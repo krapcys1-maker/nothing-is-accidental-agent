@@ -165,9 +165,12 @@ def _panel(kiedy, od, razem, zrodla_zapisow):
 
 _zr = [_panel("2026-09-25T10:00:00+00:00", "2026-08-26", 17, [("Substack", 12), ("Direct to App", 8)]),
        _panel("2026-09-27T23:46:00+00:00", "2026-08-28", 21, [("Substack", 13), ("Direct to App", 8)])]
+_zr[0]["podsumowanie"] = {"zapisy_z_ruchu": 20}
+_zr[1]["podsumowanie"] = {"zapisy_z_ruchu": 21}
 _zg = obs.zgodnosc_panelu(_zr)
-sprawdz("panel: odczyt z „razem\" 17 przy sumie zrodel 20 wykryty, zgodny nie",
-        _zg == {"odczytow": 2, "niezgodnych": 1, "doby": ["2026-09-25"]}, _zg)
+sprawdz("panel: odczyt z „razem\" 17 przy sumie zrodel 20 wykryty, zgodny nie; ruch rowny sumie w obu",
+        _zg == {"odczytow": 2, "niezgodnych": 1, "doby": ["2026-09-25"],
+                "ruch_rowny_sumie": 2, "ruch_odczytow": 2}, _zg)
 _wz = [{"kiedy": "2026-08-27T22:00:00+00:00", "subskrybenci": 6},
        {"kiedy": "2026-09-10T12:00:00+00:00", "subskrybenci": 15},
        {"kiedy": "2026-09-27T23:45:00+00:00", "subskrybenci": 27},

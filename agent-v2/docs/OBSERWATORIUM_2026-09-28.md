@@ -69,9 +69,17 @@ Brakowało trzech rzeczy:
 ## Definicje
 
 - **Netto** — zmiana stanu doba do doby (tylko między sąsiednimi dobami z pomiarem).
-- **Nowi (brutto)** — uchwyt pojawił się pierwszy raz. Churn = nowi − netto.
-- **Tempo** — % subskrybentów na tydzień w oknie 28 dni, od ostatniego stanu
-  przed oknem (albo od pierwszego pomiaru, gdy ruszyły w środku okna).
+- **Nowi na profilu** — uchwyt pojawił się pierwszy raz na liście profilu.
+  To **dolna granica**, nie zapisy brutto: listy profilu są niepełne (28.09:
+  24 z 27 subskrybentów), więc odejść z nich nie liczymy (poprawione 28.09 —
+  wcześniej stało tu „churn = nowi − netto"). Zapisy brutto daje panel źródeł.
+- **Tempo** — subskrybenci na tydzień w oknie 28 dni (od ostatniego stanu przed
+  oknem albo od pierwszego pomiaru, gdy ruszyły w środku okna) i ten sam
+  przyrost jako % średniego poziomu w oknie.
+- **Wyświetlenia (główny licznik)** — notki i artykuły, mierzone w każdym
+  przebiegu. Komentarze i odpowiedzi osobno, bo bot mierzy je z przerwami.
+- **Doba z pomiarem** — od pierwszego do ostatniego odczytu treści; doby
+  wcześniejsze to brak danych, nie zera (średnie „przed zmianą").
 - **Obcy** — widzowie spoza obserwujących i subskrybentów („Unconnected").
   Ich udział mówi, ile zasięgu to nowi ludzie.
 - **Subskrybenci na 1000 wyświetleń** — konwersja całego konta w oknie.
@@ -91,7 +99,7 @@ konta:
 - 655 wyświetleń w 7 dni, z czego 42% od obcych;
 - 4,5 subskrybenta na 1000 wyświetleń (28 dni).
 
-Wyświetlenia wzrosły z ok. 50–60 dziennie (14–21.09) do ok. 90–130 (22–27.09).
+Wyświetlenia wzrosły z ok. 50–60 dziennie (14–21.09) do ok. 70–130 (22–27.09).
 Zapisy przychodzą głównie ze środka Substacka (13 z 21 „Substack", 8 „Direct
 to App").
 
@@ -158,6 +166,62 @@ Czyli:
     i dat pojedynczych zapisów;
   - historia sprzed pierwszego odczytu (NIE 02.09, drugie konto 07.09) jest
     tylko w oknach 30 dni.
+
+## Audyt danych — 28.09
+
+Pytanie właściciela: „sprawdź wszystko dokładnie, czy się zgadzają dane".
+Każdą liczbę zestawiłem z drugim, niezależnym źródłem. Skrypty tylko czytają
+(`robocze/audyt_*.py`, poza repozytorium).
+
+**Zgadza się:**
+
+| sprawdzenie | wynik |
+|---|---|
+| pliki botów: składnia, czas UTC, luki dób, puste wiersze | bez błędów |
+| gałąź „Notes" panelu = suma zapisów przypisanych notkom | zgodne |
+| obserwatorium = surowe pliki (przeliczenie od zera) | zgodne |
+| notki z numerem w dzienniku bota = notki zmierzone w przebiegu | 162 z 162 |
+| numer restacku to nasza notka (bot szuka go na własnym profilu po treści) | tak |
+| zapisy z tabeli ruchu = suma źródeł panelu (dwa różne endpointy) | we wszystkich odczytach obu kont |
+| działania do siostry w 7 dniach | 24 = 16 polubień + 8 komentarzy |
+
+**Nie zgadzało się — naprawione i wdrożone 28.09 (`f9b6f2a`, `3acddc7` i następne):**
+
+| błąd | skala | poprawka |
+|---|---|---|
+| komentarze i odpowiedzi bez pomiaru: limit 60 pozycji zjadały notki | od 04.09 zero pomiarów | własny budżet: 60 najnowszych z 3 dób; żywy pomiar 28.09 06:30: 24 komentarze i 3 odpowiedzi (wcześniej 0) |
+| numer odpowiedzi brany z adresu wątku (`gdzie`), czyli numer wątku, nie naszej odpowiedzi | 44 odpowiedzi: 12× nasza notka mierzona drugi raz (54 wyświetlenia podwójnie), 32× cudzy wpis (2 zmierzone, 44 wyświetlenia) | tylko własny numer; w obserwatorium jedna pozycja = jeden szereg, cudze numery odrzucone |
+| koszt: wywołania bez przebiegu wypadały z sumy | 189 wywołań, 4,53 USD (02–13.09) | koszt w trzech częściach: produkcja / test / bez przebiegu |
+| średnia „przed zmianą" liczyła doby bez pomiaru jako zera | skutek zmian z pierwszych dni pomiarów wychodził z kosmosu (np. „20 → 236 wyświetleń/dobę") | „za mało danych przed (n dni)"; różnica różnic tylko przy pełnych oknach obu kont |
+| `subskrybenci_darmowi` brane za liczbę | to próg (1 albo 10) | usunięte ze stanu konta |
+| „nowi" z list profilu jako zapisy brutto i podstawa churnu | listy niepełne: 24 z 27 subskrybentów, 36 z 41 obserwujących | `nowi_na_profilu_*` = dolna granica, bez churnu |
+| główny licznik wyświetleń mieszał notki z komentarzami mierzonymi z przerwami | definicja zmieniała się w środku okna | główne liczniki = notki i artykuły, komentarze osobno |
+
+**Nie zgadza się po stronie Substacka — pokazujemy, nie poprawiamy:**
+
+- Pole „razem" panelu źródeł (`totals`) różni się od sumy źródeł w 8
+  odczytach (25.09 i 28.09): 18 zamiast 21, 20 zamiast 21. Tabela ruchu,
+  czyli inny endpoint, zgadza się z sumą źródeł zawsze. Za liczbę zapisów
+  bierzemy więc sumę źródeł, a raport zaznacza odczyty z odstającym „razem".
+- Karta „new subscribers" przy pozycji jest aktualna tylko, dopóki bot ją
+  mierzy. Przykład: notka 320809275 ma kartę 0 (ostatni pomiar 28.08), a panel
+  pokazuje 1 zapis (od 02.09). Przypisanie bierzemy z panelu.
+
+**Jeszcze nie da się sprawdzić:**
+
+- **Zapisy brutto wobec przyrostu licznika.** Chodzi o zapisy z panelu (okno
+  30 dni) wobec przyrostu licznika w tym samym oknie. Licznik subskrybentów
+  mierzymy od 31.08, a okno panelu zaczyna się wcześniej. Porównanie ruszy
+  samo od 30.09 i da szacunek odejść. Drugie konto dołączy około tydzień
+  później.
+- **Numery artykułów w dzienniku.** Dziennik bota nie zapisuje numerów
+  artykułów (statystyki mają numer z panelu wydawcy), więc z dziennikiem łączy
+  je najwyżej tytuł. Substack i tak nie przypisuje artykułom zapisów w panelu
+  źródeł. Poprawka w bocie czeka, bo właściciel zdecydował: „artykuły na razie
+  zostaw".
+- **Pomiar komentarzy w drugim koncie.** To fork z tym samym limitem, więc
+  komentarze tam też nie są mierzone. Poprawka jest kandydatem do
+  przeniesienia, decyzja należy do właściciela.
 
 ## Badania: jak rośnie konto na Substacku
 

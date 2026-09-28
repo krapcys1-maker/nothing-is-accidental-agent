@@ -473,8 +473,11 @@ def zgodnosc_panelu(zrodla: list[dict]) -> dict[str, Any]:
 
     25.09.2026 siedem odczytow NIE mialo „razem" 17/18 przy sumie zrodel 20/21 —
     niezgodnosc wewnatrz jednej odpowiedzi Substacka. Nie poprawiamy, pokazujemy.
+    TRZECIA LICZBA ROZSTRZYGA: zapisy z tabeli RUCHU (`free_signup`, inny endpoint)
+    rownaly sie SUMIE ZRODEL we wszystkich niezgodnych odczytach — odstaje „razem",
+    wiec raport liczy zapisy jako sume zrodel.
     """
-    odczyty = niezgodne = 0
+    odczyty = niezgodne = ruch_zgodny = ruch_znany = 0
     doby: set[str] = set()
     for w in zrodla:
         if w.get("blad") or not isinstance(w.get("zapisy"), dict) or _razem_panelu(w) is None:
@@ -483,7 +486,12 @@ def zgodnosc_panelu(zrodla: list[dict]) -> dict[str, Any]:
         if _razem_panelu(w) != _suma_zrodel(w):
             niezgodne += 1
             doby.add(_dzien(w.get("kiedy")))
-    return {"odczytow": odczyty, "niezgodnych": niezgodne, "doby": sorted(d for d in doby if d)}
+        z_ruchu = (w.get("podsumowanie") or {}).get("zapisy_z_ruchu")
+        if isinstance(z_ruchu, int):
+            ruch_znany += 1
+            ruch_zgodny += z_ruchu == _suma_zrodel(w)
+    return {"odczytow": odczyty, "niezgodnych": niezgodne, "doby": sorted(d for d in doby if d),
+            "ruch_rowny_sumie": ruch_zgodny, "ruch_odczytow": ruch_znany}
 
 
 def brutto_netto(zrodla: list[dict], wzrost: list[dict]) -> dict[str, Any]:
@@ -969,10 +977,12 @@ def raport(dni_raportu: int = 14, dzis: str | None = None) -> str:
         return "brutto %s, netto %s, roznica %s (okno %s..%s)" % (b["brutto"], _f(b["netto"], True),
                                                                  _f(b["roznica"], True), b["okno_od"], b["okno_do"])
     jakosc_wiersze = [
-        ("panel zrodel: odczyty, w ktorych „razem\" != suma zrodel", lambda n: "%s z %s%s" % (
+        ("panel zrodel: odczyty, w ktorych „razem\" != suma zrodel; tabela ruchu = suma zrodel",
+         lambda n: "%s z %s%s; %s z %s" % (
             _f((jak[n].get("panel") or {}).get("niezgodnych")), _f((jak[n].get("panel") or {}).get("odczytow")),
             (" (%s)" % ", ".join((jak[n].get("panel") or {}).get("doby") or []))
-            if (jak[n].get("panel") or {}).get("doby") else "")),
+            if (jak[n].get("panel") or {}).get("doby") else "",
+            _f((jak[n].get("panel") or {}).get("ruch_rowny_sumie")), _f((jak[n].get("panel") or {}).get("ruch_odczytow")))),
         ("zapisy brutto z panelu vs przyrost licznika w tym samym oknie 30 dni", lambda n: _bn(jak[n])),
         ("listy profilu / licznik: obserwujacy; subskrybenci", lambda n: "%s / %s; %s / %s" % tuple(
             _f((jak[n].get("listy") or {}).get(p)) for p in ("obserwujacy_lista", "obserwujacy_licznik",
