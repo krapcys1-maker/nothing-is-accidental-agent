@@ -321,6 +321,36 @@ sprawdz("KONTRDOWOD: dluga forma zostaje w swoim oknie mimo E17",
         (stages.ZDANIE_O_DLUGOSCI % (config.NOTE_MIN_WORDS_DLUGA, config.NOTE_MAX_WORDS_DLUGA)) in _dluga
         and "SHORT note" not in _dluga)
 
+_dp = stages.dopnij_pytanie
+sprawdz("E18: brak pytania na koncu — kod dopina pytanie z `closing_question`",
+        _dp("Plain statement.", "Where does it land for you?") == "Plain statement.\n\nWhere does it land for you?")
+sprawdz("KONTRDOWOD: bez dubla i bez psucia",
+        _dp("Ends with a question?", "Other?") == "Ends with a question?"
+        and _dp("Ask: where does it land for you? Then stop.", "Where does it land  for you?")
+        == "Ask: where does it land for you? Then stop."
+        and _dp("Plain.", "not a question") == "Plain." and _dp("", "Q?") == "")
+PROMPTY.clear()
+_oryg = {n: getattr(stages, n) for n in ("zweryfikuj", "teksty_ostatnich_notek", "ostatnie_otwarcia")}
+try:
+    llm.call = lambda etap, system, user, **k: json.dumps(
+        {"note": "A plain statement " * 5 + "ends here.", "words": 16,
+         "closing_question": "Where does the checking land for you?"})
+    stages.zweryfikuj = lambda *a, **k: {"claims": [], "safe_to_post": True}
+    stages.teksty_ostatnich_notek = lambda ile=40: []
+    stages.ostatnie_otwarcia = lambda rodzaj="notka", ile=8: []
+    with contextlib.redirect_stdout(io.StringIO()):
+        _z = stages.note(None, 0, "CIEKAWOSTKA", {"fact": dict(FAKT)}, etap="note", wariant={"pytanie": True})
+        _bez = stages.note(None, 0, "CIEKAWOSTKA", {"fact": dict(FAKT)}, etap="note")
+finally:
+    llm.call = _oryg_call
+    for n, f in _oryg.items():
+        setattr(stages, n, f)
+sprawdz("prawdziwe note(): ramie on konczy sie pytaniem, nawet gdy model go nie postawil",
+        _z["candidates"][0]["note"].rstrip().endswith("Where does the checking land for you?"),
+        _z["candidates"][0]["note"][-80:])
+sprawdz("KONTRDOWOD: bez wariantu notka taka, jak napisal model",
+        _bez["candidates"][0]["note"].rstrip().endswith("ends here."), _bez["candidates"][0]["note"][-40:])
+
 WARIANTY = []
 
 

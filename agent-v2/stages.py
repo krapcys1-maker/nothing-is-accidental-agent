@@ -3747,7 +3747,24 @@ POLECENIE_PYTANIA = (
     "No fixed sentence length or paragraph count. End with one short, genuine "
     "question to the reader that grows out of the point, one they can answer "
     "from their own work, experience or view. Not a rhetorical question, not a "
-    "quiz, and not a request to follow, subscribe or comment.")
+    "quiz, and not a request to follow, subscribe or comment. Also return that "
+    "question, word for word, in an extra JSON field \"closing_question\".")
+
+
+def dopnij_pytanie(notka: str, pytanie: str) -> str:
+    """E18: notka konczy sie pytaniem — gdy model go nie postawil, dopina je KOD.
+
+    PROSBA W PROMPCIE NIE WYSTARCZYLA: zywy test 28.09.2026 na kopii danych —
+    z samym poleceniem 2 z 3 notek skonczylo sie stwierdzeniem, wiec ramiona
+    „on" i „off" nie roznilyby sie tym, co mierzymy. Model oddaje pytanie osobno
+    (`closing_question`); nie dopinamy, gdy notka juz konczy sie pytaniem, gdy
+    pytania brak albo gdy juz stoi w tekscie (bez dubla).
+    """
+    t = str(notka or "").rstrip()
+    p = " ".join(str(pytanie or "").split())
+    if not t or t.endswith("?") or not p.endswith("?") or p.lower() in " ".join(t.split()).lower():
+        return notka
+    return t + "\n\n" + p
 
 
 # E17 — KROTKA NOTKA. Samo okno 33-60 w zdaniu o planowanej dlugosci NIE
@@ -3964,6 +3981,10 @@ def note(
             # Bez tego pola po dwoch tygodniach mielibysmy dwie kolumny kosztow
             # i ZERO mozliwosci porownania, ktore notki cos przyniosly.
             data["model"] = config.MODEL_FOR.get(etap, "")
+            # E18 — pytanie na koncu dopina kod (`dopnij_pytanie`), PRZED
+            # liczeniem slow i sprawdzaniem faktow, wiec idzie przez te same bramki.
+            if (wariant or {}).get("pytanie") and isinstance(data.get("note"), str):
+                data["note"] = dopnij_pytanie(data["note"], data.get("closing_question") or "")
         except PRZERYWAJA:
             # `continue` jest tu odwrotem POZORNYM: po wyczerpanym budzecie
             # albo przy `KILL_SWITCH=true` zaden nastepny kandydat nie ma prawa
