@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **36 plików**, 41 347 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **36 plików**, 41 394 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -114,7 +114,7 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
 się testować bez przeglądarki i bez pieniędzy**. 198 zestawów
-testów, 5016 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+testów, 5021 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -182,7 +182,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-10922 wierszy, 176 funkcji na poziomie modułu, 0 klas
+10968 wierszy, 178 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -259,6 +259,8 @@ wiec nie da sie go rozjechac z kodem.
 | `odeslanie_donikad(tekst)` | Odeslanie w PIERWSZYM zdaniu do badania, ktorego czytelnik nie widzial. |
 | `konczy_ocena_materialu(tekst)` | Fraza, ktora OSTATNIE zdanie notki ocenia material („I'd want…"), albo pusto. |
 | `za_duzo_zargonu(tekst)` | Terminy insiderskie, gdy jest ich wiecej, niz notka udzwignie. Inaczej pusto. |
+| `dopnij_pytanie(notka, pytanie)` | E18: notka konczy sie pytaniem — gdy model go nie postawil, dopina je KOD. |
+| `z_krotka_notka(prompt, dol, gora)` | Prompt notki z poleceniem krotkiej notki (E17, ramie „on"). |
 | `z_pytaniem_na_koncu(prompt)` | Prompt notki z poleceniem zakonczenia pytaniem (E18, ramie „on"). |
 | `note(conn, run_id, note_type, evidence, link, note_form, etap, seria, wariant)` | Jedna notka danego typu i danej FORMY — do szuflady. |
 | `_host_adresu(url)` *(wewn.)* | — |
@@ -619,7 +621,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-3846 wierszy, 43 funkcji na poziomie modułu, 0 klas
+3847 wierszy, 43 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|

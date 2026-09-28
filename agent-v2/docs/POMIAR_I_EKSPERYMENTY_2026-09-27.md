@@ -153,6 +153,113 @@ poprawki (sformułowanie w prompcie, forma) rozstrzyga warstwa 1 plus strażnicy
     ocena ok. **29.10**. Próba to ok. 42 notki na ramię, co wykrywa różnicę
     rzędu ±40%.
   - Miary poboczne: ocena jakości, obalone fakty, koszt i czas.
+- **E12–E18 i E20 — pakiet zatwierdzony przez właściciela 28.09** („przygotuj
+  cały test, żeby to działało i żeby zbierało dane"). Każdy eksperyment ma
+  okno dat w `config.EKSPERYMENTY` i własne losowanie. Reguły poniżej są
+  zapisane przed startem.
+  - **E12 — ile restacków (29.09–9.11).** Tygodnie według planu ABBAAB: „on"
+    to 3–5 restacków dziennie (średnio 4), „off" 1–3 (średnio 2). Plan zamiast
+    losowania, bo sześć tygodni to za mało, żeby los wyrównał trend konta.
+    - Miary (tygodniowo): zapisy przypisane restackom, przyrost subskrybentów,
+      odwiedziny profilu. Ocena:
+      `python agent-v2/eksperymenty.py --tygodnie restacki_norma`, ok. **11.11**.
+    - Strażnicy: wykonanie planu restacków (alarm „wolumeny"), odmowy modelu,
+      ci sami autorzy, wyświetlenia na restack. Jeśli spadną o ponad połowę,
+      to znaczy, że więcej restacków się rozmywa.
+    - Reguła: w tygodniach „on" przyrost subskrybentów na dobę i zapisy
+      z restacków wyższe, a strażnicy w normie — norma zostaje 3–5. Jeśli
+      jedno z nich nie jest wyższe, wracamy do 1–2. Przy trzech tygodniach na
+      ramię widać tylko duże różnice, więc „brak różnicy" nie dowodzi, że jej
+      nie ma.
+  - **E13 — kto pisze zdanie restacka (29.09–26.10).** Opus (etap
+    `restack_opus`, wysiłek low) albo Flash, 50/50. Los po treści ocenianej
+    notki. Restack z notką jest notką na naszym profilu: 35 z 35 restacków od
+    1.09 ma numer i pomiar.
+    - Miara jak w E10: wyświetlenia po 72 h względem tła i odbiór na 100
+      wyświetleń. Ocena ok. **29.10**:
+      `python agent-v2/eksperymenty.py --rodzaj restack --pole eksperyment:pisarz_restackow --od 2026-09-29`.
+    - Próba: ok. 80 restacków (40 na ramię), co wykrywa różnicę rzędu ±40%.
+    - Koszt zmierzony na żywo 28.09 (kopia danych): ocena Opusem 0,018 USD,
+      Flashem 0,00023. Połowa ocen na Opusie to ok. 0,05–0,15 USD na dobę,
+      w tygodniach E12 „on" do ok. 0,3 USD. Sufit dzienny NIE to 5 USD.
+    - Reguła: dolna granica > 1,0 — restacki pisze Opus; górna < 1,0 albo brak
+      dowodu — zostaje Flash (tańszy).
+  - **E14 — gdzie komentarz (29.09–19.10).** W każdym przebiegu ta sama liczba
+    miejsc co dotąd (N pod artykułami + max(1, N//2) pod notkami), ale każde
+    miejsce losuje rodzaj celu. Miejsce, którego blok nie zapełni, przepada
+    tak jak dotąd.
+    - Miara: odsetek komentarzy z reakcją (polubienie, odpowiedź, restack) po
+      48 h oraz odpowiedzi na 100 komentarzy. Zasięgu komentarza Substack
+      prawie nie podaje: 78 ze 125 zmierzonych ma 0 wyświetleń.
+    - Ocena ok. **22.10**:
+      `python agent-v2/eksperymenty.py --rodzaj komentarz --pole eksperyment:cel_komentarza --od 2026-09-29`.
+    - Próba: ok. 150 komentarzy, co wykrywa różnicę rzędu 2× (np. 20% wobec 10%).
+    - Reguła: dolna granica > 1,0 — więcej miejsc idzie pod ten rodzaj celu
+      (np. N pod nim, N//2 pod drugim); w innym razie przydział bez zmian.
+    - Każdy komentarz ma od teraz w dzienniku pole `pod` (notka albo artykuł),
+      także poza eksperymentem.
+  - **E15 — świeży cel (20.10–9.11).** Na miejscach „on" brany jest
+    najświeższy wybrany cel młodszy niż 2 h, jeśli taki jest.
+    - Próg anty-bota się nie zmienia: artykuł musi mieć 1,5–15 h, notka
+      20–90 min. Pod artykułami ramię zwykle nie ma więc czego wziąć i E15
+      mierzy głównie notki. Od 20.09 tylko 7 z 62 komentarzy trafiło w cel
+      młodszy niż 2 h.
+    - Miara i reguła jak w E14, plus faktyczny wiek celu (`wiek_celu_min`).
+      Ocena ok. **12.11**.
+  - **E16 — pora notki (26.10–22.11).** Dni na przemian, więc w czterech
+    tygodniach każdy dzień tygodnia ma po 2 dni w każdym ramieniu.
+    - „on": notki dopiero od 3. przebiegu, czyli o 15:20, 17:30 i 19:40 ET.
+    - „off": jak dotąd, czyli 7:20, 13:00 i 15:20 ET.
+    - Miara i reguła jak w E10: `--pole eksperyment:pora_notki --od 2026-10-26`,
+      ocena ok. **26.11**. Zmiana czasu 1.11 dotyczy obu ramion jednakowo.
+  - **E17 — krótka notka (26.10–22.11).** „on": okno 33–60 słów zamiast
+    33–120. Forma długa i notka z przesłania nie biorą udziału.
+    - Miara jak w E10 oraz zaangażowanie. Strażnik: zrozumiałość. 3.09
+      właściciel nie zrozumiał notki ściśniętej do 64 słów.
+    - Reguła: dolna granica > 1,0 i zaangażowanie nie gorsze — krótkie okno;
+      w innym razie bez zmian.
+    - Żywy test 28.09 (kopia danych): przy samym oknie 33–60 DeepSeek napisał
+      135 słów. Dlatego ramię „on" dostaje polecenie wprost
+      (`stages.z_krotka_notka`), z zastrzeżeniem zrozumiałości. Po tej zmianie
+      wyszło 57, 75, 65 i 69 słów. Długość nadal jest tylko mierzona, nic nie
+      jest cięte.
+  - **E18 — pytanie na koniec (26.10–22.11).** „on": notka kończy się jednym
+    prawdziwym pytaniem do czytelnika (`stages.POLECENIE_PYTANIA`). Część
+    serii i notka z przesłania nie biorą udziału.
+    - Sprawdzenie, że zmiana zaszła: pole `konczy_pytaniem` w dzienniku
+      (w obu ramionach).
+    - Pytanie dopina KOD, nie prośba. Żywy test 28.09: z samym poleceniem 2 z 3
+      notek skończyły się stwierdzeniem. Teraz model oddaje pytanie osobnym
+      polem, a `stages.dopnij_pytanie` dopina je, gdy notka nie kończy się
+      pytaniem, jeszcze przed sprawdzaniem faktów. Po zmianie 2 z 2 notek
+      kończyły się pytaniem.
+    - Miara decyzji: odpowiedzi pod notką na 100 wyświetleń. Strażnik:
+      wyświetlenia względem tła.
+    - Reguła: dolna granica odpowiedzi > 1,0, a wyświetlenia bez szkody (dolna
+      granica > 0,9) — pytania zostają. W innym razie bez zmian.
+  - **E20 — rekomendacje (od 28.09, przed/po).** 28.09 o 18:10 UTC NIE
+    zaczęła polecać 4 publikacji o AI, pod którymi naprawdę komentuje, każda
+    z „dziesiątkami tysięcy" subskrybentów: AI as Normal Technology, Deep
+    (Learning) Focus, Jam with AI, AI Agents Simplified. Wszystkie 4 są
+    potwierdzone przez API panelu. Dodała je przeglądarka bota
+    (`robocze/e20_polec.py`), a opisy powstały z ich opisów i ostatnich
+    tekstów.
+    - Stan przed: polecamy 1 (publikacja dodana ręcznie 11.07), polecają nas
+      0, zapisy z rekomendacji 0. Stan po: polecamy 5.
+    - Przy okazji wyszło, że `browser.kogo_polecamy` był ślepy: API oddawało
+      `{rows}` zamiast listy, a `publication/self` nie podawało numeru.
+      Naprawione — źródłem jest teraz `recommendations/stats/from`.
+    - Miara: `rekomendacje.jsonl` (ilu polecamy, ilu poleca nas, zapisy
+      z rekomendacji — liczniki panelu), źródła zapisów w panelu, obserwatorium.
+    - Reguła: po 6 tygodniach (ok. **9.11**), gdy ktoś nas poleca albo przyszedł
+      choć jeden zapis — dokładamy 2–3 kolejne. Przy zerze zostaje jak jest.
+- **Zbieranie danych dołożone 28.09 razem z pakietem:**
+  - alarm `pomiar-statystyk`: pomiar treści, licznika i panelu oraz komentarzy
+    z dwóch dób;
+  - model i ramiona w dzienniku restacka;
+  - `pod` w dzienniku komentarza;
+  - `konczy_pytaniem` w dzienniku notki;
+  - `rekomendacje.jsonl`.
 - **ok. 25.10 — ocena E8/E9:**
   - przesłania kontra zwykłe notki (`--pole przeslanie`),
   - artykuły ze śledztw (zapisy przypisane, wyświetlenia),
