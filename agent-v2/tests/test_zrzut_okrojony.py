@@ -523,6 +523,54 @@ sprawdz("pomiar podaje licznik z tej samej chwili",
         "zapisz_czytelnikow(page, licznik=stan)" in _zr)
 
 print()
+print("=== 8. WOLNA ZAKLADKA DOSTAJE CZAS (29.09.2026 17:10) ===")
+# Zakladka „Subscribers" oddala pustke 5 s po kliknieciu i drugi raz przy
+# ponowieniu, a licznik mowil 27. Poltorej godziny pozniej ta sama droga dala
+# pelna liste 0,7 s po kliknieciu — wolna chwila strony, nie zmiana znacznikow.
+
+
+class WolnaStrona(Strona):
+    """Lista otwartej zakladki pokazuje sie dopiero po `opoznienie` czekaniach na niej."""
+
+    def __init__(self, obs, sub, opoznienie):
+        super().__init__(list(NAWIGACJA), list(NAWIGACJA))
+        self._pelne = {"obserwujacy": obs, "subskrybenci": sub}
+        self._opoznienie = opoznienie
+        self._czekano = {"obserwujacy": 0, "subskrybenci": 0}
+        self.czekania = 0
+
+    def wait_for_timeout(self, _ms):
+        self.czekania += 1
+        self._czekano[self.otwarta] += 1
+        if self._czekano[self.otwarta] > self._opoznienie:
+            self.linki[self.otwarta] = self._pelne[self.otwarta]
+
+
+wolna = WolnaStrona(NAWIGACJA + OBSERWUJACY, NAWIGACJA + SUBSKRYBENCI, opoznienie=6)
+kto8 = browser.kto_nas_czyta(wolna)
+sprawdz("lista, ktora wstaje po kilku sekundach, jest odczytana w TYM SAMYM wejsciu",
+        len(kto8["obserwujacy"]) == 3 and len(kto8["subskrybenci"]) == 2
+        and kto8["odczytane"] == ["obserwujacy", "subskrybenci"] and wolna.wejscia == 1,
+        (kto8, wolna.wejscia))
+
+szybka = WolnaStrona(NAWIGACJA + OBSERWUJACY, NAWIGACJA + SUBSKRYBENCI, opoznienie=0)
+browser.kto_nas_czyta(szybka)
+sprawdz("KONTRDOWOD: pelna lista nie czeka ani sekundy dluzej niz dotad (2 czekania)",
+        szybka.czekania == 2, szybka.czekania)
+
+nigdy = WolnaStrona(NAWIGACJA + OBSERWUJACY, NAWIGACJA + SUBSKRYBENCI, opoznienie=10 ** 6)
+kto8b = browser.kto_nas_czyta(nigdy)
+sprawdz("lista, ktora nie wstaje, konczy czekanie po CZEKANIE_NA_LISTE_S probach na zakladke",
+        kto8b["obserwujacy"] == [] and kto8b["subskrybenci"] == []
+        and nigdy.czekania == 2 + 2 * browser.CZEKANIE_NA_LISTE_S,
+        (nigdy.czekania, kto8b))
+sprawdz("opis pustej zakladki nie wywraca odczytu, gdy strona nie umie policzyc odnosnikow",
+        browser._opis_pustej_zakladki(nigdy).startswith("bez opisu"),
+        browser._opis_pustej_zakladki(nigdy))
+sprawdz("ponowienie po pustce czeka dluzej niz sama czkawka z 17:10 (30 s, nie 5 s)",
+        "PONOWNY_ODCZYT_CZYTELNIKOW_S = 30" in _zr)
+
+print()
 print("=== PRODUKCJA: bez zmian ===")
 zle = 0
 for p in PILNOWANE:

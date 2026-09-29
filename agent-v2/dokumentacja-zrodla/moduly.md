@@ -235,7 +235,7 @@
 
 ### `browser.py` — cała styczność z Substackiem; nie woła modelu
 
-5687 wierszy, 108 funkcji na poziomie modułu, 0 klas
+5734 wierszy, 110 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -265,6 +265,8 @@
 | `statystyki_pozycji(pozycje)` | Pobiera statystyki NASZYCH tresci — jedna przegladarka na cala liste. |
 | `_ludzie_z_zakladki_ze_stanem(page)` *(wewn.)* | Kto jest na tej zakladce ORAZ czy zakladke w ogole udalo sie odczytac. |
 | `_ludzie_z_zakladki(page)` *(wewn.)* | Sama lista ludzi z zakladki. Dla wolajacych, ktorych stan nie obchodzi. |
+| `_ludzie_gdy_wstana(page, sekund)` *(wewn.)* | Jak `_ludzie_z_zakladki_ze_stanem`, ale pusta lista dostaje czas. |
+| `_opis_pustej_zakladki(page)` *(wewn.)* | Co stoi na pustej zakladce — same liczby, bez nazw osob. |
 | `kto_nas_czyta(page)` | KTO nas obserwuje i subskrybuje — imiennie i z data. |
 | `_puste_wbrew_licznikowi(kto, licznik)` *(wewn.)* | Grupy ODCZYTANE, ale puste, choc licznik profilu z tej chwili mowi inaczej. |
 | `zapisz_czytelnikow(page, licznik)` | Zrzut listy czytelnikow do pliku, jeden wiersz na wywolanie. |

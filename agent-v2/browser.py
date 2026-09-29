@@ -1080,6 +1080,51 @@ def _ludzie_z_zakladki(page) -> list[dict[str, str]]:
     return _ludzie_z_zakladki_ze_stanem(page)[0]
 
 
+# Ile sekund pusta zakladka dostaje na zaladowanie listy (`_ludzie_gdy_wstana`).
+CZEKANIE_NA_LISTE_S = 20
+
+
+def _ludzie_gdy_wstana(page, sekund: int | None = None
+                       ) -> tuple[list[dict[str, str]], bool]:
+    """Jak `_ludzie_z_zakladki_ze_stanem`, ale pusta lista dostaje czas.
+
+    SZTYWNE CZEKANIE WYSTARCZA W ZWYKLY DZIEN I NIE WYSTARCZA W WOLNY.
+    29.09.2026 o 17:10 zakladka „Subscribers" oddala pustke 5 s po kliknieciu,
+    drugi raz przy ponowieniu, a licznik profilu z tej samej chwili mowil 27.
+    Poltorej godziny pozniej ta sama droga na tej samej karcie: obserwujacy po
+    1,4 s, subskrybenci 0,7 s po kliknieciu, dwie proby z rzedu pelne. To nie
+    byla zmiana strony, tylko wolna chwila Substacka — a zrzut okrojony budzi
+    alarm wzajemnosci mailem przez trzy doby (`wzajemnosc.pomiar_oslepl`).
+
+    Pelna lista wychodzi od razu, jak dotad. Pusta czytamy ponownie co sekunde,
+    najdluzej `sekund` razy — licznik prob, nie zegar, wiec atrapa strony bez
+    czekania nie wisi. Gdy nadal pusto: jedna linia w logu z LICZBAMI (adres,
+    ile odnosnikow w ogole), bez nazw osob. Po niej odrozni sie nastepnym razem
+    strone, ktora nie wstala, od zmiany znacznikow.
+    """
+    sekund = CZEKANIE_NA_LISTE_S if sekund is None else sekund
+    ludzie, ok = _ludzie_z_zakladki_ze_stanem(page)
+    for _ in range(sekund):
+        if ludzie or not ok:
+            return ludzie, ok
+        page.wait_for_timeout(1000)
+        ludzie, ok = _ludzie_z_zakladki_ze_stanem(page)
+    if ok and not ludzie:
+        print("  [czytelnicy] zakladka pusta po %d s: %s"
+              % (sekund, _opis_pustej_zakladki(page)), flush=True)
+    return ludzie, ok
+
+
+def _opis_pustej_zakladki(page) -> str:
+    """Co stoi na pustej zakladce — same liczby, bez nazw osob."""
+    try:
+        return "adres %s, odnosnikow %d, w tym do profili %d" % (
+            getattr(page, "url", "?"), page.locator("a[href]").count(),
+            page.locator('a[href^="/@"]').count())
+    except Exception as exc:
+        return "bez opisu (%s)" % type(exc).__name__
+
+
 def kto_nas_czyta(page=None) -> dict[str, Any]:
     """KTO nas obserwuje i subskrybuje — imiennie i z data.
 
@@ -1148,7 +1193,7 @@ def kto_nas_czyta(page=None) -> dict[str, Any]:
         page.wait_for_timeout(SETTLE_MS + 5000)
 
         # Zakladka otwarta domyslnie to „Followers" — bierzemy ja bez klikania.
-        wynik["obserwujacy"], ok = _ludzie_z_zakladki_ze_stanem(page)
+        wynik["obserwujacy"], ok = _ludzie_gdy_wstana(page)
         if ok:
             wynik["odczytane"].append("obserwujacy")
 
@@ -1158,7 +1203,7 @@ def kto_nas_czyta(page=None) -> dict[str, Any]:
                 continue
             zakladka.click(timeout=10_000)
             page.wait_for_timeout(5000)
-            wynik["subskrybenci"], ok = _ludzie_z_zakladki_ze_stanem(page)
+            wynik["subskrybenci"], ok = _ludzie_gdy_wstana(page)
             if ok:
                 wynik["odczytane"].append("subskrybenci")
             break
@@ -1180,8 +1225,10 @@ def kto_nas_czyta(page=None) -> dict[str, Any]:
 
 
 # Ile czekamy przed ponownym odczytem list, gdy zakladki oddaly pustke wbrew
-# licznikowi profilu (`zapisz_czytelnikow`).
-PONOWNY_ODCZYT_CZYTELNIKOW_S = 5
+# licznikowi profilu (`zapisz_czytelnikow`). 30, nie 5: 29.09.2026 o 17:10
+# ponowienie po 5 s trafilo w te sama wolna chwile strony. Placi sie tylko
+# przy awarii — zdrowy zrzut nie ponawia.
+PONOWNY_ODCZYT_CZYTELNIKOW_S = 30
 
 
 def _puste_wbrew_licznikowi(kto: dict[str, Any],
