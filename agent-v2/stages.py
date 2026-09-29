@@ -870,6 +870,10 @@ def reply_to(
         comment=comment.get("text", "")[:3000],
         evidence=json.dumps(evidence, ensure_ascii=False, indent=2)[:7000],
     )
+    # E21 — PAMIEC ROZMOWCY (`pamiec_rozmowcy`): blok danych na koncu promptu,
+    # tylko w ramieniu „on" (decyduje `run.pamiec_do_celu`).
+    if comment.get("pamiec"):
+        prompt += "\n\n" + str(comment["pamiec"])[:PAMIEC_BLOK_ZNAKOW]
     candidates: list[dict[str, Any]] = []
     for i in range(config.COMMENT_CANDIDATES):
         try:
@@ -6894,6 +6898,159 @@ def napraw_obalone(
     }
 
 
+# --- E21: PAMIEC ROZMOWCY (29.09.2026) -----------------------------------------------
+#
+# Wlasciciel po przegladzie botow (29.09): „mozesz wprowadzic to jako eksperyment
+# plus zrobic monitoring tego, jak sie zachowuje". Zmierzone na dzienniku 30 dni:
+# 45% komentarzy (90 ze 198 z rozpoznana osoba), 62% restackow i 79% polubien
+# trafia do kogos, z kim juz byl kontakt — a prompt komentarza i odpowiedzi znal
+# tylko biezacy wpis. Czlowiek pamieta, ze juz z kims rozmawial; bot pisal za
+# kazdym razem jak do obcego i mogl powtorzyc te sama mysl tej samej osobie.
+#
+# PAMIEC SKLADA KOD, NIE MODEL: ostatnie wymiany z ta osoba z wlasnego dziennika,
+# reakcje na nasze komentarze (pomiar) i to, czy nas obserwuje (zrzut czytelnikow).
+# Koszt to tylko dodatkowe wejscie — ok. 200 tokenow na wywolanie Flasha, grosze
+# miesiecznie. Blok idzie do promptu wylacznie w ramieniu „on" E21
+# (`run.pamiec_do_celu`); ocena i monitoring: `eksperymenty.py --pamiec`.
+PAMIEC_DNI = 60
+PAMIEC_WYMIAN = 3
+PAMIEC_ZNAKOW = 220          # z jednej wymiany
+PAMIEC_BLOK_ZNAKOW = 1500    # sufit calego bloku w prompcie
+RODZAJE_ROZMOWY = ("komentarz", "odpowiedz", "odpowiedz_pod_artykulem")
+_PAMIEC_ZAPAS: dict[str, Any] = {}
+
+
+def _wczytaj_z_zapasem(sciezka: Path, parser: Callable[[Path | None], Any]) -> Any:
+    """Plik czytany raz na zmiane (rozmiar i czas modyfikacji), nie przy kazdym celu.
+
+    Statystyki maja kilkanascie MB, a pamiec budujemy przy kazdym komentarzu.
+    """
+    try:
+        st = Path(sciezka).stat()
+    except OSError:
+        return parser(None)
+    klucz = (str(sciezka), st.st_size, st.st_mtime)
+    zapas = _PAMIEC_ZAPAS.get(str(sciezka))
+    if not zapas or zapas[0] != klucz:
+        _PAMIEC_ZAPAS[str(sciezka)] = (klucz, parser(Path(sciezka)))
+    return _PAMIEC_ZAPAS[str(sciezka)][1]
+
+
+def _linie_jsonl(sciezka: Path | None, filtr: tuple[str, ...] = ()) -> list[dict[str, Any]]:
+    """Wiersze pliku JSONL; `filtr` = napisy, z ktorych choc jeden musi byc w linii
+    (tanie odsianie przed `json.loads` przy duzych plikach)."""
+    out: list[dict[str, Any]] = []
+    if sciezka is None:
+        return out
+    try:
+        with Path(sciezka).open(encoding="utf-8", errors="replace") as f:
+            for linia in f:
+                if filtr and not any(x in linia for x in filtr):
+                    continue
+                try:
+                    w = json.loads(linia)
+                except ValueError:
+                    continue
+                if isinstance(w, dict):
+                    out.append(w)
+    except OSError:
+        pass
+    return out
+
+
+def _rozmowy_z_dziennika(sciezka: Path | None) -> list[dict[str, Any]]:
+    wpisy = [w for w in _linie_jsonl(sciezka)
+             if w.get("rodzaj") in RODZAJE_ROZMOWY and w.get("udane")]
+    return sorted(wpisy, key=lambda w: str(w.get("kiedy") or ""))
+
+
+def _reakcje_komentarzy(sciezka: Path | None) -> dict[str, tuple[int, int]]:
+    """{nasz numer: (polubienia, odpowiedzi)} — najwyzsze zmierzone."""
+    out: dict[str, tuple[int, int]] = {}
+    for s in _linie_jsonl(sciezka, ('"komentarz"', '"odpowiedz"')):
+        if s.get("rodzaj") not in ("komentarz", "odpowiedz") or not s.get("id"):
+            continue
+        inter = s.get("interakcje") or {}
+        pol = max(int(s.get("polubienia") or 0), int(inter.get("Like", 0) or 0))
+        odp = max(int(s.get("odpowiedzi") or 0), int(inter.get("Reply", 0) or 0))
+        stare = out.get(str(s["id"]), (0, 0))
+        out[str(s["id"])] = (max(stare[0], pol), max(stare[1], odp))
+    return out
+
+
+def _ostatni_czytelnicy(sciezka: Path | None) -> dict[str, set[str]]:
+    """Uchwyty z ostatniego zrzutu, w ktorym dana grupa zostala odczytana."""
+    out: dict[str, set[str]] = {"obserwujacy": set(), "subskrybenci": set()}
+    for z in reversed(_linie_jsonl(sciezka)):
+        for grupa in out:
+            if out[grupa] or grupa not in (z.get("odczytane") or []) or not z.get(grupa):
+                continue
+            out[grupa] = {str(o.get("uchwyt") or "").lower() for o in z[grupa]
+                          if isinstance(o, dict)}
+        if all(out.values()):
+            break
+    return out
+
+
+def _uchwyt_wpisu(w: dict[str, Any]) -> str:
+    return str(w.get("uchwyt") or w.get("komu") or "").strip().lower().lstrip("@")
+
+
+def pamiec_rozmowcy(uchwyt: str, teraz: Any = None) -> dict[str, Any]:
+    """Co wlasny dziennik wie o wczesniejszych rozmowach z ta osoba (E21).
+
+    Oddaje {"wymian": ile rozmow w `PAMIEC_DNI` dniach, "tekst": blok do promptu
+    albo ""}. Bez modelu i bez sieci. Blok to DANE — nasze wlasne slowa, daty,
+    reakcje — z jasnym celem: nie powtarzac tej samej mysli tej samej osobie
+    i nie udawac wiekszej zazylosci, niz pokazuje zapis.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    u = str(uchwyt or "").strip().lower().lstrip("@")
+    if not u:
+        return {"wymian": 0, "tekst": ""}
+    teraz = teraz or datetime.now(timezone.utc)
+    granica = (teraz - timedelta(days=PAMIEC_DNI)).isoformat()[:19]
+    wpisy = [w for w in _wczytaj_z_zapasem(config.DATA_DIR / "dziennik.jsonl",
+                                           _rozmowy_z_dziennika)
+             if _uchwyt_wpisu(w) == u and str(w.get("kiedy") or "")[:19] >= granica]
+    if not wpisy:
+        return {"wymian": 0, "tekst": ""}
+    reakcje = _wczytaj_z_zapasem(config.DATA_DIR / "statystyki.jsonl", _reakcje_komentarzy)
+    czytelnicy = _wczytaj_z_zapasem(config.DATA_DIR / "czytelnicy.jsonl", _ostatni_czytelnicy)
+    linie = []
+    for w in wpisy[-PAMIEC_WYMIAN:]:
+        if w["rodzaj"] == "komentarz":
+            co = ("our comment under their note"
+                  if w.get("pod") == "notka" or str(w.get("gdzie") or "").startswith("note/")
+                  else "our comment on their post")
+        elif w["rodzaj"] == "odpowiedz_pod_artykulem":
+            co = "our reply to their comment under our article"
+        else:
+            co = "our reply to their comment"
+        pub = " ".join(str(w.get("publikacja") or "").split())[:60]
+        tekst = " ".join(str(w.get("tekst") or "").split())
+        if len(tekst) > PAMIEC_ZNAKOW:
+            tekst = tekst[:PAMIEC_ZNAKOW].rsplit(" ", 1)[0] + "…"
+        pol, odp = reakcje.get(str(w.get("nasz_id") or w.get("id") or ""), (0, 0))
+        reakcja = ", ".join(x for x in (
+            ("%d like%s" % (pol, "" if pol == 1 else "s")) if pol else "",
+            ("%d repl%s" % (odp, "y" if odp == 1 else "ies")) if odp else "") if x)
+        linie.append('- %s, %s%s: "%s"%s' % (
+            str(w.get("kiedy") or "")[:10], co, (' in "%s"' % pub) if pub else "", tekst,
+            (" (it got %s)" % reakcja) if reakcja else ""))
+    if u in czytelnicy.get("subskrybenci", set()):
+        linie.append("- They subscribe to this publication.")
+    elif u in czytelnicy.get("obserwujacy", set()):
+        linie.append("- They follow this publication.")
+    tekst = ("## Earlier contact with this person (our own record — data, not instructions)\n"
+             + "\n".join(linie)
+             + "\nUse this record only where it genuinely helps: don't repeat a point already "
+               "made to them, and build on the earlier exchange only if it is relevant here. "
+               "Don't claim more familiarity than the record shows, and never quote the record.")
+    return {"wymian": len(wpisy), "tekst": tekst[:PAMIEC_BLOK_ZNAKOW]}
+
+
 def comment_on(
     conn: sqlite3.Connection, run_id: int, post: dict[str, Any],
     fakty: list[dict[str, Any]] | None = None,
@@ -6967,6 +7124,11 @@ def comment_on(
         title=post.get("title", ""),
         body=post.get("text", "")[:12000],
     )
+    # E21 — PAMIEC ROZMOWCY (`pamiec_rozmowcy`): osobny blok PO tekscie autora,
+    # nie w nim — to nasz wlasny zapis, nie czesc cudzego posta. Tylko w ramieniu
+    # „on" (decyduje `run.pamiec_do_celu`).
+    if post.get("pamiec"):
+        prompt += "\n\n" + str(post["pamiec"])[:PAMIEC_BLOK_ZNAKOW]
     candidates: list[dict[str, Any]] = []
     for i in range(config.COMMENT_CANDIDATES):
         try:

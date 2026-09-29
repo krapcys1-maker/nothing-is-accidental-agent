@@ -164,6 +164,7 @@ def ocenione_partie(druga, historia):
         przydzial={"artykuly": 2, "notki": 1, "e14": False},
         uloz_wedlug_swiezosci=lambda cele, klucz="", dzien=None: cele,
         ramiona_komentarza=lambda cel, pod, e14: {"pod": pod},
+        pamiec_do_celu=lambda u, k, dzien=None: {"tekst": "", "ramie": "", "wymian": 0, "znaki": 0},
         zostal_czas=lambda *args: True,
     )
     exec(_kod, env)

@@ -180,6 +180,11 @@ KWOTA_SPOZA_BRANZY = True
 # E17 — KROTKA NOTKA: „on" = okno `KROTKA_NOTKA_SLOW` zamiast zwyklego.
 # E18 — PYTANIE NA KONIEC: „on" = notka konczy sie jednym prawdziwym pytaniem.
 # E16-E18 startuja po E10 i E11 (26.10), bo notek jest ok. trzech dziennie.
+# E21 — PAMIEC ROZMOWCY (wlasciciel 29.09: „wprowadz jako eksperyment plus
+#   monitoring"): przy rozmowie z kims, z kim byl juz kontakt (45% komentarzy),
+#   „on" = prompt komentarza/odpowiedzi dostaje ostatnie wymiany z ta osoba
+#   (`stages.pamiec_rozmowcy`, bez modelu), „off" = jak dotad. Los po celu.
+#   Ocena i monitoring: `eksperymenty.py --pamiec`; alarm `pamiec-rozmowcow`.
 EKSPERYMENTY: dict = {
     "wniosek": {"udzial": 0.7, "od": "2026-09-28", "do": "2026-10-25"},
     "pisarz": {"udzial": 0.5, "od": "2026-09-28", "do": "2026-10-25"},
@@ -192,6 +197,7 @@ EKSPERYMENTY: dict = {
                    "od": "2026-10-26", "do": "2026-11-22"},
     "krotka_notka": {"udzial": 0.5, "od": "2026-10-26", "do": "2026-11-22"},
     "pytanie_na_koncu": {"udzial": 0.5, "od": "2026-10-26", "do": "2026-11-22"},
+    "pamiec_rozmowcy": {"udzial": 0.5, "od": "2026-09-29", "do": "2026-10-27"},
 }
 
 # E12 — dobowe widelki restackow w obu ramionach (srednio 4 i 2). Widelki, nie

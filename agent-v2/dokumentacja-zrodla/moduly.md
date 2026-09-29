@@ -1,7 +1,7 @@
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-3345 wierszy, 32 funkcji na poziomie modułu, 1 klas
+3423 wierszy, 35 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -14,7 +14,10 @@
 | `przydzial_komentarzy(n, klucz, dzien)` | Ile miejsc na komentarz dostaje blok pod ARTYKULAMI, a ile pod NOTKAMI. |
 | `uloz_wedlug_swiezosci(cele, klucz, dzien)` | E15 (`swiezosc_celu`): kolejnosc celow, kazdy z ramieniem w polu `_e15`. |
 | `notki_w_porze(ile, zostalo_przebiegow, dzien)` | Ile notek wolno w TYM przebiegu wedlug pory doby — E16 (`pora_notki`). |
-| `ramiona_komentarza(cel, pod, e14)` | Pola dziennika komentarza: rodzaj celu i ramiona E14/E15. |
+| `pamiec_do_celu(uchwyt, klucz, dzien)` | E21: pamiec rozmowcy dla tego celu i ramie eksperymentu `pamiec_rozmowcy`. |
+| `pola_pamieci(e21)` | Pola dziennika E21: ile wczesniejszych rozmow i ile znakow pamieci poszlo. |
+| `ramiona_komentarza(cel, pod, e14)` | Pola dziennika komentarza: rodzaj celu, ramiona E14/E15/E21, pamiec (E21). |
+| `ramiona_odpowiedzi(c, e21)` | Pola dziennika odpowiedzi: uchwyt rozmowcy i E21. |
 | `zostal_czas(na_co, potrzeba_s)` | Czy zdazymy jeszcze cokolwiek zrobic przed koncem czasu przebiegu. |
 | `_pod_rzad_w_bloku(co, na_co)` *(wewn.)* | Ile porazek pod rzad naliczyl TEN blok, odkad sie zaczal. |
 | `rytm(co, na_co, stan)` | Przerwa MIEDZY dwoma dzialaniami tego samego rodzaju. |
@@ -40,7 +43,7 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-10968 wierszy, 178 funkcji na poziomie modułu, 0 klas
+11130 wierszy, 185 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -169,6 +172,13 @@
 | `_adres_zarzutu(c)` *(wewn.)* | — |
 | `_ten_sam_zarzut(a, b)` *(wewn.)* | Czy dwa zarzuty mowia o tym samym fakcie. ZACHOWAWCZO, i to celowo. |
 | `napraw_obalone(conn, run_id, tekst, audyt)` | Poprawia zdanie, ktoremu zapis przeczy. Nie wycina go i nie blokuje tekstu. |
+| `_wczytaj_z_zapasem(sciezka, parser)` *(wewn.)* | Plik czytany raz na zmiane (rozmiar i czas modyfikacji), nie przy kazdym celu. |
+| `_linie_jsonl(sciezka, filtr)` *(wewn.)* | Wiersze pliku JSONL; `filtr` = napisy, z ktorych choc jeden musi byc w linii |
+| `_rozmowy_z_dziennika(sciezka)` *(wewn.)* | — |
+| `_reakcje_komentarzy(sciezka)` *(wewn.)* | {nasz numer: (polubienia, odpowiedzi)} — najwyzsze zmierzone. |
+| `_ostatni_czytelnicy(sciezka)` *(wewn.)* | Uchwyty z ostatniego zrzutu, w ktorym dana grupa zostala odczytana. |
+| `_uchwyt_wpisu(w)` *(wewn.)* | — |
+| `pamiec_rozmowcy(uchwyt, teraz)` | Co wlasny dziennik wie o wczesniejszych rozmowach z ta osoba (E21). |
 | `comment_on(conn, run_id, post, fakty)` | Komentarz do cudzego posta — do szuflady. |
 | `fallback_card(question, evidence)` | Karta złożona z dowodów bez modelu — gdy synteza padnie. |
 | `synthesis(conn, run_id, question, evidence)` | Etap 6 — karta dowodowa (DeepSeek V4 Pro). |
@@ -225,7 +235,7 @@
 
 ### `browser.py` — cała styczność z Substackiem; nie woła modelu
 
-5669 wierszy, 108 funkcji na poziomie modułu, 0 klas
+5680 wierszy, 108 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -313,7 +323,7 @@
 | `wstaw_przycisk_subskrypcji(page)` | Jeden przycisk subskrypcji, po ostatnim akapicie a przed źródłami. |
 | `tresc_oswiadczenia()` | Oświadczenie „Jak to robię" — z pliku, nie z drugiej kopii w kodzie. |
 | `ustaw_oswiadczenie_ai(wyslij)` | Ustawia stałe oświadczenie pokazywane każdemu, kto skanuje nas pod kątem AI. |
-| `wystaw_odpowiedz_pod_artykulem(url_artykulu, autor, tekst, wyslij)` | Odpowiada pod KONKRETNYM komentarzem pod naszym artykułem. |
+| `wystaw_odpowiedz_pod_artykulem(url_artykulu, autor, tekst, wyslij, kontekst)` | Odpowiada pod KONKRETNYM komentarzem pod naszym artykułem. |
 | `potwierdz_artykul(page, tytul)` | Pyta Substacka, czy artykuł naprawdę jest opublikowany. |
 | `wystaw_artykul(sciezka_md, sciezka_png, wyslij)` | Wystawia artykuł na Substacku. Domyślnie WYPEŁNIA i NIE WYSYŁA. |
 | `_watek_z_paginacja(page, nid, stron)` *(wewn.)* | Caly watek notki — ze WSZYSTKICH stron, nie tylko z pierwszej. |
@@ -425,7 +435,7 @@
 
 ### `alarm.py` — kontrola sesji, zdrowia i alarm do właściciela
 
-1126 wierszy, 24 funkcji na poziomie modułu, 0 klas
+1214 wierszy, 25 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -448,6 +458,7 @@
 | `kopia_subskrybentow()` | Czy istnieje AKTUALNA kopia listy subskrybentow. |
 | `pomiar_wzajemnosci()` | Czy nadal mamy z czego liczyc, kto sie odwzajemnia. |
 | `pomiar_statystyk(teraz)` | Czy bot nadal MIERZY swoje tresci — bez tego kazdy eksperyment jest slepy. |
+| `pamiec_rozmowcow(teraz)` | E21: czy pamiec rozmowcy naprawde trafia do rozmow, kiedy powinna. |
 | `wydarzenie_bez_pokrycia()` | Wydarzenie odhaczone jako obsluzone, a w tresci ani slowa o nim. |
 | `bank_bez_tematow()` | Czy w banku zostalo dosc ROZNYCH tematow na dzisiejsze notki. |
 | `sprawdz_wszystko()` | Uruchamia komplet kontroli i alarmuje o tym, co znalazl. |
@@ -480,7 +491,7 @@
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-3847 wierszy, 43 funkcji na poziomie modułu, 0 klas
+3853 wierszy, 43 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -694,7 +705,7 @@
 
 ### `eksperymenty.py` — pomiar zmian — odbiór notek w grupach względem tła tygodnia, 95% przedział i werdykt (lepiej / gorzej / brak dowodu / za mało danych)
 
-496 wierszy, 20 funkcji na poziomie modułu, 0 klas
+611 wierszy, 25 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -710,10 +721,15 @@
 | `_stosunek(a, b)` *(wewn.)* | Ile razy grupa `a` bije swoje tlo mocniej niz grupa `b` (patrz `odejmij_tlo`). |
 | `_sd_log(r)` *(wewn.)* | — |
 | `porownaj(dane, grupa, odniesienie)` | Grupy, ich miary i porownanie kazdej z grupa odniesienia. |
-| `wiersze_komentarzy(dziennik, pomiary, od, do)` | Nasze komentarze z pomiarem: wpis dziennika + reakcje pod komentarzem. |
+| `wiersze_komentarzy(dziennik, pomiary, od, do, rodzaje)` | Nasze komentarze (albo i odpowiedzi — `rodzaje`) z pomiarem i reakcjami. |
 | `_odsetek(r)` *(wewn.)* | — |
 | `porownaj_komentarze(dane, grupa, odniesienie)` | Grupy komentarzy: odsetek z reakcja, polubienia i odpowiedzi na 100. |
 | `tygodnie(dni, nazwa, restacki)` | Tydzien po tygodniu eksperymentu z `plan` (`config.EKSPERYMENTY[nazwa]`). |
+| `_slowa(tekst)` *(wewn.)* | — |
+| `podobienstwo(a, b)` | Jaccard slow co najmniej czteroliterowych — 0 nic wspolnego, 1 te same slowa. |
+| `_uchwyt(w)` *(wewn.)* | — |
+| `raport_pamieci(dziennik, pomiary, od, do, cena_wejscia_usd_mln, wywolan_na_rozmowe)` | Liczby do monitoringu E21: pokrycie, ramiona, koszt, zachowanie, odbior. |
+| `_drukuj_pamiec(od, do)` *(wewn.)* | — |
 | `restacki_dziennika(dziennik, najnowsze, zapisy)` | Nasze restacki: doba, ostatnie wyswietlenia i zapisy przypisane (do tygodni E12). |
 | `_wczytaj()` *(wewn.)* | — |
 | `_drukuj_tygodnie(nazwa)` *(wewn.)* | — |

@@ -44,9 +44,11 @@ Plan pomiaru: `agent-v2/docs/POMIAR_I_EKSPERYMENTY_2026-09-27.md`.
 from __future__ import annotations
 
 import argparse
+import collections
 import json
 import math
 import random
+import re
 import sys
 from typing import Any, Callable
 
@@ -249,11 +251,12 @@ MIN_KOMENTARZY = 30     # ponizej tylu w grupie werdykt to „za malo danych"
 
 
 def wiersze_komentarzy(dziennik: list[dict], pomiary: dict,
-                       od: str = "", do: str = "") -> list[dict[str, Any]]:
-    """Nasze komentarze z pomiarem: wpis dziennika + reakcje pod komentarzem."""
+                       od: str = "", do: str = "",
+                       rodzaje: tuple[str, ...] = ("komentarz",)) -> list[dict[str, Any]]:
+    """Nasze komentarze (albo i odpowiedzi — `rodzaje`) z pomiarem i reakcjami."""
     out = []
     for e in dziennik:
-        if not (isinstance(e, dict) and e.get("rodzaj") == "komentarz" and e.get("udane")):
+        if not (isinstance(e, dict) and e.get("rodzaj") in rodzaje and e.get("udane")):
             continue
         ident = str(e.get("nasz_id") or e.get("id") or "")
         dzien = str(e.get("kiedy") or "")[:10]
@@ -366,6 +369,112 @@ def tygodnie(dni: dict[str, dict], nazwa: str, restacki: list[dict] | None = Non
     return out
 
 
+# --- E21: PAMIEC ROZMOWCY — ocena i monitoring zachowania ----------------------------
+#
+# Wlasciciel 29.09.2026: „wprowadz jako eksperyment plus zrob monitoring tego, jak
+# sie zachowuje". Poza odbiorem (reakcje po 48 h, jak E14) patrzymy na to, co pamiec
+# ma zmieniac W TEKSCIE: czy wypowiedz do tej samej osoby mniej powtarza poprzednia
+# (podobienstwo slow) i czy nawiazuje do wczesniejszej rozmowy. Oba sygnaly to
+# heurystyki — pokazuja, CZY model z pamieci korzysta, nie czy dobrze.
+RODZAJE_ROZMOWY = ("komentarz", "odpowiedz", "odpowiedz_pod_artykulem")
+NAWIAZANIE = re.compile(
+    r"\b(last time|earlier|previously|as you (said|wrote|mentioned|noted|put it)|"
+    r"you (said|wrote|mentioned|noted|argued) (before|earlier|last)|"
+    r"we (talked|discussed|spoke|touched on)|your (last|previous|earlier|other) "
+    r"(post|note|piece|comment)|picking up|following up|coming back to)\b", re.IGNORECASE)
+
+
+def _slowa(tekst: Any) -> set[str]:
+    return set(re.findall(r"[a-z']{4,}", str(tekst or "").lower()))
+
+
+def podobienstwo(a: Any, b: Any) -> float:
+    """Jaccard slow co najmniej czteroliterowych — 0 nic wspolnego, 1 te same slowa."""
+    x, y = _slowa(a), _slowa(b)
+    return len(x & y) / len(x | y) if x and y else 0.0
+
+
+def _uchwyt(w: dict) -> str:
+    return str(w.get("uchwyt") or w.get("komu") or "").strip().lower().lstrip("@")
+
+
+def raport_pamieci(dziennik: list[dict], pomiary: dict, od: str = "", do: str = "",
+                   cena_wejscia_usd_mln: float = 0.15, wywolan_na_rozmowe: int = 1
+                   ) -> dict[str, Any]:
+    """Liczby do monitoringu E21: pokrycie, ramiona, koszt, zachowanie, odbior."""
+    rozmowy = sorted((w for w in dziennik if isinstance(w, dict)
+                      and w.get("rodzaj") in RODZAJE_ROZMOWY and w.get("udane")),
+                     key=lambda w: str(w.get("kiedy") or ""))
+    poprzednia: dict[str, str] = {}
+    okno, zachowanie = [], {"on": [], "off": []}
+    for w in rozmowy:
+        dzien = str(w.get("kiedy") or "")[:10]
+        u = _uchwyt(w)
+        if (not od or dzien >= od) and (not do or dzien <= do):
+            okno.append(w)
+            r = str((w.get("eksperymenty") or {}).get("pamiec_rozmowcy") or "")
+            if r in zachowanie and u in poprzednia:
+                zachowanie[r].append({
+                    "podobienstwo": podobienstwo(w.get("tekst"), poprzednia[u]),
+                    "nawiazanie": bool(NAWIAZANIE.search(str(w.get("tekst") or ""))),
+                    "slow": int(w.get("slow") or 0)})
+        if u and w.get("tekst"):
+            poprzednia[u] = str(w["tekst"])
+    z_polem = [w for w in okno if "pamiec_wymian" in w]
+    znani = [w for w in z_polem if int(w.get("pamiec_wymian") or 0) > 0]
+    ramie = collections.Counter(str((w.get("eksperymenty") or {}).get("pamiec_rozmowcy") or "brak")
+                                for w in znani)
+    znaki_on = [int(w.get("pamiec_znaki") or 0) for w in znani
+                if (w.get("eksperymenty") or {}).get("pamiec_rozmowcy") == "on"]
+    dni = max(1, len({str(w.get("kiedy") or "")[:10] for w in okno}))
+    tokenow_dzien = sum(znaki_on) / 4.0 * wywolan_na_rozmowe / dni
+    out: dict[str, Any] = {
+        "rozmow": len(okno), "z_polem_pamieci": len(z_polem), "z_kontaktem": len(znani),
+        "ramiona": dict(ramie),
+        "znaki_on_srednio": round(sum(znaki_on) / len(znaki_on)) if znaki_on else 0,
+        "koszt_usd_miesiecznie": round(tokenow_dzien * 30 * cena_wejscia_usd_mln / 1e6, 4),
+        "zachowanie": {}}
+    for r, lista in zachowanie.items():
+        if lista:
+            out["zachowanie"][r] = {
+                "n": len(lista),
+                "podobienstwo": round(sum(x["podobienstwo"] for x in lista) / len(lista), 3),
+                "nawiazanie_proc": round(100.0 * sum(x["nawiazanie"] for x in lista) / len(lista), 1),
+                "slow": round(sum(x["slow"] for x in lista) / len(lista), 1)}
+    dane = [x for x in wiersze_komentarzy(okno, pomiary, rodzaje=RODZAJE_ROZMOWY)
+            if (x["wpis"].get("eksperymenty") or {}).get("pamiec_rozmowcy")]
+    out["odbior"] = porownaj_komentarze(dane, _grupujacy("eksperyment:pamiec_rozmowcy"))
+    return out
+
+
+def _drukuj_pamiec(od: str, do: str) -> int:
+    import statystyki
+
+    dziennik, _, _ = _wczytaj()
+    pomiary = statystyki.po_godzinach(None, GODZIN_KOMENTARZA).get("pozycje") or {}
+    cena = float((config.PRICING.get(config.MODEL_FOR.get("comment", "")) or {}).get("in") or 0.15)
+    r = raport_pamieci(dziennik, pomiary, od, do, cena_wejscia_usd_mln=cena,
+                       wywolan_na_rozmowe=int(getattr(config, "COMMENT_CANDIDATES", 1) or 1))
+    print("E21 pamiec rozmowcy — od %s%s" % (od or "poczatku", (" do " + do) if do else ""))
+    print("  komentarzy i odpowiedzi: %d; z polem pamieci (kod E21): %d; z wczesniejszym kontaktem: %d%s"
+          % (r["rozmow"], r["z_polem_pamieci"], r["z_kontaktem"],
+             (" (%.0f%%)" % (100.0 * r["z_kontaktem"] / r["z_polem_pamieci"])) if r["z_polem_pamieci"] else ""))
+    print("  ramiona przy kontakcie: %s" % (r["ramiona"] or "—"))
+    print("  pamiec w prompcie (on): srednio %d znakow ~ %d tokenow; koszt ok. %.4f USD miesiecznie"
+          % (r["znaki_on_srednio"], r["znaki_on_srednio"] // 4, r["koszt_usd_miesiecznie"]))
+    print("  zachowanie przy kontakcie (heurystyki):   %8s %8s" % ("on", "off"))
+    for pole, opis in (("n", "wypowiedzi z poprzednia do tej osoby"),
+                       ("podobienstwo", "podobienstwo do poprzedniej (0-1)"),
+                       ("nawiazanie_proc", "nawiazanie do rozmowy (%)"),
+                       ("slow", "srednio slow")):
+        print("    %-38s %8s %8s" % (opis, *(r["zachowanie"].get(x, {}).get(pole, "—") for x in ("on", "off"))))
+    print("  odbior po %d h:" % GODZIN_KOMENTARZA)
+    for nazwa, g in (r["odbior"].get("grupy") or {}).items():
+        print("    %-4s n=%-4d z reakcja %5.1f%%  odp/100 %5.1f  %s" % (
+            nazwa, g["n"], g["z_reakcja"], g["odpowiedzi_na_100"], g.get("werdykt", "(odniesienie)")))
+    return 0
+
+
 def restacki_dziennika(dziennik: list[dict], najnowsze: dict, zapisy: dict[str, int]
                        ) -> list[dict[str, Any]]:
     """Nasze restacki: doba, ostatnie wyswietlenia i zapisy przypisane (do tygodni E12)."""
@@ -447,12 +556,18 @@ def main(argv: list[str] | None = None) -> int:
                    help="co porownujemy: notki (E10, E11, E16-E18), restacki (E13), komentarze (E14, E15)")
     p.add_argument("--tygodnie", default="", metavar="EKSPERYMENT",
                    help="eksperyment z planem tygodni, np. restacki_norma (E12)")
+    p.add_argument("--pamiec", action="store_true",
+                   help="E21: monitoring i ocena pamieci rozmowcy")
     p.add_argument("--od", default=config.DATA_PRZESTAWIENIA)
     p.add_argument("--do", default="")
     p.add_argument("--odniesienie", default=None)
     a = p.parse_args(argv)
     if a.tygodnie:
         return _drukuj_tygodnie(a.tygodnie)
+    if a.pamiec:
+        return _drukuj_pamiec(a.od if a.od != config.DATA_PRZESTAWIENIA else
+                              str((config.EKSPERYMENTY.get("pamiec_rozmowcy") or {}).get("od") or ""),
+                              a.do)
     dziennik, pomiary, zapisy = _wczytaj()
     if a.rodzaj == "komentarz":
         import statystyki

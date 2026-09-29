@@ -253,14 +253,79 @@ def notki_w_porze(ile: int, zostalo_przebiegow: int, dzien: str | None = None) -
     return ile
 
 
+def pamiec_do_celu(uchwyt: Any, klucz: Any, dzien: str | None = None) -> dict[str, Any]:
+    """E21: pamiec rozmowcy dla tego celu i ramie eksperymentu `pamiec_rozmowcy`.
+
+    Oddaje {"tekst": blok do promptu albo "", "ramie", "wymian", "znaki"}. Ramie
+    dostaje TYLKO rozmowa z kims, z kim byl juz kontakt — tylko tam pamiec moze
+    cos zmienic, wiec tylko tam porownanie cos mowi. Awaria pamieci nie zatrzymuje
+    komentarza: piszemy bez niej, jak dotad. Atrapa `stages` bez tej funkcji
+    (testy `dzien()`) = pamieci nie ma, jak przy `_ramie`.
+    """
+    pusto = {"tekst": "", "ramie": "", "wymian": 0, "znaki": 0}
+    f = getattr(stages, "pamiec_rozmowcy", None)
+    if not callable(f) or not uchwyt:
+        return pusto
+    try:
+        pam = f(uchwyt)
+    except Exception as exc:
+        print("  [pamiec] nie zbudowalem (%s) — pisze bez niej" % type(exc).__name__,
+              flush=True)
+        return pusto
+    if not (pam or {}).get("wymian"):
+        return pusto
+    r = _ramie("pamiec_rozmowcy", klucz, dzien)
+    tekst = pam.get("tekst", "") if r == "on" else ""
+    if r:
+        print("  [pamiec] E21 %s — wczesniejszych rozmow z ta osoba: %d%s"
+              % (r, pam["wymian"], (", %d znakow w prompcie" % len(tekst)) if tekst else ""),
+              flush=True)
+    return {"tekst": tekst, "ramie": r, "wymian": int(pam["wymian"]), "znaki": len(tekst)}
+
+
+def pola_pamieci(e21: dict | None) -> dict[str, Any]:
+    """Pola dziennika E21: ile wczesniejszych rozmow i ile znakow pamieci poszlo.
+
+    ZERO TEZ SIE ZAPISUJE: `pamiec_wymian: 0` znaczy „sprawdzone, kontaktu nie
+    bylo", a brak pola — „wpis sprzed E21". Bez tego monitoring nie odroznilby
+    rozmowy z obcym od pamieci, ktora w ogole nie ruszyla (`alarm.pamiec_rozmowcow`).
+    """
+    if e21 is None:
+        return {}
+    return {"pamiec_wymian": int(e21.get("wymian") or 0),
+            "pamiec_znaki": int(e21.get("znaki") or 0)}
+
+
 def ramiona_komentarza(cel: dict, pod: str, e14: bool) -> dict[str, Any]:
-    """Pola dziennika komentarza: rodzaj celu i ramiona E14/E15."""
+    """Pola dziennika komentarza: rodzaj celu, ramiona E14/E15/E21, pamiec (E21)."""
     ekspe = {}
     if e14:
         ekspe["cel_komentarza"] = "on" if pod == "notka" else "off"
     if cel.get("_e15"):
         ekspe["swiezosc_celu"] = cel["_e15"]
-    return {"pod": pod, **({"eksperymenty": ekspe} if ekspe else {})}
+    # Cel bez `_e21` (pamieci nie liczono) nie dostaje pol pamieci — brak pola
+    # ma znaczyc „nie sprawdzano", a nie „bez kontaktu" (`pola_pamieci`).
+    e21 = cel.get("_e21")
+    if (e21 or {}).get("ramie"):
+        ekspe["pamiec_rozmowcy"] = e21["ramie"]
+    return {"pod": pod, **pola_pamieci(e21), **({"eksperymenty": ekspe} if ekspe else {})}
+
+
+def ramiona_odpowiedzi(c: dict, e21: dict | None) -> dict[str, Any]:
+    """Pola dziennika odpowiedzi: uchwyt rozmowcy i E21.
+
+    UCHWYT, BO DOTAD GO NIE BYLO: 60 odpowiedzi z 30 dni i przy zadnej nie wiadomo,
+    komu odpisalismy (29.09.2026) — ani pamiec, ani pomiar nie mialy jak ich
+    polaczyc z osoba. `komu` przy odpowiedzi pod artykulem jest juz zajete nazwa
+    wyswietlana, wiec uchwyt ma wlasne pole.
+    """
+    out: dict[str, Any] = {}
+    if c.get("uchwyt"):
+        out["uchwyt"] = str(c["uchwyt"])[:60]
+    out.update(pola_pamieci(e21))
+    if (e21 or {}).get("ramie"):
+        out["eksperymenty"] = {"pamiec_rozmowcy": e21["ramie"]}
+    return out
 
 
 _KONIEC_CZASU: float | None = None
@@ -1377,10 +1442,13 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
         for c in czekaja:
             if not zostal_czas("odpowiedzi"):
                 return
+            # E21 — PAMIEC ROZMOWCY (`pamiec_do_celu`), ramie po numerze
+            # komentarza, na ktory odpisujemy.
+            e21 = pamiec_do_celu(c.get("uchwyt"), c.get("id") or c.get("pod_id") or "")
             out = stages.reply_to(
                 conn, run_id,
                 {"under": c.get("kontekst") or "our own note",
-                 "author": c["autor"], "text": c["tekst"]},
+                 "author": c["autor"], "text": c["tekst"], "pamiec": e21["tekst"]},
                 {"our_note": c["pod_czym"]})
             kandydaci = [k for k in out["candidates"] if k.get("reply")]
             if not kandydaci:
@@ -1399,10 +1467,13 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
                 if c.get("gdzie") == "artykul":
                     wynik = browser.wystaw_odpowiedz_pod_artykulem(
                         c.get("url") or "", c.get("autor") or "", tekst,
-                        wyslij=True)
+                        wyslij=True, kontekst=ramiona_odpowiedzi(c, e21))
                 else:
-                    wynik = browser.wystaw_odpowiedz(c["pod_id"], tekst,
-                                                     wyslij=True)
+                    wynik = browser.wystaw_odpowiedz(
+                        c["pod_id"], tekst, wyslij=True,
+                        kontekst={**({"komu": str(c["uchwyt"])[:60]}
+                                     if c.get("uchwyt") else {}),
+                                  **ramiona_odpowiedzi(c, e21)})
                 # Rytm odmierza sie NIEZALEZNIE od wyniku: przegladarka byla
                 # otwarta, watek wczytany, tekst wpisany.
                 rytm_stanu["odpowiedz"] = True
@@ -1884,9 +1955,12 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
             # do kosza, przy prompcie, ktory czyni je warunkiem przyjecia celu.
             # (Kanal ustawia dekorator nad `komentarze` — obejmuje takze
             # `wybierz_cele` wyzej i `zweryfikuj` w srodku `comment_on`.)
+            # E21 — PAMIEC ROZMOWCY (`pamiec_do_celu`), ramie po adresie celu.
+            cel["_e21"] = pamiec_do_celu(cel.get("uchwyt"), cel.get("url", ""))
             out = stages.comment_on(
                 conn, run_id,
-                {**strony[0], "co_dodamy": cel.get("co_dodamy", "")})
+                {**strony[0], "co_dodamy": cel.get("co_dodamy", ""),
+                 "pamiec": cel["_e21"]["tekst"]})
             dobre = [k for k in out["candidates"]
                      if k.get("comment") and k.get("safe_to_post")]
             if not dobre:
@@ -2026,11 +2100,15 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
             # bloku komentarzy pod artykulami. Tu slownik jest sklecony od zera,
             # wiec pole trzeba dopisac jawnie.
             # (Kanal ustawia dekorator nad `dyskusje` — patrz blok wyzej.)
+            # E21 — PAMIEC ROZMOWCY (`pamiec_do_celu`), ramie po adresie notki.
+            cel["_e21"] = pamiec_do_celu(cel.get("uchwyt"),
+                                         cel.get("url") or cel.get("id") or "")
             out = stages.comment_on(
                 conn, run_id,
                 {"title": cel.get("tytul", ""), "text": cel.get("opis", ""),
                  "author": cel.get("pub", ""), "url": cel.get("url", ""),
-                 "co_dodamy": cel.get("co_dodamy", "")})
+                 "co_dodamy": cel.get("co_dodamy", ""),
+                 "pamiec": cel["_e21"]["tekst"]})
             dobre = [k for k in out["candidates"]
                      if k.get("comment") and k.get("safe_to_post")]
             if not dobre:

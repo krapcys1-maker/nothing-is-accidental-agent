@@ -159,7 +159,7 @@ def swiat(slad, martwe_hosty, czekajace=()):
                     "blad": None}
         return {"wpisane": True, "wyslane": slad.wyslane, "blad": None}
 
-    def wystaw_odpowiedz_pod_artykulem(url, autor, tekst, wyslij=False):
+    def wystaw_odpowiedz_pod_artykulem(url, autor, tekst, wyslij=False, kontekst=None):
         slad.odpowiedzi_pod_artykulem += 1
         return {"wpisane": True, "wyslane": slad.wyslane, "blad": None}
 

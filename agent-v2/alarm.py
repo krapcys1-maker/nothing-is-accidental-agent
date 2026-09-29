@@ -604,6 +604,66 @@ def pomiar_statystyk(teraz: datetime | None = None) -> str | None:
             + ". Raport i eksperymenty.py beda liczyc z dziur jak z zer.")
 
 
+def pamiec_rozmowcow(teraz: datetime | None = None) -> str | None:
+    """E21: czy pamiec rozmowcy naprawde trafia do rozmow, kiedy powinna.
+
+    Wlasciciel 29.09.2026: „zrob monitoring tego, jak sie zachowuje". Eksperyment,
+    ktory po cichu przestal dzialac, zbiera przez tygodnie dane o niczym — tak jak
+    pomiar komentarzy od 4 do 28.09. Trzy objawy, od najgrubszego (tylko dwie
+    ostatnie doby i tylko, gdy E21 trwa):
+      1. rozmowy sa, ale ZADNA nie ma pola `pamiec_wymian` — kod E21 nie rusza;
+      2. pamiec mowi „kontaktu nie bylo", a dziennik zna te osobe z ostatnich
+         `stages.PAMIEC_DNI` dni — pamiec nie znajduje rozmowcow;
+      3. rozmowy z kontaktem sa, a zadna nie ma ramienia — losowanie nie dziala.
+    """
+    import obserwatorium
+    import stages
+
+    teraz = teraz or datetime.now(timezone.utc)
+    ustaw = (getattr(config, "EKSPERYMENTY", None) or {}).get("pamiec_rozmowcy") or {}
+    if not stages.ramie("pamiec_rozmowcy", "kontrola", teraz.date().isoformat()):
+        return None
+    od = max(str(ustaw.get("od") or ""), (teraz - timedelta(days=2)).isoformat()[:19])
+    wszystkie = sorted((w for w in obserwatorium._jsonl(config.DATA_DIR / "dziennik.jsonl")
+                        if w.get("rodzaj") in stages.RODZAJE_ROZMOWY and w.get("udane")),
+                       key=lambda w: str(w.get("kiedy") or ""))
+    ostatni: dict[str, str] = {}
+    okno, niezgodne = [], 0
+    for w in wszystkie:
+        t = str(w.get("kiedy") or "")[:19]
+        u = stages._uchwyt_wpisu(w)
+        if t >= od:
+            okno.append(w)
+            try:
+                granica = (datetime.fromisoformat(t)
+                           - timedelta(days=stages.PAMIEC_DNI)).isoformat()[:19]
+            except ValueError:
+                granica = t
+            # Pamiec powiedziala „kontaktu nie bylo", a dziennik te osobe zna.
+            if ("pamiec_wymian" in w and not int(w.get("pamiec_wymian") or 0)
+                    and u and ostatni.get(u, "") >= granica):
+                niezgodne += 1
+        if u:
+            ostatni[u] = t
+    if len(okno) < 5:
+        return None
+    z_polem = [w for w in okno if "pamiec_wymian" in w]
+    if not z_polem:
+        return ("E21 (pamiec rozmowcy) NIE DZIALA: %d komentarzy i odpowiedzi od %s, zaden "
+                "nie ma pola pamieci — kod eksperymentu nie rusza w przebiegu."
+                % (len(okno), od[:16].replace("T", " ")))
+    if niezgodne >= 3:
+        return ("E21 (pamiec rozmowcy): %d rozmow z osobami, ktore dziennik zna z ostatnich %d "
+                "dni, poszlo jako 'bez kontaktu' — pamiec nie znajduje rozmowcow."
+                % (niezgodne, stages.PAMIEC_DNI))
+    znani = [w for w in z_polem if int(w.get("pamiec_wymian") or 0) > 0]
+    if len(znani) >= 3 and not any((w.get("eksperymenty") or {}).get("pamiec_rozmowcy")
+                                   for w in znani):
+        return ("E21 (pamiec rozmowcy): %d rozmow z kontaktem i zadna nie ma ramienia "
+                "eksperymentu — losowanie nie dziala." % len(znani))
+    return None
+
+
 def wydarzenie_bez_pokrycia() -> str | None:
     """Wydarzenie odhaczone jako obsluzone, a w tresci ani slowa o nim.
 
@@ -742,6 +802,8 @@ def sprawdz_wszystko() -> list[str]:
          pomiar_wzajemnosci),
         # Pomiar tresci, licznika i panelu — na nim stoja eksperymenty E10-E18.
         ("pomiar-statystyk", "POMIAR TRESCI OSLEPL", pomiar_statystyk),
+        # E21 — pamiec rozmowcy, ktora po cichu przestala trafiac do rozmow.
+        ("pamiec-rozmowcow", "E21: PAMIEC ROZMOWCY NIE DZIALA", pamiec_rozmowcow),
         # Gotowy, oplacony tekst lezacy na dysku to najdrozsza cisza, jaka to
         # konto potrafi wyprodukowac — i do 2 wrzesnia 2026 nie zglaszal jej
         # nikt: przebieg z nieudana publikacja zapisywal sie jako `DONE`.
@@ -794,6 +856,32 @@ def sprawdz_wszystko() -> list[str]:
         print()
     except Exception as exc:
         print("  (nie policzylem wzajemnosci: %s)" % type(exc).__name__)
+
+    # E21 — CO ROBI PAMIEC ROZMOWCY, drukowane codziennie jak wolumeny (monitoring
+    # zachowania, o ktory prosil wlasciciel 29.09.2026). Pelny raport z odbiorem:
+    # `python agent-v2/eksperymenty.py --pamiec`.
+    try:
+        import eksperymenty
+        import obserwatorium
+
+        _e21 = (getattr(config, "EKSPERYMENTY", None) or {}).get("pamiec_rozmowcy") or {}
+        if _e21:
+            _od = max(str(_e21.get("od") or ""),
+                      (datetime.now(timezone.utc) - timedelta(days=7)).date().isoformat())
+            _r = eksperymenty.raport_pamieci(
+                obserwatorium._jsonl(config.DATA_DIR / "dziennik.jsonl"), {}, od=_od)
+            _z = _r["zachowanie"]
+            print("--- E21 pamiec rozmowcow (od %s) ---" % _od)
+            print("  rozmow %d, z polem pamieci %d, z kontaktem %d, ramiona %s"
+                  % (_r["rozmow"], _r["z_polem_pamieci"], _r["z_kontaktem"], _r["ramiona"] or "-"))
+            print("  pamiec w prompcie srednio %d znakow, koszt ok. %.4f USD/mies.; podobienstwo do"
+                  " poprzedniej on/off: %s/%s; nawiazanie on/off: %s/%s%%"
+                  % (_r["znaki_on_srednio"], _r["koszt_usd_miesiecznie"],
+                     _z.get("on", {}).get("podobienstwo", "-"), _z.get("off", {}).get("podobienstwo", "-"),
+                     _z.get("on", {}).get("nawiazanie_proc", "-"), _z.get("off", {}).get("nawiazanie_proc", "-")))
+            print()
+    except Exception as exc:
+        print("  (nie policzylem E21: %s)" % type(exc).__name__)
 
     znalezione: list[str] = []
     for klucz, temat, funkcja in kontrole:

@@ -2513,6 +2513,10 @@ def odpowiedzi_na_nasze_komentarze(ile: int = 10) -> list[dict[str, Any]]:
                 # wyladowalby obok rozmowy zamiast w niej.
                 "pod_id": ich_id,
                 "autor": autor,
+                # UCHWYT — pamiec rozmowcy (E21) i dziennik odpowiedzi.
+                "uchwyt": (ich.get("handle")
+                           or (ludzie.get((zdarzenie.get("recent_sender_ids") or [None])[0])
+                               or {}).get("handle") or ""),
                 "jezyk": ich.get("language"),
                 "tekst": tekst,
                 "id": ich_id,
@@ -2591,6 +2595,8 @@ def komentarze_pod_artykulami(ile: int = 5) -> list[dict[str, Any]]:
                     "pod_id": post["id"], "gdzie": "artykul",
                     "url": post.get("canonical_url") or "",
                     "autor": k.get("name"), "jezyk": k.get("language"),
+                    # UCHWYT — pamiec rozmowcy (E21) i dziennik odpowiedzi.
+                    "uchwyt": k.get("handle") or "",
                     "tekst": k.get("body") or "", "id": k.get("id"),
                     "data": k.get("date"),
                     "reakcje": k.get("reaction_count") or 0,
@@ -2673,6 +2679,8 @@ def nieodpowiedziane(ile: int = 10) -> list[dict[str, Any]]:
                 czekaja.append({
                     "pod_czym": (n.get("body") or "")[:400], "pod_id": n["id"],
                     "autor": ostatni.get("name"), "jezyk": ostatni.get("language"),
+                    # UCHWYT — pamiec rozmowcy (E21) i dziennik odpowiedzi.
+                    "uchwyt": ostatni.get("handle") or "",
                     "tekst": ostatni.get("body") or "", "id": ostatni.get("id"),
                     "data": ostatni.get("date"),
                 })
@@ -4034,6 +4042,7 @@ def ustaw_oswiadczenie_ai(wyslij: bool = False) -> dict[str, Any]:
 
 def wystaw_odpowiedz_pod_artykulem(
     url_artykulu: str, autor: str, tekst: str, wyslij: bool = False,
+    kontekst: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Odpowiada pod KONKRETNYM komentarzem pod naszym artykułem.
 
@@ -4113,7 +4122,8 @@ def wystaw_odpowiedz_pod_artykulem(
             wynik["wyslane"] = odp
             dopisz_wynik("odpowiedz_pod_artykulem", wynik,
                                gdzie=url_artykulu, komu=autor,
-                               slow=len(tekst.split()), tekst=tekst[:2000])
+                               slow=len(tekst.split()), tekst=tekst[:2000],
+                               **(kontekst or {}))
             print("  ODPOWIEDŹ POD ARTYKUŁEM POTWIERDZONA" if wynik["wyslane"]
                   else "  KLIKNIĘTE, ALE ODPOWIEDZI NIE WIDAĆ", flush=True)
         elif not wyslij:
@@ -4136,7 +4146,8 @@ def wystaw_odpowiedz_pod_artykulem(
             if wyslij:
                 dopisz_wynik("odpowiedz_pod_artykulem", wynik,
                              gdzie=url_artykulu, komu=autor,
-                             slow=len(tekst.split()), tekst=tekst[:2000])
+                             slow=len(tekst.split()), tekst=tekst[:2000],
+                             **(kontekst or {}))
         except Exception as exc:
             print("  (nie zapisalem odpowiedzi pod artykulem do dziennika: %s)"
                   % type(exc).__name__, flush=True)
