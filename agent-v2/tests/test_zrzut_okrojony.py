@@ -446,6 +446,83 @@ finally:
     wzajemnosc.config.przywroc_katalog_danych(_zdjecie_data)
 
 print()
+print("=== 7. PUSTKA WBREW LICZNIKOWI TO AWARIA (28.09.2026 21:31) ===")
+# Obie zakladki „odpowiedzialy" pustka bez wyjatku, a licznik profilu z tej
+# samej chwili mowil 41 obserwujacych i 27 subskrybentow. Zrzut zapisal sie
+# jako udany i alarm wzajemnosci wyslal mail nastepnego ranka.
+browser.PONOWNY_ODCZYT_CZYTELNIKOW_S = 0
+LICZNIK = {"obserwujacy": 41, "subskrybenci": 27}
+
+
+class StronaPoCzkawce(Strona):
+    """Pierwsze wejscie oddaje pustke (sama nawigacja), kazde nastepne — listy."""
+
+    def __init__(self, pelne_obs, pelne_sub, czkawek=1):
+        super().__init__(list(NAWIGACJA), list(NAWIGACJA))
+        self._pelne = {"obserwujacy": pelne_obs, "subskrybenci": pelne_sub}
+        self._czkawek = czkawek
+
+    def goto(self, url, timeout=None, wait_until=None):
+        super().goto(url, timeout, wait_until)
+        self.otwarta = "obserwujacy"
+        if self.wejscia > self._czkawek:
+            self.linki = dict(self._pelne)
+
+
+stale_puste = StronaPoCzkawce([], [], czkawek=99)
+plik7 = ROBOCZY / "czkawka_stala.jsonl"
+stary_zapis = browser.CZYTELNICY
+try:
+    browser.CZYTELNICY = plik7
+    wynik7 = browser.zapisz_czytelnikow(stale_puste, licznik=LICZNIK)
+finally:
+    browser.CZYTELNICY = stary_zapis
+sprawdz("obie puste wbrew licznikowi, takze po ponowieniu — NIC nie ladzie na dysku",
+        wynik7 is None and linie(plik7) == [] and stale_puste.wejscia == 2,
+        (wynik7, linie(plik7), stale_puste.wejscia))
+
+po_czkawce = StronaPoCzkawce(NAWIGACJA + OBSERWUJACY, NAWIGACJA + SUBSKRYBENCI)
+plik7b = ROBOCZY / "czkawka_mija.jsonl"
+try:
+    browser.CZYTELNICY = plik7b
+    wynik7b = browser.zapisz_czytelnikow(po_czkawce, licznik=LICZNIK)
+finally:
+    browser.CZYTELNICY = stary_zapis
+sprawdz("czkawka mija przy ponowieniu — zapisany PELNY zrzut, bez bledu",
+        wynik7b is not None and len(linie(plik7b)) == 1
+        and linie(plik7b)[0]["odczytane"] == ["obserwujacy", "subskrybenci"]
+        and len(linie(plik7b)[0]["obserwujacy"]) == 3 and linie(plik7b)[0]["blad"] is None,
+        linie(plik7b))
+
+# Zywa strona po `goto` na /followers wraca na zakladke obserwujacych; ta atrapa
+# robi to samo (inaczej ponowienie czytaloby liste subskrybentow jako obserwujacych).
+tylko_sub = StronaPoCzkawce(list(NAWIGACJA), NAWIGACJA + SUBSKRYBENCI, czkawek=0)
+plik7c = ROBOCZY / "pusta_jedna.jsonl"
+try:
+    browser.CZYTELNICY = plik7c
+    wynik7c = browser.zapisz_czytelnikow(tylko_sub, licznik=LICZNIK)
+finally:
+    browser.CZYTELNICY = stary_zapis
+sprawdz("pusta jedna grupa wbrew licznikowi — zrzut z etykieta: odczytani sami subskrybenci, powod w `blad`",
+        wynik7c is not None and linie(plik7c)[0]["odczytane"] == ["subskrybenci"]
+        and "licznik profilu z tej samej chwili mowi 41" in str(linie(plik7c)[0]["blad"]),
+        linie(plik7c))
+sprawdz("alarm wzajemnosci widzi taki zrzut jako okrojony, a nie jako odplyw czytelnikow",
+        browser._puste_wbrew_licznikowi({"odczytane": ["obserwujacy", "subskrybenci"], "obserwujacy": [],
+                                         "subskrybenci": []}, LICZNIK) == ["obserwujacy", "subskrybenci"])
+sprawdz("KONTRDOWOD: obserwujacy moga byc pusci, gdy wszyscy stoja na liscie subskrybentow",
+        browser._puste_wbrew_licznikowi({"odczytane": ["obserwujacy", "subskrybenci"], "obserwujacy": [],
+                                         "subskrybenci": ["a", "b"]}, {"obserwujacy": 2, "subskrybenci": 2}) == [])
+sprawdz("KONTRDOWOD: bez licznika jak dotad (konto naprawde puste zapisuje sie)",
+        browser._puste_wbrew_licznikowi({"odczytane": ["obserwujacy", "subskrybenci"], "obserwujacy": [],
+                                         "subskrybenci": []}, None) == []
+        and browser._puste_wbrew_licznikowi({"odczytane": ["obserwujacy", "subskrybenci"], "obserwujacy": [],
+                                             "subskrybenci": []}, {"obserwujacy": 0, "subskrybenci": 0}) == [])
+_zr = pathlib.Path(KORZEN / "agent-v2" / "browser.py").read_text(encoding="utf-8")
+sprawdz("pomiar podaje licznik z tej samej chwili",
+        "zapisz_czytelnikow(page, licznik=stan)" in _zr)
+
+print()
 print("=== PRODUKCJA: bez zmian ===")
 zle = 0
 for p in PILNOWANE:

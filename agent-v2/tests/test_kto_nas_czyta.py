@@ -160,9 +160,11 @@ print("=== 7. JEDNO WEJSCIE NA STRONE, W POMIARZE ===")
 zrodlo = pathlib.Path("agent-v2/browser.py").read_text(encoding="utf-8")
 i = zrodlo.index("def nasze_pozycje_do_pomiaru(")
 blok = zrodlo[i:zrodlo.index("\ndef ", i + 10)]
-sprawdz("pomiar zapisuje czytelnikow", "zapisz_czytelnikow(page)" in blok)
+# Od 29.09.2026 z licznikiem profilu z tej samej chwili (`licznik=stan`) —
+# pusta zakladka wbrew licznikowi to awaria, nie puste konto.
+sprawdz("pomiar zapisuje czytelnikow", "zapisz_czytelnikow(page, licznik=stan)" in blok)
 sprawdz("i uzywa OTWARTEJ juz strony, nie nowej sesji",
-        "zapisz_czytelnikow(page)" in blok
+        "zapisz_czytelnikow(page, licznik=stan)" in blok
         and "zapisz_czytelnikow()" not in blok)
 
 print()

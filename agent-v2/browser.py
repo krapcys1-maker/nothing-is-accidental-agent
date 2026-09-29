@@ -1179,7 +1179,36 @@ def kto_nas_czyta(page=None) -> dict[str, Any]:
     return wynik
 
 
-def zapisz_czytelnikow(page=None) -> dict[str, Any] | None:
+# Ile czekamy przed ponownym odczytem list, gdy zakladki oddaly pustke wbrew
+# licznikowi profilu (`zapisz_czytelnikow`).
+PONOWNY_ODCZYT_CZYTELNIKOW_S = 5
+
+
+def _puste_wbrew_licznikowi(kto: dict[str, Any],
+                            licznik: dict[str, Any] | None) -> list[str]:
+    """Grupy ODCZYTANE, ale puste, choc licznik profilu z tej chwili mowi inaczej.
+
+    Listy sa ROZLACZNE: kto obserwuje i subskrybuje, stoi tylko w
+    „Subscribers" (`tests/test_zrzut_okrojony.py`). Pusta lista obserwujacych
+    jest wiec mozliwa przy `followerCount` > 0 — ale tylko wtedy, gdy wszyscy
+    obserwujacy stoja na liscie subskrybentow, czyli gdy licznik nie przekracza
+    jej dlugosci. Subskrybenci: pusta lista przy liczniku > 0 to zawsze awaria.
+    """
+    if not licznik:
+        return []
+    odczytane = set(kto.get("odczytane") or [])
+    out = []
+    if ("subskrybenci" in odczytane and not kto.get("subskrybenci")
+            and int(licznik.get("subskrybenci") or 0) > 0):
+        out.append("subskrybenci")
+    if ("obserwujacy" in odczytane and not kto.get("obserwujacy")
+            and int(licznik.get("obserwujacy") or 0) > len(kto.get("subskrybenci") or [])):
+        out.append("obserwujacy")
+    return sorted(out)
+
+
+def zapisz_czytelnikow(page=None, licznik: dict[str, Any] | None = None
+                       ) -> dict[str, Any] | None:
     """Zrzut listy czytelnikow do pliku, jeden wiersz na wywolanie.
 
     ZRZUT OKROJONY ZAPISUJE SIE Z ETYKIETA, A NIE JAKO PELNY. Stary warunek
@@ -1215,7 +1244,30 @@ def zapisz_czytelnikow(page=None) -> dict[str, Any] | None:
 
     NOWA_LINIA = chr(10)
     kto = kto_nas_czyta(page)
-    odczytane = list(kto.get("odczytane") or [])
+    # PUSTA ZAKLADKA WBREW LICZNIKOWI TO AWARIA, NIE PUSTE KONTO (29.09.2026).
+    # 28.09 o 21:31 obie zakladki „odpowiedzialy" pustka — ta sama chwila, w
+    # ktorej zakladka `/following` tez „nic nie oddala" — a licznik profilu
+    # sprzed 14 sekund mowil 41 obserwujacych i 27 subskrybentow. Wyjatku nie
+    # bylo, wiec zrzut zapisal sie jako udany i alarm wzajemnosci wyslal mail
+    # nastepnego ranka (takich zrzutow bylo 5 na 164). Jedno ponowienie, bo
+    # czkawka strony zwykle mija (nastepny zrzut, 23:42, byl pelny); gdy nadal
+    # pusto — grupa NIE jest odczytana. Bez licznika jak dotad: konto, ktore
+    # naprawde nie ma nikogo, nadal zapisuje pusty, odczytany zrzut.
+    puste = _puste_wbrew_licznikowi(kto, licznik)
+    if puste:
+        print("  [czytelnicy] pusto wbrew licznikowi (%s) — czytam jeszcze raz"
+              % ", ".join(puste), flush=True)
+        time.sleep(PONOWNY_ODCZYT_CZYTELNIKOW_S)
+        kto = kto_nas_czyta(page)
+        puste = _puste_wbrew_licznikowi(kto, licznik)
+    odczytane = [g for g in (kto.get("odczytane") or []) if g not in puste]
+    if puste:
+        kto["blad"] = kto.get("blad") or "; ".join(
+            "zakladka `%s` pusta, a licznik profilu z tej samej chwili mowi %d"
+            % (g, int((licznik or {}).get(g) or 0)) for g in puste)
+        print("  [czytelnicy] ! nadal pusto wbrew licznikowi (%s)%s"
+              % (", ".join(puste), "" if odczytane else " — zrzutu nie zapisuje"),
+              flush=True)
     # NIC NIE ODCZYTANE TO NIE JEST POMIAR. Wczesniej bramka pytala o `blad`
     # i o puste listy; teraz pyta wprost o to, co nas obchodzi — czy
     # ktorakolwiek zakladka w ogole odpowiedziala. Konto, ktore naprawde nie ma
@@ -1969,7 +2021,9 @@ def nasze_pozycje_do_pomiaru(page=None, ile: int = 60) -> list[dict[str, Any]]:
             # KTO, NIE TYLKO ILU. Liczba mowi, ze konto rosnie; lista pozwala
             # zapytac, CZY ROSNIE OD NASZYCH DZIALAN. Jedno wejscie na strone
             # na caly pomiar.
-            zrzut = zapisz_czytelnikow(page)
+            # LICZNIK Z TEJ SAMEJ CHWILI rozstrzyga, czy pusta zakladka to puste
+            # konto, czy czkawka strony (`_puste_wbrew_licznikowi`).
+            zrzut = zapisz_czytelnikow(page, licznik=stan)
             if zrzut:
                 print("  [czytelnicy] obserwujacych %d, subskrybentow %d"
                       % (len(zrzut["obserwujacy"]), len(zrzut["subskrybenci"])),
