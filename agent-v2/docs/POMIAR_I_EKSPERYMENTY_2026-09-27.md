@@ -282,6 +282,50 @@ poprawki (sformułowanie w prompcie, forma) rozstrzyga warstwa 1 plus strażnicy
   - Pomiar: `[rekomendacje] polecamy 5, polecaja nas 0`, plik
     `rekomendacje.jsonl` zapisany. Raport obserwatorium ma wiersz
     rekomendacji, a E12–E18 widnieją w nim jako „zaplanowane".
+- **E21 — pamięć rozmówcy (29.09–27.10), polecenie właściciela 29.09** („możesz
+  wprowadzić to jako eksperyment plus zrobić monitoring tego, jak się
+  zachowuje"). Pomysł z przeglądu botów (Letta/MemGPT, ElizaOS). Z dziennika
+  z 30 dni: 45% komentarzy, 62% restacków i 79% polubień trafia do kogoś,
+  z kim już był kontakt, a prompt komentarza znał tylko bieżący wpis.
+  - Pamięć składa kod, nie model (`stages.pamiec_rozmowcy`):
+    - ostatnie 3 rozmowy z tą osobą z 60 dni, przycięte do 220 znaków;
+    - reakcje z pomiaru;
+    - czy nas obserwuje albo subskrybuje.
+
+    Blok trafia do promptu komentarza lub odpowiedzi tylko w ramieniu „on".
+    Ramię dostaje wyłącznie rozmowa z kimś, z kim był już kontakt, bo tylko
+    tam pamięć może coś zmienić.
+  - Koszt: ok. 300 tokenów wejścia na wywołanie Flasha, czyli grosze
+    miesięcznie. Nie ma dodatkowego wywołania modelu.
+  - Żywy test 29.09 (kopia danych, bez publikacji): autor, z którym bot
+    rozmawiał 5 razy, i jego najnowszy tekst. Blok miał 1190 znaków. Oba
+    komentarze (z pamięcią i bez) były sensowne i żaden nie powtórzył
+    wcześniejszych wątków. W tym przypadku treść nie zmieniła się wyraźnie —
+    rozstrzygnie pomiar. Dwa wywołania kosztowały 0,0019 USD.
+  - Miara decyzji: odsetek rozmów z reakcją po 48 h (polubienie, odpowiedź,
+    restack), ramię „on" do „off", 95% przedział. Miary zachowania to
+    heurystyki:
+    - podobieństwo wypowiedzi do poprzedniej do tej samej osoby — czy bot się
+      powtarza;
+    - odsetek nawiązań do wcześniejszej rozmowy — czy korzysta z pamięci.
+  - Próba: ok. 110 rozmów z kontaktem (ok. 55 na ramię) wykrywa różnicę
+    rzędu 2×.
+  - Reguła, zapisana przed startem:
+    - dolna granica > 1,0 — pamięć dla wszystkich;
+    - górna granica < 1,0 — wyłączamy;
+    - brak dowodu — zostaje tylko wtedy, gdy ramię „on" powtarza się wyraźnie
+      mniej (koszt jest pomijalny).
+
+    Ocena ok. **31.10**.
+  - Monitoring:
+    - `python agent-v2/eksperymenty.py --pamiec` — pokrycie, ramiona, znaki
+      i koszt, podobieństwo, nawiązania, odbiór;
+    - codzienny wiersz „E21 pamiec rozmowcow" w logu alarmu;
+    - kontrola alarmu `pamiec-rozmowcow` — mail, gdy nowe wpisy nie mają
+      pola pamięci, gdy pamięć nie znajduje osób, które dziennik zna, albo
+      gdy rozmowy z kontaktem nie mają ramion.
+  - Przy okazji: odpowiedzi zapisują wreszcie uchwyt rozmówcy. Przedtem
+    60 odpowiedzi z 30 dni nie dało się połączyć z żadną osobą.
 - **Zbieranie danych dołożone 28.09 razem z pakietem:**
   - alarm `pomiar-statystyk`: pomiar treści, licznika i panelu oraz komentarzy
     z dwóch dób;
