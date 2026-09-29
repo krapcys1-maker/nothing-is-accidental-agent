@@ -3658,6 +3658,10 @@ def zapisz_rekomendacje(page) -> dict[str, Any] | None:
     return stan
 
 
+# Przycisk dodania rekomendacji w obu jezykach panelu wydawcy (`polec_publikacje`).
+PRZYCISK_REKOMENDACJI = re.compile(r"^\s*(Dodaj rekomendację|Add recommendation)\s*$", re.I)
+
+
 def polec_publikacje(fraza: str, powod: str,
                      wyslij: bool = False) -> dict[str, Any]:
     """Dodaje REKOMENDACJE publikacji. Domyslnie wypelnia i NIE zatwierdza.
@@ -3701,9 +3705,12 @@ def polec_publikacje(fraza: str, powod: str,
                   timeout=READ_TIMEOUT_MS * 2, wait_until="domcontentloaded")
         page.wait_for_timeout(SETTLE_MS + 4000)
 
-        guzik = page.get_by_role("button", name="Dodaj rekomendację").first
+        # OBA JEZYKI PANELU. 29.09.2026 jezyk publikacji zmieniony z polskiego
+        # na angielski i panel wydawcy mowi teraz „Add recommendation" — sam
+        # polski napis przestal cokolwiek znajdowac.
+        guzik = page.get_by_role("button", name=PRZYCISK_REKOMENDACJI).first
         if guzik.count() == 0:
-            wynik["blad"] = "nie ma przycisku „Dodaj rekomendację”"
+            wynik["blad"] = "nie ma przycisku „Dodaj rekomendację” / „Add recommendation”"
             return wynik
         guzik.click(timeout=10_000)
         # OKNO POTRZEBUJE CZASU. Pierwsze rozpoznanie zajrzalo po 3,5 s i nie
@@ -3738,7 +3745,7 @@ def polec_publikacje(fraza: str, powod: str,
         trafienie.click(timeout=10_000)
         page.wait_for_timeout(3000)
 
-        opis = page.get_by_placeholder(re.compile("pokochaj", re.I)).first
+        opis = page.get_by_placeholder(re.compile("pokochaj|love", re.I)).first
         if opis.count():
             opis.fill(powod[:280], timeout=10_000)
             wynik["wpisane"] = True
@@ -3749,7 +3756,7 @@ def polec_publikacje(fraza: str, powod: str,
             return wynik
 
         zatwierdz = page.get_by_role("button",
-                                     name="Dodaj rekomendację").last
+                                     name=PRZYCISK_REKOMENDACJI).last
         zatwierdz.click(timeout=10_000)
         page.wait_for_timeout(6000)
 
