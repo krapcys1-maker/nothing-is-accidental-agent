@@ -339,6 +339,38 @@ poprawki (sformułowanie w prompcie, forma) rozstrzyga warstwa 1 plus strażnicy
   - koszt i odsetek odmów dostawcy.
 - **Co tydzień:** karta wyników i `eksperymenty.py` dla trwających eksperymentów.
 
+## Poprawki pisania i celów 1.10.2026 — zmiany w trakcie eksperymentów
+
+Decyzja właściciela po przeglądzie treści z 1.10 („ok to popraw"). Wszystkie
+działają w obu ramionach naraz, więc porównanie ramion zostaje uczciwe, ale
+ocena musi pamiętać o dacie zmiany.
+
+- **Cele komentarzy** (`kanal.odsiej_cele`, `kanal.LimitAutorow`):
+  - teksty starsze niż 7 dni i notki starsze niż 48 h odpadają;
+  - pod notkami ciche wątki (0 reakcji i 0 komentarzy) odpadają, a żywe idą
+    pierwsze;
+  - najwyżej 3 komentarze + restacki u jednego autora w 7 dni, także u siostry.
+  - Powód: 7 z 12 komentarzy pod artykułami trafiało pod teksty starsze niż
+    2 miesiące; pod notkami 8% z reakcją (NIA, która wybiera żywe wątki, ma
+    48%); jeden autor dostał 16 komentarzy w tydzień.
+  - **E14 oceniać osobno przed 1.10 i od 1.10**: zmieniło się to, co znaczy
+    „pod artykułem" (tylko świeże) i „pod notką" (tylko żywe).
+- **Długość notki wprost** (`stages.z_dlugoscia`, zwykłe okno, poza E17).
+  Dalej nic nie tniemy. **E11 od 1.10** dostaje to samo polecenie u obu
+  pisarzy — MiMo pisał 4 z 5 notek ponad 120 słów, DeepSeek 4 z 8.
+- **Zakończenie brakiem dowodu najwyżej co trzecia notka**
+  (`POLECENIE_ZAKONCZENIA`, `przenies_zastrzezenie`). Zastrzeżenie zostaje,
+  tylko nie jako ostatnie słowo; przenosi je ten sam pisarz. Miara:
+  `koncowka_ocena` w dzienniku notki (już była).
+- **Zapowiedzi artykułu z innej strony** (`zapowiedzi_artykulu`,
+  `powtorzenie`, próg 8% ciągów 4 słów — z prawdziwej pary kopii z 29–30.09).
+- **Odpowiedzi w skali komentarza czytelnika** (`widelki_odpowiedzi`):
+  do 15 słów → najwyżej 35, do 60 → 60, dłużej → 90.
+- **Poprawka zdania w artykule widzi zdanie przed nim**; poprawka, która je
+  w połowie powtarza, usuwa zdanie bez pokrycia (`popraw_bez_pokrycia`).
+
+Test: `tests/test_poprawki_pisania.py`.
+
 ## Śledztwa — co mierzyć
 
 - **Przesłania:** grupa „przeslanie" w karcie i w `eksperymenty.py`. To ok. 6

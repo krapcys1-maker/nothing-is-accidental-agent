@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **36 plików**, 41 962 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **36 plików**, 42 435 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -113,8 +113,8 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 > w głównej ścieżce artykułu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
-się testować bez przeglądarki i bez pieniędzy**. 199 zestawów
-testów, 5075 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+się testować bez przeglądarki i bez pieniędzy**. 200 zestawów
+testów, 5115 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -143,7 +143,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-3423 wierszy, 35 funkcji na poziomie modułu, 1 klas
+3477 wierszy, 38 funkcji na poziomie modułu, 2 klas
 
 | funkcja | co robi |
 |---|---|
@@ -152,6 +152,9 @@ wiec nie da sie go rozjechac z kodem.
 | `odmow_publikacji_z_kopii(wyslij)` | Kopia testowa nie ma prawa nic opublikowac. Nigdy. |
 | `zajmij_zamek()` | Nie pozwala dwóm przebiegom działać naraz. |
 | `opis_celu(cel)` | Co wiedzielismy o celu w chwili pisania — do dziennika. |
+| `_limit_autorow(kanal)` *(wewn.)* | `kanal.LimitAutorow` z dziennika — albo limit pusty, gdy atrapa go nie ma (jak `_ramie`). |
+| `_sito_celow(kanal, cele, limit, notki)` *(wewn.)* | `kanal.odsiej_cele` — atrapa bez tej funkcji znaczy „bez sita". |
+| `_zywe_najpierw(kanal, cele)` *(wewn.)* | `kanal.zywe_najpierw` — atrapa bez tej funkcji zostawia kolejnosc. |
 | `_ramie(nazwa, miejsce, dzien)` *(wewn.)* | Ramie eksperymentu z `stages.ramie` — a atrapa `stages` bez tej funkcji |
 | `przydzial_komentarzy(n, klucz, dzien)` | Ile miejsc na komentarz dostaje blok pod ARTYKULAMI, a ile pod NOTKAMI. |
 | `uloz_wedlug_swiezosci(cele, klucz, dzien)` | E15 (`swiezosc_celu`): kolejnosc celow, kazdy z ramieniem w polu `_e15`. |
@@ -185,7 +188,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-11130 wierszy, 185 funkcji na poziomie modułu, 0 klas
+11370 wierszy, 193 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -207,6 +210,7 @@ wiec nie da sie go rozjechac z kodem.
 | `_ile_reakcji(k)` *(wewn.)* | „(reakcji: N)" TYLKO wtedy, gdy zrodlo to pole w ogole wypelnia. |
 | `_po_rowno_ze_zrodel(komentarze, ile)` *(wewn.)* | Wycinek listy, ktory NIE MOZE zaglodzic zadnego miejsca rozmowy. |
 | `wybierz_do_odpowiedzi(conn, run_id, komentarze)` | Komu odpisac, gdy komentarzy jest wiecej niz kilka. |
+| `widelki_odpowiedzi(slow_czytelnika)` | (dol, gora) dlugosci odpowiedzi w slowach — w skali tego, co napisal czytelnik. |
 | `reply_to(conn, run_id, comment, evidence)` | Odpowiedź na komentarz pod własną treścią — do szuflady. |
 | `plan_tygodnia(dzien_artykulu)` | Harmonogram tygodnia: co i kiedy wychodzi. |
 | `grafika(conn, run_id, draft, sciezka_artykulu)` | Nagłówek graficzny artykułu. |
@@ -264,6 +268,13 @@ wiec nie da sie go rozjechac z kodem.
 | `za_duzo_zargonu(tekst)` | Terminy insiderskie, gdy jest ich wiecej, niz notka udzwignie. Inaczej pusto. |
 | `dopnij_pytanie(notka, pytanie)` | E18: notka konczy sie pytaniem — gdy model go nie postawil, dopina je KOD. |
 | `z_krotka_notka(prompt, dol, gora)` | Prompt notki z poleceniem krotkiej notki (E17, ramie „on"). |
+| `z_dlugoscia(prompt, dol, gora)` | Prompt notki z dlugoscia podana wprost (poza ramieniem „on" E17). |
+| `zakonczenia_brakiem(ile)` | Ostatnie zdania tych z `ile` ostatnich notek, ktore koncza sie brakiem. |
+| `_slowa_tresci(tekst)` *(wewn.)* | — |
+| `_ostatni_czlon(tekst)` *(wewn.)* | Ostatni czlon ostatniego zdania (po przecinku, dwukropku, sredniku, myslniku). |
+| `przenies_zastrzezenie(conn, run_id, etap, tekst)` | Notka z zastrzezeniem przeniesionym przed koniec — albo pusto, gdy sie nie da. |
+| `zapowiedzi_artykulu(link, ile)` | Nasze notki, ktore juz promowaly ten artykul — po adresie w tresci. |
+| `powtorzenie(tekst, wzorce, n)` | Jaka czesc n-slowowych ciagow tekstu stoi juz w ktoryms ze wzorcow (0-1). |
 | `z_pytaniem_na_koncu(prompt)` | Prompt notki z poleceniem zakonczenia pytaniem (E18, ramie „on"). |
 | `note(conn, run_id, note_type, evidence, link, note_form, etap, seria, wariant)` | Jedna notka danego typu i danej FORMY — do szuflady. |
 | `_host_adresu(url)` *(wewn.)* | — |
@@ -377,7 +388,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `browser.py` — cała styczność z Substackiem; nie woła modelu
 
-5734 wierszy, 110 funkcji na poziomie modułu, 0 klas
+5744 wierszy, 110 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -489,7 +500,7 @@ wiec nie da sie go rozjechac z kodem.
 | `potwierdz_komentarz(page, url, tekst)` | Pyta Substacka, czy komentarz naprawdę wisi — zamiast wierzyć kliknięciu. |
 | `wystaw_komentarz(url, tekst, wyslij, kontekst)` | Wystawia komentarz pod cudzym postem. Domyślnie WYPEŁNIA i NIE WYSYŁA. |
 | `read_pages(urls)` | Otwiera strony w przeglądarce i zwraca ich widoczny tekst. |
-| `restackuj_w_kanale(ile, decyzja, wyslij)` | Podaje dalej cudze notki z wlasnym zdaniem. |
+| `restackuj_w_kanale(ile, decyzja, wyslij, limit_autorow)` | Podaje dalej cudze notki z wlasnym zdaniem. |
 | `_notka_przy_przycisku(przycisk)` *(wewn.)* | Tresc i autor notki, przy ktorej stoi ten przycisk. |
 
 ### `llm.py` — JEDYNA warstwa dostępu do modeli i liczenia kosztu
@@ -562,7 +573,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `kanal.py` — pamięć o cudzych publikacjach
 
-324 wierszy, 10 funkcji na poziomie modułu, 0 klas
+470 wierszy, 17 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -573,6 +584,13 @@ wiec nie da sie go rozjechac z kodem.
 | `_za_swiezy(post, widelki)` *(wewn.)* | Czy post jest na tyle swiezy, ze komentarz wygladalby jak czujka bota. |
 | `wartosc_celu(x)` | Klucz sortowania celow: WCZESNIE przed GLOSNO. |
 | `_za_niedawno_u_nich(post)` *(wewn.)* | Czy komentowalismy u tej publikacji w ostatnich dniach. |
+| `_komentarze_celu(x)` *(wewn.)* | Liczba komentarzy pod celem — notki z kanalu nazywaja ja `odpowiedzi`. |
+| `za_stary_cel(x, notka)` | Cel starszy niz `config.MAKS_WIEK_*_DO_KOMENTARZA` — tam nikt juz nie czyta. |
+| `zywy_watek(x)` | Watek, w ktorym ktos juz jest: `ZYWY_WATEK_KOMENTARZY` albo `ZYWY_WATEK_REAKCJI`. |
+| `cichy_watek(x)` | Zero reakcji i zero komentarzy — komentarz pod tym przeczyta tylko autor. |
+| `zywe_najpierw(cele)` | Zywe watki przed cichymi, w obrebie grup kolejnosc bez zmian. |
+| `_klucz_autora(wartosc)` *(wewn.)* | — |
+| `odsiej_cele(cele, limit, notki)` | Sito przed ocena celow: za stare, (pod notkami) ciche, ponad limit autora. |
 | `posty_z_kanalu(ile)` | Ostatnie posty z kanalu czytelnika, z liczba komentarzy i reakcji. |
 | `notki_z_kanalu(ile)` | Cudze notki, pod ktorymi mozna wejsc w dyskusje. |
 | `szukaj_nowych(ile)` | Szuka NOWYCH kont wyszukiwarka Substacka, poza naszym kregiem. |
@@ -635,7 +653,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-3853 wierszy, 43 funkcji na poziomie modułu, 0 klas
+3876 wierszy, 43 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -8595,9 +8613,13 @@ def _klik_na_profilu(handle: str, napisy: tuple[str, ...], rodzaj: str,
 <!--KOD:browser.restackuj_w_kanale-->
 ```python
 def restackuj_w_kanale(
-    ile: int, decyzja, wyslij: bool = False,
+    ile: int, decyzja, wyslij: bool = False, limit_autorow=None,
 ) -> dict[str, Any]:
     """Podaje dalej cudze notki z wlasnym zdaniem.
+
+    `limit_autorow` (`kanal.LimitAutorow`, 1.10.2026): autor ponad tygodniowy
+    sufit komentarzy i restackow jest pomijany PRZED platna decyzja, a udany
+    restack podnosi jego licznik. Bez limitu (None) — jak dotad.
 
     `decyzja` to funkcja (notka: dict) -> dict, ktora oddaje
     {"restack": bool, "sentence": str, "reason": str}. Decyzja siedzi POZA ta
@@ -8642,6 +8664,10 @@ def restackuj_w_kanale(
                 # decyzja bylaby losowaniem, a nie ocena.
                 notka = _notka_przy_przycisku(kandydat)
                 if not notka.get("tekst"):
+                    continue
+                if limit_autorow is not None and not limit_autorow.wolno(notka):
+                    print(f"    pomijam: limit autora ({notka.get('autor', '?')[:24]})",
+                          flush=True)
                     continue
                 wynik["rozwazone"] += 1
                 ocena = decyzja(notka)
@@ -8691,6 +8717,8 @@ def restackuj_w_kanale(
                 page.get_by_role("button", name="Post").last.click(timeout=8000)
                 page.wait_for_timeout(SETTLE_MS + 2000)
                 wynik["restackowane"] += 1
+                if limit_autorow is not None:
+                    limit_autorow.zapisz(notka)
                 # Restack tworzy NOWA notke z wlasnym numerem. Bez niego
                 # restack byl jedyna forma publikacji, ktorej nie dalo sie
                 # zmierzyc — a to najcenniejszy sygnal, jaki mamy: w badaniu
@@ -11772,6 +11800,11 @@ wartosc i komentarz stojacy bezposrednio nad definicja.
 | `MIN_WIEK_NOTKI_MIN` | `(20, 90)` | NOTKA TO NIE ARTYKUL i zyje godziny, nie dni. Ten sam prog co dla artykulow oznaczal, ze pod notki wchodzilismy zawsze PO koncu rozmowy: prz |
 | `KOMFORTOWO_KOMENTARZY` | `25` | ILU KOMENTARZY POD CELEM JESZCZE NIE UWAZAMY ZA TLOK. Wyszukiwarka oddawala posty ze srednio 45 komentarzami, jeden ze 126 — a komentarz sto |
 | `ODSTEP_DNI_NA_PUBLIKACJE` | `4` | Ile dni odstepu przed kolejnym komentarzem pod TA SAMA publikacja. Komentarz pod kazdym kolejnym tekstem tej samej osoby to drugi najczyteln |
+| `MAKS_WIEK_POSTA_DO_KOMENTARZA_DNI` | `7` | NAJSTARSZY CEL KOMENTARZA (1.10.2026, decyzja wlasciciela). `MIN_WIEK_*` pilnuje tylko, zeby nie wejsc za szybko; gornej granicy nie bylo, a |
+| `MAKS_WIEK_NOTKI_DO_KOMENTARZA_H` | `48` | — |
+| `ZYWY_WATEK_KOMENTARZY` | `2` | ZYWY WATEK POD NOTKA (1.10.2026). Przy tym samym wieku celu (~7,5 h) NIA wybiera notki z mediana 8 reakcji i 2 komentarzy przed nia — 48% je |
+| `ZYWY_WATEK_REAKCJI` | `5` | — |
+| `MAKS_DZIALAN_U_AUTORA_7_DNI` | `3` | NAJWYZEJ TYLE KOMENTARZY + RESTACKOW U JEDNEGO AUTORA W 7 DNI (1.10.2026). Zmierzone 24-30.09: jeden autor dostal 16 komentarzy w tydzien, i |
 | `HASLA_SZUKANIA` | `( # rdzen: systemy AI i ich dzialanie w swie` | HASLA, KTORYMI AGENT SZUKA NOWYCH KONT. Kanal czytelnika pokazuje tylko to, co juz znamy, wiec sam z siebie nie przyprowadzi nikogo nowego — |
 | `ILE_HASEL_NA_PRZEBIEG` | `5` | PIEC, NIE TRZY. Przy trzech haslach na przebieg i osiemnastu w puli agent ogladal jedna szosta rewiru na raz — a po zaostrzeniu reguly celow |
 | `RUNDY_SZUKANIA_CELOW` | `4` | ILE RAZY SZUKAC CELOW W JEDNYM PRZEBIEGU, zanim odpuscimy. „Niech szuka, az znajdzie" bez ogranicznika znaczy „w nieskonczonosc", a kazda ru |

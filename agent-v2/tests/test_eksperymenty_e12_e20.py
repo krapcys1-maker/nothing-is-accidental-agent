@@ -314,8 +314,10 @@ sprawdz("zdanie, ktore E17 podmienia, stoi w notka.md",
         stages.ZDANIE_O_DLUGOSCI.replace("%d", "{min_words}", 1).replace("%d", "{max_words}", 1) in _notka_md)
 sprawdz("E18: prompt z poleceniem pytania",
         stages.POLECENIE_PYTANIA in _z_wariantem and stages.ZDANIE_O_ZAKONCZENIU not in _z_wariantem)
-sprawdz("KONTRDOWOD: bez wariantu okno i zakonczenie jak dotad",
-        (stages.ZDANIE_O_DLUGOSCI % (config.NOTE_MIN_WORDS, config.NOTE_MAX_WORDS)) in _bez_wariantu
+# Od 1.10.2026 zwykle okno tez stoi wprost (`z_dlugoscia`) — to samo okno, nie krotkie.
+sprawdz("KONTRDOWOD: bez wariantu zwykle okno (wprost, od 1.10) i zakonczenie jak dotad",
+        (stages.POLECENIE_DLUGOSCI % (config.NOTE_MIN_WORDS, config.NOTE_MAX_WORDS,
+                                      config.NOTE_MAX_WORDS)) in _bez_wariantu
         and stages.ZDANIE_O_ZAKONCZENIU in _bez_wariantu and "SHORT note" not in _bez_wariantu)
 sprawdz("KONTRDOWOD: dluga forma zostaje w swoim oknie mimo E17",
         (stages.ZDANIE_O_DLUGOSCI % (config.NOTE_MIN_WORDS_DLUGA, config.NOTE_MAX_WORDS_DLUGA)) in _dluga

@@ -174,6 +174,37 @@ def opis_celu(cel: dict) -> dict:
     }
 
 
+class _BezLimituAutorow:
+    """Limit u autora, gdy `kanal` go nie ma — atrapa w testach `dzien()`. Nic nie ogranicza."""
+
+    def wolno(self, x: dict) -> bool:
+        return True
+
+    def zapisz(self, x: dict) -> None:
+        pass
+
+    def odsiej(self, cele: list) -> list:
+        return list(cele)
+
+
+def _limit_autorow(kanal: Any) -> Any:
+    """`kanal.LimitAutorow` z dziennika — albo limit pusty, gdy atrapa go nie ma (jak `_ramie`)."""
+    klasa = getattr(kanal, "LimitAutorow", None)
+    return klasa.z_dziennika() if klasa is not None else _BezLimituAutorow()
+
+
+def _sito_celow(kanal: Any, cele: list, limit: Any, notki: bool) -> list:
+    """`kanal.odsiej_cele` — atrapa bez tej funkcji znaczy „bez sita"."""
+    f = getattr(kanal, "odsiej_cele", None)
+    return f(cele, limit, notki) if callable(f) else cele
+
+
+def _zywe_najpierw(kanal: Any, cele: list) -> list:
+    """`kanal.zywe_najpierw` — atrapa bez tej funkcji zostawia kolejnosc."""
+    f = getattr(kanal, "zywe_najpierw", None)
+    return f(cele) if callable(f) else cele
+
+
 def _ramie(nazwa: str, miejsce: Any, dzien: str | None = None) -> str:
     """Ramie eksperymentu z `stages.ramie` — a atrapa `stages` bez tej funkcji
     znaczy „eksperyment nie trwa".
@@ -1300,6 +1331,9 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
     na_teraz["komentarze"] = zmiesci_sie("komentarz", na_teraz["komentarze"])
     # E14 — ile miejsc idzie pod artykuly, a ile pod notki (`przydzial_komentarzy`).
     przydzial = przydzial_komentarzy(na_teraz["komentarze"], run_id)
+    # LIMIT U JEDNEGO AUTORA (1.10.2026) — jeden licznik na przebieg, wspolny dla
+    # komentarzy pod artykulami, pod notkami i restackow (`kanal.LimitAutorow`).
+    limit_autorow = _limit_autorow(kanal)
     if przydzial["e14"]:
         print("   [E14 cel komentarza] pod artykulami %d, pod notkami %d"
               % (przydzial["artykuly"], przydzial["notki"]), flush=True)
@@ -1864,6 +1898,10 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
                 print("  [cele] odsiane adresy, pod ktorymi juz stoimy: %d z %d"
                       % (przed - len(unikalne), przed), flush=True)
 
+        # CZWARTE SITO: ZA STARE I PONAD LIMIT AUTORA (1.10.2026) — `kanal.odsiej_cele`.
+        # Wyszukiwarka oddaje teksty trafne, nie swieze: 7 z 12 komentarzy pod
+        # artykulami szlo pod teksty starsze niz 2 miesiace, z zerem wyswietlen.
+        unikalne = _sito_celow(kanal, unikalne, limit_autorow, notki=False)
         cele = stages.wybierz_cele(conn, run_id, unikalne)
 
         # SZUKAJ, AZ ZNAJDZIESZ — DECYZJA WLASCICIELA 31 SIERPNIA.
@@ -1924,12 +1962,15 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
                 if przed != len(dobrane):
                     print("  [cele] runda %d: odsiane juz skomentowane adresy: %d z %d"
                           % (rundy, przed - len(dobrane), przed), flush=True)
+            dobrane = _sito_celow(kanal, dobrane, limit_autorow, notki=False)
             if not dobrane:
                 continue
             cele = cele + stages.wybierz_cele(conn, run_id, dobrane)
         if rundy > 1:
             print("  [cele] po %d rundach: %d celow"
                   % (rundy, len(cele)), flush=True)
+        # Rundy oceniaja partie osobno, wiec ten sam autor moze wrocic z dwoch.
+        cele = limit_autorow.odsiej(cele)
 
         # E15 — swiezy cel na wylosowanych miejscach (`uloz_wedlug_swiezosci`).
         cele = uloz_wedlug_swiezosci(cele, "%s-artykuly" % run_id)
@@ -2038,6 +2079,7 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
                     continue
                 # Zapamietujemy U KOGO, zeby nie wracac tam za kilka dni.
                 kanal.zapamietaj_komentarz(cel)
+                limit_autorow.zapisz(cel)
                 # I zdejmujemy host z listy platnych, jesli tam byl: skoro
                 # komentarz wszedl, ustawienia sie zmienily.
                 from urllib.parse import urlparse as _up
@@ -2069,6 +2111,10 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
              "data": x.get("data") or "", "skad": x.get("skad") or ""}
             for x in kanal.szukaj_nowych() if x.get("rodzaj") == "notka"]
         notki = [n for n in notki if n.get("id")]
+        # SITO PRZED OCENA (1.10.2026) — `kanal.odsiej_cele`: notki starsze niz
+        # `MAKS_WIEK_NOTKI_DO_KOMENTARZA_H`, ciche (0 reakcji i 0 komentarzy)
+        # i ponad limit autora odpadaja; zywe watki ida najpierw.
+        notki = _sito_celow(kanal, notki, limit_autorow, notki=True)
         if not notki:
             return
         cele = stages.wybierz_cele(
@@ -2091,6 +2137,11 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
         # przekroczyla przez to budzetu dobowego. Powod jest strukturalny, nie
         # szczesliwy: `zostalo` liczy sie od nowa z dziennika na poczatku
         # KAZDEGO przebiegu, wiec nadmiar jednego zabiera z puli nastepnym.
+        # ZYWE NAJPIERW (1.10.2026). Ocena celow wybiera po temacie, a kolejnosc
+        # przyjetych decyduje, ktore miejsca zostana wypelnione — cichy watek
+        # idzie tylko jako uzupelnienie. Zmierzone: NIA pisze pod notkami z
+        # mediana 8 reakcji i 2 komentarzy (48% z reakcja), NIE pisala pod 3 i 0 (8%).
+        cele = _zywe_najpierw(kanal, limit_autorow.odsiej(cele))
         # E15 — swiezy cel na wylosowanych miejscach (`uloz_wedlug_swiezosci`).
         cele = uloz_wedlug_swiezosci(cele, "%s-notki" % run_id)
         for cel in cele[: przydzial["notki"]]:
@@ -2150,6 +2201,7 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
                 # uzasadnienie w bloku `komentarze()`.
                 if wynik.get("pominiete") or not wynik.get("wyslane"):
                     continue
+            limit_autorow.zapisz(cel)
             zrobione["komentarze"] += 1
 
     # --- 3c. obserwowanie nowych: to, co poszerza krąg ------------------------
@@ -2561,8 +2613,10 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
         if not ile:
             print("  budżet na dziś: 0 — pomijam", flush=True)
             return
+        # Ten sam limit u autora, co przy komentarzach (`kanal.LimitAutorow`).
         w = browser.restackuj_w_kanale(
-            ile, lambda n: stages.ocen_restack(conn, run_id, n), wyslij=wyslij)
+            ile, lambda n: stages.ocen_restack(conn, run_id, n), wyslij=wyslij,
+            limit_autorow=limit_autorow)
         zrobione["restacki"] = w.get("restackowane", 0)
         if w.get("odmowy"):
             print(f"  odmów: {len(w['odmowy'])} — milczenie jest pełnym wynikiem",

@@ -3158,6 +3158,29 @@ KOMFORTOWO_KOMENTARZY = 25
 # automatu — czlowiek nie czyta wszystkiego, co ktos wypuszcza.
 ODSTEP_DNI_NA_PUBLIKACJE = 4
 
+# NAJSTARSZY CEL KOMENTARZA (1.10.2026, decyzja wlasciciela). `MIN_WIEK_*` pilnuje
+# tylko, zeby nie wejsc za szybko; gornej granicy nie bylo, a wyszukiwarka
+# Substacka oddaje teksty trafne, nie swieze. Zmierzone 28.09-1.10: z 12
+# komentarzy pod artykulami 7 trafilo pod teksty starsze niz 2 miesiace
+# (najstarszy 1,5 roku; 27.09 nawet 2,6 roku), 2 pod mlodsze niz doba — tam,
+# gdzie nikt juz nie czyta. Nieznana data liczy sie jako stara.
+MAKS_WIEK_POSTA_DO_KOMENTARZA_DNI = 7
+MAKS_WIEK_NOTKI_DO_KOMENTARZA_H = 48
+
+# ZYWY WATEK POD NOTKA (1.10.2026). Przy tym samym wieku celu (~7,5 h) NIA
+# wybiera notki z mediana 8 reakcji i 2 komentarzy przed nia — 48% jej
+# komentarzy dostaje reakcje, mediana 6,5 wyswietlenia; NIE wybierala 3 reakcje
+# i 0 komentarzy — 8% z reakcja, mediana 1 wyswietlenie. Zywe ida najpierw,
+# ciche (0 reakcji i 0 komentarzy) odpadaja przed platna ocena celow.
+ZYWY_WATEK_KOMENTARZY = 2
+ZYWY_WATEK_REAKCJI = 5
+
+# NAJWYZEJ TYLE KOMENTARZY + RESTACKOW U JEDNEGO AUTORA W 7 DNI (1.10.2026).
+# Zmierzone 24-30.09: jeden autor dostal 16 komentarzy w tydzien, inny 6
+# restackow. Taki rytm wyglada na automat, a regulamin Substacka zakazuje
+# sztucznej aktywnosci. Odpowiedzi w rozmowie (ktos odpisal nam) sie nie licza.
+MAKS_DZIALAN_U_AUTORA_7_DNI = 3
+
 # HASLA, KTORYMI AGENT SZUKA NOWYCH KONT. Kanal czytelnika pokazuje tylko to,
 # co juz znamy, wiec sam z siebie nie przyprowadzi nikogo nowego — a wlasnie
 # o nowych ludzi chodzi. Wyszukiwarka Substacka oddaje konta spoza naszego kregu.

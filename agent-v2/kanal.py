@@ -101,6 +101,152 @@ def _za_niedawno_u_nich(post: dict) -> bool:
     return (datetime.now(timezone.utc) - kiedy) < timedelta(
         days=config.ODSTEP_DNI_NA_PUBLIKACJE)
 
+
+# --- SITO CELOW: WIEK, ZYCIE WATKU, AUTOR (1.10.2026, decyzja wlasciciela) ---
+#
+# Przeglad tresci z 1.10.2026: komentarze NIE byly madre, ale stawiane tam,
+# gdzie nikt nie czyta — pod tekstami sprzed miesiecy i lat, pod notkami bez
+# jednego komentarza, i ciagle u tych samych osob. Sito stoi PRZED platna ocena
+# celow (`stages.wybierz_cele`), tak jak sita platnych i martwych hostow.
+
+def _komentarze_celu(x: dict) -> int:
+    """Liczba komentarzy pod celem — notki z kanalu nazywaja ja `odpowiedzi`."""
+    return int(x.get("komentarze", x.get("odpowiedzi")) or 0)
+
+
+def za_stary_cel(x: dict, notka: bool) -> bool:
+    """Cel starszy niz `config.MAKS_WIEK_*_DO_KOMENTARZA` — tam nikt juz nie czyta.
+
+    Nieznana data liczy sie jako stara (`_wiek_minut` oddaje wtedy 1e9).
+    """
+    wiek = _wiek_minut(x.get("data", ""))
+    if notka:
+        return wiek > config.MAKS_WIEK_NOTKI_DO_KOMENTARZA_H * 60
+    return wiek > config.MAKS_WIEK_POSTA_DO_KOMENTARZA_DNI * 24 * 60
+
+
+def zywy_watek(x: dict) -> bool:
+    """Watek, w ktorym ktos juz jest: `ZYWY_WATEK_KOMENTARZY` albo `ZYWY_WATEK_REAKCJI`."""
+    return (_komentarze_celu(x) >= config.ZYWY_WATEK_KOMENTARZY
+            or int(x.get("reakcje") or 0) >= config.ZYWY_WATEK_REAKCJI)
+
+
+def cichy_watek(x: dict) -> bool:
+    """Zero reakcji i zero komentarzy — komentarz pod tym przeczyta tylko autor."""
+    return _komentarze_celu(x) == 0 and int(x.get("reakcje") or 0) == 0
+
+
+def zywe_najpierw(cele: list[dict]) -> list[dict]:
+    """Zywe watki przed cichymi, w obrebie grup kolejnosc bez zmian.
+
+    Kolejnosc po ocenie celow decyduje, ktore miejsca zostana wypelnione
+    (`cele[:przydzial]`), wiec cichy cel idzie tylko jako uzupelnienie.
+    """
+    return [x for x in cele if zywy_watek(x)] + [x for x in cele if not zywy_watek(x)]
+
+
+def _klucz_autora(wartosc: Any) -> str:
+    return " ".join(str(wartosc or "").casefold().split()).lstrip("@")
+
+
+class LimitAutorow:
+    """Ile komentarzy i restackow zrobilismy u kazdego autora w ostatnich 7 dniach.
+
+    DWA JEZYKI W DZIENNIKU. Komentarz zapisuje `komu` (uchwyt) i `publikacja`
+    (nazwe), restack — `komu` jako NAZWE, bo przycisk w kanale nie zna uchwytu.
+    Liczymy wiec po wszystkich kluczach, jakie wpis ma, a cel sprawdzamy po
+    wszystkich swoich: komentarz u osoby podnosi licznik jej nazwy, wiec restack
+    (znajacy tylko nazwe) widzi takze komentarze.
+
+    SIOSTRA BEZ WYJATKU: limit dotyczy tez drugiego konta — rozmowe w watku
+    (odpowiedzi) nadal prowadzimy, ale wlasne wejscia pod jego notki ida pod ten
+    sam sufit, co u kazdego.
+    """
+
+    POLA = ("uchwyt", "handle", "komu", "pub", "autor", "publikacja")
+
+    def __init__(self, licznik: dict | None = None, maks: int | None = None):
+        from collections import Counter
+
+        self.licznik = Counter(licznik or {})
+        self.maks = config.MAKS_DZIALAN_U_AUTORA_7_DNI if maks is None else maks
+
+    @classmethod
+    def klucze(cls, x: dict) -> list[str]:
+        out: list[str] = []
+        for pole in cls.POLA:
+            k = _klucz_autora(x.get(pole))
+            if k and k not in out:
+                out.append(k)
+        return out
+
+    @classmethod
+    def z_dziennika(cls, dni: int = 7) -> "LimitAutorow":
+        """Licznik z dziennika: udane komentarze i restacki z ostatnich `dni`."""
+        import json
+        from datetime import datetime, timedelta, timezone
+
+        granica = (datetime.now(timezone.utc) - timedelta(days=dni)).isoformat()
+        out = cls()
+        try:
+            linie = (config.DATA_DIR / "dziennik.jsonl").read_text(
+                encoding="utf-8").splitlines()
+        except OSError:
+            return out
+        for linia in linie:
+            if '"komentarz"' not in linia and '"restack"' not in linia:
+                continue
+            try:
+                w = json.loads(linia)
+            except ValueError:
+                continue
+            if (not isinstance(w, dict) or w.get("rodzaj") not in ("komentarz", "restack")
+                    or not w.get("udane") or str(w.get("kiedy") or "") < granica):
+                continue
+            out.zapisz(w)
+        return out
+
+    def ile(self, x: dict) -> int:
+        return max((self.licznik[k] for k in self.klucze(x)), default=0)
+
+    def wolno(self, x: dict) -> bool:
+        return self.ile(x) < self.maks
+
+    def zapisz(self, x: dict) -> None:
+        for k in self.klucze(x):
+            self.licznik[k] += 1
+
+    def odsiej(self, cele: list[dict]) -> list[dict]:
+        """Cele, ktore mieszcza sie w limicie — takze lacznie w tej samej liscie.
+
+        Licznik obiektu sie nie zmienia: rosnie dopiero po udanym wystawieniu
+        (`zapisz`), bo cel z listy nie musi zostac skomentowany.
+        """
+        proba = LimitAutorow(self.licznik, self.maks)
+        out = []
+        for x in cele:
+            if proba.wolno(x):
+                proba.zapisz(x)
+                out.append(x)
+        return out
+
+
+def odsiej_cele(cele: list[dict], limit: LimitAutorow, notki: bool) -> list[dict]:
+    """Sito przed ocena celow: za stare, (pod notkami) ciche, ponad limit autora."""
+    przed = len(cele)
+    stare = sum(1 for x in cele if za_stary_cel(x, notki))
+    cele = [x for x in cele if not za_stary_cel(x, notki)]
+    ciche = 0
+    if notki:
+        ciche = sum(1 for x in cele if cichy_watek(x))
+        cele = zywe_najpierw([x for x in cele if not cichy_watek(x)])
+    po_limicie = limit.odsiej(cele)
+    if przed != len(po_limicie):
+        print("  [cele] sito: %d -> %d (za stare %d, ciche %d, limit autora %d)"
+              % (przed, len(po_limicie), stare, ciche, len(cele) - len(po_limicie)),
+              flush=True)
+    return po_limicie
+
 JS_KANAL = """
 () => null
 """

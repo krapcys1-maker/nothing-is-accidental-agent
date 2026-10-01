@@ -166,6 +166,11 @@ def ocenione_partie(druga, historia):
         ramiona_komentarza=lambda cel, pod, e14: {"pod": pod},
         pamiec_do_celu=lambda u, k, dzien=None: {"tekst": "", "ramie": "", "wymian": 0, "znaki": 0},
         zostal_czas=lambda *args: True,
+        # Sito wieku i autora (1.10.2026) — tu przezroczyste: test mierzy sita platne.
+        _sito_celow=lambda kanal, cele, limit, notki: cele,
+        _zywe_najpierw=lambda kanal, cele: cele,
+        limit_autorow=SimpleNamespace(odsiej=lambda cele: list(cele), zapisz=lambda x: None,
+                                      wolno=lambda x: True),
     )
     exec(_kod, env)
     env["komentarze"]()

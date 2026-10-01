@@ -1898,9 +1898,13 @@ def _klik_na_profilu(handle: str, napisy: tuple[str, ...], rodzaj: str,
 <!--KOD:browser.restackuj_w_kanale-->
 ```python
 def restackuj_w_kanale(
-    ile: int, decyzja, wyslij: bool = False,
+    ile: int, decyzja, wyslij: bool = False, limit_autorow=None,
 ) -> dict[str, Any]:
     """Podaje dalej cudze notki z wlasnym zdaniem.
+
+    `limit_autorow` (`kanal.LimitAutorow`, 1.10.2026): autor ponad tygodniowy
+    sufit komentarzy i restackow jest pomijany PRZED platna decyzja, a udany
+    restack podnosi jego licznik. Bez limitu (None) — jak dotad.
 
     `decyzja` to funkcja (notka: dict) -> dict, ktora oddaje
     {"restack": bool, "sentence": str, "reason": str}. Decyzja siedzi POZA ta
@@ -1945,6 +1949,10 @@ def restackuj_w_kanale(
                 # decyzja bylaby losowaniem, a nie ocena.
                 notka = _notka_przy_przycisku(kandydat)
                 if not notka.get("tekst"):
+                    continue
+                if limit_autorow is not None and not limit_autorow.wolno(notka):
+                    print(f"    pomijam: limit autora ({notka.get('autor', '?')[:24]})",
+                          flush=True)
                     continue
                 wynik["rozwazone"] += 1
                 ocena = decyzja(notka)
@@ -1994,6 +2002,8 @@ def restackuj_w_kanale(
                 page.get_by_role("button", name="Post").last.click(timeout=8000)
                 page.wait_for_timeout(SETTLE_MS + 2000)
                 wynik["restackowane"] += 1
+                if limit_autorow is not None:
+                    limit_autorow.zapisz(notka)
                 # Restack tworzy NOWA notke z wlasnym numerem. Bez niego
                 # restack byl jedyna forma publikacji, ktorej nie dalo sie
                 # zmierzyc — a to najcenniejszy sygnal, jaki mamy: w badaniu
