@@ -453,6 +453,35 @@ poglądowe. Strażnicy: alarmy `nadaktywnosc` i `wolumeny`, odsetek komentarzy
 z reakcją po 48 h (nie może spaść poniżej poziomu sprzed 4.10), odsetek
 subskrypcji odrzuconych przez bramkę rozmiaru.
 
+**Pierwszy przebieg na nowym kodzie (4.10, 14:25–15:31 RO, 66 z 100 minut okna
+roboczego).** Budżet dnia ze stopniem 1/3; kanał notek 66 pozycji z 6 stron, 39
+notek do wyboru (przedtem 1–4); 22 nowych kandydatów; 1 obserwacja i 1
+subskrypcja; z 15 kont obejrzanych pod subskrypcję 14 odpadło na sicie rozmiaru,
+bez zużycia próby; 2 komentarze potwierdzone, 1 restack; zero błędów, alarmy
+ciche, koszt 0,034 USD. Obserwacja poszła do dużego konta, bo kandydaci z
+wyszukiwarki idą pierwsi i są głównie duzi (u drugiego bota jest tak samo).
+
+**Przydział komentarzy — zmierzone 4.10, decyzja: bez zmian.** Od 5.09 do 3.10
+komentarze wykonywały się w 93% planu (216 z 232; tydzień po tygodniu 98%, 98%,
+93%, 88%), obserwacje i subskrypcje w 100% i więcej, restacki w 84%, notki w 77%.
+Spadek komentarzy w ostatnim tygodniu to skurczona pula po sicie z 1.10, którą ta
+zmiana poszerza, a nie struktura przydziału (N miejsc pod artykułami i N//2 pod
+notkami, N liczone od nowa z dziennika w każdym przebiegu, więc niedobór jednego
+przebiegu wraca do następnych). Drugi bot przy włączonej personie przekazuje
+pod notki całą resztę budżetu; tu tego **nie** przenosimy, bo E14 (do 19.10)
+losuje rodzaj celu na miejsce i taka zmiana zepsułaby jego czystość.
+**Reguła, zapisana przed oceną:** po trzech pełnych dobach na stopniu 3 (od 13.10)
+porównujemy wykonanie komentarzy z planem. Jeśli wypada poniżej 75% planu, a nie
+jest to awaria Substacka, dodajemy nadwyżkę pod notkami (oznaczoną poza E14).
+Wcześniej niczego w przydziale nie ruszamy: poziom docelowy stoi do 24.10.
+
+**Czas przebiegu.** Okno robocze to 100 minut (6900 s limitu minus 900 s
+zapasu), a przerwy 5–15 minut dzielą obserwacje, subskrypcje i komentarze.
+Przy stopniach 2 i 3 końcówka przebiegu (komentarze pod artykułami, restacki)
+może być przycinana przez `zostal_czas`. Do 3.10 żaden przebieg nie był przycinany.
+Strażnik: komunikaty `[czas] ... sie nie zmiesci` i „czas przebiegu wyczerpany”
+w logu; liczymy je po 7.10 i po 10.10.
+
 **Ryzyko, które zostaje decyzją właściciela:** wychodzące obserwacje
 i subskrypcje to to, co platformy opisują jako wzajemne obserwowanie. Poziom
 jest niski i rośnie w trzech stopniach, ale każda subskrypcja trafia do skrzynki
