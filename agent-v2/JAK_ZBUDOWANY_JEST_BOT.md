@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **36 plików**, 42 435 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **36 plików**, 42 543 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -113,8 +113,8 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 > w głównej ścieżce artykułu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
-się testować bez przeglądarki i bez pieniędzy**. 200 zestawów
-testów, 5115 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+się testować bez przeglądarki i bez pieniędzy**. 201 zestawów
+testów, 5135 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -505,10 +505,12 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `llm.py` — JEDYNA warstwa dostępu do modeli i liczenia kosztu
 
-1072 wierszy, 18 funkcji na poziomie modułu, 4 klas
+1164 wierszy, 20 funkcji na poziomie modułu, 5 klas
 
 | funkcja | co robi |
 |---|---|
+| `_z_terminem(fn, termin_s)` *(wewn.)* | `fn()` z terminem CALKOWITYM, liczonym zegarem — albo `httpx.ReadTimeout`. |
+| `_zawieszenie(exc, trwalo_s)` *(wewn.)* | Czy nieudana proba to zawieszenie dostawcy, a nie zwykly blad odpowiedzi. |
 | `dostawca(model)` | Kto wystawia rachunek za ten model. |
 | `_preflight(purpose, conn, run_id, model)` *(wewn.)* | Warunki, które decydują, czy wywołanie może się w ogóle udać. |
 | `_narzedzie_wyszukiwania(model)` *(wewn.)* | Nazwa narzedzia wyszukiwania; ostrzega RAZ NA PROCES o braku wpisu. |
@@ -653,7 +655,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-3876 wierszy, 43 funkcji na poziomie modułu, 0 klas
+3892 wierszy, 43 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -6861,32 +6863,61 @@ def call(
         print(f"  [{purpose}] DRY_RUN — wywołanie pominięte", flush=True)
         return ""
 
+    # BEZPIECZNIK DOSTAWCY (2.10.2026) — patrz `config.ZAWIESZEN_DO_WYLACZENIA`.
+    if provider in _WYLACZENI:
+        db.record_call(
+            conn=conn, run_id=run_id, provider=provider, model=model,
+            purpose=purpose, tokens_in=0, tokens_out=0, web_searches=0,
+            cost_usd=0.0, price_verified=0, ok=0,
+            note=f"DostawcaWylaczony: {_WYLACZENI[provider]}"[:500])
+        raise DostawcaWylaczony(
+            f"{provider} wylaczony do konca przebiegu ({_WYLACZENI[provider]})")
+    termin = config.TERMIN_CALKOWITY_RAZY * config.timeout_for(config.MAX_TOKENS[purpose])
+
+    def _jedna_proba() -> tuple:
+        """(tekst, wejscie, wyjscie, wyszukiwania, adresy, trafienia w cache)."""
+        if provider == "anthropic":
+            text, tin, tout, searches, urls = _call_claude(
+                purpose, system, user, web_search, model=model)
+            return text, tin, tout, searches, urls, 0
+        if provider == "mimo":
+            # MiMo tylko pisze (E11). Jego szukanie jest platne osobno
+            # i nieobslugiwane tu — wywolanie z siecia to blad konfiguracji.
+            if web_search:
+                raise PreflightFailed(
+                    f"etap {purpose!r}: MiMo bez szukania w tym kodzie")
+            text, tin, tout, searches, cache_hit = _call_mimo(purpose, system, user)
+            return text, tin, tout, searches, [], cache_hit
+        if web_search:
+            return _call_deepseek_z_siecia(purpose, system, user, model=model)
+        text, tin, tout, searches, cache_hit = _call_deepseek(purpose, system, user)
+        return text, tin, tout, searches, [], cache_hit
+
     for proba in range(1, config.PONOWIENIA + 2):
+        start_proby = time.monotonic()
         try:
-            if provider == "anthropic":
-                text, tin, tout, searches, urls = _call_claude(
-                    purpose, system, user, web_search, model=model)
-                cache_hit = 0
-            elif provider == "mimo":
-                # MiMo tylko pisze (E11). Jego szukanie jest platne osobno
-                # i nieobslugiwane tu — wywolanie z siecia to blad konfiguracji.
-                if web_search:
-                    raise PreflightFailed(
-                        f"etap {purpose!r}: MiMo bez szukania w tym kodzie")
-                text, tin, tout, searches, cache_hit = _call_mimo(
-                    purpose, system, user)
-                urls = []
-            elif web_search:
-                text, tin, tout, searches, urls, cache_hit = _call_deepseek_z_siecia(
-                    purpose, system, user, model=model)
-            else:
-                text, tin, tout, searches, cache_hit = _call_deepseek(
-                    purpose, system, user)
-                urls = []
+            text, tin, tout, searches, urls, cache_hit = _z_terminem(_jedna_proba, termin)
+            _ZAWIESZENIA[provider] = 0
             if collect_urls is not None:
                 collect_urls.extend(urls)
             break
         except Exception as exc:
+            trwalo = time.monotonic() - start_proby
+            if _zawieszenie(exc, trwalo):
+                _ZAWIESZENIA[provider] = _ZAWIESZENIA.get(provider, 0) + 1
+                if _ZAWIESZENIA[provider] >= config.ZAWIESZEN_DO_WYLACZENIA:
+                    _WYLACZENI[provider] = "%d zawieszenia z rzedu, ostatnie: %s po %.0f s" % (
+                        _ZAWIESZENIA[provider], type(exc).__name__, trwalo)
+                    print(f"  [dostawca] {provider}: {_WYLACZENI[provider]} — do konca"
+                          f" przebiegu go nie wolam", flush=True)
+                    db.record_call(
+                        conn=conn, run_id=run_id, provider=provider, model=model,
+                        purpose=purpose, tokens_in=0, tokens_out=0, web_searches=0,
+                        cost_usd=0.0, price_verified=0, ok=0,
+                        note=f"{type(exc).__name__}: {exc}"[:500])
+                    raise DostawcaWylaczony(
+                        f"{provider} wylaczony do konca przebiegu ({_WYLACZENI[provider]})"
+                    ) from exc
             if przejsciowy(exc) and proba <= config.PONOWIENIA:
                 czekaj = config.PONOWIENIE_ODSTEP_S * 2 ** (proba - 1)
                 print(f"  [{purpose}] {type(exc).__name__} — przejściowy, "
@@ -11666,6 +11697,9 @@ wartosc i komentarz stojacy bezposrednio nad definicja.
 | `PODWYZKA_DO` | `_env("PODWYZKA_DO", "2026-09-30")` | — |
 | `PONOWIENIA` | `2` | Sufit na JEDEN przebieg. Działa ZAWSZE, także przy AGENT_V2_NO_LIMIT=1. „Bez limitu na budowę" miało znaczyć „nie blokuj eksperymentów", a n |
 | `PONOWIENIE_ODSTEP_S` | `8` | — |
+| `TERMIN_CALKOWITY_RAZY` | `2` | BEZPIECZNIK DOSTAWCY (2.10.2026, decyzja wlasciciela: „napraw, zeby sie nie powtorzylo"). 1.10 od 19:35 do 21:55 UTC DeepSeek przyjmowal zap |
+| `PROG_ZAWIESZENIA_S` | `120` | — |
+| `ZAWIESZEN_DO_WYLACZENIA` | `2` | — |
 | `RUN_LIMIT_USD` | `1.60` | — |
 | `RUN_LIMIT_ARTYKUL_USD` | `2.20` | OSOBNY SUFIT DLA TORU ARTYKULU — jedna liczba byla za ciasna dla artykulu i za luzna dla notek. ZMIERZONE NA PRODUKCJI: przebieg artykulu 10 |
 | `DAILY_LIMIT_USD` | `sufit_dnia(_DZIS_UTC)` | DOPIERO TU. `sufit_dnia` siega po `sufit_miesieczny` ORAZ po `RUN_LIMIT_ARTYKUL_USD`, wiec przypisanie musi stac za obiema. Przesuwalem je w |

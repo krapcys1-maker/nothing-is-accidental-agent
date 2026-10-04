@@ -84,6 +84,9 @@
 | `PODWYZKA_DO` | `_env("PODWYZKA_DO", "2026-09-30")` | — |
 | `PONOWIENIA` | `2` | Sufit na JEDEN przebieg. Działa ZAWSZE, także przy AGENT_V2_NO_LIMIT=1. „Bez limitu na budowę" miało znaczyć „nie blokuj eksperymentów", a n |
 | `PONOWIENIE_ODSTEP_S` | `8` | — |
+| `TERMIN_CALKOWITY_RAZY` | `2` | BEZPIECZNIK DOSTAWCY (2.10.2026, decyzja wlasciciela: „napraw, zeby sie nie powtorzylo"). 1.10 od 19:35 do 21:55 UTC DeepSeek przyjmowal zap |
+| `PROG_ZAWIESZENIA_S` | `120` | — |
+| `ZAWIESZEN_DO_WYLACZENIA` | `2` | — |
 | `RUN_LIMIT_USD` | `1.60` | — |
 | `RUN_LIMIT_ARTYKUL_USD` | `2.20` | OSOBNY SUFIT DLA TORU ARTYKULU — jedna liczba byla za ciasna dla artykulu i za luzna dla notek. ZMIERZONE NA PRODUKCJI: przebieg artykulu 10 |
 | `DAILY_LIMIT_USD` | `sufit_dnia(_DZIS_UTC)` | DOPIERO TU. `sufit_dnia` siega po `sufit_miesieczny` ORAZ po `RUN_LIMIT_ARTYKUL_USD`, wiec przypisanie musi stac za obiema. Przesuwalem je w |

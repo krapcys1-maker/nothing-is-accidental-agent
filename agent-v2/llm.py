@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import threading
 import time
 from datetime import datetime, timezone
 from typing import Any
@@ -52,6 +53,67 @@ class Truncated(RuntimeError):
     w połowie odpowiedzi DeepSeeka. Przyczyna była o piętro wyżej: prompt prosił
     o więcej, niż mieścił sufit.
     """
+
+
+class DostawcaWylaczony(RuntimeError):
+    """Dostawca zawiesil sie `ZAWIESZEN_DO_WYLACZENIA` razy z rzedu — do konca procesu go nie wolamy.
+
+    To NIE jest `PreflightFailed` (konczy przebieg) ani blad przejsciowy (ponowienie):
+    etap dostaje zwykly wyjatek, pomija swoja czesc, a przebieg idzie dalej z tym,
+    co nie zalezy od tego dostawcy. Patrz `config.ZAWIESZEN_DO_WYLACZENIA`.
+    """
+
+
+# BEZPIECZNIK DOSTAWCY — stan na proces, czyli na jeden przebieg (2.10.2026).
+# `_ZAWIESZENIA`: ile zawieszen z rzedu u dostawcy (udane wywolanie zeruje);
+# `_WYLACZENI`: dostawca -> powod, gdy bezpiecznik zadzialal.
+_ZAWIESZENIA: dict[str, int] = {}
+_WYLACZENI: dict[str, str] = {}
+
+
+def _z_terminem(fn, termin_s: float):
+    """`fn()` z terminem CALKOWITYM, liczonym zegarem — albo `httpx.ReadTimeout`.
+
+    Limit odczytu httpx liczy ciszę MIĘDZY bajtami, a DeepSeek przy przeciazeniu
+    wysyla co chwila pusta linie podtrzymania — 1.10.2026 wywolania z limitem
+    300 s wisialy po 15 minut. Tu liczy sie caly czas proby.
+
+    Watek DEMONICZNY: porzucone zapytanie dociera sie w tle, az serwer zamknie
+    polaczenie, ale nie trzyma procesu przy wyjsciu (zamek przebiegu zwalnia sie
+    normalnie). Sygnal (SIGTERM) przerywa czekanie w watku glownym jak dotad.
+    """
+    wynik: dict[str, Any] = {}
+
+    def cel() -> None:
+        try:
+            wynik["ok"] = fn()
+        except BaseException as exc:  # noqa: BLE001 — oddajemy dalej w watku glownym
+            wynik["blad"] = exc
+
+    watek = threading.Thread(target=cel, daemon=True)
+    watek.start()
+    watek.join(termin_s)
+    if watek.is_alive():
+        raise httpx.ReadTimeout(
+            f"brak odpowiedzi w {termin_s:.0f} s (termin calkowity proby)")
+    if "blad" in wynik:
+        raise wynik["blad"]
+    return wynik["ok"]
+
+
+def _zawieszenie(exc: BaseException, trwalo_s: float) -> bool:
+    """Czy nieudana proba to zawieszenie dostawcy, a nie zwykly blad odpowiedzi.
+
+    Przekroczony czas — zawsze. Inny blad — gdy proba trwala dluzej niz
+    `config.PROG_ZAWIESZENIA_S` (1.10: `KeyError: 'choices'` po 15 minutach).
+    Odpowiedzi kompletne, choc zle (odmowa, uciecie, budzet), nie sa zawieszeniem.
+    """
+    if isinstance(exc, (BudgetExceeded, PreflightFailed, Truncated, OdmowaDostawcy,
+                        DostawcaWylaczony)):
+        return False
+    if isinstance(exc, httpx.TimeoutException):
+        return True
+    return trwalo_s >= config.PROG_ZAWIESZENIA_S
 
 
 def dostawca(model: str) -> str:
@@ -655,7 +717,8 @@ def przejsciowy(exc: BaseException) -> bool:
     przekroczony budżet, odpowiedź ucięta na suficie. Powtórzy się identycznie,
     więc ponawianie kosztuje i nie zmienia nic.
     """
-    if isinstance(exc, (BudgetExceeded, PreflightFailed, Truncated, OdmowaDostawcy)):
+    if isinstance(exc, (BudgetExceeded, PreflightFailed, Truncated, OdmowaDostawcy,
+                        DostawcaWylaczony)):
         return False
     if isinstance(exc, (httpx.TimeoutException, httpx.TransportError)):
         return True
@@ -765,32 +828,61 @@ def call(
         print(f"  [{purpose}] DRY_RUN — wywołanie pominięte", flush=True)
         return ""
 
+    # BEZPIECZNIK DOSTAWCY (2.10.2026) — patrz `config.ZAWIESZEN_DO_WYLACZENIA`.
+    if provider in _WYLACZENI:
+        db.record_call(
+            conn=conn, run_id=run_id, provider=provider, model=model,
+            purpose=purpose, tokens_in=0, tokens_out=0, web_searches=0,
+            cost_usd=0.0, price_verified=0, ok=0,
+            note=f"DostawcaWylaczony: {_WYLACZENI[provider]}"[:500])
+        raise DostawcaWylaczony(
+            f"{provider} wylaczony do konca przebiegu ({_WYLACZENI[provider]})")
+    termin = config.TERMIN_CALKOWITY_RAZY * config.timeout_for(config.MAX_TOKENS[purpose])
+
+    def _jedna_proba() -> tuple:
+        """(tekst, wejscie, wyjscie, wyszukiwania, adresy, trafienia w cache)."""
+        if provider == "anthropic":
+            text, tin, tout, searches, urls = _call_claude(
+                purpose, system, user, web_search, model=model)
+            return text, tin, tout, searches, urls, 0
+        if provider == "mimo":
+            # MiMo tylko pisze (E11). Jego szukanie jest platne osobno
+            # i nieobslugiwane tu — wywolanie z siecia to blad konfiguracji.
+            if web_search:
+                raise PreflightFailed(
+                    f"etap {purpose!r}: MiMo bez szukania w tym kodzie")
+            text, tin, tout, searches, cache_hit = _call_mimo(purpose, system, user)
+            return text, tin, tout, searches, [], cache_hit
+        if web_search:
+            return _call_deepseek_z_siecia(purpose, system, user, model=model)
+        text, tin, tout, searches, cache_hit = _call_deepseek(purpose, system, user)
+        return text, tin, tout, searches, [], cache_hit
+
     for proba in range(1, config.PONOWIENIA + 2):
+        start_proby = time.monotonic()
         try:
-            if provider == "anthropic":
-                text, tin, tout, searches, urls = _call_claude(
-                    purpose, system, user, web_search, model=model)
-                cache_hit = 0
-            elif provider == "mimo":
-                # MiMo tylko pisze (E11). Jego szukanie jest platne osobno
-                # i nieobslugiwane tu — wywolanie z siecia to blad konfiguracji.
-                if web_search:
-                    raise PreflightFailed(
-                        f"etap {purpose!r}: MiMo bez szukania w tym kodzie")
-                text, tin, tout, searches, cache_hit = _call_mimo(
-                    purpose, system, user)
-                urls = []
-            elif web_search:
-                text, tin, tout, searches, urls, cache_hit = _call_deepseek_z_siecia(
-                    purpose, system, user, model=model)
-            else:
-                text, tin, tout, searches, cache_hit = _call_deepseek(
-                    purpose, system, user)
-                urls = []
+            text, tin, tout, searches, urls, cache_hit = _z_terminem(_jedna_proba, termin)
+            _ZAWIESZENIA[provider] = 0
             if collect_urls is not None:
                 collect_urls.extend(urls)
             break
         except Exception as exc:
+            trwalo = time.monotonic() - start_proby
+            if _zawieszenie(exc, trwalo):
+                _ZAWIESZENIA[provider] = _ZAWIESZENIA.get(provider, 0) + 1
+                if _ZAWIESZENIA[provider] >= config.ZAWIESZEN_DO_WYLACZENIA:
+                    _WYLACZENI[provider] = "%d zawieszenia z rzedu, ostatnie: %s po %.0f s" % (
+                        _ZAWIESZENIA[provider], type(exc).__name__, trwalo)
+                    print(f"  [dostawca] {provider}: {_WYLACZENI[provider]} — do konca"
+                          f" przebiegu go nie wolam", flush=True)
+                    db.record_call(
+                        conn=conn, run_id=run_id, provider=provider, model=model,
+                        purpose=purpose, tokens_in=0, tokens_out=0, web_searches=0,
+                        cost_usd=0.0, price_verified=0, ok=0,
+                        note=f"{type(exc).__name__}: {exc}"[:500])
+                    raise DostawcaWylaczony(
+                        f"{provider} wylaczony do konca przebiegu ({_WYLACZENI[provider]})"
+                    ) from exc
             if przejsciowy(exc) and proba <= config.PONOWIENIA:
                 czekaj = config.PONOWIENIE_ODSTEP_S * 2 ** (proba - 1)
                 print(f"  [{purpose}] {type(exc).__name__} — przejściowy, "

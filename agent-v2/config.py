@@ -1179,6 +1179,22 @@ def sufit_miesieczny(dzis: str | None = None) -> float:
 PONOWIENIA = 2
 PONOWIENIE_ODSTEP_S = 8
 
+# BEZPIECZNIK DOSTAWCY (2.10.2026, decyzja wlasciciela: „napraw, zeby sie nie
+# powtorzylo"). 1.10 od 19:35 do 21:55 UTC DeepSeek przyjmowal zapytania i nie
+# odpowiadal: przy przeciazeniu wysyla puste linie podtrzymania, wiec limit
+# odczytu httpx (`timeout_for`, do 300 s) nigdy nie strzelal — kazde wywolanie
+# wisialo ~15 min i konczylo sie `KeyError: 'choices'`. Przebieg 343 zrobil
+# 6 takich wywolan i zabil go systemd (SIGTERM); NIA tak samo.
+#   - TERMIN CALKOWITY jednej proby: `TERMIN_CALKOWITY_RAZY` x `timeout_for`,
+#     liczony zegarem, niezaleznie od pustych linii (`llm._z_terminem`);
+#   - ZAWIESZENIE = nieudana proba po przekroczonym czasie albo dluzsza niz
+#     `PROG_ZAWIESZENIA_S`; po `ZAWIESZEN_DO_WYLACZENIA` z rzedu u jednego
+#     dostawcy przebieg do konca go nie wola (`llm.DostawcaWylaczony`), a reszta
+#     pracy (inni dostawcy, polubienia, pomiar) idzie dalej.
+TERMIN_CALKOWITY_RAZY = 2
+PROG_ZAWIESZENIA_S = 120
+ZAWIESZEN_DO_WYLACZENIA = 2
+
 RUN_LIMIT_USD = 1.60
 
 # OSOBNY SUFIT DLA TORU ARTYKULU — jedna liczba byla za ciasna dla artykulu

@@ -48,7 +48,9 @@ zapomniana wychodza jako porazka, a nie jako cisza.
    generatorem (sekcja 2 to sprawdza).
 3. WATKI I ASYNC. `db.AKCJA` to globalna zmienna modulu, nie `ContextVar`.
    Dwa rownolegle przebiegi w JEDNYM procesie wymieszaly by znaczniki. Dzis
-   w `agent-v2/*.py` nie ma ani `threading`, ani `asyncio` (sekcja 2).
+   w `agent-v2/*.py` nie ma `asyncio`, a jedyny watek to termin calkowity proby
+   w `llm._z_terminem` (od 2.10.2026): czeka na dostawce i nie dotyka ksiegi —
+   sekcja 2 sprawdza to drzewem skladni, z kontrdowodem.
 4. KOD SPOZA `agent-v2/*.py`. Analiza osiagalnosci obejmuje moduly z pierwszego
    poziomu. Sekcja 6 sprawdza osobno, ze glebiej (`pomiary/`,
    `dokumentacja-zrodla/`) nie ma ANI JEDNEGO platnego call-site'a — wiec
@@ -437,11 +439,50 @@ sprawdz("zaden platny etap nie jest generatorem (leniwy wynik gubi znacznik)",
         not gen, gen)
 
 zrodla = {p.name: p.read_text(encoding="utf-8") for p in KOD.glob("*.py")}
+
+
+def _watek_tylko_w_terminie(tekst: str) -> bool:
+    """Czy jedyny watek w `llm.py` to termin calkowity proby — i czy nie dotyka ksiegi.
+
+    WYJATEK, NIE LUKA (2.10.2026, bezpiecznik dostawcy). `llm._z_terminem` odpala
+    jeden watek na probe i CZEKA na niego w watku glownym (`join`): watek tylko
+    czeka na dostawce. `db.record_call` (ktory czyta `AKCJA`) zostaje w watku
+    glownym, po `join`, wiec dwa zapisy naraz nie powstana. Sprawdzamy to
+    drzewem skladni: `Thread(` tylko w `_z_terminem`, a ani on, ani `_jedna_proba`
+    nie wolaja `record_call` i nie czytaja `AKCJA`.
+    """
+    drzewo = ast.parse(tekst)
+    funkcje = {f.name: f for f in ast.walk(drzewo) if isinstance(f, ast.FunctionDef)}
+    termin = funkcje.get("_z_terminem")
+    if termin is None:
+        return False
+
+    def watki_w(wezel):
+        return [n for n in ast.walk(wezel) if isinstance(n, ast.Call)
+                and getattr(n.func, "attr", getattr(n.func, "id", "")) == "Thread"]
+
+    w_terminie = {id(n) for n in watki_w(termin)}
+    wszystkie = watki_w(drzewo)
+    if not wszystkie or any(id(n) not in w_terminie for n in wszystkie):
+        return False
+    proba = funkcje.get("_jedna_proba")
+    zrodlo = ast.unparse(termin) + (ast.unparse(proba) if proba is not None else "")
+    return "record_call" not in zrodlo and "AKCJA" not in zrodlo
+
+
 watki = sorted(n for n, t in zrodla.items()
-               if "import threading" in t or "import asyncio" in t
-               or "concurrent.futures" in t)
-sprawdz("zaden modul produkcyjny nie odpala watkow (AKCJA to globalna zmienna)",
+               if ("import threading" in t or "import asyncio" in t
+                   or "concurrent.futures" in t)
+               and not (n == "llm.py" and "import asyncio" not in t
+                        and "concurrent.futures" not in t and _watek_tylko_w_terminie(t)))
+sprawdz("zaden modul produkcyjny nie odpala watkow (AKCJA to globalna zmienna)"
+        " — poza terminem calkowitym proby, ktory nie dotyka ksiegi",
         not watki, watki)
+_zepsuty = zrodla["llm.py"].replace(
+    "    def _jedna_proba() -> tuple:\n",
+    "    def _jedna_proba() -> tuple:\n        db.record_call()\n", 1)
+sprawdz("KONTRDOWOD: zapis do ksiegi w watku proby lamie wyjatek",
+        _zepsuty != zrodla["llm.py"] and not _watek_tylko_w_terminie(_zepsuty))
 
 sprawdz("`db.record_call` doklada `akcja` sam, a nie u wolajacych",
         'fields.setdefault("akcja", AKCJA)' in zrodla["db.py"])

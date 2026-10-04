@@ -363,10 +363,12 @@
 
 ### `llm.py` — JEDYNA warstwa dostępu do modeli i liczenia kosztu
 
-1072 wierszy, 18 funkcji na poziomie modułu, 4 klas
+1164 wierszy, 20 funkcji na poziomie modułu, 5 klas
 
 | funkcja | co robi |
 |---|---|
+| `_z_terminem(fn, termin_s)` *(wewn.)* | `fn()` z terminem CALKOWITYM, liczonym zegarem — albo `httpx.ReadTimeout`. |
+| `_zawieszenie(exc, trwalo_s)` *(wewn.)* | Czy nieudana proba to zawieszenie dostawcy, a nie zwykly blad odpowiedzi. |
 | `dostawca(model)` | Kto wystawia rachunek za ten model. |
 | `_preflight(purpose, conn, run_id, model)` *(wewn.)* | Warunki, które decydują, czy wywołanie może się w ogóle udać. |
 | `_narzedzie_wyszukiwania(model)` *(wewn.)* | Nazwa narzedzia wyszukiwania; ostrzega RAZ NA PROCES o braku wpisu. |
@@ -511,7 +513,7 @@
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-3876 wierszy, 43 funkcji na poziomie modułu, 0 klas
+3892 wierszy, 43 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
