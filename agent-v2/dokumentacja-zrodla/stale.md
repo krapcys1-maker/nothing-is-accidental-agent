@@ -31,6 +31,7 @@
 | `KROTKA_NOTKA_SLOW` | `(33, 60)` | E17 — okno krotkiej notki (obecne: `NOTE_MIN_WORDS`-`NOTE_MAX_WORDS`). |
 | `MAKS_ODPOWIEDZI_W_ROZMOWIE` | `2` | ILE RAZY ODPISUJEMY W JEDNEJ ROZMOWIE. Rozmowa to galaz komentarzy: ten, ktory ja zaczal, i wszystko pod nim. Liczy `browser.nasze_odpowiedz |
 | `MAKS_ODPOWIEDZI_KONTU_SIOSTRZANEMU` | `1` | — |
+| `UCHWYTY_SIOSTRZANE` | `("nia1503032",)` | UCHWYTY KONT SIOSTRZANYCH (publiczne nazwy na Substacku): nie obserwujemy ich i nie subskrybujemy w ruchu wychodzacym (`kanal.nowi_kandydaci |
 | `KONTA_SIOSTRZANE` | `frozenset( int(x) for x in _env("KONTA_SIOST` | — |
 | `WYLACZ_WYKRYWANIE_AI` | `True` | Czy agent ma klikac "Wylacz wykrywanie AI" przy kazdej publikacji. WLACZONE decyzja wlasciciela z 2026-08-15. To wybor publiczny, nie ustawi |
 | `DRY_RUN` | `_env("DRY_RUN", "false").lower() in {"1", "t` | — |
@@ -190,10 +191,17 @@
 | `KSZTALTY_MYSLI` | `{ 'PYTANIE': 'Consider a genuine open questi` | KSZTALTY NOTKI TYPU MYSL. Losowane w kodzie i podawane jako PRZYDZIAL. Powod jest zmierzony: opis typu wymienial pytanie i obserwacje jako d |
 | `NOTE_MIX_OTHER_DAY` | `("CIEKAWOSTKA", "DYSKUSJA", "SPROSTOWANIE")` | TRZY NOTKI NA DOBE ZAMIAST DZIESIECIU — decyzja wlasciciela, 7 wrzesnia 2026. Liczba notek na dobe to DLUGOSC TEJ KROTKI i tylko ona. POWOD  |
 | `PISARZE_NOTEK` | `("note",)` | KTO PISZE NOTKI — decyzja wlasciciela z 7 wrzesnia 2026: „zostaw Opusa". Naprzemiennosc weszla 3 wrzesnia jako SLEPA PROBA: polowa notek Opu |
-| `LAJKI_DZIENNIE` | `(10, 16)` | --- zachowanie spoleczne: widelki, nie stale liczby ------------------------- Stala liczba dziennie wyglada jak robot, bo czlowiek nie ma no |
-| `KOMENTARZE_DZIENNIE` | `(7, 9)` | Osiemnascie komentarzy dziennie pod cudzymi tekstami to nie jest tempo czytelnika, tylko podpis bota — i kosztuje najwiecej po pisaniu, bo k |
+| `LAJKI_DZIENNIE` | `(0, 0)` | --- zachowanie spoleczne: widelki, nie stale liczby ------------------------- Stala liczba dziennie wyglada jak robot, bo czlowiek nie ma no |
+| `KOMENTARZE_DZIENNIE` | `(14, 20)` | Osiemnascie komentarzy dziennie pod cudzymi tekstami to nie jest tempo czytelnika, tylko podpis bota — i kosztuje najwiecej po pisaniu, bo k |
 | `FOLLOW_MIESIECZNIE` | `(10, 16)` | ZEROWANE 2026-08-23, PRZYWROCONE 2026-09-01 — BO WNIOSEK BYL FALSZYWY. Stalo tu `(0, 0)` z uzasadnieniem „Substack zdjal Follow ze stron pro |
 | `SUBSKRYPCJE_MIESIECZNIE` | `(12, 20)` | — |
+| `FOLLOW_DZIENNIE` | `5` | --- NIE JAK DRUGI BOT, 4.10.2026 (decyzja wlasciciela) -------------------- Przeglad 4.10 porownal nas z drugim botem w TYM SAMYM WIEKU kont |
+| `SUBSKRYPCJE_DZIENNIE` | `4` | — |
+| `SUBSKRYPCJE_MAX_ODBIORCOW` | `1000` | SUFIT ODBIORCOW PRZY SUBSKRYPCJI. Subskrybujemy tylko publikacje, ktorych publicznosc (subskrybenci albo obserwujacy z publicznego profilu)  |
+| `SUBSKRYPCJE_MAKS_OGLADANYCH` | `40` | Ile kandydatow wolno OBEJRZEC w jednym przebiegu, szukajac malych kont. Sito jest tanie (publiczny JSON, bez przegladarki), ale duza czesc p |
+| `NOWI_BEZ_KONTAKTU` | `True` | NOWI LUDZIE BEZ WCZESNIEJSZEGO KONTAKTU. Do 4.10 obserwowalismy i subskrybowalismy WYLACZNIE autorow, pod ktorymi juz komentowalismy („zbier |
+| `STRONY_KANALU_NOTEK` | `6` | KANAL NOTEK CZYTAMY STRONAMI. Jedna strona oddawala 1-4 notki do wyboru na przebieg, wiec sito z 1.10 (stare, ciche, ponad limit autora) nie |
+| `RAMPA_AKTYWNOSCI` | `( ("2026-10-04", 3, 2, (10, 13)), ("2026-10-` | RAMPA. Skok z ~1 do ~9 obserwacji i subskrypcji dziennie z dnia na dzien to nieciaglosc w zachowaniu konta, ktorej nie ma sensu ryzykowac dl |
 | `PROG_ALARMU_WOLUMENU` | `60` | Ponizej ilu procent normy uznajemy, ze cos jest zepsute, a nie po prostu chudsze. Prog jest niski celowo: budzety sa LOSOWANE z widelek i dz |
 | `CICHY_DZIEN_NA_ILE` | `8` | ODBLOKOWANE decyzja wlasciciela 2026-08-19. Restack cudzej notki z wlasnym zdaniem trafia do kanalu NASZYCH obserwujacych, powiadamia autora |
 | `CICHE_DNI_WLACZONE` | `True` | — |
@@ -222,8 +230,8 @@
 | `KOMFORTOWO_KOMENTARZY` | `25` | ILU KOMENTARZY POD CELEM JESZCZE NIE UWAZAMY ZA TLOK. Wyszukiwarka oddawala posty ze srednio 45 komentarzami, jeden ze 126 — a komentarz sto |
 | `ODSTEP_DNI_NA_PUBLIKACJE` | `4` | Ile dni odstepu przed kolejnym komentarzem pod TA SAMA publikacja. Komentarz pod kazdym kolejnym tekstem tej samej osoby to drugi najczyteln |
 | `MAKS_WIEK_POSTA_DO_KOMENTARZA_DNI` | `7` | NAJSTARSZY CEL KOMENTARZA (1.10.2026, decyzja wlasciciela). `MIN_WIEK_*` pilnuje tylko, zeby nie wejsc za szybko; gornej granicy nie bylo, a |
-| `MAKS_WIEK_NOTKI_DO_KOMENTARZA_H` | `48` | — |
-| `ZYWY_WATEK_KOMENTARZY` | `2` | ZYWY WATEK POD NOTKA (1.10.2026). Przy tym samym wieku celu (~7,5 h) NIA wybiera notki z mediana 8 reakcji i 2 komentarzy przed nia — 48% je |
+| `MAKS_WIEK_NOTKI_DO_KOMENTARZA_H` | `36` | — |
+| `ZYWY_WATEK_KOMENTARZY` | `2` | ZYWY WATEK POD NOTKA (1.10.2026). Przy wieku celu ~7,5 h NIE wybierala notki z mediana 3 reakcji i 0 komentarzy — 8% jej komentarzy dostawal |
 | `ZYWY_WATEK_REAKCJI` | `5` | — |
 | `MAKS_DZIALAN_U_AUTORA_7_DNI` | `3` | NAJWYZEJ TYLE KOMENTARZY + RESTACKOW U JEDNEGO AUTORA W 7 DNI (1.10.2026). Zmierzone 24-30.09: jeden autor dostal 16 komentarzy w tydzien, i |
 | `HASLA_SZUKANIA` | `( # rdzen: systemy AI i ich dzialanie w swie` | HASLA, KTORYMI AGENT SZUKA NOWYCH KONT. Kanal czytelnika pokazuje tylko to, co juz znamy, wiec sam z siebie nie przyprowadzi nikogo nowego — |

@@ -59,8 +59,10 @@ for nazwa, (dol, gora), zmierzone in POROWNANIA:
 
 print()
 print("=== 2. KONKRETNE DECYZJE Z 20 SIERPNIA ===")
-sprawdz("lajki 10-16 (było 12-20)", config.LAJKI_DZIENNIE == (10, 16),
-        config.LAJKI_DZIENNIE)
+# 4.10.2026 (decyzja wlasciciela, NIE jak drugi bot): polubienia WYLACZONE —
+# (0, 0), wczesniej 10-16 (a przed 20.08 12-20). Zero ma napisany powod w config.py.
+sprawdz("lajki (0, 0) od 4.10 (bylo 10-16, a wczesniej 12-20)",
+        config.LAJKI_DZIENNIE == (0, 0), config.LAJKI_DZIENNIE)
 # PODNIESIONE 30 sierpnia 2026 decyzja wlasciciela do 15-23. Argument z 20
 # sierpnia brzmial „osiemnascie komentarzy dziennie to podpis bota" — i byl
 # sluszny wobec OWCZESNYCH odstepow 3-8 min. Wlasciciel przeformulowal go
@@ -74,8 +76,13 @@ sprawdz("lajki 10-16 (było 12-20)", config.LAJKI_DZIENNIE == (10, 16),
 # jako zrodlo ani razu. Argument z 30 sierpnia („bot poznaje sie nie po LICZBIE,
 # tylko po serii jeden po drugim") NADAL JEST SLUSZNY — dlatego odstep zostaje
 # bez zmian, a schodzi sama liczba.
-sprawdz("komentarze 7-9, czyli okolo osmiu (bylo 15-23)",
-        config.KOMENTARZE_DZIENNIE == (7, 9), config.KOMENTARZE_DZIENNIE)
+# PODNIESIONE 4.10.2026 do 14-20 (poziom docelowy rampy 10-13 -> 12-16 -> 14-20,
+# decyzja wlasciciela: NIE jak drugi bot; `config.RAMPA_AKTYWNOSCI`). Argument
+# z 3.09 („82 komentarze dalo piec odpowiedzi") dotyczyl komentarzy pod
+# CICHYMI celami; od 4.10 cele sa zywe (kanal stronami, 36 h, zywe najpierw),
+# a zmierzony zwrot z komentarzy ma byc oceniony na nowym odcinku.
+sprawdz("komentarze 14-20 od 4.10 (poziom docelowy rampy; bylo 7-9, a przed 3.09 15-23)",
+        config.KOMENTARZE_DZIENNIE == (14, 20), config.KOMENTARZE_DZIENNIE)
 sprawdz("i odstep urosl razem z liczba — inaczej to byloby seria",
         config.ODSTEPY["komentarz"][0] >= 300, config.ODSTEPY["komentarz"])
 sprawdz("restacki 1-2 (było 2-4)", config.RESTACK_DZIENNIE == (1, 2),
@@ -180,8 +187,9 @@ for nazwa in ("LAJKI_DZIENNIE", "KOMENTARZE_DZIENNIE", "RESTACK_DZIENNIE",
 print()
 print("=== 4. RESTACK JEST NAJRZADSZY ZE WSZYSTKIEGO ===")
 # Bo jako jedyny stawia NASZE nazwisko obok cudzego tekstu.
-sprawdz("restacków mniej niż lajków",
-        config.RESTACK_DZIENNIE[1] < config.LAJKI_DZIENNIE[0],
+# Polubien od 4.10.2026 nie ma (norma 0), wiec porownanie z nimi nic nie znaczy.
+sprawdz("polubien nie ma, a restacki sa (najrzadszy z wystawianych rodzajow)",
+        config.LAJKI_DZIENNIE == (0, 0) and config.RESTACK_DZIENNIE[1] >= 1,
         (config.RESTACK_DZIENNIE, config.LAJKI_DZIENNIE))
 sprawdz("restacków mniej niż komentarzy",
         config.RESTACK_DZIENNIE[1] < config.KOMENTARZE_DZIENNIE[0],

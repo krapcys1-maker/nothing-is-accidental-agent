@@ -25,6 +25,9 @@ import config   # noqa: E402
 # Zakresowe przestawienie nizej zostaje bez zmian — chodzi o to, zeby
 # poczatek pliku nie mial dostepu do niczego prawdziwego.
 config.uzyj_katalogu_danych(pathlib.Path(tempfile.mkdtemp()))
+# Straznik rozmiaru (4.10.2026) pyta publiczne API o profil; atrapy stron tego testu
+# go nie maja, a test sprawdza MECHANIKE KLIKANIA — straznik ma wlasny test.
+config.SUBSKRYPCJE_MAX_ODBIORCOW = None
 import norma    # noqa: E402
 import stages   # noqa: E402
 
@@ -741,7 +744,9 @@ with tempfile.TemporaryDirectory() as tmp:
 # KONTRDOWOD: gdyby stala wrocila do (0, 0), ta sama funkcja znowu oddalaby
 # „brak" zamiast zera. Odtwarzamy to, zamiast opowiadac.
 stara_stala = config.FOLLOW_MIESIECZNIE
+stare_dzienne = config.FOLLOW_DZIENNIE
 config.FOLLOW_MIESIECZNIE = (0, 0)
+config.FOLLOW_DZIENNIE = None      # od 4.10.2026 dzienne nadpisanie ma pierwszenstwo
 try:
     with tempfile.TemporaryDirectory() as tmp:
         _zdjecie = config.uzyj_katalogu_danych(pathlib.Path(tmp))
@@ -754,6 +759,7 @@ try:
             config.przywroc_katalog_danych(_zdjecie)
 finally:
     config.FOLLOW_MIESIECZNIE = stara_stala
+    config.FOLLOW_DZIENNIE = stare_dzienne
 print("    KONTRDOWOD (0,0): %s" % (pods0.get("obserwacja", {}),))
 sprawdz("KONTRDOWOD: przy (0, 0) to samo zero czytalo sie jako „brak”",
         pods0.get("obserwacja", {}).get("realizacja") is None,

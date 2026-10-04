@@ -1,7 +1,7 @@
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-3477 wierszy, 38 funkcji na poziomie modułu, 2 klas
+3622 wierszy, 39 funkcji na poziomie modułu, 2 klas
 
 | funkcja | co robi |
 |---|---|
@@ -36,6 +36,7 @@
 | `_przeplot(pierwsza, druga)` *(wewn.)* | Na przemian z dwoch list; gdy jedna sie konczy, druga idzie dalej. |
 | `cele_wedlug_pierwszenstwa(historia)` | Hosty do zaczepienia, w kolejnosci pierwszenstwa. Zero sieci. |
 | `powod_pustej_puli(rachunek)` | Zdanie do dziennika, gdy po odsianiu nie zostal nikt. |
+| `znane_za_duze()` | Uchwyty, ktore JUZ ZMIERZYLISMY jako za duze (4.10.2026). Z dziennika, bez sieci. |
 | `kogo_juz_subskrybujemy()` | Uchwyty, na ktore subskrypcja NIE MA JUZ CO wysylac. Z dziennika, bez sieci. |
 | `czy_juz_subskrybujemy(host, zamkniete, pamiec)` | Czy ten HOST wskazuje konto, na ktore nie ma juz po co wchodzic. |
 | `dzien(conn, run_id, wyslij, poza_oknem)` | Jeden dzień pracy konta: notki, komentarze, odpowiedzi, polubienia. |
@@ -46,7 +47,7 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-11370 wierszy, 193 funkcji na poziomie modułu, 0 klas
+11382 wierszy, 193 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -246,7 +247,7 @@
 
 ### `browser.py` — cała styczność z Substackiem; nie woła modelu
 
-5744 wierszy, 110 funkcji na poziomie modułu, 0 klas
+5902 wierszy, 114 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -316,6 +317,8 @@
 | `_stan_przycisku(uchwyt)` *(wewn.)* | Jak przycisk wyglada — wszystkie sygnaly naraz, sklejone w jeden napis. |
 | `potwierdz_polubienie(uchwyt, przed)` | Czy przycisk po klknieciu wyglada inaczej niz przed nim. |
 | `polub_w_kanale(ile, wyslij)` | Polubienia w kanale czytelnika. |
+| `konto_male(profil, maksimum)` | Czy publiczny profil mieści się w sufcie odbiorcow. NIEZNANY ROZMIAR TO NIE DOWOD. |
+| `konto_za_duze(handle)` | Czy konto przekracza sufit odbiorcow — SPRAWDZANE ZANIM ZAPLACIMY CZAS. |
 | `_klik_na_profilu(handle, napisy, rodzaj, wyslij)` *(wewn.)* | Klika JEDEN konkretny przycisk na cudzym profilu — i tylko jego. |
 | `pobierz_subskrybentow()` | Czyta liste subskrybentow z WLASNEGO panelu, wlasna sesja. |
 | `zloz_wiersze_subskrybentow(surowe)` | Sklada wiersze z komorek tabeli panelu: adres, typ i data rozpoczecia. |
@@ -358,6 +361,8 @@
 | `potwierdz_komentarz(page, url, tekst)` | Pyta Substacka, czy komentarz naprawdę wisi — zamiast wierzyć kliknięciu. |
 | `wystaw_komentarz(url, tekst, wyslij, kontekst)` | Wystawia komentarz pod cudzym postem. Domyślnie WYPEŁNIA i NIE WYSYŁA. |
 | `read_pages(urls)` | Otwiera strony w przeglądarce i zwraca ich widoczny tekst. |
+| `_odcisk_notki(tekst)` *(wewn.)* | Odcisk cudzej notki BEZ etykiety wieku, ktora zmienia sie co minute (4.10.2026). |
+| `_odciski_restackow_z_dziennika(dni)` *(wewn.)* | Odciski notek, ktore podalismy dalej w ostatnich `dni` dniach (pole `zrodlo`). Bez sieci. |
 | `restackuj_w_kanale(ile, decyzja, wyslij, limit_autorow)` | Podaje dalej cudze notki z wlasnym zdaniem. |
 | `_notka_przy_przycisku(przycisk)` *(wewn.)* | Tresc i autor notki, przy ktorej stoi ten przycisk. |
 
@@ -433,7 +438,7 @@
 
 ### `kanal.py` — pamięć o cudzych publikacjach
 
-470 wierszy, 17 funkcji na poziomie modułu, 1 klas
+563 wierszy, 20 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -450,6 +455,9 @@
 | `cichy_watek(x)` | Zero reakcji i zero komentarzy — komentarz pod tym przeczyta tylko autor. |
 | `zywe_najpierw(cele)` | Zywe watki przed cichymi, w obrebie grup kolejnosc bez zmian. |
 | `_klucz_autora(wartosc)` *(wewn.)* | — |
+| `trafny_tematycznie(post)` | Znak tematu (AI) w TYTULE albo co najmniej DWA razy w calosci. |
+| `_cel_wychodzacy(post)` *(wewn.)* | `@uchwyt` autora notki albo host publikacji; None, gdy nie da sie ustalic. |
+| `nowi_kandydaci(czysty, ile_szukanie, ile_notek)` | Swiezi, trafni tematycznie autorzy z wyszukiwarki i kanalu: `@uchwyt` albo host. |
 | `odsiej_cele(cele, limit, notki)` | Sito przed ocena celow: za stare, (pod notkami) ciche, ponad limit autora. |
 | `posty_z_kanalu(ile)` | Ostatnie posty z kanalu czytelnika, z liczba komentarzy i reakcji. |
 | `notki_z_kanalu(ile)` | Cudze notki, pod ktorymi mozna wejsc w dyskusje. |
@@ -457,7 +465,7 @@
 
 ### `alarm.py` — kontrola sesji, zdrowia i alarm do właściciela
 
-1214 wierszy, 25 funkcji na poziomie modułu, 0 klas
+1243 wierszy, 26 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -469,6 +477,7 @@
 | `artykul_zalegly()` | Czy gotowy artykul lezy na dysku niewystawiony dluzej niz dobe. |
 | `sprawdz_sesje_i_ostrzez()` | Pilnuje jedynej rzeczy, która zatrzymuje agenta bez żadnego błędu. |
 | `sprawdz_przebiegi_i_ostrzez(ile)` | Alarmuje, gdy agent pada raz za razem. |
+| `max_dzialan_dziennie()` | Ile dzialan na dobe uznajemy jeszcze za normalne — z BIEZACYCH norm. |
 | `_polaczenie()` *(wewn.)* | — |
 | `cisza()` | Czy agent w ogole cos ostatnio zrobil. |
 | `zawieszone()` | Przebiegi, ktore zostaly w stanie RUNNING na zawsze. |
@@ -513,7 +522,7 @@
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-3892 wierszy, 43 funkcji na poziomie modułu, 0 klas
+3981 wierszy, 44 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -546,6 +555,7 @@
 | `losowe_otwarcie()` | — |
 | `losowa_dlugosc()` | Ile slow ma miec ta konkretna wypowiedz. |
 | `losowy_ksztalt_mysli()` | Ktory ksztalt dostaje ta MYSL. Losowany, bo wybor zbiega do stalej. |
+| `rampa_aktywnosci(dzien)` | Stopien rampy na dany dzien (`YYYY-MM-DD`): `(follow, subskrypcje, widelki komentarzy)`. |
 | `normy_dzienne()` | Ile czego POWINNO wychodzic dziennie — srodek widelek. |
 | `_cisza_z_hasza(dzien)` *(wewn.)* | — |
 | `cichy_dzien(kiedy)` | Czy dzis nie nadajemy. Ta sama odpowiedz przez caly dzien. |

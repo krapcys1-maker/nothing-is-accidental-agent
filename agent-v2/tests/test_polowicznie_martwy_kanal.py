@@ -237,12 +237,18 @@ def werdykt(mod, moment, rodzaj, plan, wykonane, klucz):
     return kod, alarmuje(tekst, rodzaj), wyciszona(tekst, rodzaj), tekst
 
 
-# Plany tygodniowe, na ktorych stoi cala ta poprawka — liczone z PRAWDZIWEJ
-# `config.normy_dzienne()`, zeby test zestarzal sie razem z widelkami, a nie
-# przepisywal ich do wlasnej kopii.
-NORMY = config.normy_dzienne()
-TYDZIEN_OBS = NORMY["obserwacja"] * 7
-TYDZIEN_SUB = NORMY["subskrypcja"] * 7
+# Plany tygodniowe, na ktorych stoi cala ta poprawka — liczone z PRAWDZIWYCH
+# WIDELEK MIESIECZNYCH w konfiguracji, zeby test zestarzal sie razem z nimi,
+# a nie przepisywal ich do wlasnej kopii.
+#
+# DLACZEGO MIESIECZNYCH, A NIE `config.normy_dzienne()` (4.10.2026): od tego
+# dnia `FOLLOW_DZIENNIE` i `SUBSKRYPCJE_DZIENNIE` nadpisuja widelki miesieczne
+# (norma 5 i 4 na dobe, plan tygodniowy 35 i 28), wiec bramka czterech brakow
+# nie jest juz nieosiagalna i wada, ktora ten test odtwarza, w tym rezimie nie
+# istnieje. Siedzi ona jednak w rezimie miesiecznym, ktory zostaje w konfiguracji
+# jako stan domyslny (dzienne `None`), wiec to w nim mierzymy jej przesłanke.
+TYDZIEN_OBS = sum(config.FOLLOW_MIESIECZNIE) / 2 / 30 * 7
+TYDZIEN_SUB = sum(config.SUBSKRYPCJE_MIESIECZNIE) / 2 / 30 * 7
 
 
 def zestaw(data_dzis, stary):

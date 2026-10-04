@@ -1178,6 +1178,7 @@ def budzet_dnia(conn: sqlite3.Connection) -> dict[str, int]:
     # to jest dokladnie ten podpis maszyny, ktorego unikamy.
     dzis = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     los = random.Random("%s|nia-budzet-dnia" % dzis)
+    _rampa = config.rampa_aktywnosci(dzis)
 
     def losuj(widelki: tuple[int, int]) -> int:
         dol, gora = widelki
@@ -1202,18 +1203,29 @@ def budzet_dnia(conn: sqlite3.Connection) -> dict[str, int]:
         # reszte przy dzieleniu dnia na przebiegi.
         "notki": len(config.NOTE_MIX_OTHER_DAY),
         "lajki": losuj(config.LAJKI_DZIENNIE),
-        "komentarze": losuj(config.KOMENTARZE_DZIENNIE),
-        "follow": z_miesiaca(config.FOLLOW_MIESIECZNIE),
-        "subskrypcje": z_miesiaca(config.SUBSKRYPCJE_MIESIECZNIE),
+        # NIE JAK DRUGI BOT (4.10.2026): komentarze, obserwacje i subskrypcje
+        # ida stopniami `config.RAMPA_AKTYWNOSCI` do poziomu docelowego; przy
+        # pustej tabeli rampy obowiazuja widelki i stale dzienne z konfiguracji.
+        "komentarze": losuj(_rampa[2] if _rampa else config.KOMENTARZE_DZIENNIE),
+        "follow": (_rampa[0] if _rampa else
+                   config.FOLLOW_DZIENNIE if config.FOLLOW_DZIENNIE is not None
+                   else z_miesiaca(config.FOLLOW_MIESIECZNIE)),
+        "subskrypcje": (_rampa[1] if _rampa else
+                        config.SUBSKRYPCJE_DZIENNIE if config.SUBSKRYPCJE_DZIENNIE is not None
+                        else z_miesiaca(config.SUBSKRYPCJE_MIESIECZNIE)),
         # E12 — widelki restackow z ramienia TYGODNIA (`config.EKSPERYMENTY
         # ["restacki_norma"]`). Losowanie zostaje ostatnie w kolejce, wiec inne
         # widelki nie zmieniaja pozostalych pozycji budzetu z tego samego ziarna.
         "restacki": losuj(widelki_restackow(dzis)),
     }
     _e12 = ramie("restacki_norma", 0, dzis)
+    _stopien = (next((i + 1 for i, s in enumerate(config.RAMPA_AKTYWNOSCI)
+                      if tuple(s[1:]) == tuple(_rampa)), 0) if _rampa else 0)
     print(f"  [budżet dnia{' — rozbieg' if rozbieg else ''}] "
           + "  ".join(f"{k}={v}" for k, v in budzet.items())
-          + (f"  [E12 restacki: {_e12}]" if _e12 else ""), flush=True)
+          + (f"  [E12 restacki: {_e12}]" if _e12 else "")
+          + (f"  [rampa: stopień {_stopien}/{len(config.RAMPA_AKTYWNOSCI)}]" if _stopien else ""),
+          flush=True)
     _zapisz_budzet_dnia(dzis, budzet, rozbieg)
     return budzet
 ```
@@ -1889,6 +1901,21 @@ def _klik_na_profilu(handle: str, napisy: tuple[str, ...], rodzaj: str,
         page.goto(f"https://substack.com/@{handle}", timeout=READ_TIMEOUT_MS * 2,
                   wait_until="domcontentloaded")
         page.wait_for_timeout(SETTLE_MS + 4000)
+        # STRAZNIK ROZMIARU (4.10.2026) — ostatni, tuz przy przycisku. `api_json`
+        # nawiguje swoja karte, wiec rozmiar czytamy w OSOBNEJ karcie, a profil z
+        # przyciskami zostaje, gdzie byl.
+        if rodzaj == "subskrypcja" and config.SUBSKRYPCJE_MAX_ODBIORCOW is not None:
+            karta_rozmiaru = context.new_page()
+            try:
+                profil_api = api_json(karta_rozmiaru, f"/api/v1/user/{handle}/public_profile")
+            finally:
+                karta_rozmiaru.close()
+            if not konto_male(profil_api, config.SUBSKRYPCJE_MAX_ODBIORCOW):
+                wynik.update(pominiete=True, powod=POWOD_ZA_DUZY, _zapisane=True)
+                if wyslij:
+                    zapisz_w_dzienniku("subskrypcja_pominieta", udane=True,
+                                       komu=handle, powod=POWOD_ZA_DUZY)
+                return wynik
         for nazwa in napisy:
             k = page.get_by_role("button", name=nazwa, exact=True).first
             if k.count() == 0 or not k.is_visible():
@@ -1958,6 +1985,11 @@ def restackuj_w_kanale(
     page = context.new_page()
     wynik: dict[str, Any] = {"znalezione": 0, "rozwazone": 0, "restackowane": 0,
                              "odmowy": [], "blad": None}
+    # ODPOCZYNEK OD RAZU, NIE PRZY NASTEPNYM PRZEBIEGU (4.10.2026): autor i tresc,
+    # ktore WLASNIE podalismy dalej, nie wracaja w tym samym przebiegu, a odciski
+    # z ostatnich dni (`zrodlo` w dzienniku) nie wracaja w ogole.
+    odpoczywaja_autorzy: set[str] = set()
+    odciski_zrobione: set[str] = _odciski_restackow_z_dziennika()
     try:
         page.goto("https://substack.com/", timeout=READ_TIMEOUT_MS * 2,
                   wait_until="domcontentloaded")
@@ -1978,6 +2010,13 @@ def restackuj_w_kanale(
                 # decyzja bylaby losowaniem, a nie ocena.
                 notka = _notka_przy_przycisku(kandydat)
                 if not notka.get("tekst"):
+                    continue
+                autor_teraz = str(notka.get("autor") or "").strip().casefold()
+                odcisk_zrodla = _odcisk_notki(notka.get("tekst"))
+                if odcisk_zrodla in odciski_zrobione or (
+                        autor_teraz and autor_teraz in odpoczywaja_autorzy):
+                    print(f"    pomijam: ta notka albo ten autor juz podany dalej"
+                          f" ({notka.get('autor', '?')[:24]})", flush=True)
                     continue
                 if limit_autorow is not None and not limit_autorow.wolno(notka):
                     print(f"    pomijam: limit autora ({notka.get('autor', '?')[:24]})",
@@ -2033,6 +2072,9 @@ def restackuj_w_kanale(
                 wynik["restackowane"] += 1
                 if limit_autorow is not None:
                     limit_autorow.zapisz(notka)
+                if autor_teraz:
+                    odpoczywaja_autorzy.add(autor_teraz)
+                odciski_zrobione.add(odcisk_zrodla)
                 # Restack tworzy NOWA notke z wlasnym numerem. Bez niego
                 # restack byl jedyna forma publikacji, ktorej nie dalo sie
                 # zmierzyc — a to najcenniejszy sygnal, jaki mamy: w badaniu
@@ -2076,6 +2118,7 @@ def restackuj_w_kanale(
                                    komu=notka.get("autor", ""),
                                    slow=len(zdanie.split()),
                                    tekst=zdanie[:300], id=numer_restacka,
+                                   zrodlo=odcisk_zrodla,
                                    **{k: ocena[k] for k in ("model", "eksperymenty")
                                       if ocena.get(k)})
                 print(f"    podane dalej {wynik['restackowane']}/{ile}", flush=True)

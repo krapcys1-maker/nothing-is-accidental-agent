@@ -132,8 +132,18 @@ def przebieg(ile, ile_notek, zgody):
     browser.podlacz_sie = lambda: (Nic(), Nic(), FalszywyKontekst(strona))
     browser.wymagaj_sesji = lambda: None
     browser.naprawde_wyslac = lambda w, r: w
-    browser._notka_przy_przycisku = lambda p: {"tekst": "Cudza notka o czyms.",
-                                               "autor": "Ktos"}
+    # KAZDY PRZYCISK = INNA NOTKA I INNY AUTOR (4.10.2026): od tego dnia ta sama
+    # notka ani ten sam autor nie dostaja drugiego restacka w jednym przebiegu
+    # (`browser._odcisk_notki`, `odpoczywaja_autorzy`), wiec atrapa identycznych
+    # notek zatrzymalaby sie na pierwszej. Dubel sprawdza `test_nie_jak_nia.py`.
+    numer_notki = {"n": 0}
+
+    def _inna_notka(p):
+        numer_notki["n"] += 1
+        return {"tekst": "Cudza notka numer %d o zupelnie innej sprawie." % numer_notki["n"],
+                "autor": "Autor%d" % numer_notki["n"]}
+
+    browser._notka_przy_przycisku = _inna_notka
     browser.zapisz_w_dzienniku = lambda *a, **k: None
     licznik = {"n": 0}
 

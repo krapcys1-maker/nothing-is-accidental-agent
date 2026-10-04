@@ -214,6 +214,27 @@ DYSK_ALARM = 92
 # dostatecznie ciasny, zeby zlapac zapetlenie.
 MAX_DZIALAN_DZIENNIE = 60
 
+# SUFIT JEST POCHODNA NORM (4.10.2026), nie wpisana liczba. Powyzszy rachunek
+# („suma norm okolo 39,5, sufit 60 to 1,52-krotnosc planu") byl policzony raz,
+# dla jednego zestawu widelek. Po podniesieniu wolumenow (komentarze, obserwacje,
+# subskrypcje) plan rosnie, a stala 60 zapalalaby alarm zapetlenia w dobry dzien.
+# `MAX_DZIALAN_DZIENNIE` zostaje jako ostatnia podloga historyczna dla testow.
+# Mnoznik 2,5, nie 1,5: norma komentarzy to N, a miejsc jest N + N//2, do tego
+# dochodza odpowiedzi, ktorych norm nie ma. Pelny dzien na poziomie docelowym to
+# 3 notki + do 30 komentarzy + do 5 restackow + 9 ruchu wychodzacego + odpowiedzi,
+# czyli ok. 47-57 przy normach sumujacych sie do 30,5; mnoznik 2,0 dawal sufit 61
+# i falszywy alarm w dobry dzien. Zapetlenie to setki wpisow, nie kilka ponad plan.
+# Podloga to dotychczasowe 60.
+MNOZNIK_SUFITU_DZIALAN = 2.5
+MIN_SUFIT_DZIALAN = 20
+
+
+def max_dzialan_dziennie() -> int:
+    """Ile dzialan na dobe uznajemy jeszcze za normalne — z BIEZACYCH norm."""
+    suma = sum(config.normy_dzienne().values())
+    return max(MIN_SUFIT_DZIALAN, MAX_DZIALAN_DZIENNIE,
+               int(round(suma * MNOZNIK_SUFITU_DZIALAN)))
+
 
 def _polaczenie() -> sqlite3.Connection:
     conn = db.connect()
@@ -337,15 +358,23 @@ def nadaktywnosc() -> str | None:
                 continue
             if not isinstance(w, dict) or not w.get("udane"):
                 continue
-            if str(w.get("rodzaj") or "") in ("skutek", ""):
+            rodzaj = str(w.get("rodzaj") or "")
+            if rodzaj in ("skutek", ""):
+                continue
+            # POMINIECIE TO NIE DZIALANIE (4.10.2026). `*_pominieta` zapisuje, ze
+            # kandydata odrzucilo sito (za duzy, juz subskrybowany, pusta pula) —
+            # nic nie wyszlo na Substacka. Przy bramce rozmiaru takich wpisow sa
+            # setki na dobe i liczone jako dzialania zapalilyby alarm zapetlenia.
+            if rodzaj.endswith("_pominieta"):
                 continue
             if str(w.get("kiedy") or "") >= granica:
                 n += 1
     except OSError:
         return None
-    if n > MAX_DZIALAN_DZIENNIE:
+    sufit = max_dzialan_dziennie()
+    if n > sufit:
         return (f"W ostatnich 24 godzinach {n} wywolan tworzacych tresc przy "
-                f"suficie {MAX_DZIALAN_DZIENNIE}. Cos sie zapetlilo.")
+                f"suficie {sufit}. Cos sie zapetlilo.")
     return None
 
 

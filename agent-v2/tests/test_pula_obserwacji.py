@@ -69,6 +69,11 @@ sys.path.insert(0, str(KORZEN / "agent-v2"))
 
 import browser        # noqa: E402
 import config         # noqa: E402
+
+# Ten test sprawdza SCIEZKE Z HISTORII KOMENTARZY (pula, odsiew, zapas na odpady = 4).
+# Od 4.10.2026 `NOWI_BEZ_KONTAKTU` dokłada przed nia swiezych autorow z kanalu i
+# zwieksza zapas — ta sciezka ma wlasny test (`test_nie_jak_nia.py`).
+config.NOWI_BEZ_KONTAKTU = False
 import norma          # noqa: E402
 import run            # noqa: E402
 
@@ -314,6 +319,8 @@ def uruchom_blok(mod_browser, kod_bloku, hosty, obserwowani_na_substacku,
               # Wersja z `64d881a` ich nie wola, wiec obie sciezki dzialaja.
               "cele_wedlug_pierwszenstwa": run.cele_wedlug_pierwszenstwa,
               "powod_pustej_puli": run.powod_pustej_puli,
+              "znane_za_duze": run.znane_za_duze, "_slug_hosta": run._slug_hosta,
+              "nowi_z_kanalu": lambda: [],
               "PRZESTAWIENIE_KONTA_NA_AI": run.PRZESTAWIENIE_KONTA_NA_AI}
         exec(compile(kod_bloku, "run.py::obserwuj", "exec"), ns)
         buf, stare_out = io.StringIO(), sys.stdout

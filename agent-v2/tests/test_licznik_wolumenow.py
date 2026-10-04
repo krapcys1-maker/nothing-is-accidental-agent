@@ -301,20 +301,26 @@ def _rozbieg(dol, gora):
     return (dol, min(gora, max(polowa, dol + 1))) if gora > dol else (dol, gora)
 
 
+# POLUBIENIA: OD 4.10.2026 W KONFIGURACJI JEST (0, 0) — wylaczone decyzja, a nie
+# zapadniete przez rozbieg — wiec regule sprawdzamy na DAWNEJ norma (10, 16),
+# zeby arytmetyka rozbiegu dla szerokich widelek nadal miala straznika.
+LAJKI_PRZYKLAD = (10, 16)
 for nazwa, widelki in (("restacki", config.RESTACK_DZIENNIE),
-                       ("lajki", config.LAJKI_DZIENNIE),
+                       ("lajki (dawna norma)", LAJKI_PRZYKLAD),
                        ("komentarze", config.KOMENTARZE_DZIENNIE)):
     d, g = _rozbieg(*widelki)
     sprawdz("  %s maja w rozbiegu WIECEJ NIZ JEDNA mozliwosc" % nazwa, g > d,
             "(%d, %d)" % (d, g))
+sprawdz("  lajki (0, 0) to zero z decyzji, nie zapadniecie: rozbieg tego nie zmienia",
+        _rozbieg(0, 0) == (0, 0) and config.LAJKI_DZIENNIE == (0, 0))
 # KONTRDOWOD: stara regula MUSI zapadac sie dla restackow, inaczej naprawa
 # byla zbedna i ten test niczego nie pilnuje.
 _dol, _gora = config.RESTACK_DZIENNIE
 sprawdz("stara regula zapadala sie dla restackow",
         _dol + (_gora - _dol) // 2 == _dol)
 # Rozbieg ma nadal OBNIZAC srednia — to jest jego cala funkcja.
-_d, _g = _rozbieg(*config.LAJKI_DZIENNIE)
-sprawdz("rozbieg nadal scina gore", _g < config.LAJKI_DZIENNIE[1], (_d, _g))
+_d, _g = _rozbieg(*LAJKI_PRZYKLAD)
+sprawdz("rozbieg nadal scina gore", _g < LAJKI_PRZYKLAD[1], (_d, _g))
 
 # TEN SAM DZIEN = TEN SAM BUDZET, kolejne dni = rozne.
 import datetime as _dt   # noqa: E402

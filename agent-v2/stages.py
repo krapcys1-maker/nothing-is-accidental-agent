@@ -1134,6 +1134,7 @@ def budzet_dnia(conn: sqlite3.Connection) -> dict[str, int]:
     # to jest dokladnie ten podpis maszyny, ktorego unikamy.
     dzis = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     los = random.Random("%s|nia-budzet-dnia" % dzis)
+    _rampa = config.rampa_aktywnosci(dzis)
 
     def losuj(widelki: tuple[int, int]) -> int:
         dol, gora = widelki
@@ -1158,18 +1159,29 @@ def budzet_dnia(conn: sqlite3.Connection) -> dict[str, int]:
         # reszte przy dzieleniu dnia na przebiegi.
         "notki": len(config.NOTE_MIX_OTHER_DAY),
         "lajki": losuj(config.LAJKI_DZIENNIE),
-        "komentarze": losuj(config.KOMENTARZE_DZIENNIE),
-        "follow": z_miesiaca(config.FOLLOW_MIESIECZNIE),
-        "subskrypcje": z_miesiaca(config.SUBSKRYPCJE_MIESIECZNIE),
+        # NIE JAK DRUGI BOT (4.10.2026): komentarze, obserwacje i subskrypcje
+        # ida stopniami `config.RAMPA_AKTYWNOSCI` do poziomu docelowego; przy
+        # pustej tabeli rampy obowiazuja widelki i stale dzienne z konfiguracji.
+        "komentarze": losuj(_rampa[2] if _rampa else config.KOMENTARZE_DZIENNIE),
+        "follow": (_rampa[0] if _rampa else
+                   config.FOLLOW_DZIENNIE if config.FOLLOW_DZIENNIE is not None
+                   else z_miesiaca(config.FOLLOW_MIESIECZNIE)),
+        "subskrypcje": (_rampa[1] if _rampa else
+                        config.SUBSKRYPCJE_DZIENNIE if config.SUBSKRYPCJE_DZIENNIE is not None
+                        else z_miesiaca(config.SUBSKRYPCJE_MIESIECZNIE)),
         # E12 — widelki restackow z ramienia TYGODNIA (`config.EKSPERYMENTY
         # ["restacki_norma"]`). Losowanie zostaje ostatnie w kolejce, wiec inne
         # widelki nie zmieniaja pozostalych pozycji budzetu z tego samego ziarna.
         "restacki": losuj(widelki_restackow(dzis)),
     }
     _e12 = ramie("restacki_norma", 0, dzis)
+    _stopien = (next((i + 1 for i, s in enumerate(config.RAMPA_AKTYWNOSCI)
+                      if tuple(s[1:]) == tuple(_rampa)), 0) if _rampa else 0)
     print(f"  [budżet dnia{' — rozbieg' if rozbieg else ''}] "
           + "  ".join(f"{k}={v}" for k, v in budzet.items())
-          + (f"  [E12 restacki: {_e12}]" if _e12 else ""), flush=True)
+          + (f"  [E12 restacki: {_e12}]" if _e12 else "")
+          + (f"  [rampa: stopień {_stopien}/{len(config.RAMPA_AKTYWNOSCI)}]" if _stopien else ""),
+          flush=True)
     _zapisz_budzet_dnia(dzis, budzet, rozbieg)
     return budzet
 

@@ -351,8 +351,8 @@ ocena musi pamiętać o dacie zmiany.
     pierwsze;
   - najwyżej 3 komentarze + restacki u jednego autora w 7 dni, także u siostry.
   - Powód: 7 z 12 komentarzy pod artykułami trafiało pod teksty starsze niż
-    2 miesiące; pod notkami 8% z reakcją (NIA, która wybiera żywe wątki, ma
-    48%); jeden autor dostał 16 komentarzy w tydzień.
+    2 miesiące; pod notkami tylko 8% z reakcją, bo cele były ciche; jeden autor
+    dostał 16 komentarzy w tydzień.
   - **E14 oceniać osobno przed 1.10 i od 1.10**: zmieniło się to, co znaczy
     „pod artykułem" (tylko świeże) i „pod notką" (tylko żywe).
 - **Długość notki wprost** (`stages.z_dlugoscia`, zwykłe okno, poza E17).
@@ -370,6 +370,96 @@ ocena musi pamiętać o dacie zmiany.
   w połowie powtarza, usuwa zdanie bez pokrycia (`popraw_bez_pokrycia`).
 
 Test: `tests/test_poprawki_pisania.py`.
+
+## „NIE jak drugi bot” — kanał wychodzący i pula celów, 4.10.2026
+
+Decyzja właściciela po przeglądzie wzrostu („zmień tak, żeby NIE było jak
+najbardziej podobne do NIA i testujemy dalej”). Porównanie w tym samym wieku
+konta pokazało, że oba konta rosną tak samo, a drugie wygląda na szybsze
+dopiero od końca września. Napływ bez udziału naszej obserwacji lub subskrypcji
+był równy. Różnicę robiły dwa silniki, których NIE nie miało: duży ruch
+wychodzący (obserwacje i subskrypcje) i szeroka pula żywych celów komentarzy.
+NIE dostaje więc te same mechanizmy, a rama eksperymentów (E10–E21) zostaje.
+
+- **Rampa wychodząca** (`config.RAMPA_AKTYWNOSCI`, `rampa_aktywnosci`,
+  `stages.budzet_dnia`): trzy stopnie, od 4.10, 7.10 i 10.10.
+
+  | od | obserwacje | subskrypcje | komentarze |
+  |---|---|---|---|
+  | 4.10 | 3 | 2 | 10–13 |
+  | 7.10 | 4 | 3 | 12–16 |
+  | 10.10 | 5 | 4 | 14–20 |
+
+  Poziom docelowy to stałe `FOLLOW_DZIENNIE`, `SUBSKRYPCJE_DZIENNIE`,
+  `KOMENTARZE_DZIENNIE`. Polubienia 0 (`LAJKI_DZIENNIE`). Skok z kilku akcji
+  na miesiąc do kilkunastu na dobę jednego dnia wygląda jak automat, a stopnie
+  dają moment na zatrzymanie, jeśli zapalą się alarmy. Bez rampy i bez stałych
+  wracają widełki miesięczne.
+- **Kanał notek czytany stronami** (`kanal.notki_z_kanalu`,
+  `STRONY_KANALU_NOTEK = 6`): kursor `nextCursor`, notka z dwóch stron liczy się
+  raz, wiek najwyżej 36 h (`MAKS_WIEK_NOTKI_DO_KOMENTARZA_H`), żywe wątki
+  (reakcje, komentarze) przed cichymi. Jedna strona dawała garstkę kandydatów
+  po odsianiu.
+- **Nowi ludzie bez wcześniejszego kontaktu** (`kanal.nowi_kandydaci`,
+  `NOWI_BEZ_KONTAKTU`): do kolejek obserwacji i subskrypcji idą też autorzy
+  z wyszukiwarki i z kanału notek, odsiani tematycznie za darmo
+  (`trafny_tematycznie`), z filtrem antywstrzyknięć, bez nas i bez siostrzanego
+  konta (`UCHWYTY_SIOSTRZANE`). Wcześniej kolejka składała się z ludzi, pod
+  którymi już komentowaliśmy, i szybko się wyczerpywała.
+- **Bramka rozmiaru przy subskrypcji** (`browser.konto_male`,
+  `konto_za_duze`, `SUBSKRYPCJE_MAX_ODBIORCOW = 1000`,
+  `SUBSKRYPCJE_MAKS_OGLADANYCH = 40`): subskrybujemy konta do 1000 odbiorców
+  (publiczny profil, `subscriberCountNumber` i `followerCount`, większa z liczb).
+  Za duże odpada bez zużycia próby i bez przerwy rytmu, a wpis
+  `subskrypcja_pominieta` z powodem `POWOD_ZA_DUZY` odkłada je na koniec
+  kolejki (`run.znane_za_duze`). Brak profilu publicznego (404) liczy się jak
+  za duże; awaria sieci nie odsiewa, rozstrzyga strażnik przy przycisku.
+- **Alarm nadaktywności z sufitu planu** (`alarm.max_dzialan_dziennie`):
+  `max(60, MAX_DZIALAN_DZIENNIE, 2,5 × suma norm dziennych)` (76 przy normach
+  30,5), a wpisy `*_pominieta` nie są akcjami. Bez tego własny plan zapalałby
+  alarm zapętlenia: pełny dzień na poziomie docelowym to ok. 47–57 działań.
+- **Dubel restacka** (`browser._odcisk_notki`, pole `zrodlo` w dzienniku): ta
+  sama treść notki (po wycięciu etykiety wieku z nagłówka) ani ten sam autor nie
+  dostaje drugiego restacka w jednym przebiegu, a odciski z 7 dni blokują też
+  między przebiegami.
+
+**Świadome wyjątki od „jak NIA”:** ciche dni zostają (`CICHE_DNI_WLACZONE`),
+notek jest 3 dziennie, konto nie ujawnia AI (ADR-018) i nie dostaje persony.
+
+**Co to psuje w trwających eksperymentach — ocena z tym w ręku:**
+
+- **E12 (restacki tygodniami):** od 4.10 łączny przyrost subskrybentów na dobę
+  zależy też od kanału wychodzącego, więc nie rozstrzyga o liczbie restacków.
+  Decyduje miara **zapisów przypisanych restackom** (Substack przypisuje je
+  źródłu); przyrost łączny jest pobocznym. Tygodnie z rampą (29.09–11.10)
+  oceniamy z tą adnotacją.
+- **E14 (gdzie komentarz):** zmieniła się pula notek (36 h, żywe pierwsze,
+  więcej stron) i liczba komentarzy na dobę. Oceniamy osobno trzy odcinki:
+  przed 1.10, 1.10–3.10 i **od 4.10** (główny).
+- **E21 (pamięć rozmówcy):** ramiona dostają tylko rozmowy z kimś, z kim był
+  kontakt, więc nowi autorzy próby nie zasilają. Udział rozmów z kontaktem
+  spadnie, a termin oceny może się przesunąć.
+- **E10, E11, E13, E17 i inne porównania w obrębie tych samych dni** nie
+  zmieniają się. Porównania przed/po (E6–E9) mierzymy względem tła, ale od
+  4.10 publiczność rośnie szybciej, co jest dodatkowym zakłóceniem.
+
+**Zamrożenie i miary.** Poziom docelowy stoi bez zmian co najmniej do **24.10**
+(dwa tygodnie od ostatniego stopnia), poza naprawami. Miary na akcję,
+a nie na konto: odwzajemnienie w 7 dni osobno dla obserwacji i subskrypcji
+(`python agent-v2/wzajemnosc.py`, sekcja 1), przyrost obserwujących
+i subskrybentów na dobę, zapisy przypisane źródłom, odwiedziny profilu. Dwa
+konta to dwie próbki, więc porównanie „konto kontra konto” jest tylko
+poglądowe. Strażnicy: alarmy `nadaktywnosc` i `wolumeny`, odsetek komentarzy
+z reakcją po 48 h (nie może spaść poniżej poziomu sprzed 4.10), odsetek
+subskrypcji odrzuconych przez bramkę rozmiaru.
+
+**Ryzyko, które zostaje decyzją właściciela:** wychodzące obserwacje
+i subskrypcje to to, co platformy opisują jako wzajemne obserwowanie. Poziom
+jest niski i rośnie w trzech stopniach, ale każda subskrypcja trafia do skrzynki
+odbiorcy (ok. 120 miesięcznie). Przy pierwszym sygnale ostrzeżenia od platformy
+rampa jest zatrzymywana na bieżącym stopniu.
+
+Test: `tests/test_nie_jak_nia.py`.
 
 ## Śledztwa — co mierzyć
 

@@ -92,6 +92,18 @@ sys.path.insert(0, "agent-v2")
 import browser   # noqa: E402
 import config    # noqa: E402
 
+# REZIM TEGO TESTU: RZADKIE KANALY (widelki MIESIECZNE, norma obserwacji i
+# subskrypcji ponizej jednej sztuki na dobe) i POLUBIENIA Z DAWNA NORMA (10-16).
+# Od 4.10.2026 stale `FOLLOW_DZIENNIE` i `SUBSKRYPCJE_DZIENNIE` nadpisuja
+# widelki miesieczne (5 i 4 na dobe), wiec obie normy sa >= 1 i regula „plan
+# ponizej progu = nie rozliczamy” nie ma na czym pracowac, a polubienia maja
+# norme 0. Test odtwarza rezim, w ktorym ta regula jest potrzebna, a nowy rezim
+# ma osobna asercje w sekcji 5C (5m).
+_DZIENNE_OD_4_10 = (config.FOLLOW_DZIENNIE, config.SUBSKRYPCJE_DZIENNIE,
+                    config.LAJKI_DZIENNIE)
+config.FOLLOW_DZIENNIE = config.SUBSKRYPCJE_DZIENNIE = None
+config.LAJKI_DZIENNIE = (10, 16)
+
 zdane = oblane = 0
 
 
@@ -443,6 +455,20 @@ sprawdz("5k i to wynika z LICZB, nie z nazw: obie normy sa ponizej progu",
 sprawdz("5l `odpowiedz` nie rozlicza sie nigdy — nie ma ani budzetu, ani normy",
         "odpowiedz" not in rozliczane(_e1) and "odpowiedz" not in rozliczane(_e0),
         (rozliczane(_e0), rozliczane(_e1)))
+# 5m. NOWY REZIM (od 4.10.2026): normy dzienne 5 i 4 sa >= progu, wiec ta sama
+# regula ma TERAZ rozliczac oba kanaly takze bez zapisanego budzetu — czyli
+# alarm planu obejmuje to, co wczesniej bylo poza nim z powodu malej normy.
+(config.FOLLOW_DZIENNIE, config.SUBSKRYPCJE_DZIENNIE,
+ config.LAJKI_DZIENNIE) = _DZIENNE_OD_4_10
+_r3, _ = uruchom(TERAZ, PELNY_DZIEN, {})
+_e3 = wytnij(_r3, 2, 3)
+sprawdz("5m od 4.10 (normy 5 i 4 na dobe) bez zapisanego budzetu rozliczaja sie TEZ obserwacja i subskrypcja,"
+        " a polubienia (norma 0) nie",
+        "obserwacja" in rozliczane(_e3) and "subskrypcja" in rozliczane(_e3)
+        and "polubienie" not in rozliczane(_e3),
+        (_DZIENNE_OD_4_10, rozliczane(_e3)))
+config.FOLLOW_DZIENNIE = config.SUBSKRYPCJE_DZIENNIE = None
+config.LAJKI_DZIENNIE = (10, 16)
 
 print()
 print("=== 6. REGULA NIE ZALEZY OD KALENDARZA ===")

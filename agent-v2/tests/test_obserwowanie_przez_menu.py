@@ -84,6 +84,11 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 import config          # noqa: E402
 import browser         # noqa: E402
+
+# Straznik rozmiaru przy subskrypcji (4.10.2026) pyta publiczne API o profil; atrapy
+# stron tego testu go nie maja, a test sprawdza MECHANIKE KLIKANIA. Straznik ma
+# wlasny test (`test_nie_jak_nia.py`).
+config.SUBSKRYPCJE_MAX_ODBIORCOW = None
 import norma           # noqa: E402
 import stages          # noqa: E402
 
@@ -550,9 +555,12 @@ sprawdz("config.FOLLOW_MIESIECZNIE nie jest juz (0, 0)",
         config.FOLLOW_MIESIECZNIE != (0, 0), config.FOLLOW_MIESIECZNIE)
 sprawdz("norma.NIEWYKONALNE nie tlumaczy juz zera obserwacji",
         "obserwacja" not in norma.NIEWYKONALNE, norma.NIEWYKONALNE)
+# Od 4.10.2026 dzienne nadpisanie (`FOLLOW_DZIENNIE`) ma pierwszenstwo przed widelkami
+# miesiecznymi — norma liczy z tej samej stalej, ktora rozdziela budzet.
+_oczekiwana_norma = (float(config.FOLLOW_DZIENNIE) if config.FOLLOW_DZIENNIE is not None
+                     else sum(config.FOLLOW_MIESIECZNIE) / 2 / 30)
 sprawdz("norma.normy liczy obserwacje z tej samej stalej",
-        abs(config.normy_dzienne()["obserwacja"]
-            - sum(config.FOLLOW_MIESIECZNIE) / 2 / 30) < 1e-9,
+        abs(config.normy_dzienne()["obserwacja"] - _oczekiwana_norma) < 1e-9,
         config.normy_dzienne()["obserwacja"])
 
 # Budzet dnia: mierzymy ZACHOWANIE `stages.budzet_dnia`, nie tresc config.
@@ -628,16 +636,24 @@ try:
         # NOWA ASERCJA, KTOREJ TU BYC NIE MOGLO: od 1 wrzesnia subskrypcje maja
         # byc LICZNIEJSZE od obserwacji, bo to one konwertuja (11,5% wobec
         # 3,4%). Przedtem stala mowila odwrotnie i nikt tego nie mierzyl.
-        sprawdz("[%s] subskrypcji jest wiecej niz obserwacji" % opis,
-                m["subskrypcje"] > m["follow"], m)
+        # DECYZJA WLASCICIELA 4.10.2026 (NIE jak drugi bot): 5 obserwacji i 4
+        # subskrypcje dziennie, a w rampie 3/2, 4/3 — obserwacji NIE MA wiec byc
+        # mniej niz subskrypcji. Zasada „subskrypcji wiecej" wynikala ze starego
+        # pomiaru (11,5% wobec 3,4%), ktory na wiekszej probie wyszedl bardziej
+        # wyrownany. Zostaje asercja, ze subskrypcje w ogole sa.
+        sprawdz("[%s] miesieczny budzet subskrypcji jest DODATNI" % opis,
+                m["subskrypcje"] >= 1, m)
 
         # KONTRDOWOD 3: te sama funkcja z wycofana stala.
         stara_stala = config.FOLLOW_MIESIECZNIE
+        stare_dzienne, stara_rampa = config.FOLLOW_DZIENNIE, config.RAMPA_AKTYWNOSCI
         config.FOLLOW_MIESIECZNIE = (0, 0)
+        config.FOLLOW_DZIENNIE, config.RAMPA_AKTYWNOSCI = None, ()
         try:
             m0 = _miesiac_budzetow()
         finally:
             config.FOLLOW_MIESIECZNIE = stara_stala
+            config.FOLLOW_DZIENNIE, config.RAMPA_AKTYWNOSCI = stare_dzienne, stara_rampa
         print("    [%s] KONTRDOWOD (0,0): follow w miesiacu=%d"
               % (opis, m0["follow"]))
         sprawdz("[%s] KONTRDOWOD: przy (0, 0) CALY MIESIAC byl ZEROWY" % opis,

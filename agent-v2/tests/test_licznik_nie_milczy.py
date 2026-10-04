@@ -476,8 +476,14 @@ def zestaw(data_dzis, stary):
     kod, tekst = uruchom(norma, "--dni", "1")
     kod_s, tekst_s = uruchom(stary, "--dni", "1")
     sprawdz("B8 doba bez zadnego sladu daje kod 1", kod == 1, tekst)
+    # POLUBIENIA OD 4.10.2026 MAJA NORME ZERO (`LAJKI_DZIENNIE = (0, 0)`), a zero
+    # planu nie da sie niedowiezc: alarm ma je wymienic TYLKO wtedy, gdy plan
+    # jest dodatni. Bez tej reguly alarm zapalalby sie z powodu pozycji,
+    # ktorej plan jest pusty z decyzji, a nie z awarii.
+    norma_lajkow = config.normy_dzienne()["polubienie"]
     sprawdz("B9 i wymienia po imieniu pozycje, ktore nie daly nic",
-            alarmuje(tekst, "komentarz") and alarmuje(tekst, "polubienie")
+            alarmuje(tekst, "komentarz")
+            and alarmuje(tekst, "polubienie") == (norma_lajkow > 0)
             and (cicho_dzis or alarmuje(tekst, "notka")),
             [l for l in tekst.splitlines() if "PONIZEJ" in l])
     sprawdz("B10 KONTRDOWOD: e88b456 oddawal na tej samej dobie kod 0",

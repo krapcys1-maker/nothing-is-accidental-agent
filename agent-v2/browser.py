@@ -1451,6 +1451,10 @@ def czy_juz_obserwujemy(host: str, pamiec: dict[str, Any] | None = None) -> bool
     host = (host or "").strip().lower().rstrip("/")
     if not host:
         return False
+    # `@uchwyt` (nowi kandydaci bez wczesniejszego kontaktu, 4.10.2026): to juz
+    # jest uchwyt, nie host — pytamy pamiec wprost.
+    if host.startswith("@"):
+        return host[1:] in pamiec.get("uchwyty", {})
     if host in pamiec.get("hosty", {}):
         return True
     if host.endswith(".substack.com"):
@@ -3091,6 +3095,76 @@ def polub_w_kanale(ile: int, wyslij: bool = False) -> dict[str, Any]:
     return wynik
 
 
+# POWOD POMINIECIA ZA ROZMIAR (4.10.2026) — JEDEN NAPIS, TRZY MIEJSCA: strażnik
+# w `_klik_na_profilu` zapisuje go, blok subskrypcji w `run.py` zapisuje go u
+# siebie, a `run.znane_za_duze` czyta go z dziennika, zeby nie mierzyc tych
+# samych wielkich kont kazdego dnia od nowa. Trzy literaly rozjechalyby sie przy
+# pierwszej zmianie slowa i odsiew wylaczylby sie po cichu.
+POWOD_ZA_DUZY = "account exceeds the size limit or its size is unknown"
+
+
+def konto_male(profil: Any, maksimum: int) -> bool:
+    """Czy publiczny profil mieści się w sufcie odbiorcow. NIEZNANY ROZMIAR TO NIE DOWOD.
+
+    Rozmiar publicznosci to `subscriberCountNumber` albo `followerCount` z
+    publicznego `/api/v1/user/<uchwyt>/public_profile`; liczy sie wieksza z dwoch.
+    Brak obu liczb zwraca False — konto o nieznanym rozmiarze traktujemy jak
+    zbyt duze, tak samo jak strażnik przy przycisku (inaczej sito przepuszczalo
+    by dokladnie te konta, ktore strażnik zaraz odrzuci).
+    """
+    if not isinstance(profil, dict):
+        return False
+
+    def liczba(v: Any) -> int | None:
+        # TYLKO nieujemna liczba calkowita. Napis w rodzaju „4,2K" po zdjeciu
+        # znakow dalby 42 i duze konto uchodzilo by za male — wiec napis,
+        # liczba ulamkowa i bool to „nieznane".
+        return v if type(v) is int and v >= 0 else None
+
+    widziane = [n for n in (liczba(profil.get("subscriberCountNumber")),
+                            liczba(profil.get("followerCount"))) if n is not None]
+    return bool(widziane) and max(widziane) <= maksimum
+
+
+def konto_za_duze(handle: str) -> bool:
+    """Czy konto przekracza sufit odbiorcow — SPRAWDZANE ZANIM ZAPLACIMY CZAS.
+
+    Sito jest TANIE: publiczny JSON zwyklym HTTP, bez przegladarki i bez sesji
+    (druga instancja Playwrighta w procesie, ktory juz go ma, zepsulaby caly
+    przebieg). Wolno mu sie mylic w strone „wpusc": straznik przy przycisku
+    (`_klik_na_profilu`) jest OSTATNI i on decyduje. Blad sieci nie jest
+    dowodem na rozmiar, wiec zwraca False; 404 (brak profilu publicznego)
+    — True, bo straznik odrzucilby je z tego samego powodu.
+    `config.SUBSKRYPCJE_MAX_ODBIORCOW is None` wylacza sito.
+    """
+    if config.SUBSKRYPCJE_MAX_ODBIORCOW is None:
+        return False
+    import json as _json
+    import urllib.error as _err
+    import urllib.parse as _parse
+    import urllib.request as _req
+
+    adres = "https://substack.com/api/v1/user/%s/public_profile" % _parse.quote(
+        str(handle), safe="")
+    try:
+        zapytanie = _req.Request(adres, headers={"User-Agent": config.FETCH_USER_AGENT})
+        with _req.urlopen(zapytanie, timeout=15) as odp:
+            profil = _json.loads(odp.read())
+    except _err.HTTPError as exc:
+        if exc.code == 404:
+            print("  [subskrypcje] @%s nie ma profilu publicznego (404)" % handle,
+                  flush=True)
+            return True
+        print("  [subskrypcje] nie sprawdzilem rozmiaru @%s (HTTP %s) — decyzja"
+              " zostaje przy profilu" % (handle, exc.code), flush=True)
+        return False
+    except Exception as exc:                                   # noqa: BLE001
+        print("  [subskrypcje] nie sprawdzilem rozmiaru @%s (%s) — decyzja"
+              " zostaje przy profilu" % (handle, type(exc).__name__), flush=True)
+        return False
+    return not konto_male(profil, config.SUBSKRYPCJE_MAX_ODBIORCOW)
+
+
 def _klik_na_profilu(handle: str, napisy: tuple[str, ...], rodzaj: str,
                      wyslij: bool) -> dict[str, Any]:
     """Klika JEDEN konkretny przycisk na cudzym profilu — i tylko jego.
@@ -3125,6 +3199,21 @@ def _klik_na_profilu(handle: str, napisy: tuple[str, ...], rodzaj: str,
         page.goto(f"https://substack.com/@{handle}", timeout=READ_TIMEOUT_MS * 2,
                   wait_until="domcontentloaded")
         page.wait_for_timeout(SETTLE_MS + 4000)
+        # STRAZNIK ROZMIARU (4.10.2026) — ostatni, tuz przy przycisku. `api_json`
+        # nawiguje swoja karte, wiec rozmiar czytamy w OSOBNEJ karcie, a profil z
+        # przyciskami zostaje, gdzie byl.
+        if rodzaj == "subskrypcja" and config.SUBSKRYPCJE_MAX_ODBIORCOW is not None:
+            karta_rozmiaru = context.new_page()
+            try:
+                profil_api = api_json(karta_rozmiaru, f"/api/v1/user/{handle}/public_profile")
+            finally:
+                karta_rozmiaru.close()
+            if not konto_male(profil_api, config.SUBSKRYPCJE_MAX_ODBIORCOW):
+                wynik.update(pominiete=True, powod=POWOD_ZA_DUZY, _zapisane=True)
+                if wyslij:
+                    zapisz_w_dzienniku("subskrypcja_pominieta", udane=True,
+                                       komu=handle, powod=POWOD_ZA_DUZY)
+                return wynik
         for nazwa in napisy:
             k = page.get_by_role("button", name=nazwa, exact=True).first
             if k.count() == 0 or not k.is_visible():
@@ -5185,6 +5274,10 @@ def uchwyt_publikacji(host: str) -> str | None:
     host = (host or "").strip().lower().rstrip("/")
     if not host:
         return None
+    # `@uchwyt` (nowi kandydaci bez wczesniejszego kontaktu, 4.10.2026): uchwyt
+    # juz mamy, nie pytamy sieci.
+    if host.startswith("@"):
+        return host[1:] or None
     if host.endswith(".substack.com"):
         return host.split(".")[0]
 
@@ -5533,6 +5626,55 @@ def read_pages(urls: list[str]) -> list[dict[str, Any]]:
     return out
 
 
+def _odcisk_notki(tekst: str) -> str:
+    """Odcisk cudzej notki BEZ etykiety wieku, ktora zmienia sie co minute (4.10.2026).
+
+    Kontener notki w kanale zaczyna sie naglowkiem: nazwa autora, WIEK („just
+    now", „1m", „2 days ago") i czasem „Subscribe". Ta sama tresc wystawiona
+    drugi raz przez autora ma wiec dwa rozne napisy i zaden porownywacz jej nie
+    rozpozna — drugi bot zrobil przez to dwa restacki tej samej notki w jednym
+    przebiegu. Wiek wycinamy TYLKO z poczatku (pierwsze 80 znakow): dalej jest
+    tresc, w ktorej „5 m" albo „2 days" bywa trescia i nie wolno jej ruszac.
+    Sto znakow odcisku, nie sto dwadziescia: zapisy z dziennika sa uciete razem
+    z naglowkiem i po wycieciu wieku musza dawac ten sam poczatek co swiezy odczyt.
+    """
+    import re as _re
+
+    plaski_tekst = plaski(str(tekst or ""))
+    naglowek, reszta = plaski_tekst[:80], plaski_tekst[80:]
+    naglowek = _re.sub(
+        r"\b(?:just now|now|yesterday|subscribe"
+        r"|\d+\s*(?:s|m|h|d|w|mo|y)"
+        r"|\d+\s+(?:second|minute|hour|day|week|month|year)s?(?:\s+ago)?)\b",
+        " ", naglowek, flags=_re.I)
+    return " ".join((naglowek + reszta).split())[:100].casefold()
+
+
+def _odciski_restackow_z_dziennika(dni: int = 7) -> set[str]:
+    """Odciski notek, ktore podalismy dalej w ostatnich `dni` dniach (pole `zrodlo`). Bez sieci."""
+    import json as _json
+    from datetime import datetime, timedelta, timezone
+
+    granica = (datetime.now(timezone.utc) - timedelta(days=dni)).isoformat()
+    odciski: set[str] = set()
+    try:
+        if not DZIENNIK.exists():
+            return odciski
+        for linia in DZIENNIK.read_text(encoding="utf-8").splitlines():
+            if '"restack"' not in linia:
+                continue
+            try:
+                w = _json.loads(linia)
+            except ValueError:
+                continue
+            if (isinstance(w, dict) and w.get("rodzaj") == "restack" and w.get("udane")
+                    and w.get("zrodlo") and str(w.get("kiedy") or "") >= granica):
+                odciski.add(str(w["zrodlo"]))
+    except OSError:
+        return set()
+    return odciski
+
+
 def restackuj_w_kanale(
     ile: int, decyzja, wyslij: bool = False, limit_autorow=None,
 ) -> dict[str, Any]:
@@ -5565,6 +5707,11 @@ def restackuj_w_kanale(
     page = context.new_page()
     wynik: dict[str, Any] = {"znalezione": 0, "rozwazone": 0, "restackowane": 0,
                              "odmowy": [], "blad": None}
+    # ODPOCZYNEK OD RAZU, NIE PRZY NASTEPNYM PRZEBIEGU (4.10.2026): autor i tresc,
+    # ktore WLASNIE podalismy dalej, nie wracaja w tym samym przebiegu, a odciski
+    # z ostatnich dni (`zrodlo` w dzienniku) nie wracaja w ogole.
+    odpoczywaja_autorzy: set[str] = set()
+    odciski_zrobione: set[str] = _odciski_restackow_z_dziennika()
     try:
         page.goto("https://substack.com/", timeout=READ_TIMEOUT_MS * 2,
                   wait_until="domcontentloaded")
@@ -5585,6 +5732,13 @@ def restackuj_w_kanale(
                 # decyzja bylaby losowaniem, a nie ocena.
                 notka = _notka_przy_przycisku(kandydat)
                 if not notka.get("tekst"):
+                    continue
+                autor_teraz = str(notka.get("autor") or "").strip().casefold()
+                odcisk_zrodla = _odcisk_notki(notka.get("tekst"))
+                if odcisk_zrodla in odciski_zrobione or (
+                        autor_teraz and autor_teraz in odpoczywaja_autorzy):
+                    print(f"    pomijam: ta notka albo ten autor juz podany dalej"
+                          f" ({notka.get('autor', '?')[:24]})", flush=True)
                     continue
                 if limit_autorow is not None and not limit_autorow.wolno(notka):
                     print(f"    pomijam: limit autora ({notka.get('autor', '?')[:24]})",
@@ -5640,6 +5794,9 @@ def restackuj_w_kanale(
                 wynik["restackowane"] += 1
                 if limit_autorow is not None:
                     limit_autorow.zapisz(notka)
+                if autor_teraz:
+                    odpoczywaja_autorzy.add(autor_teraz)
+                odciski_zrobione.add(odcisk_zrodla)
                 # Restack tworzy NOWA notke z wlasnym numerem. Bez niego
                 # restack byl jedyna forma publikacji, ktorej nie dalo sie
                 # zmierzyc — a to najcenniejszy sygnal, jaki mamy: w badaniu
@@ -5683,6 +5840,7 @@ def restackuj_w_kanale(
                                    komu=notka.get("autor", ""),
                                    slow=len(zdanie.split()),
                                    tekst=zdanie[:300], id=numer_restacka,
+                                   zrodlo=odcisk_zrodla,
                                    **{k: ocena[k] for k in ("model", "eksperymenty")
                                       if ocena.get(k)})
                 print(f"    podane dalej {wynik['restackowane']}/{ile}", flush=True)

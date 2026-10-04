@@ -106,6 +106,11 @@ import config         # noqa: E402
 import norma          # noqa: E402
 import run            # noqa: E402
 
+# Sito i straznik rozmiaru (4.10.2026) pytaja publiczne API o profil; atrapy
+# stron tego testu go nie maja, a test sprawdza WYBOR CELU i mechanike klikania.
+# Rozmiar kont ma wlasny test (`test_nie_jak_nia.py`).
+config.SUBSKRYPCJE_MAX_ODBIORCOW = None
+
 ODNIESIENIE = "6ed4e7d"        # wersja SPRZED poprawki; nigdy HEAD
 
 zdane = 0
@@ -330,7 +335,8 @@ def uruchom_blok(kod_bloku, nazwa, historia, konta, budzet=1,
 
     stare = {k: getattr(browser, k) for k in
              ("podlacz_sie", "wymagaj_sesji", "naprawde_wyslac",
-              "uchwyt_publikacji", "DZIENNIK", "OBSERWOWANI", "CZYTELNICY")}
+              "uchwyt_publikacji", "DZIENNIK", "OBSERWOWANI",
+              "CZYTELNICY")}
     stary_shuffle = random.shuffle
     stara_norma = norma.DZIENNIK
     try:
@@ -356,7 +362,12 @@ def uruchom_blok(kod_bloku, nazwa, historia, konta, budzet=1,
               "powod_pustej_puli": run.powod_pustej_puli,
               "kogo_juz_subskrybujemy": run.kogo_juz_subskrybujemy,
               "czy_juz_subskrybujemy": run.czy_juz_subskrybujemy,
-              "PRZESTAWIENIE_KONTA_NA_AI": run.PRZESTAWIENIE_KONTA_NA_AI}
+              "PRZESTAWIENIE_KONTA_NA_AI": run.PRZESTAWIENIE_KONTA_NA_AI,
+              # OD 4.10.2026 BLOK WOLA `nowi_z_kanalu()` (zagniezdzone w `dzien`)
+              # i `znane_za_duze()` (poziom modulu). Tu kolejka ma byc sama
+              # historia komentarzy, wiec zrodlo nowych jest puste.
+              "nowi_z_kanalu": lambda: [],
+              "znane_za_duze": run.znane_za_duze}
         ns.update(dodatki or {})
         exec(compile(kod_bloku, "run.py::%s" % nazwa, "exec"), ns)
         buf, stare_out = io.StringIO(), sys.stdout

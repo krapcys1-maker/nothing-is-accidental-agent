@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **36 plików**, 42 543 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **36 plików**, 43 069 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -113,8 +113,8 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 > w głównej ścieżce artykułu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
-się testować bez przeglądarki i bez pieniędzy**. 201 zestawów
-testów, 5135 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+się testować bez przeglądarki i bez pieniędzy**. 202 zestawów
+testów, 5212 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -143,7 +143,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-3477 wierszy, 38 funkcji na poziomie modułu, 2 klas
+3622 wierszy, 39 funkcji na poziomie modułu, 2 klas
 
 | funkcja | co robi |
 |---|---|
@@ -178,6 +178,7 @@ wiec nie da sie go rozjechac z kodem.
 | `_przeplot(pierwsza, druga)` *(wewn.)* | Na przemian z dwoch list; gdy jedna sie konczy, druga idzie dalej. |
 | `cele_wedlug_pierwszenstwa(historia)` | Hosty do zaczepienia, w kolejnosci pierwszenstwa. Zero sieci. |
 | `powod_pustej_puli(rachunek)` | Zdanie do dziennika, gdy po odsianiu nie zostal nikt. |
+| `znane_za_duze()` | Uchwyty, ktore JUZ ZMIERZYLISMY jako za duze (4.10.2026). Z dziennika, bez sieci. |
 | `kogo_juz_subskrybujemy()` | Uchwyty, na ktore subskrypcja NIE MA JUZ CO wysylac. Z dziennika, bez sieci. |
 | `czy_juz_subskrybujemy(host, zamkniete, pamiec)` | Czy ten HOST wskazuje konto, na ktore nie ma juz po co wchodzic. |
 | `dzien(conn, run_id, wyslij, poza_oknem)` | Jeden dzień pracy konta: notki, komentarze, odpowiedzi, polubienia. |
@@ -188,7 +189,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-11370 wierszy, 193 funkcji na poziomie modułu, 0 klas
+11382 wierszy, 193 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -388,7 +389,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `browser.py` — cała styczność z Substackiem; nie woła modelu
 
-5744 wierszy, 110 funkcji na poziomie modułu, 0 klas
+5902 wierszy, 114 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -458,6 +459,8 @@ wiec nie da sie go rozjechac z kodem.
 | `_stan_przycisku(uchwyt)` *(wewn.)* | Jak przycisk wyglada — wszystkie sygnaly naraz, sklejone w jeden napis. |
 | `potwierdz_polubienie(uchwyt, przed)` | Czy przycisk po klknieciu wyglada inaczej niz przed nim. |
 | `polub_w_kanale(ile, wyslij)` | Polubienia w kanale czytelnika. |
+| `konto_male(profil, maksimum)` | Czy publiczny profil mieści się w sufcie odbiorcow. NIEZNANY ROZMIAR TO NIE DOWOD. |
+| `konto_za_duze(handle)` | Czy konto przekracza sufit odbiorcow — SPRAWDZANE ZANIM ZAPLACIMY CZAS. |
 | `_klik_na_profilu(handle, napisy, rodzaj, wyslij)` *(wewn.)* | Klika JEDEN konkretny przycisk na cudzym profilu — i tylko jego. |
 | `pobierz_subskrybentow()` | Czyta liste subskrybentow z WLASNEGO panelu, wlasna sesja. |
 | `zloz_wiersze_subskrybentow(surowe)` | Sklada wiersze z komorek tabeli panelu: adres, typ i data rozpoczecia. |
@@ -500,6 +503,8 @@ wiec nie da sie go rozjechac z kodem.
 | `potwierdz_komentarz(page, url, tekst)` | Pyta Substacka, czy komentarz naprawdę wisi — zamiast wierzyć kliknięciu. |
 | `wystaw_komentarz(url, tekst, wyslij, kontekst)` | Wystawia komentarz pod cudzym postem. Domyślnie WYPEŁNIA i NIE WYSYŁA. |
 | `read_pages(urls)` | Otwiera strony w przeglądarce i zwraca ich widoczny tekst. |
+| `_odcisk_notki(tekst)` *(wewn.)* | Odcisk cudzej notki BEZ etykiety wieku, ktora zmienia sie co minute (4.10.2026). |
+| `_odciski_restackow_z_dziennika(dni)` *(wewn.)* | Odciski notek, ktore podalismy dalej w ostatnich `dni` dniach (pole `zrodlo`). Bez sieci. |
 | `restackuj_w_kanale(ile, decyzja, wyslij, limit_autorow)` | Podaje dalej cudze notki z wlasnym zdaniem. |
 | `_notka_przy_przycisku(przycisk)` *(wewn.)* | Tresc i autor notki, przy ktorej stoi ten przycisk. |
 
@@ -575,7 +580,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `kanal.py` — pamięć o cudzych publikacjach
 
-470 wierszy, 17 funkcji na poziomie modułu, 1 klas
+563 wierszy, 20 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -592,6 +597,9 @@ wiec nie da sie go rozjechac z kodem.
 | `cichy_watek(x)` | Zero reakcji i zero komentarzy — komentarz pod tym przeczyta tylko autor. |
 | `zywe_najpierw(cele)` | Zywe watki przed cichymi, w obrebie grup kolejnosc bez zmian. |
 | `_klucz_autora(wartosc)` *(wewn.)* | — |
+| `trafny_tematycznie(post)` | Znak tematu (AI) w TYTULE albo co najmniej DWA razy w calosci. |
+| `_cel_wychodzacy(post)` *(wewn.)* | `@uchwyt` autora notki albo host publikacji; None, gdy nie da sie ustalic. |
+| `nowi_kandydaci(czysty, ile_szukanie, ile_notek)` | Swiezi, trafni tematycznie autorzy z wyszukiwarki i kanalu: `@uchwyt` albo host. |
 | `odsiej_cele(cele, limit, notki)` | Sito przed ocena celow: za stare, (pod notkami) ciche, ponad limit autora. |
 | `posty_z_kanalu(ile)` | Ostatnie posty z kanalu czytelnika, z liczba komentarzy i reakcji. |
 | `notki_z_kanalu(ile)` | Cudze notki, pod ktorymi mozna wejsc w dyskusje. |
@@ -599,7 +607,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `alarm.py` — kontrola sesji, zdrowia i alarm do właściciela
 
-1214 wierszy, 25 funkcji na poziomie modułu, 0 klas
+1243 wierszy, 26 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -611,6 +619,7 @@ wiec nie da sie go rozjechac z kodem.
 | `artykul_zalegly()` | Czy gotowy artykul lezy na dysku niewystawiony dluzej niz dobe. |
 | `sprawdz_sesje_i_ostrzez()` | Pilnuje jedynej rzeczy, która zatrzymuje agenta bez żadnego błędu. |
 | `sprawdz_przebiegi_i_ostrzez(ile)` | Alarmuje, gdy agent pada raz za razem. |
+| `max_dzialan_dziennie()` | Ile dzialan na dobe uznajemy jeszcze za normalne — z BIEZACYCH norm. |
 | `_polaczenie()` *(wewn.)* | — |
 | `cisza()` | Czy agent w ogole cos ostatnio zrobil. |
 | `zawieszone()` | Przebiegi, ktore zostaly w stanie RUNNING na zawsze. |
@@ -655,7 +664,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-3892 wierszy, 43 funkcji na poziomie modułu, 0 klas
+3981 wierszy, 44 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -688,6 +697,7 @@ wiec nie da sie go rozjechac z kodem.
 | `losowe_otwarcie()` | — |
 | `losowa_dlugosc()` | Ile slow ma miec ta konkretna wypowiedz. |
 | `losowy_ksztalt_mysli()` | Ktory ksztalt dostaje ta MYSL. Losowany, bo wybor zbiega do stalej. |
+| `rampa_aktywnosci(dzien)` | Stopien rampy na dany dzien (`YYYY-MM-DD`): `(follow, subskrypcje, widelki komentarzy)`. |
 | `normy_dzienne()` | Ile czego POWINNO wychodzic dziennie — srodek widelek. |
 | `_cisza_z_hasza(dzien)` *(wewn.)* | — |
 | `cichy_dzien(kiedy)` | Czy dzis nie nadajemy. Ta sama odpowiedz przez caly dzien. |
@@ -7895,6 +7905,7 @@ def budzet_dnia(conn: sqlite3.Connection) -> dict[str, int]:
     # to jest dokladnie ten podpis maszyny, ktorego unikamy.
     dzis = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     los = random.Random("%s|nia-budzet-dnia" % dzis)
+    _rampa = config.rampa_aktywnosci(dzis)
 
     def losuj(widelki: tuple[int, int]) -> int:
         dol, gora = widelki
@@ -7919,18 +7930,29 @@ def budzet_dnia(conn: sqlite3.Connection) -> dict[str, int]:
         # reszte przy dzieleniu dnia na przebiegi.
         "notki": len(config.NOTE_MIX_OTHER_DAY),
         "lajki": losuj(config.LAJKI_DZIENNIE),
-        "komentarze": losuj(config.KOMENTARZE_DZIENNIE),
-        "follow": z_miesiaca(config.FOLLOW_MIESIECZNIE),
-        "subskrypcje": z_miesiaca(config.SUBSKRYPCJE_MIESIECZNIE),
+        # NIE JAK DRUGI BOT (4.10.2026): komentarze, obserwacje i subskrypcje
+        # ida stopniami `config.RAMPA_AKTYWNOSCI` do poziomu docelowego; przy
+        # pustej tabeli rampy obowiazuja widelki i stale dzienne z konfiguracji.
+        "komentarze": losuj(_rampa[2] if _rampa else config.KOMENTARZE_DZIENNIE),
+        "follow": (_rampa[0] if _rampa else
+                   config.FOLLOW_DZIENNIE if config.FOLLOW_DZIENNIE is not None
+                   else z_miesiaca(config.FOLLOW_MIESIECZNIE)),
+        "subskrypcje": (_rampa[1] if _rampa else
+                        config.SUBSKRYPCJE_DZIENNIE if config.SUBSKRYPCJE_DZIENNIE is not None
+                        else z_miesiaca(config.SUBSKRYPCJE_MIESIECZNIE)),
         # E12 — widelki restackow z ramienia TYGODNIA (`config.EKSPERYMENTY
         # ["restacki_norma"]`). Losowanie zostaje ostatnie w kolejce, wiec inne
         # widelki nie zmieniaja pozostalych pozycji budzetu z tego samego ziarna.
         "restacki": losuj(widelki_restackow(dzis)),
     }
     _e12 = ramie("restacki_norma", 0, dzis)
+    _stopien = (next((i + 1 for i, s in enumerate(config.RAMPA_AKTYWNOSCI)
+                      if tuple(s[1:]) == tuple(_rampa)), 0) if _rampa else 0)
     print(f"  [budżet dnia{' — rozbieg' if rozbieg else ''}] "
           + "  ".join(f"{k}={v}" for k, v in budzet.items())
-          + (f"  [E12 restacki: {_e12}]" if _e12 else ""), flush=True)
+          + (f"  [E12 restacki: {_e12}]" if _e12 else "")
+          + (f"  [rampa: stopień {_stopien}/{len(config.RAMPA_AKTYWNOSCI)}]" if _stopien else ""),
+          flush=True)
     _zapisz_budzet_dnia(dzis, budzet, rozbieg)
     return budzet
 ```
@@ -8606,6 +8628,21 @@ def _klik_na_profilu(handle: str, napisy: tuple[str, ...], rodzaj: str,
         page.goto(f"https://substack.com/@{handle}", timeout=READ_TIMEOUT_MS * 2,
                   wait_until="domcontentloaded")
         page.wait_for_timeout(SETTLE_MS + 4000)
+        # STRAZNIK ROZMIARU (4.10.2026) — ostatni, tuz przy przycisku. `api_json`
+        # nawiguje swoja karte, wiec rozmiar czytamy w OSOBNEJ karcie, a profil z
+        # przyciskami zostaje, gdzie byl.
+        if rodzaj == "subskrypcja" and config.SUBSKRYPCJE_MAX_ODBIORCOW is not None:
+            karta_rozmiaru = context.new_page()
+            try:
+                profil_api = api_json(karta_rozmiaru, f"/api/v1/user/{handle}/public_profile")
+            finally:
+                karta_rozmiaru.close()
+            if not konto_male(profil_api, config.SUBSKRYPCJE_MAX_ODBIORCOW):
+                wynik.update(pominiete=True, powod=POWOD_ZA_DUZY, _zapisane=True)
+                if wyslij:
+                    zapisz_w_dzienniku("subskrypcja_pominieta", udane=True,
+                                       komu=handle, powod=POWOD_ZA_DUZY)
+                return wynik
         for nazwa in napisy:
             k = page.get_by_role("button", name=nazwa, exact=True).first
             if k.count() == 0 or not k.is_visible():
@@ -8675,6 +8712,11 @@ def restackuj_w_kanale(
     page = context.new_page()
     wynik: dict[str, Any] = {"znalezione": 0, "rozwazone": 0, "restackowane": 0,
                              "odmowy": [], "blad": None}
+    # ODPOCZYNEK OD RAZU, NIE PRZY NASTEPNYM PRZEBIEGU (4.10.2026): autor i tresc,
+    # ktore WLASNIE podalismy dalej, nie wracaja w tym samym przebiegu, a odciski
+    # z ostatnich dni (`zrodlo` w dzienniku) nie wracaja w ogole.
+    odpoczywaja_autorzy: set[str] = set()
+    odciski_zrobione: set[str] = _odciski_restackow_z_dziennika()
     try:
         page.goto("https://substack.com/", timeout=READ_TIMEOUT_MS * 2,
                   wait_until="domcontentloaded")
@@ -8695,6 +8737,13 @@ def restackuj_w_kanale(
                 # decyzja bylaby losowaniem, a nie ocena.
                 notka = _notka_przy_przycisku(kandydat)
                 if not notka.get("tekst"):
+                    continue
+                autor_teraz = str(notka.get("autor") or "").strip().casefold()
+                odcisk_zrodla = _odcisk_notki(notka.get("tekst"))
+                if odcisk_zrodla in odciski_zrobione or (
+                        autor_teraz and autor_teraz in odpoczywaja_autorzy):
+                    print(f"    pomijam: ta notka albo ten autor juz podany dalej"
+                          f" ({notka.get('autor', '?')[:24]})", flush=True)
                     continue
                 if limit_autorow is not None and not limit_autorow.wolno(notka):
                     print(f"    pomijam: limit autora ({notka.get('autor', '?')[:24]})",
@@ -8750,6 +8799,9 @@ def restackuj_w_kanale(
                 wynik["restackowane"] += 1
                 if limit_autorow is not None:
                     limit_autorow.zapisz(notka)
+                if autor_teraz:
+                    odpoczywaja_autorzy.add(autor_teraz)
+                odciski_zrobione.add(odcisk_zrodla)
                 # Restack tworzy NOWA notke z wlasnym numerem. Bez niego
                 # restack byl jedyna forma publikacji, ktorej nie dalo sie
                 # zmierzyc — a to najcenniejszy sygnal, jaki mamy: w badaniu
@@ -8793,6 +8845,7 @@ def restackuj_w_kanale(
                                    komu=notka.get("autor", ""),
                                    slow=len(zdanie.split()),
                                    tekst=zdanie[:300], id=numer_restacka,
+                                   zrodlo=odcisk_zrodla,
                                    **{k: ocena[k] for k in ("model", "eksperymenty")
                                       if ocena.get(k)})
                 print(f"    podane dalej {wynik['restackowane']}/{ile}", flush=True)
@@ -11644,6 +11697,7 @@ wartosc i komentarz stojacy bezposrednio nad definicja.
 | `KROTKA_NOTKA_SLOW` | `(33, 60)` | E17 — okno krotkiej notki (obecne: `NOTE_MIN_WORDS`-`NOTE_MAX_WORDS`). |
 | `MAKS_ODPOWIEDZI_W_ROZMOWIE` | `2` | ILE RAZY ODPISUJEMY W JEDNEJ ROZMOWIE. Rozmowa to galaz komentarzy: ten, ktory ja zaczal, i wszystko pod nim. Liczy `browser.nasze_odpowiedz |
 | `MAKS_ODPOWIEDZI_KONTU_SIOSTRZANEMU` | `1` | — |
+| `UCHWYTY_SIOSTRZANE` | `("nia1503032",)` | UCHWYTY KONT SIOSTRZANYCH (publiczne nazwy na Substacku): nie obserwujemy ich i nie subskrybujemy w ruchu wychodzacym (`kanal.nowi_kandydaci |
 | `KONTA_SIOSTRZANE` | `frozenset( int(x) for x in _env("KONTA_SIOST` | — |
 | `WYLACZ_WYKRYWANIE_AI` | `True` | Czy agent ma klikac "Wylacz wykrywanie AI" przy kazdej publikacji. WLACZONE decyzja wlasciciela z 2026-08-15. To wybor publiczny, nie ustawi |
 | `DRY_RUN` | `_env("DRY_RUN", "false").lower() in {"1", "t` | — |
@@ -11803,10 +11857,17 @@ wartosc i komentarz stojacy bezposrednio nad definicja.
 | `KSZTALTY_MYSLI` | `{ 'PYTANIE': 'Consider a genuine open questi` | KSZTALTY NOTKI TYPU MYSL. Losowane w kodzie i podawane jako PRZYDZIAL. Powod jest zmierzony: opis typu wymienial pytanie i obserwacje jako d |
 | `NOTE_MIX_OTHER_DAY` | `("CIEKAWOSTKA", "DYSKUSJA", "SPROSTOWANIE")` | TRZY NOTKI NA DOBE ZAMIAST DZIESIECIU — decyzja wlasciciela, 7 wrzesnia 2026. Liczba notek na dobe to DLUGOSC TEJ KROTKI i tylko ona. POWOD  |
 | `PISARZE_NOTEK` | `("note",)` | KTO PISZE NOTKI — decyzja wlasciciela z 7 wrzesnia 2026: „zostaw Opusa". Naprzemiennosc weszla 3 wrzesnia jako SLEPA PROBA: polowa notek Opu |
-| `LAJKI_DZIENNIE` | `(10, 16)` | --- zachowanie spoleczne: widelki, nie stale liczby ------------------------- Stala liczba dziennie wyglada jak robot, bo czlowiek nie ma no |
-| `KOMENTARZE_DZIENNIE` | `(7, 9)` | Osiemnascie komentarzy dziennie pod cudzymi tekstami to nie jest tempo czytelnika, tylko podpis bota — i kosztuje najwiecej po pisaniu, bo k |
+| `LAJKI_DZIENNIE` | `(0, 0)` | --- zachowanie spoleczne: widelki, nie stale liczby ------------------------- Stala liczba dziennie wyglada jak robot, bo czlowiek nie ma no |
+| `KOMENTARZE_DZIENNIE` | `(14, 20)` | Osiemnascie komentarzy dziennie pod cudzymi tekstami to nie jest tempo czytelnika, tylko podpis bota — i kosztuje najwiecej po pisaniu, bo k |
 | `FOLLOW_MIESIECZNIE` | `(10, 16)` | ZEROWANE 2026-08-23, PRZYWROCONE 2026-09-01 — BO WNIOSEK BYL FALSZYWY. Stalo tu `(0, 0)` z uzasadnieniem „Substack zdjal Follow ze stron pro |
 | `SUBSKRYPCJE_MIESIECZNIE` | `(12, 20)` | — |
+| `FOLLOW_DZIENNIE` | `5` | --- NIE JAK DRUGI BOT, 4.10.2026 (decyzja wlasciciela) -------------------- Przeglad 4.10 porownal nas z drugim botem w TYM SAMYM WIEKU kont |
+| `SUBSKRYPCJE_DZIENNIE` | `4` | — |
+| `SUBSKRYPCJE_MAX_ODBIORCOW` | `1000` | SUFIT ODBIORCOW PRZY SUBSKRYPCJI. Subskrybujemy tylko publikacje, ktorych publicznosc (subskrybenci albo obserwujacy z publicznego profilu)  |
+| `SUBSKRYPCJE_MAKS_OGLADANYCH` | `40` | Ile kandydatow wolno OBEJRZEC w jednym przebiegu, szukajac malych kont. Sito jest tanie (publiczny JSON, bez przegladarki), ale duza czesc p |
+| `NOWI_BEZ_KONTAKTU` | `True` | NOWI LUDZIE BEZ WCZESNIEJSZEGO KONTAKTU. Do 4.10 obserwowalismy i subskrybowalismy WYLACZNIE autorow, pod ktorymi juz komentowalismy („zbier |
+| `STRONY_KANALU_NOTEK` | `6` | KANAL NOTEK CZYTAMY STRONAMI. Jedna strona oddawala 1-4 notki do wyboru na przebieg, wiec sito z 1.10 (stare, ciche, ponad limit autora) nie |
+| `RAMPA_AKTYWNOSCI` | `( ("2026-10-04", 3, 2, (10, 13)), ("2026-10-` | RAMPA. Skok z ~1 do ~9 obserwacji i subskrypcji dziennie z dnia na dzien to nieciaglosc w zachowaniu konta, ktorej nie ma sensu ryzykowac dl |
 | `PROG_ALARMU_WOLUMENU` | `60` | Ponizej ilu procent normy uznajemy, ze cos jest zepsute, a nie po prostu chudsze. Prog jest niski celowo: budzety sa LOSOWANE z widelek i dz |
 | `CICHY_DZIEN_NA_ILE` | `8` | ODBLOKOWANE decyzja wlasciciela 2026-08-19. Restack cudzej notki z wlasnym zdaniem trafia do kanalu NASZYCH obserwujacych, powiadamia autora |
 | `CICHE_DNI_WLACZONE` | `True` | — |
@@ -11835,8 +11896,8 @@ wartosc i komentarz stojacy bezposrednio nad definicja.
 | `KOMFORTOWO_KOMENTARZY` | `25` | ILU KOMENTARZY POD CELEM JESZCZE NIE UWAZAMY ZA TLOK. Wyszukiwarka oddawala posty ze srednio 45 komentarzami, jeden ze 126 — a komentarz sto |
 | `ODSTEP_DNI_NA_PUBLIKACJE` | `4` | Ile dni odstepu przed kolejnym komentarzem pod TA SAMA publikacja. Komentarz pod kazdym kolejnym tekstem tej samej osoby to drugi najczyteln |
 | `MAKS_WIEK_POSTA_DO_KOMENTARZA_DNI` | `7` | NAJSTARSZY CEL KOMENTARZA (1.10.2026, decyzja wlasciciela). `MIN_WIEK_*` pilnuje tylko, zeby nie wejsc za szybko; gornej granicy nie bylo, a |
-| `MAKS_WIEK_NOTKI_DO_KOMENTARZA_H` | `48` | — |
-| `ZYWY_WATEK_KOMENTARZY` | `2` | ZYWY WATEK POD NOTKA (1.10.2026). Przy tym samym wieku celu (~7,5 h) NIA wybiera notki z mediana 8 reakcji i 2 komentarzy przed nia — 48% je |
+| `MAKS_WIEK_NOTKI_DO_KOMENTARZA_H` | `36` | — |
+| `ZYWY_WATEK_KOMENTARZY` | `2` | ZYWY WATEK POD NOTKA (1.10.2026). Przy wieku celu ~7,5 h NIE wybierala notki z mediana 3 reakcji i 0 komentarzy — 8% jej komentarzy dostawal |
 | `ZYWY_WATEK_REAKCJI` | `5` | — |
 | `MAKS_DZIALAN_U_AUTORA_7_DNI` | `3` | NAJWYZEJ TYLE KOMENTARZY + RESTACKOW U JEDNEGO AUTORA W 7 DNI (1.10.2026). Zmierzone 24-30.09: jeden autor dostal 16 komentarzy w tydzien, i |
 | `HASLA_SZUKANIA` | `( # rdzen: systemy AI i ich dzialanie w swie` | HASLA, KTORYMI AGENT SZUKA NOWYCH KONT. Kanal czytelnika pokazuje tylko to, co juz znamy, wiec sam z siebie nie przyprowadzi nikogo nowego — |

@@ -1134,6 +1134,50 @@ def powod_pustej_puli(rachunek: dict) -> str:
                rachunek.get("reagujacy", 0)))
 
 
+def znane_za_duze() -> set[str]:
+    """Uchwyty, ktore JUZ ZMIERZYLISMY jako za duze (4.10.2026). Z dziennika, bez sieci.
+
+    Pula kandydatow prowadzi glownie do kont, dla ktorych jestesmy szumem, i
+    bez pamieci kazdy przebieg mierzylby tych samych wielkich kont od nowa,
+    zjadajac nimi okno przegladania (`SUBSKRYPCJE_MAKS_OGLADANYCH`). Konto raz
+    zmierzone na setki tysiecy nie zejdzie ponizej sufitu.
+
+    NIE SKRESLA NIKOGO NA ZAWSZE: blok subskrypcji PRZESUWA takich kandydatow na
+    koniec kolejki, a nie wyrzuca — gdy nie ma nikogo innego, wracaja do gry i
+    dostaja normalne sprawdzenie (sufit i tak zapyta o aktualny rozmiar). Nie
+    obejmuje „nie ma profilu publicznego (404)": brak profilu bywa chwilowy, a
+    „nie wiem" nie ma sie zapisywac jak pomiar.
+    """
+    import json as _json
+    import browser
+
+    duzi: set[str] = set()
+    try:
+        if not browser.DZIENNIK.exists():
+            return duzi
+        for linia in browser.DZIENNIK.read_text(encoding="utf-8").splitlines():
+            linia = linia.strip()
+            if not linia:
+                continue
+            try:
+                wpis = _json.loads(linia)
+            except ValueError:
+                continue
+            if not isinstance(wpis, dict):
+                continue
+            if wpis.get("rodzaj") not in ("subskrypcja_pominieta",
+                                          "obserwacja_pominieta"):
+                continue
+            if str(wpis.get("powod") or "") != browser.POWOD_ZA_DUZY:
+                continue
+            komu = str(wpis.get("komu") or "").strip().lstrip("@")
+            if komu:
+                duzi.add(komu.lower())
+    except OSError:
+        return set()
+    return duzi
+
+
 def kogo_juz_subskrybujemy() -> set[str]:
     """Uchwyty, na ktore subskrypcja NIE MA JUZ CO wysylac. Z dziennika, bez sieci.
 
@@ -1214,6 +1258,11 @@ def czy_juz_subskrybujemy(host: str, zamkniete: set[str],
     host = str(host or "").strip().lower().rstrip("/")
     if not host:
         return False
+    # `@uchwyt` (nowi kandydaci bez wczesniejszego kontaktu, 4.10.2026): uchwyt
+    # juz mamy, wiec porownujemy go wprost — inaczej zasubskrybowany kandydat
+    # przeszedlby sito i zjadl miejsce w oknie ogladania.
+    if host.startswith("@"):
+        return host[1:] in zamkniete
     if host.endswith(".substack.com"):
         if host.split(".")[0] in zamkniete:
             return True
@@ -2204,6 +2253,29 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
             limit_autorow.zapisz(cel)
             zrobione["komentarze"] += 1
 
+    # --- 3c-0. nowi ludzie do ruchu wychodzacego, bez wczesniejszego kontaktu ---
+    # Liczone RAZ na przebieg i wspolne dla obserwacji i subskrypcji: wyszukiwarka i
+    # kanal notek to dwie sesje przegladarki. Patrz `config.NOWI_BEZ_KONTAKTU`.
+    pula_nowych: list[str] | None = None
+
+    def nowi_z_kanalu() -> list[str]:
+        nonlocal pula_nowych
+        if pula_nowych is None:
+            try:
+                nowi = getattr(kanal, "nowi_kandydaci", None)
+                pula_nowych = (nowi(czysty=lambda t: stages.bez_wstrzykniecia(t)[0])
+                               if callable(nowi) else [])
+            except Exception as exc:            # noqa: BLE001
+                # Zrodlo uzupelniajace. Jego awaria nie moze zabrac obserwacji
+                # ani subskrypcji z historii komentarzy.
+                print("  [nowi] nie udalo sie zebrac kandydatow (%s) — zostaje sama"
+                      " historia komentarzy" % type(exc).__name__, flush=True)
+                pula_nowych = []
+            else:
+                print("  [nowi] %d swiezych, trafnych tematycznie autorow z kanalu i"
+                      " wyszukiwarki" % len(pula_nowych), flush=True)
+        return pula_nowych
+
     # --- 3c. obserwowanie nowych: to, co poszerza krąg ------------------------
     def obserwuj() -> None:
         """Obserwuje autorów, których teksty faktycznie czytaliśmy.
@@ -2279,7 +2351,7 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
         if not na_teraz.get("follow"):
             return
         historia = kanal._historia()
-        if not historia:
+        if not historia and not config.NOWI_BEZ_KONTAKTU:
             return
 
         # ODSIEW PRZED LOSOWANIEM, A NIE PO NIM — i to jest cala roznica.
@@ -2304,6 +2376,10 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
         # tego dnia), i stawia na poczatku te, ktore juz zareagowaly na nasza
         # tresc. Los zostaje, ale juz tylko wewnatrz poziomu.
         wszyscy, rachunek = cele_wedlug_pierwszenstwa(historia)
+        # NOWI LUDZIE BEZ WCZESNIEJSZEGO KONTAKTU (4.10.2026) — na POCZATEK kolejki.
+        # Patrz `config.NOWI_BEZ_KONTAKTU` i `nowi_z_kanalu`.
+        if config.NOWI_BEZ_KONTAKTU:
+            wszyscy = list(dict.fromkeys(nowi_z_kanalu() + wszyscy))
         kandydaci = [h for h in wszyscy
                      if not browser.czy_juz_obserwujemy(h, pamiec)]
         print("  pula: %d hostow w historii, %d odsianych tematycznie"
@@ -2357,7 +2433,11 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
         # przegladarki. Cztery, bo zmierzony odsetek juz-obserwowanych w puli
         # to okolo 13 procent, wiec cztery pudla z rzedu to juz nie pech,
         # tylko znak, ze pamiec jest do odswiezenia.
-        ZAPAS_NA_ODPADY = 4
+        #
+        # Od 4.10.2026 zapas jest wiekszy (12): nowe zrodlo kandydatow
+        # (`nowi_z_kanalu`) daje wiecej hostow, ktorych uchwyt trzeba dopiero
+        # ustalic, a taki obrot tez nie jest proba.
+        ZAPAS_NA_ODPADY = 12 if config.NOWI_BEZ_KONTAKTU else 4
         proby = 0
         # DWA RODZAJE POMINIEC, BO ZOSTAWIAJA ROZNY SLAD. Pominiecie z menu
         # zapisuje `obserwuj_profil` (byl na profilu, przeczytal „Unfollow");
@@ -2391,8 +2471,9 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
                 # ich nie ma: blok bez sladu w dzienniku wyglada na blok, ktory
                 # sie nie odbywa. Proba byla, wiec ma zostawic powod.
                 if wyslij:
-                    browser.dopisz_wynik(
-                        "obserwacja", {}, komu=host,
+                    # POMINIECIE, NIE PORAZKA (4.10.2026) — jak przy subskrypcji.
+                    browser.zapisz_w_dzienniku(
+                        "obserwacja_pominieta", udane=True, komu=host,
                         powod=f"nie ustalilem konta autora dla {host}")
                     zostal_slad = True
                 print(f"  (nie ustalilem konta dla {host} — pomijam)", flush=True)
@@ -2489,7 +2570,7 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
         if not na_teraz.get("subskrypcje"):
             return
         historia = kanal._historia()
-        if not historia:
+        if not historia and not config.NOWI_BEZ_KONTAKTU:
             return
 
         # TE SAME DWA POZIOMY, CO PRZY OBSERWACJI, i to jest zamierzone: jesli
@@ -2497,10 +2578,25 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
         # ktora zaglada wlascicielowi do skrzynki i zostawia u nich slad
         # w liscie subskrybentow — jest za stary tym bardziej.
         wszyscy, rachunek = cele_wedlug_pierwszenstwa(historia)
+        # NOWI LUDZIE BEZ WCZESNIEJSZEGO KONTAKTU (4.10.2026) — na POCZATEK kolejki.
+        # Patrz `config.NOWI_BEZ_KONTAKTU` i `nowi_z_kanalu`.
+        if config.NOWI_BEZ_KONTAKTU:
+            wszyscy = list(dict.fromkeys(nowi_z_kanalu() + wszyscy))
         pamiec = browser.kogo_obserwujemy()
         zamkniete = kogo_juz_subskrybujemy()
         kandydaci = [h for h in wszyscy
                      if not czy_juz_subskrybujemy(h, zamkniete, pamiec)]
+        # KONTA JUZ ZMIERZONE JAKO ZA DUZE IDA NA KONIEC KOLEJKI (4.10.2026), nie do
+        # kosza: patrz `znane_za_duze`.
+        duzi = znane_za_duze() if config.SUBSKRYPCJE_MAX_ODBIORCOW is not None else set()
+        if duzi:
+            swiezi = [h for h in kandydaci if _slug_hosta(h.lstrip("@")) not in duzi
+                      and h.lstrip("@").lower() not in duzi]
+            znani = [h for h in kandydaci if h not in swiezi]
+            if znani:
+                print("  [subskrypcje] %d kandydatow juz zmierzonych jako za duzi —"
+                      " ida na koniec kolejki" % len(znani), flush=True)
+            kandydaci = swiezi + znani
         print("  pula: %d hostow w historii, %d odsianych tematycznie"
               " (ostatni komentarz sprzed %s), %d z reakcja na nasza tresc;"
               " reagujacych z uchwytem %d, w puli %d (%d juz nas czyta,"
@@ -2540,10 +2636,26 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
         ZAPAS_NA_ODPADY = 4
         proby = 0
         z_pamieci = 0
+        za_duzi = 0
+        obejrzani = 0
         zostal_slad = False
-        for host in kandydaci[: na_teraz["subskrypcje"] + ZAPAS_NA_ODPADY]:
+        # LIMIT OGLADANIA ZAMIAST STALEGO ZAPASU (4.10.2026). Przy sicie rozmiaru
+        # wiekszosc kandydatow odpada i zapas czterech wyczerpywal sie, zanim blok
+        # znalazl choc jedno male konto. Sito jest tanie (publiczny JSON), wiec
+        # wolno obejrzec do `SUBSKRYPCJE_MAKS_OGLADANYCH`; proba liczy sie
+        # dopiero, gdy naprawde weszlismy na profil.
+        limit_ogladania = max(
+            na_teraz["subskrypcje"] + ZAPAS_NA_ODPADY,
+            int(getattr(config, "SUBSKRYPCJE_MAKS_OGLADANYCH", 40)))
+        przerwa_odczekana = False
+        for host in kandydaci:
             if proby >= na_teraz["subskrypcje"]:
                 break
+            if obejrzani >= limit_ogladania:
+                print("  (obejrzalem %d kandydatow i koncze na dzis — reszta puli"
+                      " poczeka)" % obejrzani, flush=True)
+                break
+            obejrzani += 1
             if not zostal_czas("subskrypcje"):
                 break
             uchwyt = browser.uchwyt_publikacji(host)
@@ -2563,16 +2675,43 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
                 # trzy proby zapisane w dzienniku jako `komu='www'` nie mialy
                 # w sobie ani slowa o tym, ktorego adresu dotyczyly.
                 if wyslij:
-                    browser.dopisz_wynik(
-                        "subskrypcja", {}, komu=host,
+                    # POMINIECIE, NIE PORAZKA (4.10.2026): nowe zrodlo kandydatow
+                    # daje wiecej hostow, ktorych uchwytu nie da sie ustalic, a
+                    # `dopisz_wynik("subskrypcja", {})` liczyl je jako nieudane akcje.
+                    browser.zapisz_w_dzienniku(
+                        "subskrypcja_pominieta", udane=True, komu=host,
                         powod=f"nie ustalilem konta autora dla {host}")
                     zostal_slad = True
                 print(f"  (nie ustalilem konta dla {host} — pomijam)", flush=True)
                 continue
+            # SITO ROZMIARU PRZED PRZERWA RYTMU (4.10.2026): za duze konto odpada
+            # bez czekania 5-15 minut i bez zuzycia proby.
+            if wyslij and browser.konto_za_duze(uchwyt):
+                browser.zapisz_w_dzienniku(
+                    "subskrypcja_pominieta", udane=True, komu=uchwyt,
+                    powod=browser.POWOD_ZA_DUZY)
+                zostal_slad = True
+                za_duzi += 1
+                print(f"  (@{uchwyt} przekracza sufit odbiorcow — pomijam bez"
+                      f" przerwy i bez zuzycia proby)", flush=True)
+                continue
             if wyslij:
-                if not rytm("komentarz", "subskrypcje", rytm_stanu):
-                    break
-                browser.zasubskrybuj(uchwyt, wyslij=True)
+                if not przerwa_odczekana:
+                    if not rytm("komentarz", "subskrypcje", rytm_stanu):
+                        break
+                przerwa_odczekana = False
+                wynik_profilu = browser.zasubskrybuj(uchwyt, wyslij=True) or {}
+                # STRAZNIK PRZY PRZYCISKU ODRZUCIL KONTO (rozmiar zmienil sie
+                # miedzy sitem a profilem albo sito sie pomylilo w strone „wpusc"):
+                # slot zostaje dla nastepnego, a przerwa rytmu jest juz odczekana.
+                if wynik_profilu.get("pominiete"):
+                    za_duzi += 1
+                    zostal_slad = True
+                    przerwa_odczekana = True
+                    print(f"  (@{uchwyt}: profil niczego nie przyjal —"
+                          f" {wynik_profilu.get('powod') or 'pominiete'}; slot"
+                          f" zostaje dla nastepnego)", flush=True)
+                    continue
                 rytm_stanu["komentarz"] = True
                 # PROBA LICZY SIE TAKZE WTEDY, GDY PROFIL ODMOWIL. Weszlismy
                 # na cudza strone i dostalismy odpowiedz — to jest zuzyty slot.
@@ -2594,6 +2733,12 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
                 "subskrypcja_pominieta", udane=True,
                 powod="pominietych %d z %d kandydatow: juz ich subskrybujemy"
                       " wedlug dziennika" % (z_pamieci, len(kandydaci)))
+        if za_duzi:
+            print("  [subskrypcje] %d z %d obejrzanych przekraczalo sufit %s"
+                  " odbiorcow%s"
+                  % (za_duzi, obejrzani, config.SUBSKRYPCJE_MAX_ODBIORCOW,
+                     " — pula nie zawiera kont w naszym rozmiarze" if not proby
+                     else ""), flush=True)
 
     # --- 4. polubienia: najtańszy uczciwy sygnał ------------------------------
     def polubienia() -> None:

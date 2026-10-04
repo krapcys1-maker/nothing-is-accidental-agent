@@ -76,6 +76,11 @@ import browser        # noqa: E402
 import config         # noqa: E402
 import norma          # noqa: E402
 import run            # noqa: E402
+
+# Sito i straznik rozmiaru (4.10.2026) pytaja publiczne API o profil; atrapy
+# stron tego testu go nie maja, a test sprawdza WYBOR CELU i mechanike klikania.
+# Rozmiar kont ma wlasny test (`test_nie_jak_nia.py`).
+config.SUBSKRYPCJE_MAX_ODBIORCOW = None
 import stages         # noqa: E402
 
 ODNIESIENIE = "6ed4e7d"        # wersja SPRZED poprawki; nigdy HEAD
@@ -364,7 +369,12 @@ def uruchom_blok(kod_bloku, nazwa, historia, konta, budzet=1,
               "powod_pustej_puli": run.powod_pustej_puli,
               "kogo_juz_subskrybujemy": run.kogo_juz_subskrybujemy,
               "czy_juz_subskrybujemy": run.czy_juz_subskrybujemy,
-              "PRZESTAWIENIE_KONTA_NA_AI": run.PRZESTAWIENIE_KONTA_NA_AI}
+              "PRZESTAWIENIE_KONTA_NA_AI": run.PRZESTAWIENIE_KONTA_NA_AI,
+              # OD 4.10.2026 BLOK WOLA `nowi_z_kanalu()` (zagniezdzone w `dzien`)
+              # i `znane_za_duze()` (poziom modulu). Tu kolejka ma byc sama
+              # historia komentarzy, wiec zrodlo nowych jest puste.
+              "nowi_z_kanalu": lambda: [],
+              "znane_za_duze": run.znane_za_duze}
         exec(compile(kod_bloku, "run.py::%s" % nazwa, "exec"), ns)
         buf, stare_out = io.StringIO(), sys.stdout
         sys.stdout = buf
@@ -590,20 +600,27 @@ konta, wpisy, plik, out = uruchom_blok(
     BLOK_SUBSKRYBUJ, "subskrybuj",
     {"nieznana.domena.example": "2026-08-30T09:00:00+00:00"},
     Substack(), kolejnosc=("nieznana.domena.example",))
-sprawdz("host bez uchwytu zapisuje PORAZKE Z ADRESEM, nie cisze",
-        [w["rodzaj"] for w in wpisy] == ["subskrypcja"]
-        and wpisy[0].get("udane") is False
+sprawdz("host bez uchwytu zapisuje POMINIECIE Z ADRESEM I POWODEM, nie cisze",
+        [w["rodzaj"] for w in wpisy] == ["subskrypcja_pominieta"]
         and wpisy[0].get("komu") == "nieznana.domena.example", wpisy)
-# ADRES JEST W `komu`, NIE W `powod`, I TO NIE JEST NASZ WYBOR.
-# `browser.dopisz_wynik` NADPISUJE `powod` przekazany przez wolajacego, bo
-# przy `udane=False` wylicza go sobie sam z pol `wynik`. Blok `obserwuj` traci
-# na tym swoje „nie ustalilem konta autora dla ..." dokladnie tak samo, od
-# 1 wrzesnia. Zapisujemy to tutaj jako ZMIERZONY FAKT o cudzym pliku, zeby nie
-# udawac, ze przekazany powod gdziekolwiek dolatuje.
-sprawdz("zmierzony skutek cudzego `dopisz_wynik`: powod wolajacego przepada",
-        wpisy[0].get("powod") == browser.POWOD_HOST_NIE_POKAZUJE, wpisy)
-sprawdz("ale wpis NIE obciaza hosta — to awaria po naszej stronie",
-        wpisy[0].get("o_hoscie") is False, wpisy)
+# OD 4.10.2026 TO POMINIECIE, NIE PORAZKA: nowe zrodlo kandydatow (autorzy
+# z kanalu i z wyszukiwarki) daje wiecej hostow bez uchwytu, a kazdy liczony
+# jako nieudana akcja zapalalby alarm porazek. Wpis idzie przez
+# `zapisz_w_dzienniku`, a nie `dopisz_wynik`, wiec powod wolajacego DOLATUJE
+# (`dopisz_wynik` nadpisywal go przy `udane=False` — dawny zmierzony skutek).
+sprawdz("pominiecie jest udane i niesie powod wolajacego z adresem",
+        wpisy[0].get("udane") is True and wpisy[0].get("powod")
+        == "nie ustalilem konta autora dla nieznana.domena.example", wpisy)
+_stary_dz = browser.DZIENNIK
+try:
+    browser.DZIENNIK = plik
+    _zamkniete_po = run.kogo_juz_subskrybujemy()
+finally:
+    browser.DZIENNIK = _stary_dz
+_wyk_u, _nieud_u, _ = licz_norma(plik, "subskrypcja")
+sprawdz("i nie obciaza hosta ani licznika: host nie jest zamkniety, zero prac i zero porazek",
+        "nieznana.domena.example" not in _zamkniete_po and (_wyk_u, _nieud_u) == (0, 0),
+        (_zamkniete_po, _wyk_u, _nieud_u))
 
 # ODMOWA PROFILU JEST PAMIETANA. Konto, ktore odpowiedzialo „nie ma przycisku
 # subskrypcja", nie wraca do puli — to jest dokladnie wpis, ktory 25 sierpnia
@@ -672,12 +689,18 @@ def wolumen(follow, subskrypcje, dni, wiek_start):
     fake.datetime, fake.timezone, fake.timedelta = (
         FakeDT, _dt.timezone, _dt.timedelta)
     stare = (config.FOLLOW_MIESIECZNIE, config.SUBSKRYPCJE_MIESIECZNIE,
-             stages.BUDZETY)
+             stages.BUDZETY, config.FOLLOW_DZIENNIE, config.SUBSKRYPCJE_DZIENNIE,
+             config.RAMPA_AKTYWNOSCI)
     katalog = pathlib.Path(tempfile.mkdtemp())
     suma = {"follow": 0, "subskrypcje": 0}
     try:
         config.FOLLOW_MIESIECZNIE = follow
         config.SUBSKRYPCJE_MIESIECZNIE = subskrypcje
+        # OD 4.10.2026 `stages.budzet_dnia` daje pierwszenstwo rampie i dziennym
+        # stalym przed widelkami miesiecznymi. Ta funkcja mierzy WIDELKI
+        # MIESIECZNE (stare i dzisiejsze), wiec na czas pomiaru je wylacza.
+        config.FOLLOW_DZIENNIE = config.SUBSKRYPCJE_DZIENNIE = None
+        config.RAMPA_AKTYWNOSCI = ()
         stages.BUDZETY = katalog / "budzety.json"
         # DATA JEST USTALONA, NIE DZISIEJSZA — inaczej test mierzylby kalendarz.
         baza = _dt.datetime(2026, 9, 1, 12, 0, tzinfo=_dt.timezone.utc)
@@ -701,7 +724,8 @@ def wolumen(follow, subskrypcje, dni, wiek_start):
         return (suma["follow"] / dni * 30, suma["subskrypcje"] / dni * 30)
     finally:
         (config.FOLLOW_MIESIECZNIE, config.SUBSKRYPCJE_MIESIECZNIE,
-         stages.BUDZETY) = stare
+         stages.BUDZETY, config.FOLLOW_DZIENNIE, config.SUBSKRYPCJE_DZIENNIE,
+         config.RAMPA_AKTYWNOSCI) = stare
         sys.modules["datetime"] = prawdziwy
 
 
@@ -729,9 +753,13 @@ sprawdz("subskrypcje sa teraz LICZNIEJSZE od obserwacji", s_dzis > f_dzis,
 sprawdz("takze w rozbiegu, gdzie widelki sa scinane", s_roz > f_roz,
         (f_roz, s_roz))
 sprawdz("obserwacje zeszly ponizej 15 na miesiac", f_dzis < 15, f_dzis)
+# OD 4.10.2026 NORMA LICZY SIE Z DZIENNEGO NADPISANIA, gdy jest ustawione —
+# z tej samej stalej, ktora rozdziela budzet; bez niego z widelek miesiecznych.
+_oczekiwana_sub = (float(config.SUBSKRYPCJE_DZIENNIE)
+                   if config.SUBSKRYPCJE_DZIENNIE is not None
+                   else sum(config.SUBSKRYPCJE_MIESIECZNIE) / 2 / 30)
 sprawdz("norma dzienna liczy sie z tych samych stalych, bez drugiej listy",
-        abs(config.normy_dzienne()["subskrypcja"]
-            - sum(config.SUBSKRYPCJE_MIESIECZNIE) / 2 / 30) < 1e-9,
+        abs(config.normy_dzienne()["subskrypcja"] - _oczekiwana_sub) < 1e-9,
         config.normy_dzienne())
 
 

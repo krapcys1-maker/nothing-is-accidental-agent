@@ -231,6 +231,73 @@ class LimitAutorow:
         return out
 
 
+# --- NOWI LUDZIE DO RUCHU WYCHODZACEGO, BEZ WCZESNIEJSZEGO KONTAKTU (4.10.2026) ---
+#
+# Do 4.10 obserwowalismy i subskrybowalismy WYLACZNIE autorow, pod ktorymi juz
+# komentowalismy. Pula takich ludzi to ~170 hostow i w wiekszosci sa to konta zbyt
+# duze, zeby odpowiedziec. Teraz na poczatek kolejki wchodza tez swiezi, trafni
+# tematycznie autorzy z kanalu notek i z wyszukiwarki: aktywni piszacy, ktorzy
+# widza, ze ktos ich obserwuje. DARMOWY filtr tematyczny, bez wywolania modelu.
+
+def trafny_tematycznie(post: dict) -> bool:
+    """Znak tematu (AI) w TYTULE albo co najmniej DWA razy w calosci.
+
+    Tytul jest deklaracja tematu; dwa wystapienia znacza, ze autor do tego wraca.
+    Jedna wzmianka w tekscie na dwa tysiace slow (newsletter o ropie z jednym
+    zdaniem o AI) NIE wystarcza. Notka nie ma tytulu, wiec liczy sie tylko druga
+    droga. Wzorzec jest ten sam, ktorym `korpus_kanalow` odsiewa feedy.
+    """
+    from korpus_kanalow import O_AI
+
+    tytul = " ".join(str(post.get(k) or "") for k in ("tytul", "title"))
+    calosc = " ".join(str(post.get(k) or "")
+                      for k in ("tytul", "title", "opis", "tekst", "text", "body"))
+    return bool(O_AI.search(tytul)) or len(O_AI.findall(calosc)) >= 2
+
+
+def _cel_wychodzacy(post: dict) -> str | None:
+    """`@uchwyt` autora notki albo host publikacji; None, gdy nie da sie ustalic."""
+    import re as _re
+    from urllib.parse import urlparse
+
+    for pole in ("handle", "uchwyt"):
+        uchwyt = str(post.get(pole) or "").strip().lstrip("@")
+        if post.get("rodzaj") == "notka" and _re.fullmatch(r"[A-Za-z0-9_.-]{1,64}", uchwyt):
+            return "@" + uchwyt.lower()
+    host = (urlparse(str(post.get("url") or "")).hostname or "").lower()
+    if not host or host == "substack.com" or "." not in host:
+        return None
+    return host
+
+
+def nowi_kandydaci(czysty=None, ile_szukanie: int = 30, ile_notek: int = 20) -> list[str]:
+    """Swiezi, trafni tematycznie autorzy z wyszukiwarki i kanalu: `@uchwyt` albo host.
+
+    `czysty(tekst) -> bool` (np. antywstrzykniecie z `stages`) podaje wolajacy —
+    ten modul nie importuje `stages`. Nie wola modelu. Pomija nas samych i konta
+    siostrzane (`config.UCHWYTY_SIOSTRZANE`). Kolejnosc: najpierw wyszukiwarka,
+    potem kanal; bez duplikatow.
+    """
+    posty = list(szukaj_nowych(ile_szukanie)) + list(notki_z_kanalu(ile_notek))
+    wlasne = {config.SUBSTACK_HANDLE.lower(),
+              *(u.lower() for u in getattr(config, "UCHWYTY_SIOSTRZANE", ()))}
+    wynik: list[str] = []
+    for post in posty:
+        if not trafny_tematycznie(post):
+            continue
+        tekst = " ".join(str(post.get(k) or "")
+                         for k in ("tytul", "title", "opis", "tekst", "text", "body"))
+        if czysty is not None and not czysty(tekst):
+            continue
+        cel = _cel_wychodzacy(post)
+        if not cel or cel in wynik:
+            continue
+        if cel.lstrip("@").split(".")[0] in wlasne or cel.lstrip("@") in wlasne:
+            continue
+        wynik.append(cel)
+    return wynik
+
+
 def odsiej_cele(cele: list[dict], limit: LimitAutorow, notki: bool) -> list[dict]:
     """Sito przed ocena celow: za stare, (pod notkami) ciche, ponad limit autora."""
     przed = len(cele)
@@ -329,10 +396,32 @@ def notki_z_kanalu(ile: int = 25) -> list[dict]:
     p, br, ctx = browser.podlacz_sie()
     page = ctx.new_page()
     try:
-        dane = browser.api_json(page, "/api/v1/reader/feed?tab=for-you&type=base") or {}
+        # KANAL CZYTAMY STRONAMI (4.10.2026). Jedna strona oddawala 1-4 notki do
+        # wyboru na przebieg, wiec sito wieku, ciszy i autora (`odsiej_cele`) nie
+        # mialo z czego wybierac, a komentarz trafial tam, gdzie nikt nie czyta.
+        # Kolejne strony daje `nextCursor`; sufit stron to `STRONY_KANALU_NOTEK`.
+        # Ta sama notka potrafi wrocic na dwoch stronach, wiec dedup po numerze.
+        from urllib.parse import quote as _quote
+        pozycje: list = []
+        widziane_id: set = set()
+        kursor = None
+        for _strona in range(max(1, int(getattr(config, "STRONY_KANALU_NOTEK", 1)))):
+            dane = browser.api_json(
+                page, "/api/v1/reader/feed?tab=for-you&type=base"
+                + ("&cursor=%s" % _quote(str(kursor)) if kursor else "")) or {}
+            for x in dane.get("items") or []:
+                c_id = ((x or {}).get("comment") or {}).get("id")
+                if c_id is not None and c_id in widziane_id:
+                    continue
+                widziane_id.add(c_id)
+                pozycje.append(x)
+            kursor = dane.get("nextCursor")
+            if not kursor:
+                break
         notki = []
         odrzucone = 0
-        for x in (dane.get("items") or [])[:ile * 2]:
+        stare = 0
+        for x in pozycje[:ile * 6]:
             c = (x or {}).get("comment") or {}
             if not c.get("body") or c.get("post_id"):
                 continue                     # to nie notka, tylko komentarz
@@ -351,6 +440,9 @@ def notki_z_kanalu(ile: int = 25) -> list[dict]:
             if _za_swiezy(kandydat, config.MIN_WIEK_NOTKI_MIN):
                 odrzucone += 1
                 continue
+            if za_stary_cel(kandydat, True):
+                stare += 1
+                continue
             notki.append(kandydat)
         # Najzywsze najpierw: tam nasza uwaga zostanie przeczytana.
         # Pod notkami liczy sie to samo co pod artykulami: zywa publicznosc,
@@ -358,7 +450,8 @@ def notki_z_kanalu(ile: int = 25) -> list[dict]:
         notki.sort(key=lambda n: wartosc_celu(
             {"komentarze": n["odpowiedzi"], "reakcje": n["reakcje"]}))
         print(f"  [notki innych] {len(notki)} do rozwazenia"
-              f"   ({odrzucone} odrzuconych jako za swieze)", flush=True)
+              f"   ({odrzucone} odrzuconych jako za swieze, {stare} jako za stare;"
+              f" przejrzano {len(pozycje)} pozycji z {_strona + 1} stron)", flush=True)
         return notki[:ile]
     finally:
         page.close()

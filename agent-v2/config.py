@@ -164,8 +164,9 @@ KWOTA_SPOZA_BRANZY = True
 #
 # E12 — ILE RESTACKOW: tygodnie na przemian, „on" = 3-5 dziennie, „off" = 1-3
 #   (`RESTACK_DZIENNIE_E12`). Restacki daly polowe zapisow przypisanych tresciom
-#   (NIE 5 z 10, NIA 9 z 12). Miary tygodniowe: zapisy przypisane restackom,
-#   przyrost subskrybentow, odwiedziny profilu — `eksperymenty.py --tygodnie`.
+#   (5 z 10). Miary tygodniowe: zapisy przypisane restackom (od 4.10 decydujaca:
+#   przyrost laczny zalezy tez od kanalu wychodzacego), przyrost subskrybentow,
+#   odwiedziny profilu — `eksperymenty.py --tygodnie`.
 # E13 — KTO PISZE ZDANIE RESTACKA: „on" = Opus (etap `restack_opus`), „off" =
 #   Flash; los po tresci ocenianej notki. Restack jest mierzony jak notka
 #   (35 z 35 od 1.09 ma numer i pomiar) — `--rodzaj restack`.
@@ -226,6 +227,10 @@ KROTKA_NOTKA_SLOW = (33, 60)
 # przecinku; domyslnie NIA (`nia1503032`). Druga kopia ustawia je w `.env`.
 MAKS_ODPOWIEDZI_W_ROZMOWIE = 2
 MAKS_ODPOWIEDZI_KONTU_SIOSTRZANEMU = 1
+# UCHWYTY KONT SIOSTRZANYCH (publiczne nazwy na Substacku): nie obserwujemy ich i nie
+# subskrybujemy w ruchu wychodzacym (`kanal.nowi_kandydaci`) — wzajemne dzialania
+# botow to nie wzrost, a petla rozmow z 26.09 pokazala, jak to wyglada z zewnatrz.
+UCHWYTY_SIOSTRZANE = ("nia1503032",)
 KONTA_SIOSTRZANE = frozenset(
     int(x) for x in _env("KONTA_SIOSTRZANE", "547272980").replace(";", ",").split(",")
     if x.strip().isdigit())
@@ -2641,7 +2646,12 @@ PISARZE_NOTEK = ("note",)
 # ma przycisku)" — na podstawie prawdziwego pomiaru i falszywego wniosku —
 # i wykrzyknik zniknal razem z problemem. 1 wrzesnia 2026 widelki wracaja;
 # powod stoi przy samej stalej `FOLLOW_MIESIECZNIE`.
-LAJKI_DZIENNIE = (10, 16)
+# 4.10.2026 (decyzja wlasciciela: NIE jak drugi bot): ZERO polubien. Zmierzone na
+# NIE: 385 polubien z uchwytem dalo JEDNA osobe, ktora pozniej zaobserwowala nas
+# lub zasubskrybowala (0,3%), a obserwacje i subskrypcje ok. 5%. Polubienie nic
+# nie kosztuje w modelu, ale zjada rytm przebiegu, ktory teraz idzie na
+# komentarze i ruch wychodzacy.
+LAJKI_DZIENNIE = (0, 0)
 # Osiemnascie komentarzy dziennie pod cudzymi tekstami to nie jest tempo
 # czytelnika, tylko podpis bota — i kosztuje najwiecej po pisaniu, bo kazdy to
 # trzy warianty plus sprawdzenie faktow, okolo trzech centow. Przy dwunastu
@@ -2681,7 +2691,13 @@ LAJKI_DZIENNIE = (10, 16)
 #
 # PRZEDZIAL, NIE STALA: rytm ma nie wygladac jak maszyna, wiec dobowy przydzial
 # losuje sie z 7-9 i srednio daje osiem.
-KOMENTARZE_DZIENNIE = (7, 9)
+# 4.10.2026 (decyzja wlasciciela: NIE jak drugi bot): z (7, 9) do (14, 20),
+# stopniowo przez `RAMPA_AKTYWNOSCI`. Argument kosztowy z 30 sierpnia (trzy centy
+# na komentarz) jest nieaktualny: komentarz pisze dzis tani model i bez
+# sprawdzania faktow. Przydzial to N pod artykulami + N//2 pod notkami (miejsc
+# jest ok. 1,5 N), a ile z nich sie zapelni, zalezy od puli zywych celow, ktora
+# ta zmiana poszerza (kanal stronami); realizacje pokaze licznik `wolumeny`.
+KOMENTARZE_DZIENNIE = (14, 20)
 # ZEROWANE 2026-08-23, PRZYWROCONE 2026-09-01 — BO WNIOSEK BYL FALSZYWY.
 #
 # Stalo tu `(0, 0)` z uzasadnieniem „Substack zdjal Follow ze stron
@@ -2777,6 +2793,74 @@ KOMENTARZE_DZIENNIE = (7, 9)
 FOLLOW_MIESIECZNIE = (10, 16)      # 12,7/mies realnie; 0 z 19 czytelnikow stad
 SUBSKRYPCJE_MIESIECZNIE = (12, 20)  # 15,4/mies realnie; 3,4x lepsza konwersja
 
+# --- NIE JAK DRUGI BOT, 4.10.2026 (decyzja wlasciciela) --------------------
+#
+# Przeglad 4.10 porownal nas z drugim botem w TYM SAMYM WIEKU konta: oba zebraly
+# prawie tyle samo ludzi, a naplyw, w ktorym nie brala udzialu zadna nasza
+# obserwacja ani subskrypcja, byl u obu rowny (u nas ok. 8 osob tygodniowo).
+# Przewaga drugiego bota to KANAL WYCHODZACY — wielokrotnie wiecej obserwacji
+# i subskrypcji, z ktorych wraca kilka procent (u nas z 39 akcji wrocily 2 osoby;
+# skutecznosc podobna, skala wielokrotnie mniejsza) — oraz szeroka pula celow do
+# komentowania. Wlasciciel: „zmien tak, zeby NIE bylo jak najbardziej podobne".
+#
+# DZIENNE NADPISANIE MIESIECZNYCH WIDELEK. `None` = jak dotad (widelki
+# miesieczne). Ustawione, idzie do `stages.budzet_dnia` jako STALA dobowa.
+FOLLOW_DZIENNIE = 5
+SUBSKRYPCJE_DZIENNIE = 4
+
+# SUFIT ODBIORCOW PRZY SUBSKRYPCJI. Subskrybujemy tylko publikacje, ktorych
+# publicznosc (subskrybenci albo obserwujacy z publicznego profilu) nie
+# przekracza tej liczby: dla konta z 350 tysiacami czytelnikow jestesmy szumem,
+# a dla konta ze stoma — nowym nazwiskiem. Nieznany rozmiar to NIE dowod, ze
+# konto jest male (`browser.konto_male`). `None` wylacza sito.
+SUBSKRYPCJE_MAX_ODBIORCOW = 1000
+# Ile kandydatow wolno OBEJRZEC w jednym przebiegu, szukajac malych kont. Sito
+# jest tanie (publiczny JSON, bez przegladarki), ale duza czesc puli to konta
+# wielkie — bez tego limitu blok zjadalby caly przebieg na odrzucanie.
+SUBSKRYPCJE_MAKS_OGLADANYCH = 40
+
+# NOWI LUDZIE BEZ WCZESNIEJSZEGO KONTAKTU. Do 4.10 obserwowalismy i
+# subskrybowalismy WYLACZNIE autorow, pod ktorymi juz komentowalismy („zbieranie
+# nazwisk to nie budowanie kregu"). Pula takich ludzi to 173 hosty, z czego
+# wiekszosc jest zbyt duza. Teraz na poczatek kolejki wchodza tez swiezi,
+# trafni tematycznie autorzy z kanalu notek i z wyszukiwarki (`run.nowi_z_kanalu`):
+# darmowy filtr tematyczny, bez wywolania modelu, bez wstrzykniec.
+NOWI_BEZ_KONTAKTU = True
+
+# KANAL NOTEK CZYTAMY STRONAMI. Jedna strona oddawala 1-4 notki do wyboru na
+# przebieg, wiec sito z 1.10 (stare, ciche, ponad limit autora) nie mialo z czego
+# wybierac. Kursor `nextCursor` daje kolejne strony; ta liczba to sufit stron.
+STRONY_KANALU_NOTEK = 6
+
+# RAMPA. Skok z ~1 do ~9 obserwacji i subskrypcji dziennie z dnia na dzien to
+# nieciaglosc w zachowaniu konta, ktorej nie ma sensu ryzykowac dla tygodnia
+# szybszego pomiaru. Trzy stopnie do poziomu docelowego; stopien obowiazuje od
+# podanego dnia UTC wlacznie; dzien PRZED pierwszym idzie na pierwszym stopniu, a
+# PO ostatnim zostaje ostatni (poziom docelowy = stale wyzej). (od, follow, subskrypcje, komentarze)
+RAMPA_AKTYWNOSCI = (
+    ("2026-10-04", 3, 2, (10, 13)),
+    ("2026-10-07", 4, 3, (12, 16)),
+    ("2026-10-10", 5, 4, (14, 20)),
+)
+
+
+def rampa_aktywnosci(dzien: str):
+    """Stopien rampy na dany dzien (`YYYY-MM-DD`): `(follow, subskrypcje, widelki komentarzy)`.
+
+    Przed pierwszym stopniem zwraca PIERWSZY (najostrozniejszy), a nie poziom
+    docelowy: stale dzienne w tym pliku to poziom DOCELOWY, wiec dzien sprzed
+    rampy wpadalby od razu na pelne wolumeny. Po ostatnim stopniu zwraca ten
+    ostatni, wiec rampa nie wymaga sprzatania po sobie. `None` tylko przy pustej
+    tabeli — wtedy obowiazuja stale dzienne i widelki z konfiguracji.
+    """
+    if not RAMPA_AKTYWNOSCI:
+        return None
+    wybrany = RAMPA_AKTYWNOSCI[0][1:]
+    for od, follow, subskrypcje, komentarze in RAMPA_AKTYWNOSCI:
+        if str(dzien) >= od:
+            wybrany = (follow, subskrypcje, komentarze)
+    return wybrany
+
 
 def normy_dzienne() -> dict[str, float]:
     """Ile czego POWINNO wychodzic dziennie — srodek widelek.
@@ -2795,12 +2879,14 @@ def normy_dzienne() -> dict[str, float]:
         "polubienie": sum(LAJKI_DZIENNIE) / 2,
         "komentarz": sum(KOMENTARZE_DZIENNIE) / 2,
         "restack": sum(RESTACK_DZIENNIE) / 2,
-        "subskrypcja": sum(SUBSKRYPCJE_MIESIECZNIE) / 2 / 30,
+        "subskrypcja": (float(SUBSKRYPCJE_DZIENNIE) if SUBSKRYPCJE_DZIENNIE is not None
+                        else sum(SUBSKRYPCJE_MIESIECZNIE) / 2 / 30),
         # NAZWA MUSI BYC TAKA, JAK `rodzaj` W DZIENNIKU. Bylo tu "follow",
         # a `browser.obserwuj_profil` zapisuje "obserwacja" — licznik
         # porownywal wiec norme z niczym i zglaszal 0% przy dzialajacym
         # bloku. Dokladnie ta klasa bledu, ktora ten licznik ma lapac.
-        "obserwacja": sum(FOLLOW_MIESIECZNIE) / 2 / 30,
+        "obserwacja": (float(FOLLOW_DZIENNIE) if FOLLOW_DZIENNIE is not None
+                       else sum(FOLLOW_MIESIECZNIE) / 2 / 30),
     }
 
 
@@ -3180,14 +3266,17 @@ ODSTEP_DNI_NA_PUBLIKACJE = 4
 # komentarzy pod artykulami 7 trafilo pod teksty starsze niz 2 miesiace
 # (najstarszy 1,5 roku; 27.09 nawet 2,6 roku), 2 pod mlodsze niz doba — tam,
 # gdzie nikt juz nie czyta. Nieznana data liczy sie jako stara.
+# Notki: 48 h od 1.10, 36 h od 4.10 — notka zyje godziny, a pod swiezym zywym
+# watkiem (<= 12 h) komentarz ma kilka razy wiecej wyswietlen niz pod
+# dobowym, dlatego drugi bot tez ucina po 36 h.
 MAKS_WIEK_POSTA_DO_KOMENTARZA_DNI = 7
-MAKS_WIEK_NOTKI_DO_KOMENTARZA_H = 48
+MAKS_WIEK_NOTKI_DO_KOMENTARZA_H = 36
 
-# ZYWY WATEK POD NOTKA (1.10.2026). Przy tym samym wieku celu (~7,5 h) NIA
-# wybiera notki z mediana 8 reakcji i 2 komentarzy przed nia — 48% jej
-# komentarzy dostaje reakcje, mediana 6,5 wyswietlenia; NIE wybierala 3 reakcje
-# i 0 komentarzy — 8% z reakcja, mediana 1 wyswietlenie. Zywe ida najpierw,
-# ciche (0 reakcji i 0 komentarzy) odpadaja przed platna ocena celow.
+# ZYWY WATEK POD NOTKA (1.10.2026). Przy wieku celu ~7,5 h NIE wybierala notki
+# z mediana 3 reakcji i 0 komentarzy — 8% jej komentarzy dostawalo reakcje,
+# mediana 1 wyswietlenie. Komentarz pod zywym watkiem (reakcje i komentarze
+# przed nim) czyta wielokrotnie wiecej osob. Zywe ida najpierw, ciche
+# (0 reakcji i 0 komentarzy) odpadaja przed platna ocena celow.
 ZYWY_WATEK_KOMENTARZY = 2
 ZYWY_WATEK_REAKCJI = 5
 
