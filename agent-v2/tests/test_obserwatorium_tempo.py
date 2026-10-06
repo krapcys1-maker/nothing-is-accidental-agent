@@ -208,5 +208,41 @@ i_stan, i_tempo, i_dob = rap.find("## Stan i tempo"), rap.find("## Tempo przyros
 sprawdz("raport: sekcja tempa po „Stan i tempo”, przed „Ostatnie dni”", 0 <= i_stan < i_tempo < i_dob, (i_stan, i_tempo, i_dob))
 
 print()
+print("=== 8. JAKOSC LIST CZYTELNIKOW: NAJPELNIEJSZY ZRZUT DOBY, NIE SAM OSTATNI ===")
+# Zrzut potrafi byc OKROJONY (klik w zakladke pekl, grupa pusta, brak sladu bledu w pliku). Raport
+# brał sam ostatni odczyt, wiec jeden taki zrzut pokazywal „0 przy liczniku 26” — u drugiego bota od
+# 29.09 pusta jest ok. polowa zrzutow, reszta ma pelne listy.
+
+
+def zrzut(kiedy, ile_obs, ile_sub):
+    return {"kiedy": kiedy, "obserwujacy": [{"uchwyt": "x%d" % i} for i in range(ile_obs)],
+            "subskrybenci": [{"uchwyt": "y%d" % i} for i in range(ile_sub)]}
+
+
+liczniki = [{"kiedy": "2026-10-05T10:00:00+00:00", "subskrybenci": 25, "obserwujacy": 26},
+            {"kiedy": "2026-10-05T23:48:00+00:00", "subskrybenci": 25, "obserwujacy": 26}]
+zrzuty = [zrzut("2026-10-05T10:01:00+00:00", 24, 20),      # pelny
+          zrzut("2026-10-05T17:00:00+00:00", 0, 0),        # okrojony
+          zrzut("2026-10-05T23:49:00+00:00", 0, 0),        # okrojony i OSTATNI
+          zrzut("2026-10-03T10:00:00+00:00", 22, 18)]      # starszy niz doba przed ostatnim — nie wchodzi
+pl = obs.pokrycie_list(zrzuty, liczniki)
+sprawdz("najpelniejszy zrzut doby, nie sam ostatni: 24 z 26 obserwujacych i 20 z 25 subskrybentow",
+        (pl.get("obserwujacy_lista"), pl.get("obserwujacy_licznik"), pl.get("subskrybenci_lista"),
+         pl.get("subskrybenci_licznik")) == (24, 26, 20, 25), pl)
+sprawdz("w dobie sa 3 zrzuty (czwarty jest starszy niz 24 h przed ostatnim), z tego 2 okrojone",
+        (pl.get("zrzutow_w_dobie"), pl.get("zrzutow_okrojonych")) == (3, 2), pl)
+sprawdz("KONTRDOWOD: sam ostatni zrzut tej serii jest pusty — stary rachunek dalby 0 przy liczniku 26",
+        zrzuty[2]["obserwujacy"] == [] and zrzuty[2]["subskrybenci"] == [])
+wszystkie_puste = obs.pokrycie_list([zrzut("2026-10-05T10:01:00+00:00", 0, 0), zrzut("2026-10-05T23:49:00+00:00", 0, 0)],
+                                    liczniki)
+sprawdz("wszystkie zrzuty okrojone: bez wyjatku, 0 przy liczniku, 2 z 2 okrojone",
+        wszystkie_puste.get("obserwujacy_lista") == 0 and wszystkie_puste.get("obserwujacy_licznik") == 26
+        and wszystkie_puste.get("zrzutow_okrojonych") == 2, wszystkie_puste)
+sprawdz("brak zrzutow albo brak licznikow = pusty wynik, nie wyjatek",
+        obs.pokrycie_list([], liczniki) == {} and obs.pokrycie_list(zrzuty, []) == {})
+sprawdz("uchwyty czytelnikow nie wchodza do wyniku (dane osobowe zostaja poza obserwatorium)",
+        "x0" not in json.dumps(pl) and "y0" not in json.dumps(pl))
+
+print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))
 sys.exit(1 if oblane else 0)

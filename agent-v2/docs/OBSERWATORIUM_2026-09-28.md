@@ -113,9 +113,12 @@ subskrybentów i obserwujących, a ta sama osoba może być w obu; luka w pomiar
 „—”, nigdy zero i nigdy nie jest wypełniana; okno liczy tylko stany na swoich końcach.
 Test: `tests/test_obserwatorium_tempo.py` (dane syntetyczne o znanym przebiegu).
 
-**Czego tu nie ma i dlaczego:** kto konkretnie przyszedł po której akcji. Listy czytelników
-NIA są puste (0 przy liczniku 26 obserwujących i 25 subskrybentów), więc dla niej mamy tylko
-liczniki i panel źródeł; to wada przyrządu po jej stronie, nietknięta bez prośby właściciela.
+**Czego tu nie ma i dlaczego:** kto konkretnie przyszedł po której akcji, dla NIA tylko z luk.
+Zrzuty list czytelników u niej są okrojone (jedna grupa pusta przy dodatnim liczniku, bez śladu
+błędu): do 28.09 wszystkie miały pełne listy, od 29.09 pełne jest ok. 2–3 z 5 dziennie, a ostatni
+zrzut z 6.10 jest pusty. Dawny wiersz „listy / licznik” brał sam ostatni zrzut i pokazywał u NIA
+„0 przy 26”, co zawyżało ślepotę. Raport bierze teraz najpełniejszy zrzut ostatniej doby i dodaje
+wiersz „okrojone / wszystkie”. To wada przyrządu po jej stronie, nietknięta bez prośby właściciela.
 
 ## Pierwszy odczyt — 28.09 (doby do 27.09)
 

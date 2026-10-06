@@ -547,17 +547,35 @@ def pokrycie_list(czytelnicy: list[dict], wzrost: list[dict]) -> dict[str, Any]:
     Listy sa NIEPELNE (28.09.2026 NIE: 24 subskrybentow na liscie przy liczniku 27),
     wiec „nowi na profilu" to dolna granica, a z list nie liczymy odejsc.
     """
-    odczyt = next((w for w in sorted(czytelnicy, key=lambda w: str(w.get("kiedy") or ""), reverse=True)
-                   if not w.get("blad") and isinstance(w.get("subskrybenci"), list) and _czas(w.get("kiedy"))),
-                  None)
+    odczyty = sorted((w for w in czytelnicy
+                      if not w.get("blad") and isinstance(w.get("subskrybenci"), list) and _czas(w.get("kiedy"))),
+                     key=lambda w: str(w.get("kiedy") or ""), reverse=True)
     stany = [w for w in wzrost if w.get("subskrybenci") is not None and _czas(w.get("kiedy"))]
-    if not odczyt or not stany:
+    if not odczyty or not stany:
         return {}
-    t = _czas(odczyt["kiedy"])
-    stan = min(stany, key=lambda w: abs((_czas(w["kiedy"]) - t).total_seconds()))
+
+    def stan_dla(w: dict) -> dict:
+        t = _czas(w["kiedy"])
+        return min(stany, key=lambda s: abs((_czas(s["kiedy"]) - t).total_seconds()))
+
+    # NAJPELNIEJSZY ZRZUT Z OSTATNIEJ DOBY, nie sam ostatni (6.10.2026). Zrzut potrafi byc OKROJONY: klik w
+    # zakladke pekl i jedna grupa jest pusta, choc licznik mowi inaczej, bez sladu bledu w pliku. Raport brał
+    # sam ostatni odczyt, wiec jeden taki zrzut pokazywal „0 przy liczniku 26” i zawyzal slepote przyrzadu
+    # (u drugiego bota od 29.09 pusta jest ok. polowa zrzutow, reszta ma pelne listy).
+    t_ostatni = _czas(odczyty[0]["kiedy"])
+    doba = [w for w in odczyty if (t_ostatni - _czas(w["kiedy"])).total_seconds() <= 86400]
+    odczyt = max(doba, key=lambda w: len(w.get("obserwujacy") or []) + len(w.get("subskrybenci") or []))
+    stan = stan_dla(odczyt)
+
+    def okrojony(w: dict) -> bool:
+        s = stan_dla(w)
+        return ((not (w.get("obserwujacy") or []) and (s.get("obserwujacy") or 0) > 0)
+                or (not (w.get("subskrybenci") or []) and (s.get("subskrybenci") or 0) > 0))
+
     return {"kiedy": str(odczyt["kiedy"])[:16],
             "obserwujacy_lista": len(odczyt.get("obserwujacy") or []), "obserwujacy_licznik": stan.get("obserwujacy"),
-            "subskrybenci_lista": len(odczyt.get("subskrybenci") or []), "subskrybenci_licznik": stan.get("subskrybenci")}
+            "subskrybenci_lista": len(odczyt.get("subskrybenci") or []), "subskrybenci_licznik": stan.get("subskrybenci"),
+            "zrzutow_w_dobie": len(doba), "zrzutow_okrojonych": sum(1 for w in doba if okrojony(w))}
 
 
 def pokrycie_komentarzy(dziennik: list[dict], statystyki: list[dict], dzis: str, dni: int = 7) -> dict[str, Any]:
@@ -1190,9 +1208,13 @@ def raport(dni_raportu: int = 14, dzis: str | None = None) -> str:
             if (jak[n].get("panel") or {}).get("doby") else "",
             _f((jak[n].get("panel") or {}).get("ruch_rowny_sumie")), _f((jak[n].get("panel") or {}).get("ruch_odczytow")))),
         ("zapisy brutto z panelu vs przyrost licznika w tym samym oknie 30 dni", lambda n: _bn(jak[n])),
-        ("listy profilu / licznik: obserwujacy; subskrybenci", lambda n: "%s / %s; %s / %s" % tuple(
+        ("listy profilu / licznik (najpelniejszy zrzut ostatniej doby): obserwujacy; subskrybenci",
+         lambda n: "%s / %s; %s / %s" % tuple(
             _f((jak[n].get("listy") or {}).get(p)) for p in ("obserwujacy_lista", "obserwujacy_licznik",
                                                             "subskrybenci_lista", "subskrybenci_licznik"))),
+        ("zrzuty czytelnikow ostatniej doby: okrojone (pusta grupa przy dodatnim liczniku) / wszystkie",
+         lambda n: "%s / %s" % tuple(_f((jak[n].get("listy") or {}).get(p))
+                                     for p in ("zrzutow_okrojonych", "zrzutow_w_dobie"))),
         ("komentarze i odpowiedzi z 7 dob: zmierzone / wystawione (bez numeru)", lambda n: "%s / %s (%s)" % tuple(
             _f((jak[n].get("komentarze") or {}).get(p)) for p in ("zmierzone", "wystawione", "bez_numeru"))),
         ("odrzucone pozycje: jedna pod 2 rodzajami / cudzy numer", lambda n: "%s / %s" % tuple(
