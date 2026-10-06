@@ -329,9 +329,17 @@ RACHUNEK = {"wszystkich": 0, "sprzed_przestawienia": 0, "ze_skutkiem": 0, "reagu
             "odstep_h": 0, "po_przestawieniu": 0, "zdublowani": 0}
 
 
+ZAPYTANIA_SITA = []          # (uchwyt, argumenty, nazwane) kazdego zapytania o rozmiar w ostatnim przebiegu
+
+
 def uruchom(nazwa_bloku, hosty, nowi=(), duzi_za=lambda u: u.startswith("big"), zasubskrybuj_wynik=None,
-            budzet=3, znane=frozenset(), limit=40, wlaczone=True):
+            budzet=3, znane=frozenset(), limit=40, wlaczone=True, sufit_obs=5000, limit_obs=40):
     zapisy, subskrybowani, obserwowani = [], [], []
+    ZAPYTANIA_SITA.clear()
+
+    def sito(u, *a, **k):
+        ZAPYTANIA_SITA.append((u, a, k))
+        return duzi_za(u)
 
     def zasubskrybuj(u, wyslij=True):
         subskrybowani.append(u)
@@ -344,7 +352,7 @@ def uruchom(nazwa_bloku, hosty, nowi=(), duzi_za=lambda u: u.startswith("big"), 
     atrapa_browser = SimpleNamespace(
         kogo_obserwujemy=lambda: {"uchwyty": {}, "hosty": {}},
         uchwyt_publikacji=lambda h: (h[1:] if h.startswith("@") else h.split(".")[0]),
-        konto_za_duze=duzi_za, zasubskrybuj=zasubskrybuj, obserwuj_profil=obserwuj_profil,
+        konto_za_duze=sito, zasubskrybuj=zasubskrybuj, obserwuj_profil=obserwuj_profil,
         zapisz_w_dzienniku=lambda rodzaj, **k: zapisy.append((rodzaj, k)),
         dopisz_wynik=lambda *a, **k: zapisy.append(("dopisz", k)),
         zapamietaj_obserwowanego=lambda *a, **k: None,
@@ -359,15 +367,18 @@ def uruchom(nazwa_bloku, hosty, nowi=(), duzi_za=lambda u: u.startswith("big"), 
           "kogo_juz_subskrybujemy": lambda: set(), "czy_juz_subskrybujemy": lambda h, z, p=None: False,
           "znane_za_duze": lambda: set(znane), "_slug_hosta": run._slug_hosta,
           "nowi_z_kanalu": lambda: list(nowi)}
-    stare = (config.SUBSKRYPCJE_MAKS_OGLADANYCH, config.NOWI_BEZ_KONTAKTU)
-    config.SUBSKRYPCJE_MAKS_OGLADANYCH, config.NOWI_BEZ_KONTAKTU = limit, wlaczone
+    stare = (config.SUBSKRYPCJE_MAKS_OGLADANYCH, config.NOWI_BEZ_KONTAKTU,
+             config.OBSERWACJE_MAX_ODBIORCOW, config.OBSERWACJE_MAKS_OGLADANYCH)
+    (config.SUBSKRYPCJE_MAKS_OGLADANYCH, config.NOWI_BEZ_KONTAKTU,
+     config.OBSERWACJE_MAX_ODBIORCOW, config.OBSERWACJE_MAKS_OGLADANYCH) = limit, wlaczone, sufit_obs, limit_obs
     try:
         exec(compile(blok(nazwa_bloku), "run.py::" + nazwa_bloku, "exec"), ns)
         wyjscie = io.StringIO()
         with contextlib.redirect_stdout(wyjscie):
             ns[nazwa_bloku]()
     finally:
-        config.SUBSKRYPCJE_MAKS_OGLADANYCH, config.NOWI_BEZ_KONTAKTU = stare
+        (config.SUBSKRYPCJE_MAKS_OGLADANYCH, config.NOWI_BEZ_KONTAKTU,
+         config.OBSERWACJE_MAX_ODBIORCOW, config.OBSERWACJE_MAKS_OGLADANYCH) = stare
     return zapisy, subskrybowani, obserwowani, wyjscie.getvalue()
 
 
@@ -418,6 +429,30 @@ sprawdz("straznik przy przycisku odrzucil konto: slot zostaje dla nastepnego (2 
 
 zap, sub, obs, _ = uruchom("obserwuj", [], nowi=["@a", "@b", "@c", "@d"], budzet=3)
 sprawdz("obserwuj(): nowi z kanalu dostaja obserwacje, takze przy pustej historii", obs == ["a", "b", "c"], obs)
+
+# SITO ROZMIARU PRZY OBSERWACJI (6.10.2026). Od 4.10 cztery z szesciu obserwacji poszly do
+# kont z 23-167 tys. obserwujacych; jedyna odwzajemniona obserwacja miala 11 obserwujacych.
+zap, _, obs, out = uruchom("obserwuj", duzi + male, budzet=3)
+sprawdz("SEDNO: 10 duzych kont przed malymi nie zjada budzetu obserwacji — obserwuje 3 male",
+        obs == ["mal1", "mal2", "mal3"], obs)
+pom_obs = [z for z in zap if z[0] == "obserwacja_pominieta" and z[1].get("powod") == browser.POWOD_ZA_DUZY]
+sprawdz("kazde duze konto zostawia `obserwacja_pominieta` z powodem rozmiaru (bez proby i bez przerwy)",
+        sorted(z[1]["komu"] for z in pom_obs) == sorted(d.split(".")[0] for d in duzi), [z[1].get("komu") for z in pom_obs])
+sprawdz("sito obserwacji pyta WLASNYM progiem 5000 i z etykieta „obserwacje” (13 zapytan: 10 duzych + 3 male)",
+        len(ZAPYTANIA_SITA) == 13 and all(a == (5000,) and k.get("co") == "obserwacje" for _, a, k in ZAPYTANIA_SITA),
+        ZAPYTANIA_SITA[:2])
+sprawdz("podsumowanie mowi, ile obejrzano i ile bylo za duzych", "[obserwacje] 10 z 13 obejrzanych przekraczalo sufit 5000" in out,
+        out[-200:])
+zap, _, obs, _ = uruchom("obserwuj", duzi + male, budzet=3, sufit_obs=None)
+sprawdz("KONTRDOWOD: `OBSERWACJE_MAX_ODBIORCOW = None` — obserwuje pierwsze z kolejki (duze) i nie pyta o rozmiar, jak do 6.10",
+        obs == ["big0", "big1", "big2"] and ZAPYTANIA_SITA == [], (obs, ZAPYTANIA_SITA[:2]))
+mnostwo_duzych = ["wielki%d.substack.com" % i for i in range(45)]
+zap, _, obs, out = uruchom("obserwuj", mnostwo_duzych + male, budzet=3, duzi_za=lambda u: u.startswith("wielki"))
+sprawdz("okno ogladania obserwacji (40) konczy blok, gdy przed malymi stoi 45 duzych — zero obserwacji i komunikat",
+        obs == [] and "obejrzalem 40 kandydatow do obserwacji" in out and len(ZAPYTANIA_SITA) == 40, (obs, out[-160:]))
+zap, _, obs, out = uruchom("obserwuj", mnostwo_duzych + male, budzet=3, sufit_obs=None)
+sprawdz("KONTRDOWOD: bez sita okno to dawne follow + zapas (3 + 12), a obserwacje ida do trzech pierwszych",
+        obs == ["wielki0", "wielki1", "wielki2"] and "obejrzalem" not in out, (obs, out[-160:]))
 
 print()
 print("=== 7. DUBEL RESTACKA ===")
@@ -583,6 +618,8 @@ sprawdz("`nowi_z_kanalu` nie wywraca przebiegu: awaria zrodla = sama historia",
 sprawdz("poziom docelowy: komentarze (14, 20), kanal 6 stron, bramka 1000, 40 ogladanych, siostra wpisana",
         (config.KOMENTARZE_DZIENNIE, config.STRONY_KANALU_NOTEK, config.SUBSKRYPCJE_MAX_ODBIORCOW,
          config.SUBSKRYPCJE_MAKS_OGLADANYCH) == ((14, 20), 6, 1000, 40) and "nia1503032" in config.UCHWYTY_SIOSTRZANE)
+sprawdz("obserwacja ma wlasne sito (6.10.2026): do 5000 odbiorcow, 40 ogladanych",
+        (config.OBSERWACJE_MAX_ODBIORCOW, config.OBSERWACJE_MAKS_OGLADANYCH) == (5000, 40))
 
 print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))

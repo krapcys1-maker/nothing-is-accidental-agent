@@ -110,6 +110,7 @@ import run            # noqa: E402
 # stron tego testu go nie maja, a test sprawdza WYBOR CELU i mechanike klikania.
 # Rozmiar kont ma wlasny test (`test_nie_jak_nia.py`).
 config.SUBSKRYPCJE_MAX_ODBIORCOW = None
+config.OBSERWACJE_MAX_ODBIORCOW = None      # sito przy obserwacji (6.10.2026), ten sam powod
 
 ODNIESIENIE = "6ed4e7d"        # wersja SPRZED poprawki; nigdy HEAD
 

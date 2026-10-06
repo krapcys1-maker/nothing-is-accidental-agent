@@ -2445,9 +2445,28 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
         # i dlatego tylko ono moze zostawic dzien bez ani jednego wpisu.
         z_pamieci = 0
         zostal_slad = False
-        for host in kandydaci[: na_teraz["follow"] + ZAPAS_NA_ODPADY]:
+        # SITO ROZMIARU TAKZE PRZY OBSERWACJI (6.10.2026, decyzja wlasciciela) —
+        # patrz `config.OBSERWACJE_MAX_ODBIORCOW`. Duze konto odpada przed przerwa
+        # rytmu i bez zuzycia proby, a okno ogladania rosnie jak przy subskrypcji:
+        # kandydaci z wyszukiwarki ida pierwsi i sa glownie duzi, wiec staly zapas
+        # konczyl sie, zanim blok doszedl do malych autorow z kanalu notek. Bez sita
+        # (`None`) petla jest dokladnie taka jak do 6.10: `follow` + zapas kandydatow.
+        sufit_obs = getattr(config, "OBSERWACJE_MAX_ODBIORCOW", None)
+        za_duzi = 0
+        obejrzani = 0
+        limit_ogladania = na_teraz["follow"] + ZAPAS_NA_ODPADY
+        if sufit_obs is not None:
+            limit_ogladania = max(limit_ogladania,
+                                  int(getattr(config, "OBSERWACJE_MAKS_OGLADANYCH", 40)))
+        for host in kandydaci:
             if proby >= na_teraz["follow"]:
                 break
+            if obejrzani >= limit_ogladania:
+                if sufit_obs is not None:
+                    print("  (obejrzalem %d kandydatow do obserwacji i koncze na dzis"
+                          " — reszta puli poczeka)" % obejrzani, flush=True)
+                break
+            obejrzani += 1
             if not zostal_czas("obserwowanie"):
                 break
             # Nie `host.split(".")[0]`: przy wlasnej domenie dawalo to "www"
@@ -2477,6 +2496,17 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
                         powod=f"nie ustalilem konta autora dla {host}")
                     zostal_slad = True
                 print(f"  (nie ustalilem konta dla {host} — pomijam)", flush=True)
+                continue
+            # SITO ROZMIARU PRZED PRZERWA RYTMU (6.10.2026) — jak przy subskrypcji.
+            if wyslij and sufit_obs is not None and browser.konto_za_duze(
+                    uchwyt, sufit_obs, co="obserwacje"):
+                browser.zapisz_w_dzienniku(
+                    "obserwacja_pominieta", udane=True, komu=uchwyt,
+                    powod=browser.POWOD_ZA_DUZY)
+                zostal_slad = True
+                za_duzi += 1
+                print(f"  (@{uchwyt} przekracza sufit {sufit_obs} odbiorcow — nie"
+                      f" obserwuje, bez przerwy i bez zuzycia proby)", flush=True)
                 continue
             if wyslij:
                 if not rytm("komentarz", "obserwowanie", rytm_stanu):
@@ -2520,6 +2550,12 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
                 "obserwacja_pominieta", udane=True,
                 powod="pominietych %d z %d wylosowanych: znamy ich z pamieci"
                       " obserwowanych" % (z_pamieci, len(kandydaci)))
+        if za_duzi:
+            print("  [obserwacje] %d z %d obejrzanych przekraczalo sufit %s"
+                  " odbiorcow%s"
+                  % (za_duzi, obejrzani, sufit_obs,
+                     " — pula nie zawiera kont w naszym rozmiarze" if not proby
+                     else ""), flush=True)
 
     # --- 3d. subskrypcje: NAJMOCNIEJSZY sygnal, jaki umiemy wyslac ------------
     def subskrybuj() -> None:

@@ -2819,6 +2819,17 @@ SUBSKRYPCJE_MAX_ODBIORCOW = 1000
 # wielkie — bez tego limitu blok zjadalby caly przebieg na odrzucanie.
 SUBSKRYPCJE_MAKS_OGLADANYCH = 40
 
+# SUFIT ODBIORCOW PRZY OBSERWACJI (6.10.2026, decyzja wlasciciela: „ok to wykonaj”).
+# Do tego dnia obserwacja nie miala sita: od 4.10 cztery z szesciu obserwacji poszly
+# do kont z 23-167 tys. obserwujacych, bo kandydaci z wyszukiwarki ida pierwsi i sa
+# glownie duzi, a takie konta praktycznie nie odwzajemniaja (jedyna odwzajemniona
+# obserwacja w `wzajemnosc.py` miala 11 obserwujacych). Prog luzniejszy niz przy
+# subskrypcji (1000), bo obserwacja nie przysyla nikomu maili, a aktywny autor z kilkoma
+# tysiacami czytelnikow nadal widzi, kto go obserwuje. `None` wylacza sito.
+OBSERWACJE_MAX_ODBIORCOW = 5000
+# Ile kandydatow wolno OBEJRZEC w jednym przebiegu przy obserwacji (jak przy subskrypcji).
+OBSERWACJE_MAKS_OGLADANYCH = 40
+
 # NOWI LUDZIE BEZ WCZESNIEJSZEGO KONTAKTU. Do 4.10 obserwowalismy i
 # subskrybowalismy WYLACZNIE autorow, pod ktorymi juz komentowalismy („zbieranie
 # nazwisk to nie budowanie kregu"). Pula takich ludzi to 173 hosty, z czego

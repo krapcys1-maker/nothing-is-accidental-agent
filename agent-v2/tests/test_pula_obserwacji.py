@@ -74,6 +74,9 @@ import config         # noqa: E402
 # Od 4.10.2026 `NOWI_BEZ_KONTAKTU` dokłada przed nia swiezych autorow z kanalu i
 # zwieksza zapas — ta sciezka ma wlasny test (`test_nie_jak_nia.py`).
 config.NOWI_BEZ_KONTAKTU = False
+# Sito rozmiaru przy obserwacji (6.10.2026) pyta publiczne API o profil; ten test sprawdza
+# pule i odsiew, a sito ma wlasny test (`test_nie_jak_nia.py`), wiec tu jest wylaczone.
+config.OBSERWACJE_MAX_ODBIORCOW = None
 import norma          # noqa: E402
 import run            # noqa: E402
 

@@ -199,6 +199,8 @@
 | `SUBSKRYPCJE_DZIENNIE` | `4` | — |
 | `SUBSKRYPCJE_MAX_ODBIORCOW` | `1000` | SUFIT ODBIORCOW PRZY SUBSKRYPCJI. Subskrybujemy tylko publikacje, ktorych publicznosc (subskrybenci albo obserwujacy z publicznego profilu)  |
 | `SUBSKRYPCJE_MAKS_OGLADANYCH` | `40` | Ile kandydatow wolno OBEJRZEC w jednym przebiegu, szukajac malych kont. Sito jest tanie (publiczny JSON, bez przegladarki), ale duza czesc p |
+| `OBSERWACJE_MAX_ODBIORCOW` | `5000` | SUFIT ODBIORCOW PRZY OBSERWACJI (6.10.2026, decyzja wlasciciela: „ok to wykonaj”). Do tego dnia obserwacja nie miala sita: od 4.10 cztery z  |
+| `OBSERWACJE_MAKS_OGLADANYCH` | `40` | Ile kandydatow wolno OBEJRZEC w jednym przebiegu przy obserwacji (jak przy subskrypcji). |
 | `NOWI_BEZ_KONTAKTU` | `True` | NOWI LUDZIE BEZ WCZESNIEJSZEGO KONTAKTU. Do 4.10 obserwowalismy i subskrybowalismy WYLACZNIE autorow, pod ktorymi juz komentowalismy („zbier |
 | `STRONY_KANALU_NOTEK` | `6` | KANAL NOTEK CZYTAMY STRONAMI. Jedna strona oddawala 1-4 notki do wyboru na przebieg, wiec sito z 1.10 (stare, ciche, ponad limit autora) nie |
 | `RAMPA_AKTYWNOSCI` | `( ("2026-10-04", 3, 2, (10, 13)), ("2026-10-` | RAMPA. Skok z ~1 do ~9 obserwacji i subskrypcji dziennie z dnia na dzien to nieciaglosc w zachowaniu konta, ktorej nie ma sensu ryzykowac dl |

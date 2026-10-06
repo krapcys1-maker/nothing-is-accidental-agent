@@ -493,6 +493,16 @@ a „Reply” zostaje ostatnią deską. **Wpływ na pomiar:** liczba potwierdzon
 pod notkami rośnie od 6.10 mniej więcej o piątą część bez zmiany budżetu; E14 oceniamy na
 komentarzach potwierdzonych, a odsetek odpowiedzi na komentarz nie powinien się zmienić.
 
+**Zmiana 6.10: sito rozmiaru także przy obserwacji** (decyzja właściciela „ok to
+wykonaj”; `config.OBSERWACJE_MAX_ODBIORCOW = 5000`, `OBSERWACJE_MAKS_OGLADANYCH = 40`,
+test w `tests/test_nie_jak_nia.py`). Od 4.10 cztery z sześciu obserwacji poszły do kont
+z 23–167 tys. obserwujących, bo kandydaci z wyszukiwarki idą pierwsi i są głównie duzi.
+Jedyna odwzajemniona obserwacja (`wzajemnosc.py`) miała 11 obserwujących. Próg luźniejszy
+niż przy subskrypcji, bo obserwacja nie wysyła maili, a autor z kilkoma tysiącami
+czytelników nadal widzi, kto go obserwuje. Wolumen bez zmian. Weszło przed 10.10, więc
+okno pomiaru 10–24.10 ma już nowy sposób obserwowania. **Miara:** odwzajemnienie na
+obserwację w 7 dni (`wzajemnosc.py`, sekcja 1) i odsetek obserwacji do kont do 5 tys.
+
 **Ryzyko, które zostaje decyzją właściciela:** wychodzące obserwacje
 i subskrypcje to to, co platformy opisują jako wzajemne obserwowanie. Poziom
 jest niski i rośnie w trzech stopniach, ale każda subskrypcja trafia do skrzynki

@@ -3126,7 +3126,7 @@ def konto_male(profil: Any, maksimum: int) -> bool:
     return bool(widziane) and max(widziane) <= maksimum
 
 
-def konto_za_duze(handle: str) -> bool:
+def konto_za_duze(handle: str, sufit: int | None = None, co: str = "subskrypcje") -> bool:
     """Czy konto przekracza sufit odbiorcow — SPRAWDZANE ZANIM ZAPLACIMY CZAS.
 
     Sito jest TANIE: publiczny JSON zwyklym HTTP, bez przegladarki i bez sesji
@@ -3135,9 +3135,14 @@ def konto_za_duze(handle: str) -> bool:
     (`_klik_na_profilu`) jest OSTATNI i on decyduje. Blad sieci nie jest
     dowodem na rozmiar, wiec zwraca False; 404 (brak profilu publicznego)
     — True, bo straznik odrzucilby je z tego samego powodu.
-    `config.SUBSKRYPCJE_MAX_ODBIORCOW is None` wylacza sito.
+
+    `sufit` (6.10.2026): prog odbiorcow; None = `config.SUBSKRYPCJE_MAX_ODBIORCOW`.
+    Obserwacja podaje wlasny (`config.OBSERWACJE_MAX_ODBIORCOW`). Gdy prog wychodzi
+    None, sito jest wylaczone. `co` trafia tylko do komunikatu w logu.
     """
-    if config.SUBSKRYPCJE_MAX_ODBIORCOW is None:
+    if sufit is None:
+        sufit = config.SUBSKRYPCJE_MAX_ODBIORCOW
+    if sufit is None:
         return False
     import json as _json
     import urllib.error as _err
@@ -3152,17 +3157,17 @@ def konto_za_duze(handle: str) -> bool:
             profil = _json.loads(odp.read())
     except _err.HTTPError as exc:
         if exc.code == 404:
-            print("  [subskrypcje] @%s nie ma profilu publicznego (404)" % handle,
+            print("  [%s] @%s nie ma profilu publicznego (404)" % (co, handle),
                   flush=True)
             return True
-        print("  [subskrypcje] nie sprawdzilem rozmiaru @%s (HTTP %s) — decyzja"
-              " zostaje przy profilu" % (handle, exc.code), flush=True)
+        print("  [%s] nie sprawdzilem rozmiaru @%s (HTTP %s) — decyzja"
+              " zostaje przy profilu" % (co, handle, exc.code), flush=True)
         return False
     except Exception as exc:                                   # noqa: BLE001
-        print("  [subskrypcje] nie sprawdzilem rozmiaru @%s (%s) — decyzja"
-              " zostaje przy profilu" % (handle, type(exc).__name__), flush=True)
+        print("  [%s] nie sprawdzilem rozmiaru @%s (%s) — decyzja"
+              " zostaje przy profilu" % (co, handle, type(exc).__name__), flush=True)
         return False
-    return not konto_male(profil, config.SUBSKRYPCJE_MAX_ODBIORCOW)
+    return not konto_male(profil, sufit)
 
 
 def _klik_na_profilu(handle: str, napisy: tuple[str, ...], rodzaj: str,

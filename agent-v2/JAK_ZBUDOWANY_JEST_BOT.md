@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **36 plików**, 43 281 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **36 plików**, 43 333 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -114,7 +114,7 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
 się testować bez przeglądarki i bez pieniędzy**. 204 zestawów
-testów, 5266 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+testów, 5274 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -143,7 +143,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-3622 wierszy, 39 funkcji na poziomie modułu, 2 klas
+3658 wierszy, 39 funkcji na poziomie modułu, 2 klas
 
 | funkcja | co robi |
 |---|---|
@@ -389,7 +389,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `browser.py` — cała styczność z Substackiem; nie woła modelu
 
-5911 wierszy, 114 funkcji na poziomie modułu, 0 klas
+5916 wierszy, 114 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -460,7 +460,7 @@ wiec nie da sie go rozjechac z kodem.
 | `potwierdz_polubienie(uchwyt, przed)` | Czy przycisk po klknieciu wyglada inaczej niz przed nim. |
 | `polub_w_kanale(ile, wyslij)` | Polubienia w kanale czytelnika. |
 | `konto_male(profil, maksimum)` | Czy publiczny profil mieści się w sufcie odbiorcow. NIEZNANY ROZMIAR TO NIE DOWOD. |
-| `konto_za_duze(handle)` | Czy konto przekracza sufit odbiorcow — SPRAWDZANE ZANIM ZAPLACIMY CZAS. |
+| `konto_za_duze(handle, sufit, co)` | Czy konto przekracza sufit odbiorcow — SPRAWDZANE ZANIM ZAPLACIMY CZAS. |
 | `_klik_na_profilu(handle, napisy, rodzaj, wyslij)` *(wewn.)* | Klika JEDEN konkretny przycisk na cudzym profilu — i tylko jego. |
 | `pobierz_subskrybentow()` | Czyta liste subskrybentow z WLASNEGO panelu, wlasna sesja. |
 | `zloz_wiersze_subskrybentow(surowe)` | Sklada wiersze z komorek tabeli panelu: adres, typ i data rozpoczecia. |
@@ -664,7 +664,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-3981 wierszy, 44 funkcji na poziomie modułu, 0 klas
+3992 wierszy, 44 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -11874,6 +11874,8 @@ wartosc i komentarz stojacy bezposrednio nad definicja.
 | `SUBSKRYPCJE_DZIENNIE` | `4` | — |
 | `SUBSKRYPCJE_MAX_ODBIORCOW` | `1000` | SUFIT ODBIORCOW PRZY SUBSKRYPCJI. Subskrybujemy tylko publikacje, ktorych publicznosc (subskrybenci albo obserwujacy z publicznego profilu)  |
 | `SUBSKRYPCJE_MAKS_OGLADANYCH` | `40` | Ile kandydatow wolno OBEJRZEC w jednym przebiegu, szukajac malych kont. Sito jest tanie (publiczny JSON, bez przegladarki), ale duza czesc p |
+| `OBSERWACJE_MAX_ODBIORCOW` | `5000` | SUFIT ODBIORCOW PRZY OBSERWACJI (6.10.2026, decyzja wlasciciela: „ok to wykonaj”). Do tego dnia obserwacja nie miala sita: od 4.10 cztery z  |
+| `OBSERWACJE_MAKS_OGLADANYCH` | `40` | Ile kandydatow wolno OBEJRZEC w jednym przebiegu przy obserwacji (jak przy subskrypcji). |
 | `NOWI_BEZ_KONTAKTU` | `True` | NOWI LUDZIE BEZ WCZESNIEJSZEGO KONTAKTU. Do 4.10 obserwowalismy i subskrybowalismy WYLACZNIE autorow, pod ktorymi juz komentowalismy („zbier |
 | `STRONY_KANALU_NOTEK` | `6` | KANAL NOTEK CZYTAMY STRONAMI. Jedna strona oddawala 1-4 notki do wyboru na przebieg, wiec sito z 1.10 (stare, ciche, ponad limit autora) nie |
 | `RAMPA_AKTYWNOSCI` | `( ("2026-10-04", 3, 2, (10, 13)), ("2026-10-` | RAMPA. Skok z ~1 do ~9 obserwacji i subskrypcji dziennie z dnia na dzien to nieciaglosc w zachowaniu konta, ktorej nie ma sensu ryzykowac dl |
