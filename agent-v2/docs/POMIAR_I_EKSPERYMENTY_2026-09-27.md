@@ -482,6 +482,17 @@ może być przycinana przez `zostal_czas`. Do 3.10 żaden przebieg nie był przy
 Strażnik: komunikaty `[czas] ... sie nie zmiesci` i „czas przebiegu wyczerpany”
 w logu; liczymy je po 7.10 i po 10.10.
 
+**Naprawa 6.10: przycisk wysyłki odpowiedzi pod notką** (`browser.wystaw_odpowiedz`,
+test `tests/test_przycisk_odpowiedzi_pod_notka.py`). Lista przycisków zaczynała się od
+„Reply”, czyli przycisku odpowiedzi pod istniejącym komentarzem, który otwiera pole,
+a nie wysyła. Zmierzone na dzienniku od 20.09: po kliknięciu „Post” odpowiedź
+potwierdzona w 102 z 102 przypadków, po „Reply” w 0 z 11. Od 4.10 wybieramy żywe wątki,
+a w nich „Reply” jest widoczny, więc 4.10 dał 5 takich porażek na 24 próby pod notkami
+(każda kosztowała też przerwę rytmu i wydłużała przebieg). Teraz „Post” jest pierwszy,
+a „Reply” zostaje ostatnią deską. **Wpływ na pomiar:** liczba potwierdzonych komentarzy
+pod notkami rośnie od 6.10 mniej więcej o piątą część bez zmiany budżetu; E14 oceniamy na
+komentarzach potwierdzonych, a odsetek odpowiedzi na komentarz nie powinien się zmienić.
+
 **Ryzyko, które zostaje decyzją właściciela:** wychodzące obserwacje
 i subskrypcje to to, co platformy opisują jako wzajemne obserwowanie. Poziom
 jest niski i rośnie w trzech stopniach, ale każda subskrypcja trafia do skrzynki

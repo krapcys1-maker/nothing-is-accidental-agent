@@ -4573,8 +4573,17 @@ def wystaw_odpowiedz(note_id: int, tekst: str, wyslij: bool = False,
         wynik["wpisane"] = True
         print(f"  wpisane w pole odpowiedzi: {len(tekst.split())} słów", flush=True)
 
+        # „POST" PRZED „REPLY" (6.10.2026). Zmierzone na dzienniku produkcji od 20.09:
+        # po kliknieciu „Post" odpowiedz byla potwierdzona w 102 z 102 przypadkow,
+        # po kliknieciu „Reply" w 0 z 11 („KLIKNIETE, ALE ODPOWIEDZI NIE MA W WATKU").
+        # „Reply" to przycisk odpowiedzi pod JUZ ISTNIEJACYM komentarzem — otwiera pole,
+        # nie wysyla — a na stronie notki z odpowiedziami (zywe watki, ktore wybieramy
+        # od 4.10) jest widoczny i byl brany pierwszy. 4.10 dalo 5 takich porazek na
+        # 24 proby pod notkami; kazda kosztowala tez przerwe rytmu i cofala tempo
+        # (`rytm`: dwie porazki pod rzad podwajaja przerwe). „Reply" zostaje na koncu
+        # jako ostatnia deska, gdy nie ma zadnego innego przycisku wysylki.
         przycisk = None
-        for nazwa in ("Reply", "Odpowiedz", "Post", "Opublikuj", "Wyślij"):
+        for nazwa in ("Post", "Opublikuj", "Wyślij", "Reply", "Odpowiedz"):
             kandydat = page.get_by_role("button", name=nazwa).first
             if kandydat.count() > 0 and kandydat.is_visible():
                 przycisk = kandydat
