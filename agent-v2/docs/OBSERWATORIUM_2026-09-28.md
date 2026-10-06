@@ -88,6 +88,35 @@ Brakowało trzech rzeczy:
   Substacka, dzień tygodnia), ale nie różnice kont. To wskazówka, a nie dowód;
   dowodem jest eksperyment przeplatany (`eksperymenty.py`).
 
+## Tempo przyrostu — ten sam rachunek dla obu kont (6.10.2026)
+
+Pytanie właściciela: czy mierzymy prędkość przyrostu subskrybentów i obserwujących
+dla obu botów, skoro drugie konto wygląda na szybsze. Mierzyliśmy (netto 7 i 28
+dni, tempo subskrybentów na tydzień), ale nie było miejsca, w którym widać naraz
+cztery rzeczy. Raport (`sekcja_tempo`, zaraz po „Stan i tempo”) pokazuje teraz:
+
+1. **Tydzień po tygodniu** (pon–niedz, pełne tygodnie): subskrybenci / obserwujący
+   / osoby, iloraz drugiego konta do pierwszego i **suma z tygodni, w których są
+   dane dla obu kont** (jeden tydzień przy kilku osobach to szum, trzy to kierunek).
+2. **Według wieku konta**: skumulowany przyrost po 7, 14, 21, 28, 35 dobach od
+   pierwszego odczytu licznika. Odpowiada na pytanie „czy NIA jest szybsza, czy
+   tylko starsza lub w innym momencie”.
+3. **Kroczące 7 dni** z ilorazem, dla ostatnich 10 dób: widać, kiedy jedno konto
+   wyprzedziło drugie.
+4. **Wskaźniki zasięgu** (ostatnie 7 dób wobec 7 poprzednich): wyświetlenia obcych,
+   wyświetlenia komentarzy, komentarze wystawione, odwiedziny profilu i wyświetlenia
+   na komentarz. Wyprzedzają przyrost o kilka dni, więc to one pokażą pierwsze, czy
+   zmiana działa.
+
+**Zasady rachunku:** licznik jest netto (odejść nie rozdzielamy); „osoby” to suma
+subskrybentów i obserwujących, a ta sama osoba może być w obu; luka w pomiarze to
+„—”, nigdy zero i nigdy nie jest wypełniana; okno liczy tylko stany na swoich końcach.
+Test: `tests/test_obserwatorium_tempo.py` (dane syntetyczne o znanym przebiegu).
+
+**Czego tu nie ma i dlaczego:** kto konkretnie przyszedł po której akcji. Listy czytelników
+NIA są puste (0 przy liczniku 26 obserwujących i 25 subskrybentów), więc dla niej mamy tylko
+liczniki i panel źródeł; to wada przyrządu po jej stronie, nietknięta bez prośby właściciela.
+
 ## Pierwszy odczyt — 28.09 (doby do 27.09)
 
 Tabela obu kont i wnioski z porównania leżą w lokalnym rejestrze

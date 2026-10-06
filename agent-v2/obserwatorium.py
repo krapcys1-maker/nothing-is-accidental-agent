@@ -840,6 +840,185 @@ def skutek(dni: dict[str, dict], dni_kontrola: dict[str, dict] | None, kiedy: st
 
 # --- raport --------------------------------------------------------------------------
 
+# --- tempo przyrostu: TEN SAM rachunek dla obu kont (6.10.2026) ---------------------
+#
+# Wlasciciel zapytal, czy mierzymy predkosc przyrostu subskrybentow i obserwujacych
+# dla obu botow, bo drugie konto wyglada na szybsze. Mierzylismy (netto 7 i 28 dni,
+# tempo subskrybentow na tydzien), ale NIE bylo miejsca, w ktorym widac naraz:
+# (1) tydzien po tygodniu, (2) to samo konto o tym samym WIEKU (dzien 0 = pierwszy
+# odczyt licznika), (3) kroczace 7 dni z ilorazem i (4) wskazniki zasiegu, ktore
+# wyprzedzaja przyrost o kilka dni. Liczone z tych samych serii dziennych
+# (`dni_<konto>.json`), bez nowych zapytan i bez zapisu do katalogu drugiego bota.
+
+def _poziom(dni: dict[str, dict], pole: str, dzien: str) -> int | None:
+    v = (dni.get(dzien) or {}).get(pole)
+    return v if isinstance(v, int) and not isinstance(v, bool) else None
+
+
+def przyrost_miedzy(dni: dict[str, dict], od: str, do: str) -> dict[str, int] | None:
+    """Zmiana licznikow miedzy stanem na koniec doby `od` a stanem na koniec doby `do`.
+
+    Zwraca None, gdy ktorejkolwiek z czterech liczb brakuje: luka w pomiarze nie jest
+    zerem i nie wolno jej wypelniac. `osoby` = subskrybenci + obserwujacy, a ta sama
+    osoba moze byc w obu licznikach, wiec to suma przyrostow, nie liczba roznych ludzi.
+    """
+    s0, s1 = _poziom(dni, "subskrybenci", od), _poziom(dni, "subskrybenci", do)
+    o0, o1 = _poziom(dni, "obserwujacy", od), _poziom(dni, "obserwujacy", do)
+    if None in (s0, s1, o0, o1):
+        return None
+    return {"sub": s1 - s0, "obs": o1 - o0, "osoby": (s1 - s0) + (o1 - o0)}
+
+
+def pierwszy_odczyt(dni: dict[str, dict]) -> str | None:
+    """Doba pierwszego odczytu OBU licznikow — dzien 0 porownania wedlug wieku."""
+    dobre = [d for d in sorted(dni) if _poziom(dni, "subskrybenci", d) is not None
+             and _poziom(dni, "obserwujacy", d) is not None]
+    return dobre[0] if dobre else None
+
+
+def tygodnie_netto(dni: dict[str, dict], wczoraj: str, ile: int = 6) -> list[tuple[str, str, dict[str, int] | None]]:
+    """Ostatnie `ile` PELNYCH tygodni (pon-niedz, koniec najpozniej wczoraj): (od, do, przyrost)."""
+    koniec = _d(wczoraj)
+    niedziela = koniec - timedelta(days=(koniec.weekday() + 1) % 7)   # ostatnia niedziela <= wczoraj
+    out = []
+    for i in range(ile - 1, -1, -1):
+        do = niedziela - timedelta(days=7 * i)
+        od = do - timedelta(days=6)
+        out.append((od.isoformat(), do.isoformat(),
+                    przyrost_miedzy(dni, (od - timedelta(days=1)).isoformat(), do.isoformat())))
+    return out
+
+
+def wedlug_wieku(dni: dict[str, dict], kroki: tuple[int, ...] = (7, 14, 21, 28, 35, 42)) -> dict[int, dict[str, int] | None]:
+    """Skumulowany przyrost od pierwszego odczytu, po `n` dobach (None = brak odczytu w tej dobie)."""
+    start = pierwszy_odczyt(dni)
+    if not start:
+        return {}
+    return {n: przyrost_miedzy(dni, start, (_d(start) + timedelta(days=n)).isoformat()) for n in kroki
+            if (_d(start) + timedelta(days=n)).isoformat() <= max(dni)}
+
+
+def kroczace_7(dni: dict[str, dict], wczoraj: str, ile: int = 10) -> list[tuple[str, dict[str, int] | None]]:
+    """Dla kazdej z ostatnich `ile` dob: przyrost netto w 7 dobach konczacych sie ta doba."""
+    return [(d, przyrost_miedzy(dni, (_d(d) - timedelta(days=7)).isoformat(), d))
+            for d in okno({}, wczoraj, ile)]
+
+
+WSKAZNIKI_ZASIEGU = (("obcy", "wyswietlenia obcych"), ("wyswietlenia_komentarz", "wyswietlenia komentarzy"),
+                     ("dz_komentarze", "komentarze wystawione"), ("odwiedziny_profilu", "odwiedziny profilu"))
+
+
+def wskazniki_zasiegu(dni: dict[str, dict], wczoraj: str) -> dict[str, Any]:
+    """Ostatnie 7 dob wobec 7 poprzednich: suma i liczba dob z pomiarem, osobno dla kazdego wskaznika.
+
+    Wskazniki WYPRZEDZAJA przyrost: wyswietlenie obcego jest wstepem do obserwacji, a od
+    wyswietlenia do nowej osoby mijaja dni. `komentarz_na_komentarz` = wyswietlenia komentarzy
+    podzielone przez komentarze wystawione W TYCH SAMYCH dobach z pomiarem.
+    """
+    teraz = okno({}, wczoraj, 7)
+    przed = okno({}, (_d(wczoraj) - timedelta(days=7)).isoformat(), 7)
+
+    def suma(daty: list[str], pole: str) -> tuple[int | None, int]:
+        wart = [(d, (dni.get(d) or {}).get(pole)) for d in daty]
+        z_pomiarem = [(d, v) for d, v in wart if isinstance(v, (int, float)) and not isinstance(v, bool)]
+        return (int(sum(v for _, v in z_pomiarem)) if z_pomiarem else None), len(z_pomiarem)
+
+    wynik: dict[str, Any] = {}
+    for pole, _ in WSKAZNIKI_ZASIEGU:
+        wynik[pole] = {"przed": suma(przed, pole), "teraz": suma(teraz, pole)}
+    for okres, daty in (("przed", przed), ("teraz", teraz)):
+        wspolne = [d for d in daty if isinstance((dni.get(d) or {}).get("wyswietlenia_komentarz"), (int, float))
+                   and isinstance((dni.get(d) or {}).get("dz_komentarze"), (int, float))]
+        w = sum((dni[d]["wyswietlenia_komentarz"]) for d in wspolne)
+        k = sum((dni[d]["dz_komentarze"]) for d in wspolne)
+        wynik.setdefault("komentarz_na_komentarz", {})[okres] = (round(w / k, 1) if k else None, len(wspolne))
+    return wynik
+
+
+def _razy(a: int | float | None, b: int | float | None) -> str:
+    """Iloraz `a / b` jako „2.5x"; „—" przy braku danych albo zerowym mianowniku."""
+    if a is None or b is None or b <= 0 or a < 0:
+        return "—"           # iloraz z zerem albo liczby ujemnej nic nie mowi
+    return "%.1fx" % (a / b)
+
+
+def sekcja_tempo(dane: dict[str, dict[str, dict]], wczoraj: str) -> list[str]:
+    """Blok raportu „Tempo przyrostu”: ten sam rachunek dla kazdego konta, obok siebie."""
+    nazwy = list(dane)
+    dwa = len(nazwy) == 2
+
+    def kom(p: dict[str, int] | None) -> str:
+        return "—" if p is None else "%+d / %+d (= %+d)" % (p["sub"], p["obs"], p["osoby"])
+
+    L = ["## Tempo przyrostu — ten sam rachunek dla obu kont", "",
+         "Z dziennych licznikow (netto, odejsc nie da sie rozdzielic). „Osoby” = subskrybenci + obserwujacy; ta sama",
+         "osoba moze byc w obu licznikach. Przy tak malych liczbach roznica kilku osob w tygodniu miesci sie w szumie:",
+         "patrz kilka tygodni, nie jeden. „—” to luka w pomiarze albo brak odczytu, nie zero.", ""]
+    # 1. tydzien po tygodniu
+    tyg = {n: tygodnie_netto(dane[n], wczoraj) for n in nazwy}
+    L += ["### Tydzien po tygodniu (pon-niedz, pelne tygodnie; subskr. / obserw. / osoby)", "",
+          "| tydzien | " + " | ".join(nazwy) + (" | drugie / pierwsze |" if dwa else " |"),
+          "|---|" + "---|" * (len(nazwy) + (1 if dwa else 0))]
+    wspolne = {n: 0 for n in nazwy}
+    ile_wspolnych = 0
+    for i in range(len(next(iter(tyg.values())))):
+        od, do, _ = tyg[nazwy[0]][i]
+        if all(tyg[n][i][2] is None for n in nazwy):
+            continue                      # tydzien sprzed pomiaru u wszystkich: pusty wiersz nic nie mowi
+        wiersz = [kom(tyg[n][i][2]) for n in nazwy]
+        if dwa:
+            a, b = tyg[nazwy[0]][i][2], tyg[nazwy[1]][i][2]
+            wiersz.append(_razy(b["osoby"] if b else None, a["osoby"] if a else None))
+        if all(tyg[n][i][2] is not None for n in nazwy):
+            ile_wspolnych += 1
+            for n in nazwy:
+                wspolne[n] += tyg[n][i][2]["osoby"]
+        L.append("| %s..%s | %s |" % (od[5:], do[5:], " | ".join(wiersz)))
+    if ile_wspolnych:
+        # SUMA Z TYGODNI, W KTORYCH SA DANE DLA OBU KONT — jeden tydzien przy kilku osobach to szum,
+        # a trzy tygodnie to juz kierunek. Nie wolno do niej dolaczyc tygodnia znanego tylko jednemu.
+        wiersz = ["%+d" % wspolne[n] for n in nazwy]
+        if dwa:
+            wiersz.append(_razy(wspolne[nazwy[1]], wspolne[nazwy[0]]))
+        L.append("| **razem, %d tyg. z danymi dla obu (osoby)** | %s |" % (ile_wspolnych, " | ".join(wiersz)))
+    # 2. wedlug wieku
+    wiek = {n: wedlug_wieku(dane[n]) for n in nazwy}
+    starty = {n: pierwszy_odczyt(dane[n]) for n in nazwy}
+    L += ["", "### Wedlug wieku konta (dzien 0 = pierwszy odczyt licznika: %s)" % ", ".join(
+        "%s %s" % (n, starty[n] or "—") for n in nazwy), "",
+          "| dzien | " + " | ".join(nazwy) + " |", "|---|" + "---|" * len(nazwy)]
+    for n_dni in sorted({k for n in nazwy for k in wiek[n]}):
+        L.append("| %d | %s |" % (n_dni, " | ".join(kom(wiek[n].get(n_dni)) for n in nazwy)))
+    # 3. kroczace 7 dni
+    kr = {n: dict(kroczace_7(dane[n], wczoraj)) for n in nazwy}
+    L += ["", "### Kroczace 7 dni (przyrost netto w 7 dobach konczacych sie dana doba; osoby)", "",
+          "| do doby | " + " | ".join(nazwy) + (" | drugie / pierwsze |" if dwa else " |"),
+          "|---|" + "---|" * (len(nazwy) + (1 if dwa else 0))]
+    for d in okno({}, wczoraj, 10)[::-1]:
+        wiersz = [("—" if kr[n].get(d) is None else "%+d" % kr[n][d]["osoby"]) for n in nazwy]
+        if dwa:
+            a, b = kr[nazwy[0]].get(d), kr[nazwy[1]].get(d)
+            wiersz.append(_razy(b["osoby"] if b else None, a["osoby"] if a else None))
+        L.append("| %s | %s |" % (d, " | ".join(wiersz)))
+    # 4. wskazniki zasiegu
+    zas = {n: wskazniki_zasiegu(dane[n], wczoraj) for n in nazwy}
+
+    def para(w: dict[str, Any]) -> str:
+        (a, na), (b, nb) = w["przed"], w["teraz"]
+        return "%s → %s%s" % (_f(a), _f(b), "" if (na == 7 and nb == 7) else " (dni z pomiarem: %d / %d)" % (na, nb))
+
+    L += ["", "### Wskazniki zasiegu: ostatnie 7 dob wobec 7 poprzednich", "",
+          "Wyprzedzaja przyrost o kilka dni. Przy mniej niz 7 dobach z pomiarem suma jest dolna granica.", "",
+          "| wskaznik | " + " | ".join(nazwy) + " |", "|---|" + "---|" * len(nazwy)]
+    for pole, etykieta in WSKAZNIKI_ZASIEGU:
+        L.append("| %s | %s |" % (etykieta, " | ".join(para(zas[n][pole]) for n in nazwy)))
+    L.append("| wyswietlenia komentarza na komentarz | %s |" % " | ".join(
+        "%s → %s" % (_f(zas[n]["komentarz_na_komentarz"]["przed"][0]), _f(zas[n]["komentarz_na_komentarz"]["teraz"][0]))
+        for n in nazwy))
+    L.append("")
+    return L
+
+
 def _f(v: Any, znak: bool = False) -> str:
     if v is None:
         return "—"
@@ -903,6 +1082,8 @@ def raport(dni_raportu: int = 14, dzis: str | None = None) -> str:
     ]
     for etykieta, fn in wiersze:
         L.append("| %s | %s |" % (etykieta, " | ".join(fn(n) for n in nazwy)))
+    # TEMPO PRZYROSTU — ten sam rachunek dla obu kont (6.10.2026), patrz `sekcja_tempo`.
+    L += [""] + sekcja_tempo(dane, wczoraj)
     L += ["", "## Ostatnie %d dob" % dni_raportu, "",
           "Kolumny: subskr. netto, obserw. netto, wyswietlenia, obcy, odwiedziny profilu, notki, komentarze, koszt.", ""]
     L += ["| doba | " + " | ".join(nazwy) + " |", "|---|" + "---|" * len(nazwy)]

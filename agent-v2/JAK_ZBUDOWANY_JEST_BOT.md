@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **36 plików**, 43 078 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **36 plików**, 43 259 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -113,8 +113,8 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 > w głównej ścieżce artykułu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
-się testować bez przeglądarki i bez pieniędzy**. 203 zestawów
-testów, 5221 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+się testować bez przeglądarki i bez pieniędzy**. 204 zestawów
+testów, 5260 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -911,7 +911,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `obserwatorium.py` — obserwatorium obu kont — dane dnia (wzrost, lejek, działania, koszt), dziennik zmian z reflogu i rejestru, tempo wzrostu i skutek zmian
 
-1084 wierszy, 45 funkcji na poziomie modułu, 0 klas
+1265 wierszy, 54 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -955,6 +955,15 @@ wiec nie da sie go rozjechac z kodem.
 | `tempo(dni, do, ile)` | Wzrost i lejek w oknie `ile` dob konczacym sie `do` (wlacznie). |
 | `_srednia_dobowa(dni, daty, pole)` *(wewn.)* | (srednia dobowa, ile dob z danymi). Liczniki tresci — tylko doby z `pomiar_tresci`. |
 | `skutek(dni, dni_kontrola, kiedy, ile, dzis)` | Przed/po zmianie (srednie dobowe) i roznica roznic wzgledem drugiego konta. |
+| `_poziom(dni, pole, dzien)` *(wewn.)* | — |
+| `przyrost_miedzy(dni, od, do)` | Zmiana licznikow miedzy stanem na koniec doby `od` a stanem na koniec doby `do`. |
+| `pierwszy_odczyt(dni)` | Doba pierwszego odczytu OBU licznikow — dzien 0 porownania wedlug wieku. |
+| `tygodnie_netto(dni, wczoraj, ile)` | Ostatnie `ile` PELNYCH tygodni (pon-niedz, koniec najpozniej wczoraj): (od, do, przyrost). |
+| `wedlug_wieku(dni, kroki)` | Skumulowany przyrost od pierwszego odczytu, po `n` dobach (None = brak odczytu w tej dobie). |
+| `kroczace_7(dni, wczoraj, ile)` | Dla kazdej z ostatnich `ile` dob: przyrost netto w 7 dobach konczacych sie ta doba. |
+| `wskazniki_zasiegu(dni, wczoraj)` | Ostatnie 7 dob wobec 7 poprzednich: suma i liczba dob z pomiarem, osobno dla kazdego wskaznika. |
+| `_razy(a, b)` *(wewn.)* | Iloraz `a / b` jako „2.5x"; „—" przy braku danych albo zerowym mianowniku. |
+| `sekcja_tempo(dane, wczoraj)` | Blok raportu „Tempo przyrostu”: ten sam rachunek dla kazdego konta, obok siebie. |
 | `_f(v, znak)` *(wewn.)* | — |
 | `_zrodla(konto)` *(wewn.)* | — |
 | `_jakosc(konto)` *(wewn.)* | — |
