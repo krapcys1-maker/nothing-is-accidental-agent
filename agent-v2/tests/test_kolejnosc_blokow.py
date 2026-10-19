@@ -120,7 +120,20 @@ print("=== 4. PRZYDZIAL CELOWO NIETKNIETY ===")
 sprawdz("artykuly biora swoja czesc z `przydzial_komentarzy`",
         'ile = przydzial["artykuly"]' in ZR and "cele[:ile]" in ZR)
 sprawdz("dyskusje biora swoja czesc z `przydzial_komentarzy`",
-        'cele[: przydzial["notki"]]' in ZR)
+        'miejsca = przydzial["notki"] if ile is None else ile' in ZR
+        and "cele[:miejsca]" in ZR)
+# NADWYZKA POD NOTKAMI (19.10.2026) — regula zapisana przed ocena 13.10: wolne
+# miejsca spod artykulow ida pod notki, ale DOPIERO po bloku artykulow (wtedy
+# wiadomo, ile ich zostalo) i nigdy w E14.
+if "dyskusje: nadwyzka" in KOLEJNOSC and "komentarze" in KOLEJNOSC:
+    sprawdz("nadwyzka pod notkami idzie PO komentarzach pod artykulami",
+            KOLEJNOSC.index("dyskusje: nadwyzka") == KOLEJNOSC.index("komentarze") + 1,
+            KOLEJNOSC)
+else:
+    sprawdz("blok nadwyzki jest na liscie", False, KOLEJNOSC)
+sprawdz("nadwyzka nie rusza w E14 i tylko przy wolnych miejscach",
+        'if przydzial["e14"] or not wolne:' in ZR
+        and 'dyskusje(ile=wolne, nadwyzka=True)' in ZR)
 sprawdz("poza eksperymentem przydzial jak dotad: N i max(1, N // 2)",
         'return {"artykuly": n, "notki": max(1, n // 2), "e14": False}' in ZR)
 

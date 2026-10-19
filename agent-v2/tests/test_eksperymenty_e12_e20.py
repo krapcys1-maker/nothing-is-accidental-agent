@@ -72,12 +72,25 @@ sprawdz("E12-E18 zapisane w konfiguracji z oknami dat",
         and E.get("cel_komentarza") == {"udzial": 0.5, "od": "2026-09-29", "do": "2026-10-19"}
         and E.get("swiezosc_celu") == {"udzial": 0.5, "od": "2026-10-20", "do": "2026-11-09"}
         and E.get("pora_notki") == {"plan": ["on", "off"], "okres_dni": 1, "od": "2026-10-26", "do": "2026-11-22"}
-        and E.get("krotka_notka") == {"udzial": 0.5, "od": "2026-10-26", "do": "2026-11-22"}
+        and E.get("krotka_notka") == {"udzial": 0.5, "od": "2026-10-20", "do": "2026-11-22"}
         and E.get("pytanie_na_koncu") == {"udzial": 0.5, "od": "2026-10-26", "do": "2026-11-22"}, E)
-sprawdz("E15 startuje po E14, E16-E18 po E10 i E11",
+sprawdz("E15 startuje po E14, E16 i E18 po E10 i E11",
         E["swiezosc_celu"]["od"] > E["cel_komentarza"]["do"]
         and all(E[n]["od"] > E["wniosek"]["do"] and E[n]["od"] > E["pisarz"]["do"]
-                for n in ("pora_notki", "krotka_notka", "pytanie_na_koncu")))
+                for n in ("pora_notki", "pytanie_na_koncu")))
+# E17 PRZESUNIETA NA 20.10 (wlasciciel 19.10.2026) — szesc dni nakladki z E10
+# i E11. Wolno, bo kazdy eksperyment losuje po WLASNEJ nazwie: oba ramiona E10
+# i E11 dostaja wtedy po rowno krotkich notek. Sprawdzone na losowaniu, nie na
+# slowie: w dniach nakladki laczne ramiona maja udzial = iloczyn udzialow.
+_dni_nakladki = ["2026-10-%02d" % d for d in range(20, 26)]
+_pary = [(stages.ramie("wniosek", m, d), stages.ramie("pisarz", m, d), stages.ramie("krotka_notka", m, d))
+         for d in _dni_nakladki for m in range(300)]
+_w = sum(1 for a, _, k in _pary if a == "on" and k == "on") / len(_pary)
+_p = sum(1 for _, b, k in _pary if b == "on" and k == "on") / len(_pary)
+sprawdz("E17 trwa w dniach nakladki, a jej ramiona sa niezalezne od E10 (0,7 x 0,5) i E11 (0,5 x 0,5)",
+        all(k for _, _, k in _pary) and abs(_w - 0.35) < 0.04 and abs(_p - 0.25) < 0.04,
+        (round(_w, 3), round(_p, 3)))
+sprawdz("E17 nie trwa przed 20.10", stages.ramie("krotka_notka", 0, "2026-10-19") == "")
 _stare_int = [int(__import__("hashlib").sha256(("wniosek|2026-10-01|%d" % m).encode()).hexdigest()[:8], 16)
               / 0x100000000 < 0.7 for m in range(30)]
 sprawdz("`%s` zamiast `%d` w haszu: ramiona E10/E11 dla liczb bez zmian",
@@ -202,8 +215,10 @@ sprawdz("pola dziennika: rodzaj celu zawsze, ramie E14 tylko w eksperymencie",
         run.ramiona_komentarza({}, "notka", True) == {"pod": "notka", "eksperymenty": {"cel_komentarza": "on"}}
         and run.ramiona_komentarza({}, "artykul", True) == {"pod": "artykul", "eksperymenty": {"cel_komentarza": "off"}}
         and run.ramiona_komentarza({}, "artykul", False) == {"pod": "artykul"})
-_kom = _RUN[_RUN.index("    def komentarze() -> None:"):_RUN.index("    def dyskusje() -> None:")]
-_dys = _RUN[_RUN.index("    def dyskusje() -> None:"):_RUN.index("    def obserwuj() -> None:")]
+# Po poczatku definicji, nie po calej sygnaturze: `dyskusje` dostala 19.10.2026
+# parametry drugiej rundy (`ile`, `nadwyzka`).
+_kom = _RUN[_RUN.index("    def komentarze() -> None:"):_RUN.index("    def dyskusje(")]
+_dys = _RUN[_RUN.index("    def dyskusje("):_RUN.index("    def obserwuj() -> None:")]
 sprawdz("blok artykulow bierze `przydzial[\"artykuly\"]`, a nie `na_teraz[\"komentarze\"]`",
         'ile = przydzial["artykuly"]' in _kom and 'na_teraz["komentarze"]' not in _kom
         and "cele[:ile]" in _kom and 'ramiona_komentarza(cel, "artykul"' in _kom)

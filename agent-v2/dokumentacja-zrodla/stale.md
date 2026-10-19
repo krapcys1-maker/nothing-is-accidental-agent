@@ -207,7 +207,7 @@
 | `PROG_ALARMU_WOLUMENU` | `60` | Ponizej ilu procent normy uznajemy, ze cos jest zepsute, a nie po prostu chudsze. Prog jest niski celowo: budzety sa LOSOWANE z widelek i dz |
 | `CICHY_DZIEN_NA_ILE` | `8` | ODBLOKOWANE decyzja wlasciciela 2026-08-19. Restack cudzej notki z wlasnym zdaniem trafia do kanalu NASZYCH obserwujacych, powiadamia autora |
 | `CICHE_DNI_WLACZONE` | `True` | — |
-| `CICHY_DZIEN_WYCISZA` | `("notki", "restacki")` | CO WYCISZA CICHY DZIEN — jedna lista, dwoch czytelnikow. `run.py` zeruje przydzial na te pozycje; `norma.py` nie wlicza takich dni do sredni |
+| `CICHY_DZIEN_WYCISZA` | `("notki",)` | CO WYCISZA CICHY DZIEN — jedna lista, dwoch czytelnikow. `run.py` zeruje przydzial na te pozycje; `norma.py` nie wlicza takich dni do sredni |
 | `BUDZET_NA_RODZAJ` | `{ "notki": "notka", "komentarze": "komentarz` | NAZWA W BUDZECIE -> NAZWA W DZIENNIKU. Dwie konwencje istnieja naprawde: budzet mowi „ile czego dzis wolno" (liczba mnoga), dziennik notuje  |
 | `CICHY_DZIEN_WYCISZA_RODZAJE` | `tuple(BUDZET_NA_RODZAJ[k] for k in CICHY_DZI` | Wyprowadzone, NIE przepisane recznie — zeby nie dalo sie rozjechac. |
 | `RESTACK_DZIENNIE` | `(1, 2)` | Zjechane z 2-4 na 1-2 (2026-08-20). Restack stawia NASZE nazwisko obok cudzego tekstu — to najmocniejszy gest w calym repertuarze i jedyny,  |
@@ -235,6 +235,7 @@
 | `MAKS_WIEK_NOTKI_DO_KOMENTARZA_H` | `36` | — |
 | `ZYWY_WATEK_KOMENTARZY` | `2` | ZYWY WATEK POD NOTKA (1.10.2026). Przy wieku celu ~7,5 h NIE wybierala notki z mediana 3 reakcji i 0 komentarzy — 8% jej komentarzy dostawal |
 | `ZYWY_WATEK_REAKCJI` | `5` | — |
+| `MIN_REAKCJI_CELU_NOTKI` | `5` | SLABA NOTKA ODPADA, NIE TYLKO CICHA (19.10.2026, decyzja wlasciciela). Zmierzone na komentarzach z 28.09-16.10 (pomiar po 72 h): pod notkami |
 | `MAKS_DZIALAN_U_AUTORA_7_DNI` | `3` | NAJWYZEJ TYLE KOMENTARZY + RESTACKOW U JEDNEGO AUTORA W 7 DNI (1.10.2026). Zmierzone 24-30.09: jeden autor dostal 16 komentarzy w tydzien, i |
 | `HASLA_SZUKANIA` | `( # rdzen: systemy AI i ich dzialanie w swie` | HASLA, KTORYMI AGENT SZUKA NOWYCH KONT. Kanal czytelnika pokazuje tylko to, co juz znamy, wiec sam z siebie nie przyprowadzi nikogo nowego — |
 | `ILE_HASEL_NA_PRZEBIEG` | `5` | PIEC, NIE TRZY. Przy trzech haslach na przebieg i osiemnastu w puli agent ogladal jedna szosta rewiru na raz — a po zaostrzeniu reguly celow |

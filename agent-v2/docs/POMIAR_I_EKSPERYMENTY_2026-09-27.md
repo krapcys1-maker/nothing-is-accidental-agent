@@ -511,6 +511,62 @@ rampa jest zatrzymywana na bieżącym stopniu.
 
 Test: `tests/test_nie_jak_nia.py`.
 
+## Porównanie z drugim kontem i pięć zmian, 19.10.2026
+
+**Skąd.** Właściciel 19.10: „porównaj oba boty, sprawdź statystyki, zobacz, co warto
+poprawić”. Liczby drugiego konta są w rejestrze lokalnym (`docs/POLIGON_I_PRODUKCJA.md`),
+tu tylko wniosek: przyrost osób obu kont jest od dwóch tygodni równy, NIE lepiej
+zamienia wyświetlenia na subskrybentów, a wąskim gardłem jest **zasięg** — notek,
+restacków i komentarzy. Własne pomiary NIE (publikacje 28.09–16.10, odczyt po 72 h):
+
+- **Notki:** 44, mediana 11 wyświetleń; 39 z 44 ma ponad 80 słów. Pisarz nie ma
+  znaczenia: średnia geometryczna Opus 11,4 (n=6), Flash 10,2 (n=21), MiMo 10,7 (n=17).
+- **Komentarze pod notkami starszymi niż 2 h:** przy celu z ≥5 reakcjami 5,4
+  wyświetlenia (n=93), przy słabszym 2,4 (n=39), przy celu z samymi komentarzami 2,9
+  (n=13). Pod artykułami ok. 1, ale ich zasięg jest mierzony tylko częściowo.
+- **Dni ciszy:** 4 z 21 dób bez notek i restacków; wyświetlenia spadały wtedy do kilkunastu.
+- **Wykonanie komentarzy:** 70% planu w dobach 10–12.10 — reguła z 13.10 zadziałała,
+  ale nie była wdrożona; 13–18.10 84%. Blok artykułów kończy przebiegi z „po 4 rundach:
+  0 celów”.
+
+**Zmiany (właściciel: „ok do dzieła”):**
+
+1. **E17 od 20.10 zamiast 26.10** (`config.EKSPERYMENTY["krotka_notka"]`). Sześć dni
+   nakładki z E10 i E11 niczego nie miesza: każdy eksperyment losuje po własnej
+   nazwie, więc oba ich ramiona dostają po równo krótkich notek (sprawdzone na
+   losowaniu w `tests/test_eksperymenty_e12_e20.py`).
+2. **Słaba notka odpada z celów komentarza** (`config.MIN_REAKCJI_CELU_NOTKI = 5`,
+   `kanal.slaby_watek`): notka starsza niż 2 h z mniej niż 5 reakcjami. Młodsza
+   przechodzi bez progu — to cele E15, który rusza 20.10. Log sita mówi „słabe N”.
+3. **Nadwyżka pod notkami** (`nadwyzka_pod_notkami` w `run.dzien`): wolne miejsca spod
+   artykułów idą pod notki w tym samym przebiegu — tylko poza E14 (czyli od 20.10),
+   tylko gdy blok artykułów doszedł do końca bez wyjątku i gdy zostało co najmniej
+   10 minut. Druga runda pomija notki, pod którymi przebieg już był, a wpis w dzienniku
+   ma `przydzial: "nadwyzka"`. To wdrożenie reguły zapisanej przed oceną 13.10.
+4. **Dzień ciszy nie wycisza już restacków** (`config.CICHY_DZIEN_WYCISZA = ("notki",)`):
+   rytm własnych notek zostaje, przekazanie dalej cudzej notki idzie w normie dnia.
+   Pełne wyłączenie ciszy to `CICHE_DNI_WLACZONE = False`. **Wpływ na E12:** tygodnie
+   od 20.10 (on, on, off) dostają restacki także w dzień ciszy, w normie swojego
+   ramienia; tygodnie 1–3 ich nie miały. Przy ocenie E12 (9.11) porównujemy też
+   bez dni ciszy (wyznacza je `config.cichy_dzien`).
+5. **Dwie drobne poprawki z 6.10:** to samo konto pod dwoma adresami jest w kolejce
+   obserwacji i subskrypcji pomijane (jedno zapytanie o rozmiar, podsumowanie liczy
+   konta, nie adresy), a subskrypcja omija konto bez publikacji
+   (`browser.POWOD_BEZ_PUBLIKACJI`, z tego samego publicznego profilu) bez przerwy
+   rytmu i bez zużycia próby. 6–8.10 były cztery takie porażki.
+
+Bez zmian: norma restacków (E12 trwa do 9.11, od 20.10 tydzień „on”), poziom docelowy
+do 24.10, przydział poza nadwyżką.
+
+**Miary i strażnicy:** wykonanie komentarzy wobec planu (cel ≥90%), udział wpisów
+`przydzial: "nadwyzka"`, wyświetlenia na komentarz pod notkami, „słabe N” w logu sita,
+„[subskrypcje] N z M obejrzanych nie miało publikacji”, restacki w dni ciszy, ramiona
+E17 w dzienniku (`eksperymenty.krotka_notka`). Przegląd po trzech pełnych dobach.
+
+Testy: `tests/test_nadwyzka_pod_notkami.py`, `tests/test_poprawki_pisania.py` (sekcja 1b),
+`tests/test_nie_jak_nia.py` (sekcje 6 i 6b), `tests/test_ciche_dni.py`,
+`tests/test_eksperymenty_e12_e20.py`, `tests/test_kolejnosc_blokow.py`.
+
 ## Śledztwa — co mierzyć
 
 - **Przesłania:** grupa „przeslanie" w karcie i w `eksperymenty.py`. To ok. 6

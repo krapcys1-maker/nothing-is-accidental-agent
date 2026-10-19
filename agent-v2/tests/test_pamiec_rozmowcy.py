@@ -213,8 +213,10 @@ def _kod(sciezka):
 
 
 _RUN, _BR = _kod("agent-v2/run.py"), _kod("agent-v2/browser.py")
-_kom = _RUN[_RUN.index("    def komentarze() -> None:"):_RUN.index("    def dyskusje() -> None:")]
-_dys = _RUN[_RUN.index("    def dyskusje() -> None:"):_RUN.index("    def obserwuj() -> None:")]
+# Po poczatku definicji, nie po calej sygnaturze: `dyskusje` dostala 19.10.2026
+# parametry drugiej rundy (`ile`, `nadwyzka`).
+_kom = _RUN[_RUN.index("    def komentarze() -> None:"):_RUN.index("    def dyskusje(")]
+_dys = _RUN[_RUN.index("    def dyskusje("):_RUN.index("    def obserwuj() -> None:")]
 _odp = _RUN[_RUN.index("    def odpowiedzi() -> None:"):_RUN.index("    def notki() -> None:")]
 sprawdz("komentarze i dyskusje licza pamiec przed pisaniem i podaja ja do promptu",
         'cel["_e21"] = pamiec_do_celu(cel.get("uchwyt")' in _kom and '"pamiec": cel["_e21"]["tekst"]' in _kom

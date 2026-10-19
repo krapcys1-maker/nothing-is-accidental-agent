@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **36 plików**, 43 333 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **36 plików**, 43 486 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -113,8 +113,8 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 > w głównej ścieżce artykułu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
-się testować bez przeglądarki i bez pieniędzy**. 204 zestawów
-testów, 5274 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+się testować bez przeglądarki i bez pieniędzy**. 205 zestawów
+testów, 5324 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -143,7 +143,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-3658 wierszy, 39 funkcji na poziomie modułu, 2 klas
+3736 wierszy, 39 funkcji na poziomie modułu, 2 klas
 
 | funkcja | co robi |
 |---|---|
@@ -389,7 +389,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `browser.py` — cała styczność z Substackiem; nie woła modelu
 
-5916 wierszy, 114 funkcji na poziomie modułu, 0 klas
+5951 wierszy, 116 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -459,8 +459,10 @@ wiec nie da sie go rozjechac z kodem.
 | `_stan_przycisku(uchwyt)` *(wewn.)* | Jak przycisk wyglada — wszystkie sygnaly naraz, sklejone w jeden napis. |
 | `potwierdz_polubienie(uchwyt, przed)` | Czy przycisk po klknieciu wyglada inaczej niz przed nim. |
 | `polub_w_kanale(ile, wyslij)` | Polubienia w kanale czytelnika. |
+| `bez_publikacji(profil)` | Czy publiczny profil MOWI, ze konto nie ma publikacji. Brak pol to „nie wiem". |
 | `konto_male(profil, maksimum)` | Czy publiczny profil mieści się w sufcie odbiorcow. NIEZNANY ROZMIAR TO NIE DOWOD. |
-| `konto_za_duze(handle, sufit, co)` | Czy konto przekracza sufit odbiorcow — SPRAWDZANE ZANIM ZAPLACIMY CZAS. |
+| `konto_za_duze(handle, sufit, co)` | Czy sito kaze pominac konto — `powod_pominiecia` jako tak/nie. |
+| `powod_pominiecia(handle, sufit, co)` | Dlaczego pominac konto ("" = wpusc) — SPRAWDZANE ZANIM ZAPLACIMY CZAS. |
 | `_klik_na_profilu(handle, napisy, rodzaj, wyslij)` *(wewn.)* | Klika JEDEN konkretny przycisk na cudzym profilu — i tylko jego. |
 | `pobierz_subskrybentow()` | Czyta liste subskrybentow z WLASNEGO panelu, wlasna sesja. |
 | `zloz_wiersze_subskrybentow(surowe)` | Sklada wiersze z komorek tabeli panelu: adres, typ i data rozpoczecia. |
@@ -580,7 +582,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `kanal.py` — pamięć o cudzych publikacjach
 
-563 wierszy, 20 funkcji na poziomie modułu, 1 klas
+578 wierszy, 21 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -595,12 +597,13 @@ wiec nie da sie go rozjechac z kodem.
 | `za_stary_cel(x, notka)` | Cel starszy niz `config.MAKS_WIEK_*_DO_KOMENTARZA` — tam nikt juz nie czyta. |
 | `zywy_watek(x)` | Watek, w ktorym ktos juz jest: `ZYWY_WATEK_KOMENTARZY` albo `ZYWY_WATEK_REAKCJI`. |
 | `cichy_watek(x)` | Zero reakcji i zero komentarzy — komentarz pod tym przeczyta tylko autor. |
+| `slaby_watek(x)` | Notka starsza niz `SWIEZY_CEL_MIN` z mniej niz `MIN_REAKCJI_CELU_NOTKI` reakcjami. |
 | `zywe_najpierw(cele)` | Zywe watki przed cichymi, w obrebie grup kolejnosc bez zmian. |
 | `_klucz_autora(wartosc)` *(wewn.)* | — |
 | `trafny_tematycznie(post)` | Znak tematu (AI) w TYTULE albo co najmniej DWA razy w calosci. |
 | `_cel_wychodzacy(post)` *(wewn.)* | `@uchwyt` autora notki albo host publikacji; None, gdy nie da sie ustalic. |
 | `nowi_kandydaci(czysty, ile_szukanie, ile_notek)` | Swiezi, trafni tematycznie autorzy z wyszukiwarki i kanalu: `@uchwyt` albo host. |
-| `odsiej_cele(cele, limit, notki)` | Sito przed ocena celow: za stare, (pod notkami) ciche, ponad limit autora. |
+| `odsiej_cele(cele, limit, notki)` | Sito przed ocena celow: za stare, (pod notkami) ciche i slabe, ponad limit autora. |
 | `posty_z_kanalu(ile)` | Ostatnie posty z kanalu czytelnika, z liczba komentarzy i reakcji. |
 | `notki_z_kanalu(ile)` | Cudze notki, pod ktorymi mozna wejsc w dyskusje. |
 | `szukaj_nowych(ile)` | Szuka NOWYCH kont wyszukiwarka Substacka, poza naszym kregiem. |
@@ -664,7 +667,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-3992 wierszy, 44 funkcji na poziomie modułu, 0 klas
+4017 wierszy, 44 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -11882,7 +11885,7 @@ wartosc i komentarz stojacy bezposrednio nad definicja.
 | `PROG_ALARMU_WOLUMENU` | `60` | Ponizej ilu procent normy uznajemy, ze cos jest zepsute, a nie po prostu chudsze. Prog jest niski celowo: budzety sa LOSOWANE z widelek i dz |
 | `CICHY_DZIEN_NA_ILE` | `8` | ODBLOKOWANE decyzja wlasciciela 2026-08-19. Restack cudzej notki z wlasnym zdaniem trafia do kanalu NASZYCH obserwujacych, powiadamia autora |
 | `CICHE_DNI_WLACZONE` | `True` | — |
-| `CICHY_DZIEN_WYCISZA` | `("notki", "restacki")` | CO WYCISZA CICHY DZIEN — jedna lista, dwoch czytelnikow. `run.py` zeruje przydzial na te pozycje; `norma.py` nie wlicza takich dni do sredni |
+| `CICHY_DZIEN_WYCISZA` | `("notki",)` | CO WYCISZA CICHY DZIEN — jedna lista, dwoch czytelnikow. `run.py` zeruje przydzial na te pozycje; `norma.py` nie wlicza takich dni do sredni |
 | `BUDZET_NA_RODZAJ` | `{ "notki": "notka", "komentarze": "komentarz` | NAZWA W BUDZECIE -> NAZWA W DZIENNIKU. Dwie konwencje istnieja naprawde: budzet mowi „ile czego dzis wolno" (liczba mnoga), dziennik notuje  |
 | `CICHY_DZIEN_WYCISZA_RODZAJE` | `tuple(BUDZET_NA_RODZAJ[k] for k in CICHY_DZI` | Wyprowadzone, NIE przepisane recznie — zeby nie dalo sie rozjechac. |
 | `RESTACK_DZIENNIE` | `(1, 2)` | Zjechane z 2-4 na 1-2 (2026-08-20). Restack stawia NASZE nazwisko obok cudzego tekstu — to najmocniejszy gest w calym repertuarze i jedyny,  |
@@ -11910,6 +11913,7 @@ wartosc i komentarz stojacy bezposrednio nad definicja.
 | `MAKS_WIEK_NOTKI_DO_KOMENTARZA_H` | `36` | — |
 | `ZYWY_WATEK_KOMENTARZY` | `2` | ZYWY WATEK POD NOTKA (1.10.2026). Przy wieku celu ~7,5 h NIE wybierala notki z mediana 3 reakcji i 0 komentarzy — 8% jej komentarzy dostawal |
 | `ZYWY_WATEK_REAKCJI` | `5` | — |
+| `MIN_REAKCJI_CELU_NOTKI` | `5` | SLABA NOTKA ODPADA, NIE TYLKO CICHA (19.10.2026, decyzja wlasciciela). Zmierzone na komentarzach z 28.09-16.10 (pomiar po 72 h): pod notkami |
 | `MAKS_DZIALAN_U_AUTORA_7_DNI` | `3` | NAJWYZEJ TYLE KOMENTARZY + RESTACKOW U JEDNEGO AUTORA W 7 DNI (1.10.2026). Zmierzone 24-30.09: jeden autor dostal 16 komentarzy w tydzien, i |
 | `HASLA_SZUKANIA` | `( # rdzen: systemy AI i ich dzialanie w swie` | HASLA, KTORYMI AGENT SZUKA NOWYCH KONT. Kanal czytelnika pokazuje tylko to, co juz znamy, wiec sam z siebie nie przyprowadzi nikogo nowego — |
 | `ILE_HASEL_NA_PRZEBIEG` | `5` | PIEC, NIE TRZY. Przy trzech haslach na przebieg i osiemnastu w puli agent ogladal jedna szosta rewiru na raz — a po zaostrzeniu reguly celow |

@@ -1,7 +1,7 @@
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-3658 wierszy, 39 funkcji na poziomie modułu, 2 klas
+3736 wierszy, 39 funkcji na poziomie modułu, 2 klas
 
 | funkcja | co robi |
 |---|---|
@@ -247,7 +247,7 @@
 
 ### `browser.py` — cała styczność z Substackiem; nie woła modelu
 
-5916 wierszy, 114 funkcji na poziomie modułu, 0 klas
+5951 wierszy, 116 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -317,8 +317,10 @@
 | `_stan_przycisku(uchwyt)` *(wewn.)* | Jak przycisk wyglada — wszystkie sygnaly naraz, sklejone w jeden napis. |
 | `potwierdz_polubienie(uchwyt, przed)` | Czy przycisk po klknieciu wyglada inaczej niz przed nim. |
 | `polub_w_kanale(ile, wyslij)` | Polubienia w kanale czytelnika. |
+| `bez_publikacji(profil)` | Czy publiczny profil MOWI, ze konto nie ma publikacji. Brak pol to „nie wiem". |
 | `konto_male(profil, maksimum)` | Czy publiczny profil mieści się w sufcie odbiorcow. NIEZNANY ROZMIAR TO NIE DOWOD. |
-| `konto_za_duze(handle, sufit, co)` | Czy konto przekracza sufit odbiorcow — SPRAWDZANE ZANIM ZAPLACIMY CZAS. |
+| `konto_za_duze(handle, sufit, co)` | Czy sito kaze pominac konto — `powod_pominiecia` jako tak/nie. |
+| `powod_pominiecia(handle, sufit, co)` | Dlaczego pominac konto ("" = wpusc) — SPRAWDZANE ZANIM ZAPLACIMY CZAS. |
 | `_klik_na_profilu(handle, napisy, rodzaj, wyslij)` *(wewn.)* | Klika JEDEN konkretny przycisk na cudzym profilu — i tylko jego. |
 | `pobierz_subskrybentow()` | Czyta liste subskrybentow z WLASNEGO panelu, wlasna sesja. |
 | `zloz_wiersze_subskrybentow(surowe)` | Sklada wiersze z komorek tabeli panelu: adres, typ i data rozpoczecia. |
@@ -438,7 +440,7 @@
 
 ### `kanal.py` — pamięć o cudzych publikacjach
 
-563 wierszy, 20 funkcji na poziomie modułu, 1 klas
+578 wierszy, 21 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -453,12 +455,13 @@
 | `za_stary_cel(x, notka)` | Cel starszy niz `config.MAKS_WIEK_*_DO_KOMENTARZA` — tam nikt juz nie czyta. |
 | `zywy_watek(x)` | Watek, w ktorym ktos juz jest: `ZYWY_WATEK_KOMENTARZY` albo `ZYWY_WATEK_REAKCJI`. |
 | `cichy_watek(x)` | Zero reakcji i zero komentarzy — komentarz pod tym przeczyta tylko autor. |
+| `slaby_watek(x)` | Notka starsza niz `SWIEZY_CEL_MIN` z mniej niz `MIN_REAKCJI_CELU_NOTKI` reakcjami. |
 | `zywe_najpierw(cele)` | Zywe watki przed cichymi, w obrebie grup kolejnosc bez zmian. |
 | `_klucz_autora(wartosc)` *(wewn.)* | — |
 | `trafny_tematycznie(post)` | Znak tematu (AI) w TYTULE albo co najmniej DWA razy w calosci. |
 | `_cel_wychodzacy(post)` *(wewn.)* | `@uchwyt` autora notki albo host publikacji; None, gdy nie da sie ustalic. |
 | `nowi_kandydaci(czysty, ile_szukanie, ile_notek)` | Swiezi, trafni tematycznie autorzy z wyszukiwarki i kanalu: `@uchwyt` albo host. |
-| `odsiej_cele(cele, limit, notki)` | Sito przed ocena celow: za stare, (pod notkami) ciche, ponad limit autora. |
+| `odsiej_cele(cele, limit, notki)` | Sito przed ocena celow: za stare, (pod notkami) ciche i slabe, ponad limit autora. |
 | `posty_z_kanalu(ile)` | Ostatnie posty z kanalu czytelnika, z liczba komentarzy i reakcji. |
 | `notki_z_kanalu(ile)` | Cudze notki, pod ktorymi mozna wejsc w dyskusje. |
 | `szukaj_nowych(ile)` | Szuka NOWYCH kont wyszukiwarka Substacka, poza naszym kregiem. |
@@ -522,7 +525,7 @@
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-3992 wierszy, 44 funkcji na poziomie modułu, 0 klas
+4017 wierszy, 44 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|

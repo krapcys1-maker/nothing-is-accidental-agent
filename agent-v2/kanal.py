@@ -136,6 +136,18 @@ def cichy_watek(x: dict) -> bool:
     return _komentarze_celu(x) == 0 and int(x.get("reakcje") or 0) == 0
 
 
+def slaby_watek(x: dict) -> bool:
+    """Notka starsza niz `SWIEZY_CEL_MIN` z mniej niz `MIN_REAKCJI_CELU_NOTKI` reakcjami.
+
+    Taka juz nie wystartowala: komentarz pod nia zbiera ponad dwa razy mniej
+    wyswietlen niz pod notka, ktora reakcje ma (pomiar przy stalej). Mlodsza
+    przechodzi — reakcje dopiero sie zbieraja. Nieznana data liczy sie jako
+    stara, tak samo jak w `za_stary_cel`.
+    """
+    return (_wiek_minut(x.get("data", "")) >= config.SWIEZY_CEL_MIN
+            and int(x.get("reakcje") or 0) < config.MIN_REAKCJI_CELU_NOTKI)
+
+
 def zywe_najpierw(cele: list[dict]) -> list[dict]:
     """Zywe watki przed cichymi, w obrebie grup kolejnosc bez zmian.
 
@@ -299,18 +311,21 @@ def nowi_kandydaci(czysty=None, ile_szukanie: int = 30, ile_notek: int = 20) -> 
 
 
 def odsiej_cele(cele: list[dict], limit: LimitAutorow, notki: bool) -> list[dict]:
-    """Sito przed ocena celow: za stare, (pod notkami) ciche, ponad limit autora."""
+    """Sito przed ocena celow: za stare, (pod notkami) ciche i slabe, ponad limit autora."""
     przed = len(cele)
     stare = sum(1 for x in cele if za_stary_cel(x, notki))
     cele = [x for x in cele if not za_stary_cel(x, notki)]
-    ciche = 0
+    ciche = slabe = 0
     if notki:
         ciche = sum(1 for x in cele if cichy_watek(x))
-        cele = zywe_najpierw([x for x in cele if not cichy_watek(x)])
+        cele = [x for x in cele if not cichy_watek(x)]
+        # SLABE (19.10.2026) — patrz `config.MIN_REAKCJI_CELU_NOTKI`.
+        slabe = sum(1 for x in cele if slaby_watek(x))
+        cele = zywe_najpierw([x for x in cele if not slaby_watek(x)])
     po_limicie = limit.odsiej(cele)
     if przed != len(po_limicie):
-        print("  [cele] sito: %d -> %d (za stare %d, ciche %d, limit autora %d)"
-              % (przed, len(po_limicie), stare, ciche, len(cele) - len(po_limicie)),
+        print("  [cele] sito: %d -> %d (za stare %d, ciche %d, slabe %d, limit autora %d)"
+              % (przed, len(po_limicie), stare, ciche, slabe, len(cele) - len(po_limicie)),
               flush=True)
     return po_limicie
 

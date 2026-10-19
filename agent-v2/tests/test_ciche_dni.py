@@ -85,9 +85,16 @@ if blok:
             "CICHY_DZIEN_WYCISZA" in t
             or all('zostalo[%r] = 0' % p in t for p in config.CICHY_DZIEN_WYCISZA),
             t[:200])
-    sprawdz("a config wymienia notki i restacki",
-            set(config.CICHY_DZIEN_WYCISZA) == {"notki", "restacki"},
+    # RESTACKI ZESZLY Z LISTY 19.10.2026 (decyzja wlasciciela): cisza wstrzymuje
+    # wlasne notki, a restack — u nas najwieksze zrodlo zapisow przypisanych
+    # tresciom — idzie w normie dnia. Uzasadnienie przy `config.CICHY_DZIEN_WYCISZA`.
+    sprawdz("a config wymienia same notki",
+            set(config.CICHY_DZIEN_WYCISZA) == {"notki"},
             config.CICHY_DZIEN_WYCISZA)
+    sprawdz("restacki NIE sa wyciszane i licznik je liczy takze w dzien ciszy",
+            "restacki" not in config.CICHY_DZIEN_WYCISZA
+            and "restack" not in config.CICHY_DZIEN_WYCISZA_RODZAJE,
+            config.CICHY_DZIEN_WYCISZA_RODZAJE)
     for rozmowa in ("komentarze", "lajki"):
         sprawdz("NIE wycisza pozycji %r" % rozmowa,
                 rozmowa not in config.CICHY_DZIEN_WYCISZA

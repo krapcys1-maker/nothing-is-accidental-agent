@@ -179,8 +179,15 @@ KWOTA_SPOZA_BRANZY = True
 #   notki dopiero od trzeciego przebiegu doby (15:20-19:40 ET), „off" = jak dotad
 #   (od pierwszego, 7:20 ET).
 # E17 — KROTKA NOTKA: „on" = okno `KROTKA_NOTKA_SLOW` zamiast zwyklego.
+#   PRZESUNIETA NA 20.10 (decyzja wlasciciela 19.10.2026 po porownaniu z drugim
+#   kontem, ktorego notki sa krotsze i maja wiekszy zasieg; liczby w rejestrze
+#   lokalnym). Nasze notki z 28.09-16.10 maja prawie wszystkie ponad 80 slow,
+#   a zasieg niezalezny od pisarza (Opus, Flash, MiMo po ok. 10 wyswietlen), wiec
+#   dlugosc jest najlepszym kandydatem. Szesc dni nakladki z E10 i E11 niczego
+#   nie miesza: kazdy eksperyment losuje po wlasnej nazwie, wiec oba ich ramiona
+#   dostaja tyle samo krotkich notek. Zapis: `docs/POMIAR_I_EKSPERYMENTY_2026-09-27.md`.
 # E18 — PYTANIE NA KONIEC: „on" = notka konczy sie jednym prawdziwym pytaniem.
-# E16-E18 startuja po E10 i E11 (26.10), bo notek jest ok. trzech dziennie.
+# E16 i E18 startuja po E10 i E11 (26.10), bo notek jest ok. trzech dziennie.
 # E21 — PAMIEC ROZMOWCY (wlasciciel 29.09: „wprowadz jako eksperyment plus
 #   monitoring"): przy rozmowie z kims, z kim byl juz kontakt (45% komentarzy),
 #   „on" = prompt komentarza/odpowiedzi dostaje ostatnie wymiany z ta osoba
@@ -196,7 +203,7 @@ EKSPERYMENTY: dict = {
     "swiezosc_celu": {"udzial": 0.5, "od": "2026-10-20", "do": "2026-11-09"},
     "pora_notki": {"plan": ["on", "off"], "okres_dni": 1,
                    "od": "2026-10-26", "do": "2026-11-22"},
-    "krotka_notka": {"udzial": 0.5, "od": "2026-10-26", "do": "2026-11-22"},
+    "krotka_notka": {"udzial": 0.5, "od": "2026-10-20", "do": "2026-11-22"},
     "pytanie_na_koncu": {"udzial": 0.5, "od": "2026-10-26", "do": "2026-11-22"},
     "pamiec_rozmowcy": {"udzial": 0.5, "od": "2026-09-29", "do": "2026-10-27"},
 }
@@ -2939,9 +2946,18 @@ CICHE_DNI_WLACZONE = True
 # czytanie cudzych rzeczy — a nieodpisanie komus, kto sie odezwal, nie jest
 # cisza, tylko lekcewazeniem.
 #
+# RESTACKI WYSZLY Z LISTY 19.10.2026 (decyzja wlasciciela po porownaniu z drugim
+# kontem). Na 21 dob cztery byly ciche i w kazda z nich wyswietlenia spadaly do
+# kilkunastu, a restack jest u nas najwiekszym zrodlem zapisow przypisanych
+# tresciom (5 z 14 w panelu Substacka). Rytm WLASNYCH notek, przed
+# ktorym ta cisza miala bronic, zostaje — przekazanie dalej cudzej notki to
+# czytanie, nie nadawanie. Pelne wylaczenie: `CICHE_DNI_WLACZONE = False`.
+# Wplyw na E12: tygodnie od 20.10 dostaja restacki takze w dzien ciszy, w normie
+# swojego ramienia — patrz `docs/POMIAR_I_EKSPERYMENTY_2026-09-27.md`.
+#
 # Dwie nazwy tej samej rzeczy, bo budzet mowi w liczbie mnogiej, a dziennik w
 # pojedynczej. Zgodnosc obu krotek pilnuje test.
-CICHY_DZIEN_WYCISZA = ("notki", "restacki")
+CICHY_DZIEN_WYCISZA = ("notki",)
 
 # NAZWA W BUDZECIE -> NAZWA W DZIENNIKU. Dwie konwencje istnieja naprawde:
 # budzet mowi „ile czego dzis wolno" (liczba mnoga), dziennik notuje pojedyncze
@@ -3290,6 +3306,15 @@ MAKS_WIEK_NOTKI_DO_KOMENTARZA_H = 36
 # (0 reakcji i 0 komentarzy) odpadaja przed platna ocena celow.
 ZYWY_WATEK_KOMENTARZY = 2
 ZYWY_WATEK_REAKCJI = 5
+
+# SLABA NOTKA ODPADA, NIE TYLKO CICHA (19.10.2026, decyzja wlasciciela). Zmierzone
+# na komentarzach z 28.09-16.10 (pomiar po 72 h): pod notkami starszymi niz 2 h
+# z co najmniej 5 reakcjami srednia geometryczna to 5,4 wyswietlenia (n=93),
+# pod slabszymi 2,4 (n=39), a pod takimi, ktore maja <5 reakcji i dopiero
+# komentarze, 2,9 (n=13) — wiec prog stoi na REAKCJACH. U drugiego konta podzial
+# wychodzi tak samo (rejestr lokalny). Mlodsze niz `SWIEZY_CEL_MIN` przechodza bez progu:
+# reakcje dopiero sie zbieraja, a takie cele bada E15. Sito: `kanal.slaby_watek`.
+MIN_REAKCJI_CELU_NOTKI = 5
 
 # NAJWYZEJ TYLE KOMENTARZY + RESTACKOW U JEDNEGO AUTORA W 7 DNI (1.10.2026).
 # Zmierzone 24-30.09: jeden autor dostal 16 komentarzy w tydzien, inny 6

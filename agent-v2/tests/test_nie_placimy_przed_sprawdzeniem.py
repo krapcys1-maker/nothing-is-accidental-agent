@@ -122,9 +122,14 @@ sprawdz("komentarze() sprawdzaja przydzial na wejsciu",
 i_przydzial = _run.find('if ile <= 0:')
 sprawdz("i robia to PRZED ocena celow",
         0 < i_przydzial < i_ocena, (i_przydzial, i_ocena))
-# `dyskusje()` mial ten warunek od poczatku — ma go zachowac.
-sprawdz("dyskusje() nadal maja swoj warunek przydzialu",
-        'if not przydzial["notki"]:' in _run)
+# `dyskusje()` mial ten warunek od poczatku — ma go zachowac. Od 19.10.2026 liczba
+# miejsc to `przydzial["notki"]` albo `ile` drugiej rundy (nadwyzka spod artykulow),
+# ale warunek „zero miejsc = nie zaczynamy" stoi na wejsciu jak dotad.
+_i_dys = _run.find("    def dyskusje(")
+_dys = _run[_i_dys:_run.find("cele = stages.wybierz_cele", _i_dys)]
+sprawdz("dyskusje() nadal maja swoj warunek przydzialu, PRZED ocena celow",
+        'miejsca = przydzial["notki"] if ile is None else ile' in _dys
+        and "if not miejsca:" in _dys, _dys[:300])
 
 print()
 print("=== 5. KOLEJNE RUNDY TEZ ODSIEWAJA JUZ SKOMENTOWANE ARTYKULY ===")

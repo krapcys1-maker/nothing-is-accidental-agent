@@ -3102,6 +3102,27 @@ def polub_w_kanale(ile: int, wyslij: bool = False) -> dict[str, Any]:
 # pierwszej zmianie slowa i odsiew wylaczylby sie po cichu.
 POWOD_ZA_DUZY = "account exceeds the size limit or its size is unknown"
 
+# KONTO BEZ PUBLIKACJI NIE MA CZEGO SUBSKRYBOWAC (19.10.2026). Zmierzone 6-8.10:
+# cztery nieudane subskrypcje, wszystkie „nie ma przycisku subskrypcja", kazda
+# po przerwie rytmu 5-15 min — a publiczny profil, ktory sito i tak pobiera,
+# mowil to wprost (`primaryPublication` puste, `publicationUsers` pusta lista).
+# Obserwacji to nie dotyczy: obserwowac mozna kazdego.
+POWOD_BEZ_PUBLIKACJI = "account has no publication to subscribe to"
+
+
+def bez_publikacji(profil: Any) -> bool:
+    """Czy publiczny profil MOWI, ze konto nie ma publikacji. Brak pol to „nie wiem".
+
+    True tylko przy jawnym braku: pola sa, a obie wartosci puste. Profil bez
+    tych pol (inny ksztalt odpowiedzi) przepuszczamy — decyduje straznik przy
+    przycisku, tak jak przy nieznanym rozmiarze sito myli sie w strone „wpusc".
+    """
+    if not isinstance(profil, dict):
+        return False
+    if "primaryPublication" not in profil and "publicationUsers" not in profil:
+        return False
+    return not profil.get("primaryPublication") and not profil.get("publicationUsers")
+
 
 def konto_male(profil: Any, maksimum: int) -> bool:
     """Czy publiczny profil mieści się w sufcie odbiorcow. NIEZNANY ROZMIAR TO NIE DOWOD.
@@ -3127,23 +3148,33 @@ def konto_male(profil: Any, maksimum: int) -> bool:
 
 
 def konto_za_duze(handle: str, sufit: int | None = None, co: str = "subskrypcje") -> bool:
-    """Czy konto przekracza sufit odbiorcow — SPRAWDZANE ZANIM ZAPLACIMY CZAS.
+    """Czy sito kaze pominac konto — `powod_pominiecia` jako tak/nie.
+
+    Przy subskrypcji „tak" znaczy takze konto bez publikacji (19.10.2026);
+    po powod do dziennika siegaj do `powod_pominiecia`.
+    """
+    return bool(powod_pominiecia(handle, sufit, co))
+
+
+def powod_pominiecia(handle: str, sufit: int | None = None, co: str = "subskrypcje") -> str:
+    """Dlaczego pominac konto ("" = wpusc) — SPRAWDZANE ZANIM ZAPLACIMY CZAS.
 
     Sito jest TANIE: publiczny JSON zwyklym HTTP, bez przegladarki i bez sesji
     (druga instancja Playwrighta w procesie, ktory juz go ma, zepsulaby caly
     przebieg). Wolno mu sie mylic w strone „wpusc": straznik przy przycisku
     (`_klik_na_profilu`) jest OSTATNI i on decyduje. Blad sieci nie jest
-    dowodem na rozmiar, wiec zwraca False; 404 (brak profilu publicznego)
-    — True, bo straznik odrzucilby je z tego samego powodu.
+    dowodem na rozmiar, wiec oddaje ""; 404 (brak profilu publicznego)
+    — `POWOD_ZA_DUZY`, bo straznik odrzucilby je z tego samego powodu.
 
     `sufit` (6.10.2026): prog odbiorcow; None = `config.SUBSKRYPCJE_MAX_ODBIORCOW`.
     Obserwacja podaje wlasny (`config.OBSERWACJE_MAX_ODBIORCOW`). Gdy prog wychodzi
-    None, sito jest wylaczone. `co` trafia tylko do komunikatu w logu.
+    None, sito jest wylaczone. `co` trafia do komunikatu w logu, a przy
+    „subskrypcje" wlacza tez `POWOD_BEZ_PUBLIKACJI` (19.10.2026).
     """
     if sufit is None:
         sufit = config.SUBSKRYPCJE_MAX_ODBIORCOW
     if sufit is None:
-        return False
+        return ""
     import json as _json
     import urllib.error as _err
     import urllib.parse as _parse
@@ -3159,15 +3190,19 @@ def konto_za_duze(handle: str, sufit: int | None = None, co: str = "subskrypcje"
         if exc.code == 404:
             print("  [%s] @%s nie ma profilu publicznego (404)" % (co, handle),
                   flush=True)
-            return True
+            return POWOD_ZA_DUZY
         print("  [%s] nie sprawdzilem rozmiaru @%s (HTTP %s) — decyzja"
               " zostaje przy profilu" % (co, handle, exc.code), flush=True)
-        return False
+        return ""
     except Exception as exc:                                   # noqa: BLE001
         print("  [%s] nie sprawdzilem rozmiaru @%s (%s) — decyzja"
               " zostaje przy profilu" % (co, handle, type(exc).__name__), flush=True)
-        return False
-    return not konto_male(profil, sufit)
+        return ""
+    if not konto_male(profil, sufit):
+        return POWOD_ZA_DUZY
+    if co == "subskrypcje" and bez_publikacji(profil):
+        return POWOD_BEZ_PUBLIKACJI
+    return ""
 
 
 def _klik_na_profilu(handle: str, napisy: tuple[str, ...], rodzaj: str,

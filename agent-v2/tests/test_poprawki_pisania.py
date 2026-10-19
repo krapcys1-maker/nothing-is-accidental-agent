@@ -142,10 +142,43 @@ try:
         {"id": 4, "uchwyt": "x3", "pub": "X3", "reakcje": 7, "odpowiedzi": 0, "data": temu(hours=60)},
         {"id": 5, "uchwyt": "x4", "pub": "X4", "reakcje": 6, "odpowiedzi": 1, "data": temu(hours=9)},
         {"id": 6, "uchwyt": "kaan", "pub": "Kaan Y", "reakcje": 9, "odpowiedzi": 4, "data": temu(hours=3)}]
-    with contextlib.redirect_stdout(io.StringIO()):
+    with contextlib.redirect_stdout(io.StringIO()) as _log:
         po = kanal.odsiej_cele(notki, lim, notki=True)
-    sprawdz("sito notek: stara (60 h), cicha i ponad limit odpadaja, zywe najpierw",
+    # Od 19.10.2026 odpada tez SLABA (id 3: 5 h, 2 reakcje) — `config.MIN_REAKCJI_CELU_NOTKI`.
+    sprawdz("sito notek: stara (60 h), cicha, slaba i ponad limit odpadaja, zywe najpierw",
+            [x["id"] for x in po] == [1, 5], [x["id"] for x in po])
+    sprawdz("log sita mowi, ile odpadlo jako slabe",
+            "slabe 1" in _log.getvalue(), _log.getvalue().strip())
+
+    print()
+    print("=== 1b. SLABA NOTKA (19.10.2026): starsza niz 2 h i < 5 reakcji ===")
+    sprawdz("3 h i 4 reakcje — slaba", kanal.slaby_watek({"reakcje": 4, "data": temu(hours=3)}))
+    sprawdz("3 h i 5 reakcji — nie (prog wlacznie)",
+            not kanal.slaby_watek({"reakcje": 5, "data": temu(hours=3)}))
+    sprawdz("1 h i 2 reakcje — nie: swieza zbiera reakcje dopiero teraz (to cele E15)",
+            not kanal.slaby_watek({"reakcje": 2, "data": temu(hours=1)}))
+    sprawdz("same komentarze nie ratuja (pomiar: 2,9 wobec 5,4 wyswietlenia)",
+            kanal.slaby_watek({"reakcje": 1, "odpowiedzi": 6, "data": temu(hours=4)}))
+    sprawdz("nieznana data liczy sie jako stara (jak w `za_stary_cel`)",
+            kanal.slaby_watek({"reakcje": 3, "data": ""}))
+    swieza = [{"id": 7, "uchwyt": "x7", "pub": "X7", "reakcje": 2, "odpowiedzi": 0, "data": temu(minutes=50)}]
+    with contextlib.redirect_stdout(io.StringIO()):
+        po = kanal.odsiej_cele(swieza + notki, kanal.LimitAutorow({}, 3), notki=True)
+    sprawdz("swieza notka z 2 reakcjami przechodzi sito", 7 in [x["id"] for x in po], [x["id"] for x in po])
+    _prog = config.MIN_REAKCJI_CELU_NOTKI
+    config.MIN_REAKCJI_CELU_NOTKI = 0
+    try:
+        with contextlib.redirect_stdout(io.StringIO()):
+            po = kanal.odsiej_cele(notki, lim, notki=True)
+    finally:
+        config.MIN_REAKCJI_CELU_NOTKI = _prog
+    sprawdz("KONTRDOWOD: prog 0 — sito jak przed 19.10 (slaba wraca)",
             [x["id"] for x in po] == [1, 5, 3], [x["id"] for x in po])
+    with contextlib.redirect_stdout(io.StringIO()):
+        po = kanal.odsiej_cele([dict(n, data=temu(hours=5)) for n in notki[1:3]],
+                               kanal.LimitAutorow({}, 3), notki=False)
+    sprawdz("pod artykulami prog nie dziala (tylko notki)", len(po) == 2, [x["id"] for x in po])
+    sprawdz("prog zapisany w konfiguracji: 5 reakcji", config.MIN_REAKCJI_CELU_NOTKI == 5)
 
     print()
     print("=== 3. ZAPOWIEDZI ARTYKULU ===")

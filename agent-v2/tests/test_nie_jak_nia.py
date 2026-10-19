@@ -333,13 +333,21 @@ ZAPYTANIA_SITA = []          # (uchwyt, argumenty, nazwane) kazdego zapytania o 
 
 
 def uruchom(nazwa_bloku, hosty, nowi=(), duzi_za=lambda u: u.startswith("big"), zasubskrybuj_wynik=None,
-            budzet=3, znane=frozenset(), limit=40, wlaczone=True, sufit_obs=5000, limit_obs=40):
+            budzet=3, znane=frozenset(), limit=40, wlaczone=True, sufit_obs=5000, limit_obs=40,
+            bez_publ=lambda u: False):
     zapisy, subskrybowani, obserwowani = [], [], []
     ZAPYTANIA_SITA.clear()
 
     def sito(u, *a, **k):
         ZAPYTANIA_SITA.append((u, a, k))
         return duzi_za(u)
+
+    def powod(u, *a, **k):
+        # Jak `browser.powod_pominiecia`: rozmiar najpierw, brak publikacji tylko przy subskrypcji.
+        ZAPYTANIA_SITA.append((u, a, k))
+        if duzi_za(u):
+            return browser.POWOD_ZA_DUZY
+        return browser.POWOD_BEZ_PUBLIKACJI if bez_publ(u) and k.get("co", "subskrypcje") == "subskrypcje" else ""
 
     def zasubskrybuj(u, wyslij=True):
         subskrybowani.append(u)
@@ -352,12 +360,13 @@ def uruchom(nazwa_bloku, hosty, nowi=(), duzi_za=lambda u: u.startswith("big"), 
     atrapa_browser = SimpleNamespace(
         kogo_obserwujemy=lambda: {"uchwyty": {}, "hosty": {}},
         uchwyt_publikacji=lambda h: (h[1:] if h.startswith("@") else h.split(".")[0]),
-        konto_za_duze=sito, zasubskrybuj=zasubskrybuj, obserwuj_profil=obserwuj_profil,
+        konto_za_duze=sito, powod_pominiecia=powod,
+        zasubskrybuj=zasubskrybuj, obserwuj_profil=obserwuj_profil,
         zapisz_w_dzienniku=lambda rodzaj, **k: zapisy.append((rodzaj, k)),
         dopisz_wynik=lambda *a, **k: zapisy.append(("dopisz", k)),
         zapamietaj_obserwowanego=lambda *a, **k: None,
         czy_juz_obserwujemy=lambda h, pamiec=None: False,
-        POWOD_ZA_DUZY=browser.POWOD_ZA_DUZY)
+        POWOD_ZA_DUZY=browser.POWOD_ZA_DUZY, POWOD_BEZ_PUBLIKACJI=browser.POWOD_BEZ_PUBLIKACJI)
     ns = {"browser": atrapa_browser, "config": config,
           "kanal": SimpleNamespace(_historia=lambda: ({h: "2026-09-30T00:00:00Z" for h in hosty} or {})),
           "na_teraz": {"subskrypcje": budzet, "follow": budzet}, "wyslij": True, "rytm_stanu": {},
@@ -453,6 +462,59 @@ sprawdz("okno ogladania obserwacji (40) konczy blok, gdy przed malymi stoi 45 du
 zap, _, obs, out = uruchom("obserwuj", mnostwo_duzych + male, budzet=3, sufit_obs=None)
 sprawdz("KONTRDOWOD: bez sita okno to dawne follow + zapas (3 + 12), a obserwacje ida do trzech pierwszych",
         obs == ["wielki0", "wielki1", "wielki2"] and "obejrzalem" not in out, (obs, out[-160:]))
+
+# KONTO BEZ PUBLIKACJI (19.10.2026): 6-8.10 cztery subskrypcje padly na „nie ma
+# przycisku subskrypcja", kazda po przerwie rytmu. Profil mowil to wczesniej.
+zap, sub, _, out = uruchom("subskrybuj", ["nopub.substack.com"] + male, bez_publ=lambda u: u == "nopub", budzet=2)
+sprawdz("SEDNO: konto bez publikacji odpada na sicie, a dwa miejsca dostaja male konta",
+        sub == ["mal1", "mal2"], sub)
+_np = [z[1] for z in zap if z[0] == "subskrypcja_pominieta" and z[1].get("komu") == "nopub"]
+sprawdz("wpis `subskrypcja_pominieta` z WLASNYM powodem (nie „za duze”)",
+        [z.get("powod") for z in _np] == [browser.POWOD_BEZ_PUBLIKACJI], _np)
+sprawdz("podsumowanie liczy konta bez publikacji osobno",
+        "[subskrypcje] 1 z 3 obejrzanych nie mialo publikacji" in out
+        and "przekraczalo sufit" not in out, out[-240:])
+zap, sub, _, _ = uruchom("subskrybuj", ["nopub.substack.com"] + male, budzet=2)
+sprawdz("KONTRDOWOD: bez tej informacji (profil nie mowi) konto idzie do proby jak dotad",
+        sub == ["nopub", "mal1"], sub)
+zap, _, obs, _ = uruchom("obserwuj", ["nopub.substack.com"] + male, bez_publ=lambda u: u == "nopub", budzet=2)
+sprawdz("obserwacji brak publikacji nie dotyczy — obserwowac mozna kazdego",
+        obs == ["nopub", "mal1"], obs)
+
+# TO SAMO KONTO POD DWOMA ADRESAMI (19.10.2026): 6.10 jedno konto dwa razy
+# w kolejce, dwa zapytania o rozmiar i „15 z 17" liczace je podwojnie.
+zap, _, obs, out = uruchom("obserwuj", ["big0.substack.com", "@big0", "mal1.substack.com"], budzet=1)
+sprawdz("SEDNO: dubel uchwytu pomijany — jedno zapytanie o rozmiar na konto",
+        obs == ["mal1"] and [u for u, _, _ in ZAPYTANIA_SITA] == ["big0", "mal1"],
+        (obs, [u for u, _, _ in ZAPYTANIA_SITA]))
+sprawdz("i podsumowanie liczy konta, nie adresy: 1 z 2", "[obserwacje] 1 z 2 obejrzanych" in out, out[-200:])
+zap, _, obs, _ = uruchom("obserwuj", ["abc.substack.com", "@ABC", "def.substack.com"], budzet=3)
+sprawdz("dubel nie dostaje obserwacji drugi raz (wielkosc liter bez znaczenia)", obs == ["abc", "def"], obs)
+zap, sub, _, _ = uruchom("subskrybuj", ["mal1.substack.com", "@mal1", "mal2.substack.com"], budzet=3)
+sprawdz("subskrypcja tez pomija dubel uchwytu", sub == ["mal1", "mal2"], sub)
+
+print()
+print("=== 6b. SITO Z PROFILU: POWOD POMINIECIA (19.10.2026) ===")
+stary_urlopen = urllib.request.urlopen
+try:
+    _bez = {"subscriberCountNumber": 0, "followerCount": 18, "primaryPublication": None, "publicationUsers": []}
+    urllib.request.urlopen = lambda *a, **kw: _Odp(_bez)
+    sprawdz("subskrypcja: profil bez publikacji -> POWOD_BEZ_PUBLIKACJI",
+            cicho(browser.powod_pominiecia, "kto") == browser.POWOD_BEZ_PUBLIKACJI)
+    sprawdz("obserwacja: ten sam profil przechodzi (prog 5000)",
+            cicho(browser.powod_pominiecia, "kto", 5000, co="obserwacje") == "")
+    sprawdz("`konto_za_duze` przy subskrypcji mowi „pomin” takze dla braku publikacji",
+            cicho(browser.konto_za_duze, "kto") is True)
+    urllib.request.urlopen = lambda *a, **kw: _Odp(dict(_bez, primaryPublication={"id": 1}, publicationUsers=[{"id": 2}]))
+    sprawdz("profil z publikacja i malym rozmiarem -> wpusc", cicho(browser.powod_pominiecia, "kto") == "")
+    urllib.request.urlopen = lambda *a, **kw: _Odp({"subscriberCountNumber": 40})
+    sprawdz("profil bez pol o publikacji to „nie wiem” -> wpusc (decyduje straznik)",
+            cicho(browser.powod_pominiecia, "kto") == "")
+    urllib.request.urlopen = lambda *a, **kw: _Odp(dict(_bez, subscriberCountNumber=250000))
+    sprawdz("rozmiar ma pierwszenstwo: duze konto bez publikacji to POWOD_ZA_DUZY",
+            cicho(browser.powod_pominiecia, "kto") == browser.POWOD_ZA_DUZY)
+finally:
+    urllib.request.urlopen = stary_urlopen
 
 print()
 print("=== 7. DUBEL RESTACKA ===")

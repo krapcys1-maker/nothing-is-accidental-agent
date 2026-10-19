@@ -224,10 +224,13 @@ def przydzial_komentarzy(n: int, klucz: Any = "", dzien: str | None = None) -> d
     Bez eksperymentu jak dotad: artykuly `n`, notki `max(1, n // 2)` (patrz
     `dyskusje`). E14 (`config.EKSPERYMENTY["cel_komentarza"]`, decyzja wlasciciela
     28.09.2026): TA SAMA liczba miejsc, ale kazde losuje rodzaj celu — „on" pod
-    notka, „off" pod artykulem. Miejsce, ktorego blok nie zapelni, przepada tak jak
-    dotad; nie przechodzi do drugiego bloku, bo wtedy rodzaj celu zalezalby od
-    tego, gdzie akurat byly cele. `klucz` = numer przebiegu: ten sam przebieg
-    zawsze da ten sam podzial.
+    notka, „off" pod artykulem. W E14 miejsce, ktorego blok nie zapelni, przepada;
+    nie przechodzi do drugiego bloku, bo wtedy rodzaj celu zalezalby od tego,
+    gdzie akurat byly cele. `klucz` = numer przebiegu: ten sam przebieg zawsze da
+    ten sam podzial.
+
+    POZA E14 (od 20.10.2026) wolne miejsca pod artykulami ida pod notki —
+    `nadwyzka_pod_notkami` w `dzien()`, regula zapisana przed ocena 13.10.
     """
     if n <= 0:
         return {"artykuly": 0, "notki": 0, "e14": False}
@@ -2138,17 +2141,26 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
 
     # --- 3b. dyskusje pod cudzymi notkami -------------------------------------
     # Ten sam powod, co przy `komentarze` — z drugim kanalem.
+    # Notki, pod ktorymi ten przebieg juz byl (z komentarzem albo bez) — druga
+    # runda (`nadwyzka_pod_notkami`) nie placi drugi raz za ten sam cel.
+    odwiedzone_notki: set[str] = set()
+
     @stages._na_kanal("komentarz@notka")
-    def dyskusje() -> None:
+    def dyskusje(ile: int | None = None, nadwyzka: bool = False) -> None:
         """Wejscie w rozmowe pod cudza notka.
 
         Dla swiezego konta to najwazniejsze miejsce: pod notkami toczy sie
         rozmowa, a kanal promuje watki, ktore zyja. Komentarz pod artykulem
         czyta kilka osob; sensowna uwaga pod zywa notka trafia do calego watku.
+
+        `ile` i `nadwyzka` (19.10.2026): druga runda po bloku artykulow, na
+        miejsca, ktorych tamten nie zapelnil — `nadwyzka_pod_notkami`. Wpis
+        w dzienniku dostaje wtedy `przydzial="nadwyzka"`.
         """
         # Miejsca pod notkami — `przydzial_komentarzy` (poza E14 to
-        # `max(1, N // 2)`, jak dotad).
-        if not przydzial["notki"]:
+        # `max(1, N // 2)`, jak dotad), a w drugiej rundzie — `ile`.
+        miejsca = przydzial["notki"] if ile is None else ile
+        if not miejsca:
             return
         # Dwa zrodla, bo jedno bylo glodowe: przeglad pokazal DWA cele na
         # przebieg, oba z zerem odpowiedzi. Wyszukiwarka oddaje notki spoza
@@ -2159,7 +2171,8 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
              "odpowiedzi": x.get("komentarze") or 0, "url": x.get("url") or "",
              "data": x.get("data") or "", "skad": x.get("skad") or ""}
             for x in kanal.szukaj_nowych() if x.get("rodzaj") == "notka"]
-        notki = [n for n in notki if n.get("id")]
+        notki = [n for n in notki
+                 if n.get("id") and str(n["id"]) not in odwiedzone_notki]
         # SITO PRZED OCENA (1.10.2026) — `kanal.odsiej_cele`: notki starsze niz
         # `MAKS_WIEK_NOTKI_DO_KOMENTARZA_H`, ciche (0 reakcji i 0 komentarzy)
         # i ponad limit autora odpadaja; zywe watki ida najpierw.
@@ -2193,9 +2206,10 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
         cele = _zywe_najpierw(kanal, limit_autorow.odsiej(cele))
         # E15 — swiezy cel na wylosowanych miejscach (`uloz_wedlug_swiezosci`).
         cele = uloz_wedlug_swiezosci(cele, "%s-notki" % run_id)
-        for cel in cele[: przydzial["notki"]]:
+        for cel in cele[:miejsca]:
             if not zostal_czas("dyskusje"):
                 return
+            odwiedzone_notki.add(str(cel.get("id")))
             # Drugie miejsce, w ktorym ginelo `co_dodamy` — patrz komentarz przy
             # bloku komentarzy pod artykulami. Tu slownik jest sklecony od zera,
             # wiec pole trzeba dopisac jawnie.
@@ -2238,7 +2252,8 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
                               "otwarcie": (out.get("otwarcie") or "")[:60],
                               "postawa": out.get("postawa") or "",
                               **ramiona_komentarza(cel, "notka",
-                                                   przydzial["e14"])},
+                                                   przydzial["e14"]),
+                              **({"przydzial": "nadwyzka"} if nadwyzka else {})},
                     rodzaj="komentarz")
                 rytm_stanu["komentarz"] = True
                 # Jak przy komentarzu pod artykulem: `wyslane` ustawia
@@ -2454,6 +2469,11 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
         sufit_obs = getattr(config, "OBSERWACJE_MAX_ODBIORCOW", None)
         za_duzi = 0
         obejrzani = 0
+        # TO SAMO KONTO POD DWOMA ADRESAMI (19.10.2026). Pula laczy hosty
+        # publikacji, `@uchwyty` z kanalu notek i wyszukiwarki, wiec jeden autor
+        # wchodzil dwa razy (6.10: dwa zapytania o rozmiar i podwojny wpis
+        # w podsumowaniu „15 z 17"). Dubel nie zjada miejsca w oknie ogladania.
+        widziane_uchwyty: set[str] = set()
         limit_ogladania = na_teraz["follow"] + ZAPAS_NA_ODPADY
         if sufit_obs is not None:
             limit_ogladania = max(limit_ogladania,
@@ -2472,6 +2492,11 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
             # Nie `host.split(".")[0]`: przy wlasnej domenie dawalo to "www"
             # i agent probowal obserwowac konto o tej nazwie.
             uchwyt = browser.uchwyt_publikacji(host)
+            if uchwyt and uchwyt.lower() in widziane_uchwyty:
+                obejrzani -= 1
+                continue
+            if uchwyt:
+                widziane_uchwyty.add(uchwyt.lower())
             # UCHWYT SPRAWDZAMY DRUGI RAZ, JUZ PO ROZWIAZANIU. Dla wlasnej
             # domeny (24 z 92 hostow w puli) nazwa konta wychodzi dopiero
             # z API, wiec odsiew po hoscie nie mial jej jak rozpoznac:
@@ -2673,8 +2698,11 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
         proby = 0
         z_pamieci = 0
         za_duzi = 0
+        bez_publikacji = 0
         obejrzani = 0
         zostal_slad = False
+        # TO SAMO KONTO POD DWOMA ADRESAMI (19.10.2026) — patrz `obserwuj`.
+        widziane_uchwyty: set[str] = set()
         # LIMIT OGLADANIA ZAMIAST STALEGO ZAPASU (4.10.2026). Przy sicie rozmiaru
         # wiekszosc kandydatow odpada i zapas czterech wyczerpywal sie, zanim blok
         # znalazl choc jedno male konto. Sito jest tanie (publiczny JSON), wiec
@@ -2695,6 +2723,11 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
             if not zostal_czas("subskrypcje"):
                 break
             uchwyt = browser.uchwyt_publikacji(host)
+            if uchwyt and uchwyt.lower() in widziane_uchwyty:
+                obejrzani -= 1          # dubel nie zjada miejsca w oknie ogladania
+                continue
+            if uchwyt:
+                widziane_uchwyty.add(uchwyt.lower())
             # DRUGIE SPRAWDZENIE, JUZ PO ROZWIAZANIU UCHWYTU. Tanie sito wyzej
             # jest dokladne tylko dla adresow w domenie Substacka; dla wlasnej
             # domeny (24 z 92 hostow) uchwyt wychodzi dopiero z API i dopiero
@@ -2721,12 +2754,20 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
                 print(f"  (nie ustalilem konta dla {host} — pomijam)", flush=True)
                 continue
             # SITO ROZMIARU PRZED PRZERWA RYTMU (4.10.2026): za duze konto odpada
-            # bez czekania 5-15 minut i bez zuzycia proby.
-            if wyslij and browser.konto_za_duze(uchwyt):
+            # bez czekania 5-15 minut i bez zuzycia proby. Od 19.10.2026 tak samo
+            # konto bez publikacji (`browser.POWOD_BEZ_PUBLIKACJI`) — z tego
+            # samego profilu, bez dodatkowego zapytania.
+            powod = browser.powod_pominiecia(uchwyt) if wyslij else ""
+            if powod:
                 browser.zapisz_w_dzienniku(
-                    "subskrypcja_pominieta", udane=True, komu=uchwyt,
-                    powod=browser.POWOD_ZA_DUZY)
+                    "subskrypcja_pominieta", udane=True, komu=uchwyt, powod=powod)
                 zostal_slad = True
+                if powod == browser.POWOD_BEZ_PUBLIKACJI:
+                    bez_publikacji += 1
+                    print(f"  (@{uchwyt} nie ma publikacji — nie ma czego"
+                          f" subskrybowac; pomijam bez przerwy i bez zuzycia"
+                          f" proby)", flush=True)
+                    continue
                 za_duzi += 1
                 print(f"  (@{uchwyt} przekracza sufit odbiorcow — pomijam bez"
                       f" przerwy i bez zuzycia proby)", flush=True)
@@ -2775,6 +2816,9 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
                   % (za_duzi, obejrzani, config.SUBSKRYPCJE_MAX_ODBIORCOW,
                      " — pula nie zawiera kont w naszym rozmiarze" if not proby
                      else ""), flush=True)
+        if bez_publikacji:
+            print("  [subskrypcje] %d z %d obejrzanych nie mialo publikacji"
+                  % (bez_publikacji, obejrzani), flush=True)
 
     # --- 4. polubienia: najtańszy uczciwy sygnał ------------------------------
     def polubienia() -> None:
@@ -2945,9 +2989,43 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
     # potwierdzil. Trzy sygnaly wyboru celu, na ktorych stalo zalecenie
     # (malo reakcji pod celem, brak tloku, swiezy cel), wyszly mi plasko:
     # 17% wobec 13%, 22/6/16% niemonotonicznie, 17% zamiast obiecanych 50%.
+    #
+    # NADWYZKA POD NOTKAMI (19.10.2026) — regula zapisana przed ocena 13.10:
+    # komentarze ponizej 75% planu nie z winy Substacka -> wolne miejsca ida pod
+    # notki. Bylo 70% w dobach 10-12.10, bo blok artykulow konczyl przebieg
+    # z „po 4 rundach: 0 celow" (sito „za stare" i sedzia 0/N), a pod notkami
+    # cele byly. Dopiero po E14 (do 19.10): w nim miejsce artykulu przepadalo,
+    # zeby rodzaj celu nie zalezal od tego, gdzie akurat byly cele.
+    po_artykulach: dict[str, int] = {}
+
+    def komentarze_z_rachunkiem() -> None:
+        """`komentarze` i ile ich miejsc zostalo pustych — tylko gdy blok doszedl do konca.
+
+        Wyjatek (padnieta przegladarka, budzet) nie zostawia rachunku, wiec
+        awaria nie przenosi sie pod notki; reguly to nie dotyczy.
+        """
+        przed = zrobione["komentarze"]
+        komentarze()
+        po_artykulach["wolne"] = max(
+            0, przydzial["artykuly"] - (zrobione["komentarze"] - przed))
+
+    def nadwyzka_pod_notkami() -> None:
+        """Wolne miejsca spod artykulow — pod notki, w tym samym przebiegu, poza E14."""
+        wolne = po_artykulach.get("wolne", 0)
+        if przydzial["e14"] or not wolne:
+            return
+        # Bez dziesieciu minut nie zmiesci sie nawet jeden komentarz z przerwa,
+        # a szukanie i ocena celow kosztuja czas i pieniadze juz przed nim.
+        if not zostal_czas("nadwyzke pod notkami", 600):
+            return
+        print("  [nadwyzka] pod artykulami zostalo wolnych miejsc: %d — ida pod notki"
+              % wolne, flush=True)
+        dyskusje(ile=wolne, nadwyzka=True)
+
     for nazwa, robota in (("odpowiedzi", odpowiedzi), ("notki", notki),
                           ("obserwowanie", obserwuj), ("subskrypcje", subskrybuj),
-                          ("dyskusje", dyskusje), ("komentarze", komentarze),
+                          ("dyskusje", dyskusje), ("komentarze", komentarze_z_rachunkiem),
+                          ("dyskusje: nadwyzka", nadwyzka_pod_notkami),
                           ("polubienia", polubienia), ("restacki", restacki),
                           ("zalegly artykul", zalegly_artykul),
                           ("kopia listy", kopia_listy)):
