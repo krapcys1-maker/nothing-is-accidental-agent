@@ -515,9 +515,13 @@ Test: `tests/test_nie_jak_nia.py`.
 
 **Skąd.** Właściciel 19.10: „porównaj oba boty, sprawdź statystyki, zobacz, co warto
 poprawić”. Liczby drugiego konta są w rejestrze lokalnym (`docs/POLIGON_I_PRODUKCJA.md`),
-tu tylko wniosek: przyrost osób obu kont jest od dwóch tygodni równy, NIE lepiej
-zamienia wyświetlenia na subskrybentów, a wąskim gardłem jest **zasięg** — notek,
-restacków i komentarzy. Własne pomiary NIE (publikacje 28.09–16.10, odczyt po 72 h):
+tu tylko wniosek: przyrost osób obu kont jest od dwóch tygodni równy mimo kilkakrotnie
+mniejszego zasięgu NIE, a wąskim gardłem jest **zasięg** — notek, restacków
+i komentarzy. *(Sprostowanie 20.10: wskaźnik „subskrybenci na 1000 wyświetleń” jest
+u NIE wyższy, ale nie znaczy „lepszej konwersji” — miesza kanały: większość
+przyrostu NIE przychodzi z kontaktów, nie z wyświetleń, więc przy małym zasięgu
+wskaźnik rośnie sam. Zasięg jest więc niewykorzystanym zapasem, nie dowodem
+na lepszą treść.)* Własne pomiary NIE (publikacje 28.09–16.10, odczyt po 72 h):
 
 - **Notki:** 44, mediana 11 wyświetleń; 39 z 44 ma ponad 80 słów. Pisarz nie ma
   znaczenia: średnia geometryczna Opus 11,4 (n=6), Flash 10,2 (n=21), MiMo 10,7 (n=17).
@@ -566,6 +570,20 @@ E17 w dzienniku (`eksperymenty.krotka_notka`). Przegląd po trzech pełnych doba
 Testy: `tests/test_nadwyzka_pod_notkami.py`, `tests/test_poprawki_pisania.py` (sekcja 1b),
 `tests/test_nie_jak_nia.py` (sekcje 6 i 6b), `tests/test_ciche_dni.py`,
 `tests/test_eksperymenty_e12_e20.py`, `tests/test_kolejnosc_blokow.py`.
+
+**Naprawa 20.10: odpowiedź pod komentarzem pod naszym artykułem**
+(`browser.wystaw_odpowiedz_pod_artykulem`, test `tests/test_odpowiedz_pod_artykulem.py`
+na prawdziwym Chromium). Od 18.10 dziewięć prób z rzędu kończyło się 30-sekundowym
+oczekiwaniem: kod wpisywał tekst w **pierwsze pole na stronie** — główną ramkę
+„Write a comment...” nad komentarzami — i klikał wyłączony „Reply” formularza pod
+komentarzem. Sonda na żywej stronie (20.10, nic nie wpisane) pokazała dwa formularze.
+Każda próba kosztowała wywołanie modelu i przerwę rytmu 5–15 min, czyli część
+czasu, którego brakowało przebiegom. Teraz: pole to to, które pojawiło się po
+kliknięciu, przycisk z tego samego formularza i tylko aktywny; przy dwóch
+komentarzach przycisk odpowiedzi musi stać pod nazwą autora (najbliższy bywał
+„Reply” poprzedniego komentarza); po dwóch porażkach nowej metody przy tym samym
+komentarzu (`MAKS_NIEUDANYCH_ODPOWIEDZI_POD_ARTYKULEM`) komentarz odpada przed
+wyborem i pisaniem, bez kosztu.
 
 ## Śledztwa — co mierzyć
 

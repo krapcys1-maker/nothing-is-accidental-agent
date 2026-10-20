@@ -362,6 +362,28 @@ def ramiona_odpowiedzi(c: dict, e21: dict | None) -> dict[str, Any]:
     return out
 
 
+def odpowiedz_zablokowana(c: dict) -> bool:
+    """Czy odpowiedz pod artykulem na ten komentarz juz `MAKS_NIEUDANYCH_...` razy nie wyszla.
+
+    Liczy tylko porazki obecnej metody (`browser.METODA_ODPOWIEDZI_POD_ARTYKULEM`).
+    Odpowiedzi pod notkami i na nasze komentarze nie dotyczy.
+    """
+    if c.get("gdzie") != "artykul":
+        return False
+    import browser   # jak w reszcie modulu: przegladarka dopiero, gdy potrzebna
+
+    f = getattr(browser, "nieudane_odpowiedzi_pod_artykulem", None)
+    if not callable(f):
+        return False
+    ile = f(c.get("id"), c.get("url") or "", c.get("autor") or "")
+    if ile < config.MAKS_NIEUDANYCH_ODPOWIEDZI_POD_ARTYKULEM:
+        return False
+    print("  (odpowiedz pod artykulem %r do %s: %d nieudane proby — nie probuje"
+          " dalej, bez modelu i bez przerwy)"
+          % (str(c.get("pod_czym") or "")[:34], c.get("autor") or "?", ile), flush=True)
+    return True
+
+
 _KONIEC_CZASU: float | None = None
 
 
@@ -1521,6 +1543,14 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
             stages.zbierz_pytania(czekaja)
         except Exception as exc:
             print(f"  (nie zebralem pytan: {type(exc).__name__})", flush=True)
+        # ODPOWIEDZ POD ARTYKULEM, KTORA DWA RAZY NIE WYSZLA, NIE WRACA
+        # (20.10.2026). Komentarz czeka, dopoki nie ma pod nim naszej odpowiedzi,
+        # wiec porazka wracala w KAZDYM przebiegu: od 18.10 dziewiec prob, kazda
+        # z wywolaniem modelu i przerwa rytmu 5-15 min. Sito stoi PRZED wyborem
+        # i pisaniem — zablokowany komentarz nie kosztuje nic.
+        czekaja = [c for c in czekaja if not odpowiedz_zablokowana(c)]
+        if not czekaja:
+            return
         # Przy dwóch odpowiada się obu. Przy dwustu odpowiedź pod każdym wygląda
         # jak maszyna, więc powyżej progu agent wybiera — z pierwszeństwem dla
         # niezgody, bo nieodpowiedziany zarzut zostaje ostatnim słowem.
@@ -1551,9 +1581,13 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
                 if not rytm("odpowiedz", "odpowiedzi", rytm_stanu):
                     return
                 if c.get("gdzie") == "artykul":
+                    # Numer komentarza do dziennika — po nim liczy sie limit
+                    # prob (`odpowiedz_zablokowana`).
                     wynik = browser.wystaw_odpowiedz_pod_artykulem(
                         c.get("url") or "", c.get("autor") or "", tekst,
-                        wyslij=True, kontekst=ramiona_odpowiedzi(c, e21))
+                        wyslij=True,
+                        kontekst={**ramiona_odpowiedzi(c, e21),
+                                  **({"komentarz_id": c["id"]} if c.get("id") else {})})
                 else:
                     wynik = browser.wystaw_odpowiedz(
                         c["pod_id"], tekst, wyslij=True,

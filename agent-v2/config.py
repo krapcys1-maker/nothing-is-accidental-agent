@@ -234,6 +234,12 @@ KROTKA_NOTKA_SLOW = (33, 60)
 # przecinku; domyslnie NIA (`nia1503032`). Druga kopia ustawia je w `.env`.
 MAKS_ODPOWIEDZI_W_ROZMOWIE = 2
 MAKS_ODPOWIEDZI_KONTU_SIOSTRZANEMU = 1
+# ILE NIEUDANYCH PROB ODPOWIEDZI POD ARTYKULEM NA JEDEN KOMENTARZ (20.10.2026).
+# Komentarz czeka w kazdym przebiegu, dopoki nie ma pod nim naszej odpowiedzi,
+# wiec bez limitu porazka interfejsu powtarzala sie co przebieg: od 18.10
+# dziewiec prob, kazda z wywolaniem modelu i przerwa rytmu. Liczy
+# `browser.nieudane_odpowiedzi_pod_artykulem` (tylko obecna metoda).
+MAKS_NIEUDANYCH_ODPOWIEDZI_POD_ARTYKULEM = 2
 # UCHWYTY KONT SIOSTRZANYCH (publiczne nazwy na Substacku): nie obserwujemy ich i nie
 # subskrybujemy w ruchu wychodzacym (`kanal.nowi_kandydaci`) — wzajemne dzialania
 # botow to nie wzrost, a petla rozmow z 26.09 pokazala, jak to wyglada z zewnatrz.

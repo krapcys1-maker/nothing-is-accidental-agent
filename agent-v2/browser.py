@@ -4223,6 +4223,45 @@ def ustaw_oswiadczenie_ai(wyslij: bool = False) -> dict[str, Any]:
     return wynik
 
 
+# ZNACZNIK METODY (20.10.2026) — wpisy odpowiedzi pod artykulem z polem i przyciskiem
+# z formularza pod komentarzem. Limit prob (`nieudane_odpowiedzi_pod_artykulem`)
+# liczy tylko wpisy z tym znacznikiem: dziewiec porazek starej metody nie odbiera
+# nowej szansy, a dwie porazki nowej zatrzymuja proby przy tym komentarzu.
+METODA_ODPOWIEDZI_POD_ARTYKULEM = "formularz-pod-komentarzem"
+
+
+def nieudane_odpowiedzi_pod_artykulem(komentarz_id: Any = None, gdzie: str = "",
+                                      komu: str = "") -> int:
+    """Ile razy obecna metoda NIE odpisala na ten komentarz pod artykulem. Bez sieci.
+
+    Komentarz rozpoznajemy po numerze (`komentarz_id` w dzienniku); wpis bez
+    numeru — po artykule i autorze.
+    """
+    import json as _json
+
+    ile = 0
+    try:
+        if not DZIENNIK.exists():
+            return 0
+        for linia in DZIENNIK.read_text(encoding="utf-8").splitlines():
+            if '"odpowiedz_pod_artykulem"' not in linia:
+                continue
+            try:
+                w = _json.loads(linia)
+            except ValueError:
+                continue
+            if (not isinstance(w, dict) or w.get("rodzaj") != "odpowiedz_pod_artykulem"
+                    or w.get("udane") or w.get("metoda") != METODA_ODPOWIEDZI_POD_ARTYKULEM):
+                continue
+            if komentarz_id and w.get("komentarz_id"):
+                ile += str(w["komentarz_id"]) == str(komentarz_id)
+            else:
+                ile += w.get("gdzie") == gdzie and w.get("komu") == komu
+    except OSError:
+        return 0
+    return ile
+
+
 def wystaw_odpowiedz_pod_artykulem(
     url_artykulu: str, autor: str, tekst: str, wyslij: bool = False,
     kontekst: dict[str, Any] | None = None,
@@ -4250,6 +4289,13 @@ def wystaw_odpowiedz_pod_artykulem(
         # Przycisk odpowiedzi znajdujemy po ODLEGLOSCI OD KOMENTARZA, a nie po
         # drzewie DOM: uklad zmienia sie miedzy widokami, a przy wielu
         # komentarzach trafienie w cudzy watek byloby wpadka nie do cofniecia.
+        #
+        # TYLKO PONIZEJ AUTORA (20.10.2026). Przycisk komentarza stoi pod jego
+        # trescia, a najblizszy w ogole bywa „Reply" POPRZEDNIEGO komentarza —
+        # tuz nad nazwiskiem. Przy jednym komentarzu (sonda z 20.10) tego nie
+        # widac; przy dwoch i dluzszej tresci wybor szedl do cudzego watku
+        # (`tests/test_odpowiedz_pod_artykulem.py`). Gdy ponizej nie ma nic,
+        # zostaje dawna regula.
         wybrany = page.evaluate("""(autor) => {
             const kandydaci = [...document.querySelectorAll('*')].filter(
                 n => !n.children.length &&
@@ -4259,8 +4305,11 @@ def wystaw_odpowiedz_pod_artykulem(
                      (n.innerText || '').trim() === autor);
             if (!kandydaci.length || !kotwice.length) return -1;
             const k = kotwice[0].getBoundingClientRect();
+            const wszystkie = kandydaci.map((c, i) => [c, i]);
+            const ponizej = wszystkie.filter(
+                ([c]) => c.getBoundingClientRect().top >= k.top - 2);
             let najlepszy = -1, naj = 1e9;
-            kandydaci.forEach((c, i) => {
+            (ponizej.length ? ponizej : wszystkie).forEach(([c, i]) => {
                 const r = c.getBoundingClientRect();
                 const d = Math.hypot(r.top - k.top, r.left - k.left);
                 if (d < naj) { naj = d; najlepszy = i; }
@@ -4271,26 +4320,64 @@ def wystaw_odpowiedz_pod_artykulem(
         }""", autor)
         if wybrany < 0:
             raise RuntimeError("nie znalazłem przycisku odpowiedzi")
+        # POLE ODPOWIEDZI TO TO, KTORE POJAWILO SIE PO KLIKNIECIU (20.10.2026).
+        # Do 19.10 stalo tu `page.locator("textarea").first`, a pierwsza na
+        # stronie jest GLOWNA ramka „Write a comment..." nad komentarzami. Sonda
+        # z 20.10 (`robocze/sonda_odpowiedz_artykul.py`): przed kliknieciem jedna
+        # forma, po nim druga — z wlasnym polem i wlasnym „Reply" (submit,
+        # wylaczony, dopoki pole jest puste). Tekst szedl wiec do glownej ramki,
+        # a klik czekal 30 s na wylaczony „Reply": od 18.10 dziewiec prob
+        # z rzedu, kazda z wywolaniem modelu i przerwa rytmu. Gdyby petla
+        # trafila na „Post" glownej ramki, odpowiedz wyszlaby jako osobny
+        # komentarz pod NASZYM artykulem.
+        page.evaluate("""() => document.querySelectorAll(
+            'textarea, [contenteditable="true"]').forEach(
+            n => n.setAttribute('data-nia-stare', '1'))""")
         przycisk = page.locator('[data-nia="1"]').first
         print(f"  przycisk odpowiedzi znaleziony przy komentarzu {autor!r}",
               flush=True)
         przycisk.click(timeout=15_000)
         page.wait_for_timeout(3000)
 
-        pole = page.locator("textarea").first
+        nowe = page.locator('textarea:not([data-nia-stare]), '
+                            '[contenteditable="true"]:not([data-nia-stare])')
+        if nowe.count() != 1:
+            # Zero albo dwa nowe pola to NIE ten formularz, ktory znamy —
+            # lepiej nie odpisac niz wpisac w cudze albo glowne pole.
+            raise RuntimeError("formularz odpowiedzi: %d nowych pol zamiast jednego"
+                               " — nie wpisuje" % nowe.count())
+        pole = nowe.first
+        forma = pole.locator("xpath=ancestor::form[1]")
+        if forma.count() != 1:
+            raise RuntimeError("pole odpowiedzi poza formularzem — nie wpisuje")
         pole.click(timeout=10_000)
         page.keyboard.type(tekst, delay=12)
         page.wait_for_timeout(1500)
         wynik["wpisane"] = True
         print(f"  wpisane w pole odpowiedzi: {len(tekst.split())} słów", flush=True)
 
+        # PRZYCISK Z TEJ SAMEJ FORMY — nigdy z calej strony.
         wyslac = None
         for nazwa in ("Reply", "Post", "Odpowiedz", "Opublikuj"):
-            k = page.get_by_role("button", name=nazwa).first
+            k = forma.get_by_role("button", name=nazwa).first
             if k.count() > 0 and k.is_visible():
                 wyslac = k
                 break
+        if wyslac is None:
+            k = forma.locator('button[type="submit"]').first
+            if k.count() > 0 and k.is_visible():
+                wyslac = k
         wynik["przycisk_widoczny"] = wyslac is not None
+        if wyslac is not None:
+            # NIEAKTYWNY PRZYCISK = TEKST NIE WSZEDL DO TEGO POLA. Piec sekund na
+            # przeliczenie formularza, potem jasny blad zamiast 30 s czekania.
+            for _ in range(10):
+                if wyslac.is_enabled():
+                    break
+                page.wait_for_timeout(500)
+            else:
+                raise RuntimeError("przycisk wysylki odpowiedzi nieaktywny po"
+                                   " wpisaniu — nie klikam")
 
         if wyslij and wyslac is not None:
             wyslac.click()
@@ -4306,6 +4393,7 @@ def wystaw_odpowiedz_pod_artykulem(
             dopisz_wynik("odpowiedz_pod_artykulem", wynik,
                                gdzie=url_artykulu, komu=autor,
                                slow=len(tekst.split()), tekst=tekst[:2000],
+                               metoda=METODA_ODPOWIEDZI_POD_ARTYKULEM,
                                **(kontekst or {}))
             print("  ODPOWIEDŹ POD ARTYKUŁEM POTWIERDZONA" if wynik["wyslane"]
                   else "  KLIKNIĘTE, ALE ODPOWIEDZI NIE WIDAĆ", flush=True)
@@ -4330,6 +4418,7 @@ def wystaw_odpowiedz_pod_artykulem(
                 dopisz_wynik("odpowiedz_pod_artykulem", wynik,
                              gdzie=url_artykulu, komu=autor,
                              slow=len(tekst.split()), tekst=tekst[:2000],
+                             metoda=METODA_ODPOWIEDZI_POD_ARTYKULEM,
                              **(kontekst or {}))
         except Exception as exc:
             print("  (nie zapisalem odpowiedzi pod artykulem do dziennika: %s)"

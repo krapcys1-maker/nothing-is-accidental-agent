@@ -134,6 +134,9 @@ class Element:
     def click(self, **k):
         self.klikniety = True
 
+    def is_enabled(self):
+        return True
+
     def scroll_into_view_if_needed(self, **k):
         pass
 
@@ -163,6 +166,31 @@ class PrzyciskWysylki(Element):
     def click(self, **k):
         super().click(**k)
         self.strona.wyslano = True
+
+
+class Forma(Element):
+    """Formularz pod komentarzem (20.10.2026): przycisk wysylki szukamy w NIM."""
+
+    def __init__(self, strona):
+        super().__init__()
+        self.strona = strona
+
+    def get_by_role(self, rola, name=None, exact=False):
+        return self.strona.get_by_role(rola, name=name, exact=exact)
+
+    def locator(self, selektor):
+        return Brak()
+
+
+class Pole(Element):
+    """Pole tekstowe: zna swoj formularz (`xpath=ancestor::form[1]`)."""
+
+    def __init__(self, strona):
+        super().__init__()
+        self.strona = strona
+
+    def locator(self, selektor):
+        return Forma(self.strona) if "ancestor::form" in selektor else Brak()
 
 
 class Otwieracz(Element):
@@ -203,7 +231,7 @@ class Strona:
         self.wyslano = False
         self.mouse = _Mysz()
         self.keyboard = _Klawiatura()
-        self.pola = Zbior([Element()])
+        self.pola = Zbior([Pole(self)])
         self.edytowalne = Zbior([])
         self.zamknieta = False
         self.ostatni = ""

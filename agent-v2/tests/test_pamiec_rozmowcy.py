@@ -221,9 +221,11 @@ _odp = _RUN[_RUN.index("    def odpowiedzi() -> None:"):_RUN.index("    def notk
 sprawdz("komentarze i dyskusje licza pamiec przed pisaniem i podaja ja do promptu",
         'cel["_e21"] = pamiec_do_celu(cel.get("uchwyt")' in _kom and '"pamiec": cel["_e21"]["tekst"]' in _kom
         and 'cel["_e21"] = pamiec_do_celu(cel.get("uchwyt"),' in _dys and '"pamiec": cel["_e21"]["tekst"]' in _dys)
+# Od 20.10.2026 odpowiedz pod artykulem dokleja do pol numer komentarza (limit
+# prob), wiec oba wywolania rozpakowuja `ramiona_odpowiedzi` — stad dwa trafienia.
 sprawdz("odpowiedzi: pamiec do promptu i pola do dziennika (oba rodzaje odpowiedzi)",
         'e21 = pamiec_do_celu(c.get("uchwyt")' in _odp and '"pamiec": e21["tekst"]' in _odp
-        and "kontekst=ramiona_odpowiedzi(c, e21)" in _odp and "**ramiona_odpowiedzi(c, e21)" in _odp)
+        and _odp.count("**ramiona_odpowiedzi(c, e21)") >= 2, _odp.count("**ramiona_odpowiedzi(c, e21)"))
 sprawdz("kolejka odpowiedzi niesie uchwyt rozmowcy (trzy zrodla)", _BR.count('"uchwyt": ') >= 3
         and '"uchwyt": k.get("handle") or ""' in _BR and '"uchwyt": ostatni.get("handle") or ""' in _BR
         and '"uchwyt": (ich.get("handle")' in _BR)

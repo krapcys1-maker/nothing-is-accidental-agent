@@ -31,6 +31,7 @@
 | `KROTKA_NOTKA_SLOW` | `(33, 60)` | E17 — okno krotkiej notki (obecne: `NOTE_MIN_WORDS`-`NOTE_MAX_WORDS`). |
 | `MAKS_ODPOWIEDZI_W_ROZMOWIE` | `2` | ILE RAZY ODPISUJEMY W JEDNEJ ROZMOWIE. Rozmowa to galaz komentarzy: ten, ktory ja zaczal, i wszystko pod nim. Liczy `browser.nasze_odpowiedz |
 | `MAKS_ODPOWIEDZI_KONTU_SIOSTRZANEMU` | `1` | — |
+| `MAKS_NIEUDANYCH_ODPOWIEDZI_POD_ARTYKULEM` | `2` | ILE NIEUDANYCH PROB ODPOWIEDZI POD ARTYKULEM NA JEDEN KOMENTARZ (20.10.2026). Komentarz czeka w kazdym przebiegu, dopoki nie ma pod nim nasz |
 | `UCHWYTY_SIOSTRZANE` | `("nia1503032",)` | UCHWYTY KONT SIOSTRZANYCH (publiczne nazwy na Substacku): nie obserwujemy ich i nie subskrybujemy w ruchu wychodzacym (`kanal.nowi_kandydaci |
 | `KONTA_SIOSTRZANE` | `frozenset( int(x) for x in _env("KONTA_SIOST` | — |
 | `WYLACZ_WYKRYWANIE_AI` | `True` | Czy agent ma klikac "Wylacz wykrywanie AI" przy kazdej publikacji. WLACZONE decyzja wlasciciela z 2026-08-15. To wybor publiczny, nie ustawi |
