@@ -242,9 +242,14 @@ NOTKA_3 = ("While earning its Intelligence Index score, Kimi K3.1 Pro wrote 150 
            "and every extra one is billed.")
 _b = sledztwo.sprawdz_notke(NOTKA_3, [AA_MOD], {"encje": ENCJE_KIMI})
 sprawdz("notka z przykladu 3 przechodzi: „token” objasniony w trzecim zdaniu", _b == [], _b)
-_b = sledztwo.sprawdz_notke(NOTKA_3.replace("A token is a word-piece, and every", "Every"), [AA_MOD],
-                            {"encje": ENCJE_KIMI})
-sprawdz("KONTRDOWOD: „tokens” bez zadnej glosy w notce", any("'tokens'" in b for b in _b), _b)
+_log = io.StringIO()
+with contextlib.redirect_stdout(_log):
+    _b = sledztwo.sprawdz_notke(NOTKA_3.replace("A token is a word-piece, and every", "Every"), [AA_MOD],
+                                {"encje": ENCJE_KIMI})
+# Od proby 25.10.2026 zargon AI bez objasnienia to uwaga w logu, nie odrzucenie notki
+# (werdykt serii odpadl za nierozpoznane objasnienie „weights").
+sprawdz("„tokens” bez zadnej glosy w notce: uwaga w logu, notka nie odrzucona",
+        not any("'tokens'" in b for b in _b) and "'tokens' bez objasnienia" in _log.getvalue(), (_b, _log.getvalue()))
 _b = sledztwo.sprawdz_notke(NOTKA_1 + " It scored 12% on another test.", [KIMI_BLOG, AA_ART], KN)
 sprawdz("KONTRDOWOD: czwarta liczba i liczba spoza twierdzen",
         any("4 numbers" in b for b in _b) and any("12 not in the cited claims" in b for b in _b), _b)

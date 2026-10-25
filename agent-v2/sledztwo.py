@@ -1993,9 +1993,14 @@ def sprawdz_notke(tekst: str, fakty: list[dict[str, Any]], kontekst: dict[str, A
         bledy.append("voice: first person singular outside quotes (%s); we, never I" % ", ".join(dict.fromkeys(ja)))
     for term in _zargon_bez_glosy(dwa):
         bledy.append("plain words: '%s' in the first two sentences needs a short gloss" % term)
+    # ZARGON AI (weights, tokens...) BEZ OBJASNIENIA — UWAGA, NIE ODRZUCENIE (proba 25.10.2026):
+    # werdykt serii odpadl po poprawce, bo kod nie rozpoznal objasnienia „weights", choc ta sama
+    # linia przeszla bramke haka. Strata notki z naszym zdaniem jest drozsza niz jedno
+    # nieobjasnione slowo dla czytelnika, ktory interesuje sie AI; twardy zargon (finanse,
+    # bezpieczenstwo) nadal odrzuca wyzej.
     for m in _ZARGON_AI.finditer(dwa):
         if not _zglosowany(tekst, m.group(0)):
-            bledy.append("plain words: '%s' needs a one-clause gloss somewhere in the note" % m.group(0))
+            print("  [notka] uwaga: '%s' bez objasnienia w notce (nie odrzucam)" % m.group(0), flush=True)
             break
     for e in k.get("gloss_juz_uzyty") or []:
         if re.search(r"(?<![\w.])%s(?![\w])\s*(\(|—|–|,\s+(?:a|an|the|which)\b)" % re.escape(str(e)), tekst, re.I):

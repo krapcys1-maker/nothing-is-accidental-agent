@@ -689,5 +689,17 @@ sprawdz("twierdzenie czasowe oznaczone do sprawdzenia na dzis",
         rek.count("TIME-SENSITIVE") == 1 and "not yet released.\" " not in rek)
 
 print()
+print("=== PO PROBIE NA KOPII 25.10.2026 ===")
+import sledztwo as _sl  # noqa: E402
+_wpis = {"id": "x-1-reveal", "rodzaj": "REVEAL", "lead": True, "linia": "", "klucze": ["Gizmo"],
+         "encje": ["Gizmo 2.5", "Rival Max 4"], "historia": "Gizmo 2.5 launch"}
+_k = stages.kontekst_notki_serii(_wpis, {"investigation": {"first_line": "", "supporting_claims": []}})
+sprawdz("kontekst bramki notki serii ma encje z kolejki (nazwy modeli to aktor AI)",
+        "Gizmo 2.5" in (_k["kontekst"].get("encje") or []) and _k["kontekst"]["rodzaj"] == "REVEAL",
+        _k["kontekst"])
+sprawdz("nazwa modelu z encji w pierwszym zdaniu wystarcza za termin AI",
+        not any(b.startswith("AI term") for b in _sl.sprawdz_notke(
+            "Gizmo 2.5 costs half as much as Rival Max 4. Buyers noticed fast.", [], _k["kontekst"])))
+print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))
 sys.exit(1 if oblane else 0)

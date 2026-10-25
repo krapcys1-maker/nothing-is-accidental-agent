@@ -5988,9 +5988,15 @@ def kontekst_notki_serii(p: dict[str, Any], material: dict[str, Any]) -> dict[st
     linia = " ".join(str(linia or "").split())
     fakty = [c for c in (inv.get("supporting_claims") or p.get("fakty") or [])
              if isinstance(c, dict)]
-    kontekst = {"rodzaj": p.get("rodzaj"), "lead": bool(p.get("lead")), "linia": linia,
-                "klucze": list(p.get("klucze") or []), "historia": p.get("historia") or "",
-                "k": p.get("k"), "n": p.get("n")}
+    # PELNY KONTEKST SERII Z `sledztwo.kontekst_notki` (proba 25.10.2026): wlasny, ubogi kontekst
+    # nie mial encji, wiec bramka nie widziala nazw modeli („Kimi K3.1 Pro", „Claude Opus 5.5")
+    # jako aktora AI i placila za poprawke Opusa; nie mial tez tekstow serii i objasnien juz
+    # uzytych. Na nasze pola kladziemy go od spodu.
+    baza = _z_sledztwa("kontekst_notki", p, domyslnie={})
+    kontekst = dict(baza) if isinstance(baza, dict) else {}
+    kontekst.update({"rodzaj": p.get("rodzaj"), "lead": bool(p.get("lead")), "linia": linia,
+                     "klucze": list(p.get("klucze") or []), "historia": p.get("historia") or "",
+                     "k": p.get("k"), "n": p.get("n")})
 
     def bramka(tekst: str) -> list[str]:
         problemy = []
