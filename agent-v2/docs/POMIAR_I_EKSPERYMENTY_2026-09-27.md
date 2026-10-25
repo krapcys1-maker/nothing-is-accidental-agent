@@ -670,6 +670,48 @@ wartość, której nie daje żadne pojedyncze źródło.
 kąta ok. 0,06 USD. Przy ok. trzech śledztwach i ok. 18 notkach serii w tygodniu
 to ok. 2 USD tygodniowo (dotąd ok. 0,8 USD).
 
+### Duże tematy, premiera modelu i wyrazistość (25.10.2026, ten sam dzień, `2b1f888`–`5351e2a`)
+
+Właściciel po pierwszych próbach: „ma szukać dużych tematów, a nie jakieś małe pierdki
+(...) ma to być kreatywne”, „wychodzi nowy model — benchmarki, opinie ludzi, testy,
+smaczki, czy to już AGI z matmy”, „mamy być wyraziści, nie wszystko musi być na 100%
+udowodnione”.
+
+**Badanie klikalności** (`robocze/klikalnosc_ai_25_10.py`, `klasyfikuj_klikalnosc_25_10.py`):
+22 czołowe AI-Substacki, 891 wpisów o AI (najlepsze wszech czasów i ostatnie), każdy
+sklasyfikowany tematem i formą. W najlepszych wpisach nadreprezentowane: krytyka hype'u
+×2,35, praktyka („którego AI używać”) ×1,49, wyjaśnienia ×1,48, praca i pieniądze ×1,20;
+największe pojedyncze hity to premiery modeli z pierwszej ręki i z werdyktem; rzadko
+trafiają prawo i regulacje (×0,23) i przeglądy newsów. Na NIE najlepiej szły premiery
+(mediana 21,5 wyświetlenia) i firmy (21), najsłabiej bezpieczeństwo (42 notki, mediana 12).
+
+**Co weszło:**
+1. **Wybór historii** (`sledztwo.wybierz_historie`): wynik = (niezależne serwisy)^0,7 ×
+   waga kategorii × 0,6 za dziedzinę z dwóch ostatnich śledztw. Kategorię i 1–3 nazwy
+   własne daje jedno tanie wywołanie DeepSeeka; nagłówki z korpusu z tą nazwą (5 dni,
+   całe słowo, bez nazw ogólnych) dołączają do historii, bo radar grupuje niestabilnie
+   (ta sama luka PHP2Shell w trzech losowaniach: 10, 8 i 7 serwisów). Bramka obejmuje
+   wszystkie historie radaru, nie pięć pierwszych.
+2. **Premiera modelu**: własny zestaw kątów (SMACZEK, LICZBY — deklarowane wobec
+   zmierzonych, TEST, WIELKIE_PYTANIE, KTO_ZYSKA, CO_Z_TEGO), dodatkowe pytania badania
+   (niezależne oceny, testy ludzi, cena, wielkie pytanie, karta modelu), cennik OpenRouter.
+3. **Głosy ludzi**: wątki Hacker News (Algolia, bez klucza) po zapytaniu i nazwach
+   własnych, podpisane jako opinie. Reddit odpowiada serwerowi 403.
+4. **Wyrazistość**: analiza nie musi mieć dowodu przeciw; ma stanowisko i nazwane
+   założenie. Prompty: „Have opinions”, werdykt przy wielkim pytaniu (także „to wygląda na
+   AGI z matmy”), głos „we”. Etap poprawek artykułu nie dopisuje już „our reading is that”
+   do opinii. Granica jedna: fakty tylko z karty.
+5. **Artykuł** kończy się „Our conclusion” i „What this could lead to” (2–3 prognozy z
+   założeniem); MYSL w dzień serii daje opinię o dużej historii poziom wyżej, z kątów już
+   opublikowanych.
+6. Zapas przy odmowie Opusa przy kątach (DeepSeek z rozumowaniem).
+
+**Ręczna ocena prób na kopii danych** (cztery próby, nic nie wyszło): fakty dwóch
+artykułów sprawdzone u źródła (komunikat PHP Foundation, komunikat NextDC, Reuters, CNN) —
+zgodne. Po zmianach artykuł ma tezę, zestawienie „mówili/zrobili” i prognozy; zostaje za
+długi (1509 słów przy celu 1075) i research bywa słaby przy dokumentach pierwotnych
+(raport MFW przez portal wtórny).
+
 ## Śledztwa — co mierzyć
 
 - **Przesłania:** grupa „przeslanie" w karcie i w `eksperymenty.py`. Od 26.10
