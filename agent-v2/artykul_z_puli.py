@@ -959,7 +959,7 @@ def _przebieg_sledztwa(conn, run_id: int) -> int:
     if wybrana is not None:
         print("  WYBRANA: [radar %d] %s — %s, %d serwisow, wynik %.2f" % (
             wybrana["miejsce"], wybrana["tytul"][:80], wybrana.get("kategoria") or "?",
-            wybrana["serwisy"], wybrana["wynik_wyboru"]), flush=True)
+            wybrana.get("serwisy") or 0, wybrana.get("wynik_wyboru") or 0.0), flush=True)
     if wybrana is None:
         print(">> zadna historia z czolowki radaru nie nadaje sie na sledztwo",
               flush=True)
