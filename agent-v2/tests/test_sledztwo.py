@@ -424,6 +424,15 @@ try:
             "fixed real bugs, but it also invented" in _gl[0]["text"] and "&amp;" not in _gl[0]["text"]
             and "short" not in _gl[0]["text"] and _gl[0]["text"].startswith(sledztwo.NAGLOWEK_GLOSOW), _gl[0]["text"][:200])
     sprawdz("zapytanie z oknem dat (created_at_i)", "created_at_i>" in str(_siec.zapytania[0][1]))
+    sprawdz("nazwy wlasne: tylko wyrozniajace (wielka litera albo cyfra, bez ogolnych)",
+            sledztwo.nazwy_wlasne(["safety", "PHP", "OpenAI", "GPT-6", "UK", "hacking", "NextDC", "PHP"])
+            == ["PHP", "GPT-6", "NextDC"])
+    _siec.zapytania.clear()
+    with contextlib.redirect_stdout(io.StringIO()):
+        _gl2 = sledztwo.glosy_hn("Model X launch", http=_siec, klucze=["ModelX", "safety"])
+    _pytania_hn = [q[1]["query"] for q in _siec.zapytania if q[0] == sledztwo.HN_SZUKAJ]
+    sprawdz("Hacker News szuka po zapytaniu i nazwach wlasnych, watki bez powtorek",
+            _pytania_hn == ["Model X launch", "ModelX"] and len(_gl2) == 2, (_pytania_hn, len(_gl2)))
     with contextlib.redirect_stdout(io.StringIO()):
         _cn = sledztwo.cennik_openrouter("Model X", http=_siec)
     sprawdz("OpenRouter: pasujacy model, cena za milion tokenow, kontekst, podpis posrednika",
@@ -556,9 +565,9 @@ sprawdz("artykul: pelny obraz i JEDNA nasza analiza przy co najmniej czterech ka
 _sl = _art[_art.index("def _przebieg_sledztwa"):]
 sprawdz("przebieg: wybor duzego tematu, pytania premiery, glosy HN i cennik w korpusie, typ do pisarza",
         "sledztwo.wybierz_historie(historie" in _art and "pod += list(sledztwo.PYTANIA_PREMIERY)" in _art
-        and "sledztwo.glosy_hn(_zapytanie)" in _art and "sledztwo.cennik_openrouter(_zapytanie)" in _art
+        and "sledztwo.glosy_hn(_zapytanie, klucze=" in _art and "sledztwo.cennik_openrouter(_zapytanie)" in _art
         and 'card["investigation_type"]' in _art and "przeslania(conn, run_id, card, dossier, wybrana, typ=typ)" in _art
-        and _sl.index("corpus = stages.fetch(conn, run_id, zrodla)") < _sl.index("sledztwo.glosy_hn(_zapytanie)")
+        and _sl.index("corpus = stages.fetch(conn, run_id, zrodla)") < _sl.index("sledztwo.glosy_hn(_zapytanie, klucze=")
         < _sl.index("evidence = stages.classify("))
 sprawdz("pisarz notki dostaje wczesniejsze katy w prompcie",
         "earlier_angles_already_published" in pathlib.Path("agent-v2/prompts/notka.md").read_text(encoding="utf-8"))

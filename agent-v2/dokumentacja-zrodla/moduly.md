@@ -708,7 +708,7 @@
 
 ### `sledztwo.py` — śledztwo — historia z radaru, bramka nowości sprawdzana kodem, seria 4–5 kątów (kuriozum, mechanizm, ustalenie, kto płaci, motyw, za dwa lata) i kolejka notek
 
-981 wierszy, 38 funkcji na poziomie modułu, 0 klas
+1007 wierszy, 39 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -724,10 +724,11 @@
 | `kategorie_historii(historie, conn, run_id)` | {miejsce: {"kategoria", "zapytanie"}} dla historii — jedno tanie wywolanie. |
 | `ostatnie_kategorie(ile)` | Kategorie ostatnich `ile` sledztw (najnowsze na koncu) — do kary za powtorke. |
 | `dolacz_z_korpusu(h, korpus, klucze)` | Dopisuje do historii naglowki z korpusu (ostatnie `DNI_DOLACZANIA` dni), ktore |
+| `nazwy_wlasne(klucze)` | Tylko wyrozniajace nazwy: z wielka litera albo cyfra, min. 3 znaki, spoza `OGOLNE_KLUCZE`. |
 | `wybierz_historie(historie, conn, run_id, korpus)` | Najwieksza historia, ktora przejdzie bramke: (wybrana albo None, ranking). |
 | `typ_sledztwa(kategoria)` | „premiera" dla premiery modelu, inaczej zwykle „sledztwo" (`ZESTAWY_KATOW`). |
 | `_bez_html(tekst)` *(wewn.)* | — |
-| `glosy_hn(zapytanie, dni, http)` | Najwieksze watki Hacker News o tej sprawie z ostatnich `dni` jako dokumenty korpusu. |
+| `glosy_hn(zapytanie, dni, http, klucze)` | Najwieksze watki Hacker News o tej sprawie z ostatnich `dni` jako dokumenty korpusu. |
 | `cennik_openrouter(zapytanie, http, ile)` | Ceny i okno kontekstu modeli pasujacych do zapytania — jako dokument korpusu. |
 | `fakt_z_historii(h)` | Historia w ksztalcie faktu, ktory przyjmuje `artykul_z_puli.temat_z_faktu`. |
 | `_twierdzenia(card)` *(wewn.)* | — |

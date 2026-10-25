@@ -378,8 +378,7 @@ def dolacz_z_korpusu(h: dict[str, Any], korpus: list[dict[str, Any]], klucze: li
     Slowa daje klasyfikator i maja byc wyrozniajace („PHP", „NextDC"), nie ogolne;
     slowa krotsze niz 3 znaki i ogolne nazwy z `OGOLNE_KLUCZE` pomijamy.
     """
-    wzory = [re.compile(r"(?<![a-z0-9])%s(?![a-z0-9])" % re.escape(k.lower()))
-             for k in klucze if len(k) >= 3 and k.lower() not in OGOLNE_KLUCZE]
+    wzory = [re.compile(r"(?<![a-z0-9])%s(?![a-z0-9])" % re.escape(k.lower())) for k in nazwy_wlasne(klucze)]
     if not wzory:
         return 0
     granica = (_teraz() - timedelta(days=DNI_DOLACZANIA)).strftime("%Y-%m-%d")
@@ -398,7 +397,24 @@ def dolacz_z_korpusu(h: dict[str, Any], korpus: list[dict[str, Any]], klucze: li
 
 # Nazwy zbyt ogolne, zeby po nich laczyc naglowki w jedna historie.
 OGOLNE_KLUCZE = {"ai", "openai", "google", "anthropic", "meta", "microsoft", "apple", "amazon", "nvidia",
-                 "chatgpt", "claude", "gemini", "model", "models", "agent", "agents", "data", "the"}
+                 "chatgpt", "claude", "gemini", "model", "models", "agent", "agents", "data", "the",
+                 "uk", "us", "usa", "eu", "china", "x", "llm", "llms", "gpu", "gpus"}
+
+
+def nazwy_wlasne(klucze: list[str] | None) -> list[str]:
+    """Tylko wyrozniajace nazwy: z wielka litera albo cyfra, min. 3 znaki, spoza `OGOLNE_KLUCZE`.
+
+    Sonda 25.10.2026: mimo polecenia klasyfikator dawal tez slowa ogolne („safety",
+    „audits", „hacking"), a po nich do historii o zwolnionych badaczach OpenAI doszly
+    trzy niezwiazane naglowki. Nazwa wlasna („PHP", „NextDC", „GPT-6") tego nie robi.
+    """
+    out = []
+    for k in klucze or []:
+        k = " ".join(str(k).split())
+        if (len(k) >= 3 and k.lower() not in OGOLNE_KLUCZE
+                and any(ch.isupper() or ch.isdigit() for ch in k) and k not in out):
+            out.append(k)
+    return out
 
 
 def wybierz_historie(historie: list[dict[str, Any]], conn=None, run_id: int | None = None,
@@ -470,23 +486,33 @@ def _bez_html(tekst: Any) -> str:
     return " ".join(html.unescape(t).split())
 
 
-def glosy_hn(zapytanie: str, dni: int = 10, http=None) -> list[dict[str, Any]]:
+def glosy_hn(zapytanie: str, dni: int = 10, http=None, klucze: list[str] | None = None
+             ) -> list[dict[str, Any]]:
     """Najwieksze watki Hacker News o tej sprawie z ostatnich `dni` jako dokumenty korpusu.
 
-    Dokument ma ksztalt pobranego zrodla (`stages.fetch`): url, host, publisher, title,
-    text, class. Bez nazw uzytkownikow. Awaria sieci = pusta lista, nigdy wyjatek.
+    Szuka po zapytaniu i po kazdej nazwie wlasnej z `klucze` (sonda 25.10: „PHP2SHELL
+    vulnerability" dalo 1 watek, a samo „PHP" watki z 1104 i 734 punktami), laczy
+    trafienia i bierze najwieksze. Dokument ma ksztalt pobranego zrodla (`stages.fetch`):
+    url, host, publisher, title, text, class. Bez nazw uzytkownikow. Awaria sieci =
+    pusta lista, nigdy wyjatek.
     """
     zapytanie = " ".join(str(zapytanie or "").split())
-    if not zapytanie:
+    zapytania = [z for z in dict.fromkeys([zapytanie] + nazwy_wlasne(klucze)) if z]
+    if not zapytania:
         return []
     try:
         import httpx
         http = http or httpx
         od = int((_teraz() - timedelta(days=dni)).timestamp())
-        r = http.get(HN_SZUKAJ, params={"query": zapytanie, "tags": "story",
-                                       "numericFilters": "created_at_i>%d" % od}, timeout=20)
-        trafienia = [h for h in (r.json().get("hits") or [])
-                     if int(h.get("num_comments") or 0) >= HN_MIN_KOMENTARZY]
+        trafienia, widziane = [], set()
+        for z in zapytania:
+            r = http.get(HN_SZUKAJ, params={"query": z, "tags": "story",
+                                           "numericFilters": "created_at_i>%d" % od}, timeout=20)
+            for h in r.json().get("hits") or []:
+                if (int(h.get("num_comments") or 0) >= HN_MIN_KOMENTARZY
+                        and h.get("objectID") not in widziane):
+                    widziane.add(h.get("objectID"))
+                    trafienia.append(h)
     except Exception as exc:
         print("  [glosy] Hacker News niedostepny (%s)" % type(exc).__name__, flush=True)
         return []
@@ -512,7 +538,7 @@ def glosy_hn(zapytanie: str, dni: int = 10, http=None) -> list[dict[str, Any]]:
                         h.get("title"), h.get("points"), h.get("num_comments")),
                     "class": "SECONDARY",
                     "text": NAGLOWEK_GLOSOW + "\n\n" + "\n".join(komentarze)})
-    print("  [glosy] Hacker News „%s”: %d watkow z komentarzami" % (zapytanie, len(out)), flush=True)
+    print("  [glosy] Hacker News „%s”: %d watkow z komentarzami" % (" | ".join(zapytania), len(out)), flush=True)
     return out
 
 

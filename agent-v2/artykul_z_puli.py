@@ -986,7 +986,7 @@ def _przebieg_sledztwa(conn, run_id: int) -> int:
     # GLOSY LUDZI I CENA (25.10.2026): watki Hacker News o tej sprawie (opinie, tak
     # podpisane) i — przy premierze — cennik OpenRouter. Darmowe, bez klucza.
     _zapytanie = wybrana.get("zapytanie") or ""
-    corpus = corpus + sledztwo.glosy_hn(_zapytanie)
+    corpus = corpus + sledztwo.glosy_hn(_zapytanie, klucze=wybrana.get("klucze"))
     if typ == "premiera":
         corpus = corpus + sledztwo.cennik_openrouter(_zapytanie)
     _z_trescia = [c for c in corpus if c.get("text")]
