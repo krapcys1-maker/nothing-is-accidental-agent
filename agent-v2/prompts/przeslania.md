@@ -43,7 +43,9 @@ and stands on its own. For each note give:
   data centre, or are online. Not only companies or investors.
 - `naglowek`: the first sentence: the most surprising TRUE thing in this note, at
   most 18 words, starting with the thing itself. For a verdict, a motive or a
-  forecast it is the verdict itself, said plainly. Not a question, no date or
+  forecast it is the verdict itself, said plainly — keeping the condition it depends
+  on ("once the files ship, ..."), never stating a promised or conditional thing as
+  already true. Not a question, no date or
   "According to" opener, no teaser. Every number, superlative ("highest", "only",
   "first") and comparison in it must appear in the evidence of the claims you cite,
   about the same entity the sentence names; if that evidence says "if", "once",

@@ -239,7 +239,7 @@
 {{"powtorka_nr": <number of the bank fact it repeats, or 0 if none>, "powod": "<one short sentence>"}}
 ```
 
-#### `przeslania.md` (102 wierszy)
+#### `przeslania.md` (104 wierszy)
 
 **Pola wejściowe:** `artykulowy`, `glosy`, `hipotezy`, `karta`, `katy`, `ksiega`, `marka`, `n_kand`, `n_max`, `odbior`, `ramy`, `typ_historii`
 
