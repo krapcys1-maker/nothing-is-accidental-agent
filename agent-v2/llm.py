@@ -70,6 +70,32 @@ class DostawcaWylaczony(RuntimeError):
 _ZAWIESZENIA: dict[str, int] = {}
 _WYLACZENI: dict[str, str] = {}
 
+# MODEL, KTORY DOSTAWCA NAPRAWDE PODAL (25.10.2026, spec §9 pkt 24). Proba
+# sledztwa na kopii danych pisala innym modelem niz produkcja (stala `CLAUDE`
+# bierze sie z `data/wybor_modeli.json`, a kopia miala go pustego) i w `calls`
+# nie bylo sladu: kolumna `model` mowi, o co PROSILISMY. Transport zapisuje tu
+# pole `model` z odpowiedzi, `call` przenosi je do `calls.model_served`.
+#
+# STAN WATKU, NIE KROTKA TRANSPORTU. Proba idzie w osobnym watku
+# (`_z_terminem`), a atrapy transportow w kilkunastu testach oddaja krotki
+# o stalym ksztalcie — dopisanie pola do krotki wywrociloby je wszystkie.
+# `_jedna_proba` czysci ten stan przed transportem i czyta go po nim, w tym
+# samym watku, wiec dwie proby nie widza swoich wartosci.
+_SERWOWANY = threading.local()
+
+
+def _zapamietaj_model(model: Any) -> None:
+    """Transport: zapisz nazwe modelu z odpowiedzi dostawcy (albo nic)."""
+    _SERWOWANY.model = str(model) if isinstance(model, str) and model.strip() else None
+
+
+def _model_z_odpowiedzi() -> str | None:
+    return getattr(_SERWOWANY, "model", None)
+
+
+# Pary (etap, podany model), o ktorych rozjezdzie juz mowilismy w tym procesie.
+_INNY_MODEL: set[tuple[str, str]] = set()
+
 
 def _z_terminem(fn, termin_s: float):
     """`fn()` z terminem CALKOWITYM, liczonym zegarem — albo `httpx.ReadTimeout`.
@@ -320,9 +346,32 @@ def _log(purpose: str, model: str, tin: int, tout: int, searches: int, usd: floa
     )
 
 
+def effort_dziala(model: str) -> bool:
+    """Czy model przyjmuje `output_config.effort` — po DOSTAWCY i rodzinie, nie po nazwie.
+
+    25.10.2026, spec §9 pkt 24: warunek stal jako `model in (config.CLAUDE,
+    config.SONNET, config.FABLE)`, czyli rownosc z TRZEMA stalymi. Model podany
+    z boku — `AGENT_V2_WRITER`, zastepca przy szukaniu, poprzednik `FABLE_5`,
+    pisarz zmieniony przez `nowe_modele` w polowie procesu — nie byl zadna z nich
+    i wysilek znikal po cichu: etap chodzil na domyslnym ustawieniu API, choc
+    `config.EFFORT` mowil co innego.
+
+    Pokretlo istnieje od piatej generacji Opusa, Sonneta i Fable; starsze modele
+    i Haiku odrzucilyby parametr bledem 400, wiec dla nich go nie wysylamy.
+    """
+    import model_registry
+    nazwa = str(model or "").lower()
+    if dostawca(nazwa) != "anthropic" or not nazwa.startswith("claude-"):
+        return False
+    if not any(r in nazwa for r in ("opus", "sonnet", "fable")):
+        return False
+    wersja = model_registry.version(nazwa)
+    return bool(wersja) and wersja[0] >= 5
+
+
 def _call_claude(
     purpose: str, system: str, user: str, web_search: bool,
-    model: str | None = None,
+    model: str | None = None, max_szukan: int | None = None,
 ) -> tuple[str, int, int, int, list[str]]:
     model = model or config.MODEL_FOR[purpose]
     client = anthropic.Anthropic(
@@ -336,9 +385,9 @@ def _call_claude(
         "system": system,
         "messages": [{"role": "user", "content": user}],
     }
-    # `effort` istnieje na Opusie 5, Sonnecie 5 i Fable 5.
-    if purpose in config.EFFORT and model in (config.CLAUDE, config.SONNET,
-                                              config.FABLE):
+    # `effort` istnieje na Opusie 5, Sonnecie 5 i Fable 5 — i na ich nastepcach,
+    # wiec rozstrzyga rodzina modelu, nie rownosc ze stala (`effort_dziala`).
+    if purpose in config.EFFORT and effort_dziala(model):
         kwargs["output_config"] = {"effort": config.EFFORT[purpose]}
     if web_search:
         # max_uses JEST OBOWIĄZKOWE. Bez niego model robił 17, potem 31 rund
@@ -352,13 +401,14 @@ def _call_claude(
         kwargs["tools"] = [{
             "type": _narzedzie_wyszukiwania(model),
             "name": "web_search",
-            "max_uses": config.max_szukan(purpose),
+            "max_uses": max_szukan or config.max_szukan(purpose),
         }]
 
     # Strumień zawsze: sufity są duże, a myślenie na Opusie 5 jest domyślnie
     # włączone i liczy się jak wyjście, więc bez strumienia grozi timeout HTTP.
     with client.messages.stream(**kwargs) as stream:
         message = stream.get_final_message()
+    _zapamietaj_model(getattr(message, "model", None))
 
     if message.stop_reason == "refusal":
         raise OdmowaDostawcy(f"dostawca odmówił: {message.stop_details}")
@@ -551,6 +601,7 @@ def _deepseek_pick_from_urls(
 
 def _call_deepseek_z_siecia(
     purpose: str, system: str, user: str, model: str | None = None,
+    max_szukan: int | None = None,
 ) -> tuple[str, int, int, int, list[str], int]:
     """DeepSeek z wyszukiwaniem przez endpoint zgodny z API Anthropic.
 
@@ -581,12 +632,13 @@ def _call_deepseek_z_siecia(
                if purpose in config.DEEPSEEK_EFFORT_FOR else {}),
             "tools": [{"type": config.NARZEDZIE_WYSZUKIWANIA_DEEPSEEK,
                        "name": "web_search",
-                       "max_uses": config.max_szukan(purpose)}],
+                       "max_uses": max_szukan or config.max_szukan(purpose)}],
         },
         timeout=config.timeout_for(config.MAX_TOKENS[purpose]),
     )
     odpowiedz.raise_for_status()
     dane = odpowiedz.json()
+    _zapamietaj_model(dane.get("model") if isinstance(dane, dict) else None)
     if dane.get("stop_reason") == "max_tokens":
         raise Truncated(
             f"odpowiedź ucięta na suficie {config.MAX_TOKENS[purpose]} tokenów "
@@ -641,6 +693,7 @@ def _call_deepseek(purpose: str, system: str, user: str) -> tuple[str, int, int,
     )
     response.raise_for_status()
     payload = response.json()
+    _zapamietaj_model(payload.get("model") if isinstance(payload, dict) else None)
     choice = payload["choices"][0]
     if choice.get("finish_reason") == "length":
         raise Truncated(
@@ -686,6 +739,7 @@ def _call_mimo(purpose: str, system: str, user: str) -> tuple[str, int, int, int
     )
     response.raise_for_status()
     payload = response.json()
+    _zapamietaj_model(payload.get("model") if isinstance(payload, dict) else None)
     choice = (payload.get("choices") or [{}])[0]
     if choice.get("finish_reason") == "length":
         raise Truncated(
@@ -764,11 +818,17 @@ def call(
     run_id: int | None = None,
     web_search: bool = False,
     collect_urls: list[str] | None = None,
+    max_szukan: int | None = None,
 ) -> str:
     """Woła model właściwy dla etapu i zapisuje koszt. Zwraca tekst odpowiedzi.
 
     `collect_urls`, jeśli podane, zostanie wypełnione adresami, które realnie
     zwróciła wyszukiwarka — do sprawdzenia, czy model nie zmyślił URL-a.
+
+    `max_szukan` — nizszy limit wyszukiwan TEGO wywolania niz `config.max_szukan`
+    etapu (25.10.2026: ponowka weryfikacji bez JSON-a w `stages.zweryfikuj`
+    szuka mniej, bo pierwsza proba juz przepalila swoje rundy). Bez niego —
+    limit etapu, jak dotad.
     """
     model = config.MODEL_FOR[purpose]
 
@@ -839,12 +899,18 @@ def call(
             f"{provider} wylaczony do konca przebiegu ({_WYLACZENI[provider]})")
     termin = config.TERMIN_CALKOWITY_RAZY * config.timeout_for(config.MAX_TOKENS[purpose])
 
+    # Nizszy limit wyszukiwan idzie do transportu TYLKO wtedy, gdy ktos go podal:
+    # atrapy transportow w testach maja stale sygnatury bez tego argumentu.
+    _limit = {"max_szukan": int(max_szukan)} if max_szukan else {}
+
     def _jedna_proba() -> tuple:
-        """(tekst, wejscie, wyjscie, wyszukiwania, adresy, trafienia w cache)."""
+        """(tekst, wejscie, wyjscie, wyszukiwania, adresy, trafienia w cache,
+        model podany w odpowiedzi albo None)."""
+        _zapamietaj_model(None)
         if provider == "anthropic":
             text, tin, tout, searches, urls = _call_claude(
-                purpose, system, user, web_search, model=model)
-            return text, tin, tout, searches, urls, 0
+                purpose, system, user, web_search, model=model, **_limit)
+            return text, tin, tout, searches, urls, 0, _model_z_odpowiedzi()
         if provider == "mimo":
             # MiMo tylko pisze (E11). Jego szukanie jest platne osobno
             # i nieobslugiwane tu — wywolanie z siecia to blad konfiguracji.
@@ -852,16 +918,18 @@ def call(
                 raise PreflightFailed(
                     f"etap {purpose!r}: MiMo bez szukania w tym kodzie")
             text, tin, tout, searches, cache_hit = _call_mimo(purpose, system, user)
-            return text, tin, tout, searches, [], cache_hit
+            return text, tin, tout, searches, [], cache_hit, _model_z_odpowiedzi()
         if web_search:
-            return _call_deepseek_z_siecia(purpose, system, user, model=model)
+            return (*_call_deepseek_z_siecia(purpose, system, user, model=model, **_limit),
+                    _model_z_odpowiedzi())
         text, tin, tout, searches, cache_hit = _call_deepseek(purpose, system, user)
-        return text, tin, tout, searches, [], cache_hit
+        return text, tin, tout, searches, [], cache_hit, _model_z_odpowiedzi()
 
     for proba in range(1, config.PONOWIENIA + 2):
         start_proby = time.monotonic()
         try:
-            text, tin, tout, searches, urls, cache_hit = _z_terminem(_jedna_proba, termin)
+            text, tin, tout, searches, urls, cache_hit, podany = _z_terminem(
+                _jedna_proba, termin)
             _ZAWIESZENIA[provider] = 0
             if collect_urls is not None:
                 collect_urls.extend(urls)
@@ -908,8 +976,19 @@ def call(
         tokens_in=tin, tokens_out=tout, cache_hit=trafienia,
         web_searches=searches, cost_usd=usd,
         price_verified=int(verified), ok=1, note=None,
+        # Tylko gdy dostawca cos podal: brak pola to NULL w kolumnie, a nie
+        # nowa kolumna w INSERT (bazy zbudowane recznie w testach jej nie maja).
+        **({"model_served": podany} if podany else {}),
     )
     _log(purpose, model, tin, tout, searches, usd, verified)
+    # ROZJAZD MIEDZY PROSBA A ODPOWIEDZIA — raz na proces na pare. Migawka
+    # z data (`claude-opus-5-5-20261001` przy prosbie o `claude-opus-5-5`) to ta
+    # sama rzecz i nie halasuje; inna nazwa to przekierowanie dostawcy albo inny
+    # model, niz myslimy, i ma byc widoczna w logu, a nie tylko w bazie.
+    if podany and not podany.startswith(model) and (purpose, podany) not in _INNY_MODEL:
+        _INNY_MODEL.add((purpose, podany))
+        print(f"  [model] {purpose}: prosilismy o {model}, odpowiedzial {podany}",
+              flush=True)
     return text
 
 

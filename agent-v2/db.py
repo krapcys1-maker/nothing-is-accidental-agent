@@ -82,7 +82,10 @@ CREATE TABLE IF NOT EXISTS calls (
     cost_usd       REAL NOT NULL DEFAULT 0,
     price_verified INTEGER NOT NULL DEFAULT 1,  -- 0 = stawka niepotwierdzona
     ok             INTEGER NOT NULL DEFAULT 1,
-    note           TEXT
+    note           TEXT,
+    -- Model, ktory dostawca NAPRAWDE podal w odpowiedzi (pole `model`), obok
+    -- tego, o ktory prosilismy (`model`). Patrz `NOWE_KOLUMNY` nizej.
+    model_served   TEXT
 );
 
 CREATE TABLE IF NOT EXISTS articles (
@@ -187,7 +190,15 @@ def connect(path: Path | None = None) -> sqlite3.Connection:
 NOWE_KOLUMNY = {
     "calls": {"cache_hit": "INTEGER NOT NULL DEFAULT 0",
               # KTORE DZIALANIE ZA TO ZAPLACILO — patrz `AKCJA` i `kanal`.
-              "akcja": "TEXT NOT NULL DEFAULT ''"},
+              "akcja": "TEXT NOT NULL DEFAULT ''",
+              # MODEL ZWROCONY PRZEZ API (25.10.2026, spec §9 pkt 24). `model`
+              # to nazwa, o ktora PROSILISMY; nazwa w odpowiedzi bywa inna
+              # (przekierowanie dostawcy, migawka z data), a 25.10 proba na
+              # kopii danych pisala innym modelem niz produkcja i nic w `calls`
+              # tego nie pokazalo. BEZ `NOT NULL`: stare wiersze i wywolania
+              # nieudane nie maja tej wiedzy, a NULL mowi to wprost — pusty
+              # napis udawalby, ze dostawca cos odpowiedzial.
+              "model_served": "TEXT"},
     # TOR PRZEBIEGU. „produkcja" to praca konta, „test" to sprawdzanie kodu.
     # Domyslnie produkcja, bo bezpieczniejsza pomylka to policzyc test jako
     # produkcje (mniej wolnego budzetu) niz odwrotnie.
@@ -331,7 +342,7 @@ def record_call(conn: sqlite3.Connection, **fields: Any) -> None:
     keys = [k for k in (
         "run_id", "provider", "model", "purpose", "tokens_in", "tokens_out",
         "cache_hit", "web_searches", "cost_usd", "price_verified", "ok", "note",
-        "akcja",
+        "akcja", "model_served",
     ) if k in fields]
     conn.execute(
         f"INSERT INTO calls (at, {', '.join(keys)})"

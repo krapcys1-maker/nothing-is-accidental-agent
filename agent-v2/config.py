@@ -457,6 +457,39 @@ MODEL_FOR = {
     # zamiast 0,004 USD za notke; ok. 6 takich notek tygodniowo = ok. 1,3 USD
     # miesiecznie. Patrz `agent-v2/docs/WNIOSEK_2026-09-27.md`.
     "notka_przeslania": CLAUDE,
+    # SLEDZTWO — FALA 1 (25.10.2026, kontrakt `robocze/proby_25_10/KONTRAKT_FALA1.md`,
+    # spec §9 pkt 2). KAZDY cel ma tu wpis, bo `llm.call` na nieznanym celu rzuca
+    # `KeyError` (`config.MODEL_FOR[purpose]`), a ogolne `except` w przebiegu
+    # sledztwa po cichu puszczalo wtedy stara sciezke — oplacone etapy szly do
+    # kosza bez jednej linii w logu. Pilnuje tego `tests/test_cele_modeli.py`.
+    # Kanal kosztu jak u sasiadow: wywolania sledztwa ida pod `artykul_z_puli.main`
+    # („artykul"), notki serii pod `stages.notki_dnia` („notka").
+    #
+    # Plan przy odmowie albo ucieciu Sonneta (klasyfikatory „cyber" przy historiach
+    # o lukach): Flash z rozumowaniem, potem pytania stale (`sledztwo_plan`).
+    "pytania_ciekawosci_zapas": DEEPSEEK,
+    # Starszy redaktor: najwyzej trzy luki przed pisaniem — ocena, czego brakuje,
+    # to osad, wiec Sonnet; jedno krotkie wywolanie na sledztwo.
+    "krytyk_sledztwa": SONNET,
+    "krytyk_sledztwa_zapas": DEEPSEEK,
+    # Ksiega pytan: statusy paczkami po piec pytan; cytaty i statusy sprawdza kod.
+    "ksiega": DEEPSEEK,
+    # Poscig za dokumentem pierwotnym (`research.dokument`): najwyzej dwa szukania.
+    "investigation_document": DEEPSEEK,
+    # Jedna naprawa pierwszego zdania kata i wsadowe porownanie wnioskow serii
+    # z ostatnimi 14 dniami — praca na gotowych zdaniach, bez rozumowania.
+    "naglowek_naprawa": DEEPSEEK,
+    "ten_sam_punkt": DEEPSEEK,
+    # NOTKI SERII Z KATOW FAKTOW TEZ PISZE OPUS 5.5 (decyzja D1 kontraktu,
+    # 25.10.2026). Spec chciala tu Flasha z rozumowaniem, ale reczne czytanie prob
+    # z 25.10 pokazalo, ze Flash bez rozumowania mial bledy wiernosci, ktorych
+    # sprawdzenie faktow nie zlapalo, a Flash z rozumowaniem proby jeszcze nie
+    # przeszedl. Osobny cel zostaje, zeby przelaczenie po probie bylo jedna linia.
+    "notka_przeslania_fakt": CLAUDE,
+    # Wiernosc notki serii wobec JEJ twierdzen, przed sprawdzeniem w sieci —
+    # proba 25.10: „its comparison was Sonnet, not Opus" przeczylo cytowanemu
+    # „the highest score of any model" i przeszlo przez weryfikacje.
+    "wiernosc_notki": DEEPSEEK,
     # Poprawki zdan bez pokrycia w artykule — `stages.popraw_bez_pokrycia`.
     "naprawa_artykulu": DEEPSEEK,
     # NIESZTANDAROWY WNIOSEK przed pisaniem notki — `stages.wniosek`; model po
@@ -552,6 +585,18 @@ DEEPSEEK_MYSLENIE: dict[str, dict[str, str]] = {
     "przeslania_zapas": {"type": "enabled"},
     "kategoria_historii": {"type": "disabled"},
     "wielkie_historie": {"type": "disabled"},
+    # SLEDZTWO — FALA 1 (25.10.2026, kontrakt). Zapasy Sonneta MYSLA, bo zastepuja
+    # osad redaktora; reszta to praca na gotowym tekscie, ktora sprawdza kod
+    # (cytaty ksiegi, adresy dokumentow, liczby w zdaniu), wiec rozumowanie bylo
+    # by tylko rachunkiem — proba 6.09 pokazala, ze domyslne rozumowanie na
+    # `chat/completions` potrafi zjesc caly sufit przed odpowiedzia.
+    "pytania_ciekawosci_zapas": {"type": "enabled"},
+    "krytyk_sledztwa_zapas": {"type": "enabled"},
+    "ksiega": {"type": "disabled"},
+    "investigation_document": {"type": "disabled"},
+    "naglowek_naprawa": {"type": "disabled"},
+    "ten_sam_punkt": {"type": "disabled"},
+    "wiernosc_notki": {"type": "disabled"},
     # Jak `naprawa` notek: trzeba zwazyc zdanie wobec dowodow.
     "naprawa_artykulu": {"type": "enabled"},
     # Wniosek to MYSLENIE — szukanie tego, czego nie ma w naglowku.
@@ -625,18 +670,26 @@ PRICING = {
     "claude-opus-5": {"in": 5.00, "out": 25.00, "cache": 0.50, "verified": True},
     # OPUS 5.5 — model, na ktory `nowe_modele` przeszedl 23.09.2026. Do 26.09
     # liczony jak Opus 5 (5/25), bo nie mial wpisu; cennik Anthropic podaje
-    # 4/20 i cache 0,20. Z cennika, nie z faktury, wiec `verified: False`.
-    "claude-opus-5-5": {"in": 4.00, "out": 20.00, "cache": 0.20, "verified": False},
+    # 4/20 i cache 0,20.
+    #
+    # `verified: True` OD 25.10.2026 (kontrakt fali 1 sledztwa): oficjalny cennik
+    # Anthropic sprawdzony tego dnia dla Opusa 5.5, Sonneta 5.5 i Fable 5.1
+    # podaje stawki stale, bez taryf pory doby — inaczej niz DeepSeek, u ktorego
+    # stawka zalezy od godziny i dlatego potwierdza ja dopiero faktura. Plan i
+    # katy sledztwa chodza na tych modelach, a `price_verified = 0` przy kazdym
+    # ich wywolaniu robilo z calego rachunku sledztwa „szacunek" w raportach.
+    "claude-opus-5-5": {"in": 4.00, "out": 20.00, "cache": 0.20, "verified": True},
     # SONNET 5 — 2/10, nie 3/15. Cennik Anthropic (26.09.2026): cena wprowadzajaca
     # zostala cena stala, a zapowiedziana na 1 wrzesnia podwyzka do 3/15 „nie
     # nastapi". Z cennika, nie z faktury.
     "claude-sonnet-5": {"in": 2.00, "out": 10.00, "cache": 0.20, "verified": False},
-    # STAWKA FABLE 5.1 NIEPOTWIERDZONA. Wpisana z ceny poprzednika, bo model
-    # wyszedl 1 wrzesnia i nie ma go jeszcze na zadnej naszej fakturze.
-    # `verified: False` sprawia, ze kazde takie wywolanie zapisuje sie
-    # z `price_verified = 0` — czyli koszt artykulu bedzie widoczny jako
-    # SZACUNEK, dopoki nie sprawdzimy go na rozliczeniu.
-    "claude-fable-5-1": {"in": 10.00, "out": 50.00, "cache": 0.25, "verified": False},
+    # SONNET 5.5 — plan sledztwa i starszy redaktor (25.10.2026). Oficjalny cennik
+    # z 25.10: 2/10, cache 0,10. Wpis byl potrzebny, bo bez niego `stawka_modelu`
+    # liczyla Sonneta 5.5 stawka rodziny z cache 0,20 — dwa razy za drogo.
+    "claude-sonnet-5-5": {"in": 2.00, "out": 10.00, "cache": 0.10, "verified": True},
+    # FABLE 5.1 — do 25.10.2026 stawka niepotwierdzona, wpisana z ceny poprzednika.
+    # Oficjalny cennik z 25.10 podaje te same 10/50 i cache 0,25 (patrz Opus 5.5).
+    "claude-fable-5-1": {"in": 10.00, "out": 50.00, "cache": 0.25, "verified": True},
     "claude-fable-5": {"in": 10.00, "out": 50.00, "cache": 1.00, "verified": True},
     # STAWKI POTWIERDZONE FAKTURA (15-19 sierpnia 2026). Dziesiec wierszy
     # rozliczenia odtworzonych co do centa, wiec `verified` znaczy tu wreszcie
@@ -716,6 +769,44 @@ def stawka_modelu(model: str) -> dict:
             return {**PRICING[wzor], "verified": False}
     wzor = "deepseek-v4-pro" if nazwa.startswith("deepseek") else "claude-fable-5-1"
     return {**PRICING[wzor], "verified": False}
+
+
+# MODELE, NA KTORYCH STOI SLEDZTWO (25.10.2026, spec §9 pkt 2). Plan i krytyk
+# sledztwa chodza na `SONNET`, katy i notki serii na `CLAUDE`, a obie stale
+# BIORA SIE Z PLIKU (`data/wybor_modeli.json`, zamiany `nowe_modele`). Kopia
+# danych do proby miala ten plik bez zamian i 25.10 proba pisala Opusem 5,
+# a produkcja Opusem 5.5 — czyli proba mierzyla inny system niz ten, ktory
+# wdrazamy, i nic tego nie pokazalo.
+#
+# SPRAWDZENIE PRZY STARCIE, NIE `assert`. Wyjatek przy imporcie `config`
+# zatrzymalby KAZDY zegar bota (notki, komentarze, restacki), a nie tylko
+# sledztwo — za brak zamiany w pliku. Dlatego glosna linia na stderr przy kazdym
+# starcie procesu, a test (`tests/test_cele_modeli.py`) pilnuje samej reguly.
+MODELE_SLEDZTWA_OD = {"CLAUDE": "claude-opus-5-5", "SONNET": "claude-sonnet-5-5"}
+
+
+def modele_sledztwa_ponizej(stan: dict[str, str] | None = None) -> list[str]:
+    """Opisy rol sledztwa, ktorych model jest starszy niz zalozony albo bez ceny.
+
+    `stan` = {rola: model}; domyslnie biezace stale. Pusta lista = w porzadku.
+    """
+    from model_registry import version as _wersja
+    stan = stan if stan is not None else {r: globals().get(r, "") for r in MODELE_SLEDZTWA_OD}
+    out = []
+    for rola, minimum in MODELE_SLEDZTWA_OD.items():
+        model = str(stan.get(rola) or "")
+        if _wersja(model) < _wersja(minimum):
+            out.append("%s=%s, a sledztwo zaklada co najmniej %s" % (rola, model, minimum))
+        elif model not in PRICING and model not in CENY_ZAMIAN:
+            out.append("%s=%s nie ma wpisu w cenniku (liczony stawka rodziny)" % (rola, model))
+    return out
+
+
+if not _w_tescie_wczesnie():
+    for _opis in modele_sledztwa_ponizej():
+        import sys as _sys
+        print("  [modele] UWAGA: %s — sprawdz `data/wybor_modeli.json`" % _opis,
+              file=_sys.stderr, flush=True)
 
 # --- taryfa szczytowa DeepSeeka -----------------------------------------------
 # Od 2026-08-16 16:00 UTC DeepSeek wprowadza ceny szczytowe i pozaszczytowe:
@@ -939,7 +1030,10 @@ MODEL_DO_SZUKANIA: dict[str, str] = {}
 # (np. dyskoveria w trybie tanim). Bez limitu Claude robil 17, potem 31 rund.
 # Ten sam limit idzie do DeepSeeka przez endpoint zgodny z API Anthropic.
 MAX_SZUKAN_NA_ETAP = {"factcheck": 3, "curiosity": 3, "aktualne_modele": 4, "reply": 2,
-                     "investigation_search": 3}
+                     "investigation_search": 3,
+                     # Jeden dokument pierwotny, jedno-dwa celne zapytania (25.10.2026,
+                     # spec §2 etap 8): szukanie Flasha ok. 0,005 USD, cztery dokumenty.
+                     "investigation_document": 2}
 
 # SPRAWDZANIE FAKTOW W KOMENTARZACH — WYLACZONE decyzja wlasciciela 28.09.2026
 # („niech tak bedzie": sprawdzamy notki i artykuly, komentarzy nie). Zmierzone
@@ -1346,6 +1440,13 @@ CLASSIFY_MAX_EXCERPT_CHARS = 700
 # --- karta dowodowa ----------------------------------------------------------
 CARD_MIN_CONFIRMED = 5
 CARD_MAX_CONFIRMED = 8
+# KARTA SLEDZTWA: SZESNASCIE (25.10.2026, spec §9 pkt 6). Sufit osmiu byl
+# osiagany w kazdej probie sledztwa tego dnia, a seria do szesciu notek potrzebuje
+# twierdzen rdzeniowych na kazda notke osobno. Artykul z puli zostaje przy osmiu
+# (`stages.synthesis(..., tryb="artykul")`).
+CARD_MAX_CONFIRMED_SLEDZTWO = 16
+# Glosy ludzi w karcie sledztwa — osobna lista, nie twierdzenia (spec §2 etap 13).
+CARD_MAX_GLOSOW = 4
 CARD_MAX_UNCERTAIN = 3
 CARD_MAX_CONTRADICTIONS = 3
 CARD_MIN_NUMBERS = 3
@@ -1577,6 +1678,10 @@ EFFORT = {
     # Claude API) — tak przeszlo A/B z 27.09, wiec zachowanie sie nie zmienia.
     "przeslania": "medium",
     "pytania_ciekawosci": "medium",
+    # SLEDZTWO — FALA 1 (25.10.2026, kontrakt): starszy redaktor jak plan,
+    # notka kata faktow jak notka z przeslania — ten sam pisarz, ten sam wysilek.
+    "krytyk_sledztwa": "medium",
+    "notka_przeslania_fakt": "medium",
     # PONIZEJ: piec wpisow, ktore NIC NIE ROBIA — wszystkie te etapy chodza na
     # DeepSeeku, ktory tego pokretla nie czyta. Zostaja jako zapis intencji na
     # wypadek przepiecia etapu na Claude, i `llm.call` mowi raz na proces,
@@ -1634,10 +1739,16 @@ MAX_TOKENS = {
     # Parowanie oddaje same identyfikatory i jedno zdanie uzasadnienia na
     # grupe — krotko, ale przy dwudziestu faktach grup moze byc kilka.
     "parowanie": 8000,
-    # karta: twierdzenia z cytatami, liczby, sprzeczności, granice
+    # karta: twierdzenia z cytatami, liczby, sprzeczności, granice.
+    # SUFIT Z WIEKSZEGO TRYBU (25.10.2026): ten sam etap pisze karte artykulu (8)
+    # i karte sledztwa (16 twierdzen, glosy, pola `q`/`kind`/`slot`). Sufit
+    # policzony z osmiu ucialby karte sledztwa w polowie JSON-a, a nieuzyty
+    # zapas nic nie kosztuje.
     "synthesis": _tokens_for(
-        CARD_MAX_CONFIRMED * (CARD_MAX_CLAIM_CHARS + CLASSIFY_MAX_EXCERPT_CHARS)
+        max(CARD_MAX_CONFIRMED, CARD_MAX_CONFIRMED_SLEDZTWO)
+        * (CARD_MAX_CLAIM_CHARS + CLASSIFY_MAX_EXCERPT_CHARS + 120)
         + CARD_MAX_NUMBERS * 200
+        + CARD_MAX_GLOSOW * 450
         + 4000
     ),
     # artykuł plus zapas na myślenie
@@ -1652,6 +1763,7 @@ MAX_TOKENS = {
     "note_tani": _tokens_for(400) + 8000,   # ten sam kontrakt, inny pisarz
     "note_mimo": _tokens_for(400) + 8000,   # ten sam kontrakt, Xiaomi MiMo (E11)
     "notka_przeslania": _tokens_for(400) + 8000,   # ten sam kontrakt, Opus
+    "notka_przeslania_fakt": _tokens_for(400) + 8000,   # D1: tez Opus
     "comment": _tokens_for(600) + 8000,
     "reply": _tokens_for(600) + 8000,
     "bank": 24000,
@@ -1675,11 +1787,22 @@ MAX_TOKENS = {
     # Sledztwo: werdykt nowosci (jedno zdanie + numery) i trzy przeslania po
     # kilka zdan. Rozumowanie wlaczone, stad zapas.
     "nowosc": 12000,
-    "przeslania": 16000,
-    "przeslania_zapas": 16000,
+    # PRZESLANIA PRZELICZONE NA SZESC KATOW I SEDNO (25.10.2026, spec §9 pkt 12):
+    # kat ma kilkanascie pol (wniosek, ai_link, why_care, naglowek, hak, fakty,
+    # zalozenie, sprawdzian...), ok. 2,5 tys. znakow JSON-u, czyli ok. 700
+    # tokenow; szesc katow, sedno i lista ustalen to ok. 6 tys. tokenow tresci.
+    # 12 tys. to dwukrotny zapas na samej tresci, a rozumowanie ma osobno
+    # `THINKING_HEADROOM_TOKENS` doliczane nizej.
+    "przeslania": 12000,
+    "przeslania_zapas": 12000,
     "kategoria_historii": 3000,
     "wielkie_historie": 4000,
     "pytania_ciekawosci": 8000,
+    # SLEDZTWO — FALA 1 (25.10.2026, kontrakt). Plan przy odmowie Sonneta — ten
+    # sam kontrakt co plan; starszy redaktor oddaje najwyzej trzy pozycje.
+    "pytania_ciekawosci_zapas": 8000,
+    "krytyk_sledztwa": 4000,
+    "krytyk_sledztwa_zapas": 4000,
     # Do szesciu zdan, kazde jedno zdanie odpowiedzi.
     "naprawa_artykulu": 6000,
     # Trzy wnioski po kilka krotkich pol.
@@ -2295,8 +2418,15 @@ FORMY_NIEMOZLIWE = {
 NOTE_FORM_MIX = ("SCENA", "KONTRAST", "ZACZEP_I_KONKRET", "PROSTA", "LISTA",
                  "PYTANIE", "ODWROCENIE", "LICZBA", "WYJASNIENIE")
 
+# MYSL W GLOSIE PUBLIKACJI (25.10.2026, spec §5 „MYSL"). Bylo „Reasoning and
+# first-person judgment are welcome" i dwie z trzech MYSLI z prob tego dnia
+# mowily „I" — konto jest anonimowa marka redakcyjna (ADR-018), wiec „ja" bez
+# osoby za nim to persona, a nie glos. Zostaje zdanie z wlasnym stanowiskiem,
+# tylko w liczbie mnogiej publikacji. Analogia, bo MYSL nie ma faktow, a cos musi
+# dac czytelnikowi zrozumienie zamiast samej opinii. Brak cyfr i nazw serii
+# pilnuje KOD (`stages.bramka_mysli`), nie ten opis.
 NOTE_TYPES = {
-    'MYSL': 'An editorial view, a genuine open question, or a clearly hypothetical situation. There is no evidence card: do not assert checkable events, figures, company actions or shared personal experiences. Reasoning and first-person judgment are welcome.',
+    'MYSL': 'An editorial view, a genuine open question, or a clearly hypothetical situation. There is no evidence card: do not assert checkable events, figures, company actions or shared personal experiences. Give a judgment in the publication\'s voice — we, our view, our bet — never I or my. Use one everyday analogy that preserves how the real thing works.',
     'ARTYKUL': 'A supported point from our article, understandable on its own. The publishing code adds its link. Do not reduce the note to an advertisement.',
     'CIEKAWOSTKA': 'Explain a documented finding and why it matters. It can be useful without overturning a myth or criticising anyone.',
     'DYSKUSJA': 'Offer a reasoned position or a genuine question grounded in the evidence. Let readers see what the judgment depends on.',
@@ -3469,6 +3599,15 @@ MAX_TOKENS = {
 # Te sufity juz obejmuja rozumowanie. Nie dodajemy kolejnych 28 tysiecy tokenow.
 MAX_TOKENS.update({"investigation": 6000, "investigation_search": 6000,
                    "investigation_extract": 8000, "discovery_recovery": 6000})
+# SLEDZTWO — FALA 1 (25.10.2026, kontrakt): etapy z WYLACZONYM rozumowaniem
+# (`DEEPSEEK_MYSLENIE`) dostaja sufit doslownie, jak trzy wyzej — zapas na
+# rozumowanie nie ma tu czego pokrywac, a sufit wyznacza tez termin wywolania
+# (`timeout_for`). Ksiega: paczka pieciu pytan ze statusami i cytatami;
+# naprawa naglowka: jedno zdanie; porownanie wnioskow i wiernosc notki: krotka
+# lista par albo zdan.
+MAX_TOKENS.update({"ksiega": 6000, "investigation_document": 6000,
+                   "naglowek_naprawa": 600, "ten_sam_punkt": 1500,
+                   "wiernosc_notki": 1500})
 
 # --- terminy -----------------------------------------------------------------
 # Termin musi pokryć własny sufit tokenów. Zmierzone: mediana 16,08 ms na token

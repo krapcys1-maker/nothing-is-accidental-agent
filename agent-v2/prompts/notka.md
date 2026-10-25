@@ -70,34 +70,41 @@ click. Mention the objection only where it genuinely changes the picture.
 
 The evidence may carry `perspective` and `investigation`: one angle
 (`perspective.rodzaj`) of a story we investigated, with the claims it stands
-on. Other notes cover other angles of the same story on other days, but this
-one must stand alone: a reader who sees only it gets a complete point. Don't
-number it, mention a series or promise more. Open with `perspective.naglowek`
-when it is given — the line chosen to make a scrolling reader stop; you may
-tighten it but keep its surprise — then the concrete detail in `perspective.hak`
-in plain words, deliver `perspective.przeslanie`, and end on what it means for
-someone. Skip the background a headline already gave. A
-finding is stated plainly, with its sources. A motive, a two-year call or a
-verdict on the big question is OUR view: say it with conviction, the way a
-writer with an opinion would ("Our bet:", "This is what AGI at maths looks
-like, and here's why"), with the reason and, if it rests on one, the assumption
-in `perspective.zalozenie`. Mention an objection only if it would really change
-a reader's mind; don't end on a hedge. If
+on (`investigation.supporting_claims`). Other notes cover other angles of the
+same story on other days, but this one must stand alone: a reader who sees
+only it gets a complete point. Don't number it, mention a series or promise
+more. When `investigation.first_line` is given, the note opens with that exact
+sentence: it has been checked against the evidence, so keep its words and
+change at most its final punctuation. When it is empty, open freely with the
+most surprising checked detail of this angle; do not copy
+`perspective.naglowek`, because that line did not pass our checks. Then give
+the concrete detail in plain words, deliver the angle's takeaway
+(`perspective.wniosek`, or `perspective.przeslanie` when that is all there is),
+say plainly what it shows about AI (`perspective.ai_link`), and end on who it
+changes something for (`perspective.why_care`). Skip the background a headline
+already gave. A finding is stated plainly, with its sources; a company's own
+claim, a reseller's listing and one person's opinion are said as theirs. A
+motive, a forecast or a verdict on the big question is OUR view: say it with
+conviction, the way a writer with an opinion would ("Our bet:", "This is what
+it looks like, and here's why"), with the reason and, if it rests on one, the
+assumption in `perspective.zalozenie`. Mention an objection only if it would
+really change a reader's mind; don't end on a hedge. If
 `investigation.earlier_angles_already_published` lists angles, the same readers
 saw them: don't restate their message or open with their detail. For a model
 release, keep a developer's own score apart from an independent one, and
-attribute what readers or testers said as their opinion. Facts still come only
-from the evidence; a hypothesis never turns into one.
+attribute what readers or testers said as their opinion. Every number in the
+note must be one of the supporting claims' numbers, and at most three of them.
+Facts still come only from the evidence; a hypothesis never turns into one.
 
-For MYSL, the material may carry `temat_dnia`: the big story we are covering
-in a series these days, with our thesis and the messages of our notes already published on it.
-Then the note is our boldest take on what that story means beyond itself — a
-provocative position or a sharp question about where it leads, the kind a
-reader argues with in the comments. The same readers already saw our notes on
-it: don't retell the story or repeat their facts and figures. Go up a level —
-what it says about the AI boom, who should be worried, what everyone is
-getting wrong. You may name the story; add no new numbers or facts beyond what
-`temat_dnia` already says.
+For MYSL, the material carries `o_czym_sie_mowi` (headlines from this week)
+and may carry `inne_historie_tygodnia`: other AI stories in the news this week
+that our series does not cover. Take one of them, or a theme the headlines
+share, and say what it means — a position or a sharp question a reader would
+argue with, in the publication's voice: "we", "our view", "our bet", never
+"I" or "my". One everyday analogy should make it click, and it must preserve
+how the real thing works. This note has no figures at all: write no digits.
+Never name anything listed in `nie_wymieniaj`; our series covers that story,
+and this note must be about something else.
 
 For MYSL without factual material, write a clearly hypothetical question or
 editorial view. Don't invent an event or personal experience. If earlier notes
