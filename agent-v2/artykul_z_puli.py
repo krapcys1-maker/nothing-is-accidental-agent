@@ -974,6 +974,7 @@ def _przebieg_sledztwa(conn, run_id: int) -> int:
     # pytanie, smaczki z karty modelu — badanie szuka odpowiedzi na kazde z nich.
     if typ == "premiera":
         pod += list(sledztwo.PYTANIA_PREMIERY)
+    pod.append(sledztwo.PYTANIE_PIERWOTNE)
     for q in pod:
         print("    - %s" % str(q)[:110], flush=True)
     pytanie = brief["question"] + (
@@ -1008,7 +1009,8 @@ def _przebieg_sledztwa(conn, run_id: int) -> int:
     print("-- klasyfikacja --", flush=True)
     evidence = stages.classify(conn, run_id, brief["question"], corpus)
     print("\n-- sledztwo: hipotezy i brakujace odpowiedzi --", flush=True)
-    evidence, dossier = research.deepen(conn, run_id, pytanie, evidence, corpus)
+    evidence, dossier = research.deepen(conn, run_id, pytanie, evidence, corpus,
+                                        max_rund=sledztwo.RUND_SLEDZTWA)
     print()
     print("-- synteza --", flush=True)
     try:

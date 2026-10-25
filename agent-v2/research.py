@@ -321,8 +321,17 @@ def _extract(conn, run_id, question, gap, corpus):
     return result
 
 
-def deepen(conn, run_id, question, evidence, corpus):
-    """Return enriched evidence and an auditable dossier. At most two searches."""
+def deepen(conn, run_id, question, evidence, corpus, max_rund=None):
+    """Return enriched evidence and an auditable dossier. At most `max_rund` searches
+    (default `config.RESEARCH_MAX_ROUNDS`).
+
+    A round that brings nothing (no search results, no sources, no new verified
+    passage) no longer ends the research: the next open question from the SAME
+    assessment gets the next round, without paying for a new assessment. 25.10.2026:
+    NextDC investigation stopped after one round of three HTTP 403 pages with two
+    other important questions open.
+    """
+    max_rund = config.RESEARCH_MAX_ROUNDS if max_rund is None else max_rund
     import stages
     evidence = list(evidence)
     dossier = {"question": question, "created_at": datetime.now(timezone.utc).isoformat(),
@@ -333,33 +342,48 @@ def deepen(conn, run_id, question, evidence, corpus):
     dossier["path"] = str(path)
     seen = {url_key(c.get("url")) for c in [*corpus, *evidence]} - {""}
     attempted = []
+    failed = set()        # questions whose round brought nothing
+    stale = False         # True = last round added nothing, the assessment still holds
+    rounds_done = 0
     try:
-        for turn in range(config.RESEARCH_MAX_ROUNDS + 1):
-            assessment, cached = _assess(conn, run_id, question, evidence, attempted)
-            dossier["assessment"] = assessment
-            dossier["assessments"].append({"round": turn, "cached": cached, **assessment})
-            _write(path, {**dossier, "evidence": evidence, "stop_reason": "in_progress"})
+        while True:
+            if not stale:
+                assessment, cached = _assess(conn, run_id, question, evidence, attempted)
+                dossier["assessment"] = assessment
+                dossier["assessments"].append({"round": rounds_done, "cached": cached, **assessment})
+                _write(path, {**dossier, "evidence": evidence, "stop_reason": "in_progress"})
             gaps = [q for q in assessment["questions"] if q["status"] != "answered"
-                    and q["next_query"] and q["next_query"].casefold() not in attempted]
+                    and q["next_query"] and q["next_query"].casefold() not in attempted
+                    and q["question"] not in failed]
             chosen = assessment.get("next_question")
             preferred = assessment["questions"][chosen - 1] if chosen else None
             gaps.sort(key=lambda q: (q["importance"] != "high", q != preferred))
             if assessment["ready"] or not gaps:
-                dossier["stop_reason"] = "answered" if assessment["ready"] else "no_actionable_gap"
+                # After a failed round the stop reason is that round's own.
+                if not stale:
+                    dossier["stop_reason"] = "answered" if assessment["ready"] else "no_actionable_gap"
                 break
-            if turn == config.RESEARCH_MAX_ROUNDS:
+            if rounds_done >= max_rund:
                 dossier["stop_reason"] = "round_limit"
                 break
             gap = gaps[0]
-            print("  [research] runda %d: %s" % (turn + 1, gap["question"]), flush=True)
+            rounds_done += 1
+            print("  [research] runda %d: %s" % (rounds_done, gap["question"]), flush=True)
             attempted.append(gap["next_query"].casefold())
-            new_sources = _search(conn, run_id, question, gap, seen)
+            try:
+                new_sources = _search(conn, run_id, question, gap, seen)
+            except ResearchLimit as exc:
+                if str(exc) != "no_search_results":
+                    raise
+                new_sources = None
             record = {"question": gap["question"], "query": gap["next_query"],
-                      "urls": [s["url"] for s in new_sources], "added_sources": 0}
+                      "urls": [s["url"] for s in new_sources or []], "added_sources": 0}
             dossier["rounds"].append(record)
             if not new_sources:
-                dossier["stop_reason"] = "no_new_sources"
-                break
+                dossier["stop_reason"] = "no_search_results" if new_sources is None else "no_new_sources"
+                failed.add(gap["question"])
+                stale = True
+                continue
             documents = stages.fetch(conn, run_id, new_sources)
             new = _extract(conn, run_id, question, gap, documents)
             old_quotes = {" ".join(q.split()).casefold() for e in evidence for q in e["excerpts"]}
@@ -367,9 +391,12 @@ def deepen(conn, run_id, question, evidence, corpus):
                                          for q in e["excerpts"])]
             if not new:
                 dossier["stop_reason"] = "no_new_verified_passages"
-                break
+                failed.add(gap["question"])
+                stale = True
+                continue
             evidence.extend(new)
             record["added_sources"] = len(new)
+            stale = False
     except ResearchLimit as exc:
         dossier["stop_reason"] = str(exc)
     except (llm.BudgetExceeded, llm.PreflightFailed):

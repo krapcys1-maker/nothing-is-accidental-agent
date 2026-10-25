@@ -708,7 +708,7 @@
 
 ### `sledztwo.py` — śledztwo — historia z radaru, bramka nowości sprawdzana kodem, seria 4–5 kątów (kuriozum, mechanizm, ustalenie, kto płaci, motyw, za dwa lata) i kolejka notek
 
-1011 wierszy, 39 funkcji na poziomie modułu, 0 klas
+1074 wierszy, 42 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -720,7 +720,10 @@
 | `_rekordy(dni)` *(wewn.)* | — |
 | `ile_sledztw(dni)` | Ile SLEDZTW w oknie — bez wpisow `oznacz_artykul`. |
 | `ile_artykulow(dni)` | — |
-| `ocena_historii(h)` | Czy te historie warto badac: dosc niezaleznych zrodel i jeszcze nie badana. |
+| `zasieg_historii(h)` | Ilu niezaleznych wydawcow mowi o historii: serwisy (hosty) plus osobne kanaly |
+| `_slowa_tytulu(tytul)` *(wewn.)* | — |
+| `_ten_sam_tytul(a, b)` *(wewn.)* | Ten sam tekst pod dwoma hostami: oba tytuly maja co najmniej 5 znaczacych slow i 80% |
+| `ocena_historii(h, min_serwisow)` | Czy te historie warto badac: dosc niezaleznych zrodel i jeszcze nie badana. |
 | `kategorie_historii(historie, conn, run_id)` | {miejsce: {"kategoria", "zapytanie"}} dla historii — jedno tanie wywolanie. |
 | `ostatnie_kategorie(ile)` | Kategorie ostatnich `ile` sledztw (najnowsze na koncu) — do kary za powtorke. |
 | `dolacz_z_korpusu(h, korpus, klucze)` | Dopisuje do historii naglowki z korpusu (ostatnie `DNI_DOLACZANIA` dni), ktore |
@@ -915,7 +918,7 @@
 
 ### `research.py` — dogrywka researchu artykułu: konkurencyjne wyjaśnienia, dosłowne cytaty, twardy sufit kosztu
 
-407 wierszy, 19 funkcji na poziomie modułu, 1 klas
+434 wierszy, 19 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -935,7 +938,7 @@
 | `_assess(conn, run_id, question, evidence, attempted)` *(wewn.)* | — |
 | `_search(conn, run_id, question, gap, seen)` *(wewn.)* | — |
 | `_extract(conn, run_id, question, gap, corpus)` *(wewn.)* | — |
-| `deepen(conn, run_id, question, evidence, corpus)` | Return enriched evidence and an auditable dossier. At most two searches. |
+| `deepen(conn, run_id, question, evidence, corpus, max_rund)` | Return enriched evidence and an auditable dossier. At most `max_rund` searches |
 | `synthesis_question(question, dossier)` | — |
 | `attach(card, dossier)` | — |
 
@@ -987,7 +990,7 @@
 
 ### `artykul_z_puli.py` — artykuł bierze temat z tej samej puli, co notki
 
-1785 wierszy, 15 funkcji na poziomie modułu, 0 klas
+1787 wierszy, 15 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|

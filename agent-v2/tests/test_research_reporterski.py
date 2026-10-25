@@ -106,6 +106,33 @@ class InvestigationTests(unittest.TestCase):
         self.assertEqual(len(saved["assessments"]), 3)
         self.assertEqual(saved["assessment"]["questions"][0]["evidence"][0]["url"], C)
 
+    def test_failed_round_moves_to_next_open_question_without_new_assessment(self):
+        # 25.10.2026: NextDC — one round of HTTP 403 pages ended the research with two
+        # other important questions open. Now the next question gets the next round.
+        two = assessment()
+        two["questions"].append({**two["questions"][0], "question": "Who carries the debt?",
+                                 "next_query": "lender exposure filing"})
+        self.queue("investigation", two)
+        self.queue("investigation_search", {"sources": []}, [A])      # round 1: nothing new
+        self.round(C, QC)                                              # round 2: next question
+        self.queue("investigation", assessment(answered=True, ident=2, quote=QC))
+        evidence, dossier = self.run_research()
+        self.assertEqual([s["url"] for s in evidence], [A, C])
+        self.assertEqual([r["question"] for r in dossier["rounds"]],
+                         ["Does the evaluation support this policy?", "Who carries the debt?"])
+        self.assertEqual([c[0] for c in self.calls].count("investigation"), 2)
+        self.assertEqual(dossier["stop_reason"], "answered")
+
+    def test_round_limit_can_be_raised_per_call(self):
+        self.queue("investigation", assessment())
+        self.round()
+        self.queue("investigation", assessment("independent evaluation effectiveness", ident=2, quote=QB))
+        self.round(C, QC)
+        self.queue("investigation", assessment("third question query", ident=3, quote=QC))
+        _, dossier = research.deepen(self.conn, 1, "Why?", [source()], [{"url": A, "text": QA}], max_rund=2)
+        self.assertEqual(dossier["stop_reason"], "round_limit")
+        self.assertEqual(len(dossier["rounds"]), 2)
+
     def test_satisfied_question_needs_no_search(self):
         self.queue("investigation", assessment(answered=True))
         _, dossier = self.run_research()

@@ -377,6 +377,27 @@ try:
     sprawdz("rozbita historia dostaje naglowki z korpusu po slowie kluczowym i przechodzi bramke",
             _wyb4 is H_ROZBITA and H_ROZBITA["serwisy"] == 5 and H_ROZBITA["dolaczone"] == 3
             and "+3 z korpusu" in _rank4[0]["powod"], (_rank4, H_ROZBITA.get("serwisy")))
+    # PRZEDRUK I PREMIERA (25.10.2026): TechXplore przedrukowal The Conversation pod tym samym
+    # tytulem; premiera Kimi K3.1 Pro miala 2 serwisy do pobrania i 3 kanaly YouTube.
+    _tyt = "Shares in this data centre company are down 40% as investors lose faith in the AI story"
+    H_PRZEDRUK = {"miejsce": 7, "tytul": _tyt, "naglowki": [
+        w("Conversation", "https://theconversation.com/a", _tyt),
+        w("TechXplore", "https://techxplore.com/a", _tyt.replace("centre", "center")),
+        w("NPR", "https://www.npr.org/a", "Oracle's debt is growing and investors are worried"),
+        w("Futurism", "https://futurism.com/a", "Banks prepare for an AI catastrophe")]}
+    sprawdz("przedruk pod tym samym tytulem to jeden wydawca: 4 hosty, zasieg 3, bramka nie",
+            sledztwo.zasieg_historii(H_PRZEDRUK) == 3 and not sledztwo.ocena_historii(H_PRZEDRUK)[0],
+            (sledztwo.zasieg_historii(H_PRZEDRUK), sledztwo.ocena_historii(H_PRZEDRUK)))
+    H_KIMI = {"miejsce": 8, "tytul": "Introducing Kimi K3.1 Pro", "naglowki": [
+        w("Simon Willison", "https://simonwillison.net/k", "Introducing Kimi K3.1 Pro"),
+        w("Latent Space", "https://www.latent.space/k", "Kimi 3.1 Pro narrows the closed-AI lead"),
+        w("Matt Wolfe", "https://www.youtube.com/watch?v=a", "Open-Source AI Models Caught Up!"),
+        w("Matthew Berman", "https://www.youtube.com/watch?v=b", "Kimi K3.1 Invented the Benchmark Scores"),
+        w("TheAIGRID", "https://www.youtube.com/watch?v=c", "Kimi K3.1 Just Revealed The Worlds Most Powerful AI")]}
+    sprawdz("premiera: zasieg z kanalami YouTube (5), prog premiery 2 serwisy — przechodzi; zwykly prog nie",
+            sledztwo.zasieg_historii(H_KIMI) == 5
+            and sledztwo.ocena_historii(H_KIMI, sledztwo.MIN_SERWISOW_PREMIERY)[0]
+            and not sledztwo.ocena_historii(H_KIMI)[0], sledztwo.ocena_historii(H_KIMI, 2))
     sprawdz("KONTRDOWOD: ogolne slowo (OpenAI), stary naglowek i fragment wyrazu (NextDCX) nie lacza",
             not any("OpenAI ships" in str(n.get("temat")) or "old story" in str(n.get("temat"))
                     or "NextDCX" in str(n.get("temat")) for n in H_ROZBITA["naglowki"]))
@@ -566,6 +587,9 @@ sprawdz("artykul ze sledztwa raz na tydzien: limit przed pisaniem, po kolejce ka
 sprawdz("artykul: pelny obraz i JEDNA nasza analiza przy co najmniej czterech katach",
         'analiza_ok = bool(rodzaje & set(sledztwo.ANALIZY)) and len(przes) >= 4' in _art)
 _sl = _art[_art.index("def _przebieg_sledztwa"):]
+sprawdz("kazde sledztwo pyta o dokumenty pierwotne i ma 3 rundy dogrywki",
+        "pod.append(sledztwo.PYTANIE_PIERWOTNE)" in _sl and "max_rund=sledztwo.RUND_SLEDZTWA" in _sl
+        and sledztwo.RUND_SLEDZTWA == 3 and "original document" in sledztwo.PYTANIE_PIERWOTNE)
 sprawdz("przebieg: wybor duzego tematu, pytania premiery, glosy HN i cennik w korpusie, typ do pisarza",
         "sledztwo.wybierz_historie(historie" in _art and "pod += list(sledztwo.PYTANIA_PREMIERY)" in _art
         and "sledztwo.glosy_hn(_zapytanie, klucze=" in _art and "sledztwo.cennik_openrouter(_zapytanie)" in _art

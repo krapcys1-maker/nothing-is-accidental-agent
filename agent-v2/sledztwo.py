@@ -49,6 +49,9 @@ import config
 # skladac obraz. Prototyp 27.09 mial ich dziewiec; ponizej czterech laczenie
 # zrodel niczego nie ustali.
 MIN_ZRODEL = 4
+# Premiera modelu: dwa serwisy do pobrania wystarcza, jesli zasieg (z kanalami YouTube)
+# ma co najmniej `MIN_ZRODEL` wydawcow — patrz `zasieg_historii`.
+MIN_SERWISOW_PREMIERY = 2
 MAKS_ZRODEL = 12
 # LIMITY TYGODNIOWE — wlasciciel: jak najtaniej, ale ma byc unikatowo.
 # 25.10.2026 (wlasciciel: „dziennikarz sledczy (...) mniej tematow, ale jeden
@@ -146,6 +149,14 @@ PYTANIA_PREMIERY = (
     "of AGI)? What is the evidence for and against?",
     "What surprising details appear in its model card, system card or safety testing?",
 )
+# DOKUMENT PIERWOTNY ZA KAZDYM KLUCZOWYM TWIERDZENIEM (25.10.2026): w probie o NextDC
+# liczby z testu warunkow skrajnych MFW przyszly z greckiego portalu, a raport Banku Anglii
+# z „wtornych doniesien" — nikt nie szukal oryginalow. To pytanie idzie do kazdego sledztwa.
+PYTANIE_PIERWOTNE = ("Where is the original document behind each key claim attributed to an institution, "
+                     "regulator or company (the report, filing, official post, model card or dataset on its "
+                     "own website), and what exactly does it say?")
+# Ile rund dogrywki badania w sledztwie (artykul z puli ma `config.RESEARCH_MAX_ROUNDS`).
+RUND_SLEDZTWA = 3
 # DUZE TEMATY, NIE PIERWSZY Z RADARU (25.10.2026, wlasciciel: „ma szukac duzych
 # tematow, a nie jakies male pierdki (...) ma to byc kreatywne"). Do tego dnia
 # sledztwo bralo pierwsza historie radaru z co najmniej 4 serwisami — radar ustawia
@@ -295,12 +306,63 @@ def ile_artykulow(dni: int = 7) -> int:
     return sum(1 for r in _rekordy(dni) if r.get("artykul_opublikowany"))
 
 
-def ocena_historii(h: dict[str, Any]) -> tuple[bool, str]:
-    """Czy te historie warto badac: dosc niezaleznych zrodel i jeszcze nie badana."""
+def zasieg_historii(h: dict[str, Any]) -> int:
+    """Ilu niezaleznych wydawcow mowi o historii: serwisy (hosty) plus osobne kanaly
+    YouTube, ktorych nie pobieramy, ale ktore swiadcza o wielkosci tematu.
+
+    25.10.2026: premiera Kimi K3.1 Pro byla w korpusie u pieciu wydawcow (Simon Willison,
+    Latent Space i trzy kanaly YouTube), ale miala dwa serwisy do pobrania — bramka
+    czterech serwisow nie wpuszczala jej nigdy, a premiery maja byc naszym glownym tematem.
+    """
+    # PRZEDRUK TO JEDEN WYDAWCA (25.10.2026): TechXplore przedrukowuje The Conversation pod
+    # niemal tym samym tytulem, wiec historia NextDC miala „4 serwisy" przy jednym tekscie.
+    # Ten sam tytul (po zestawie slow, `_ten_sam_tytul`) u dwoch hostow liczy sie raz.
+    wydawcy: dict[str, set[str]] = {}
+    for z in zrodla_historii(h):
+        wydawcy.setdefault(z["host"], set()).add(_slowa_tytulu(z.get("title")))
+    for w in h.get("naglowki") or []:
+        if any(p in str(w.get("url") or "").lower() for p in NIE_POBIERAMY) and w.get("kanal"):
+            wydawcy.setdefault("yt:%s" % str(w.get("kanal")).strip().lower(), set()).add(
+                _slowa_tytulu(w.get("temat")))
+    grupy: list[list[frozenset]] = []
+    for host, tytuly in wydawcy.items():
+        tytuly = [t for t in tytuly if t]
+        for g in grupy:
+            if tytuly and all(any(_ten_sam_tytul(a, b) for b in g) for a in tytuly):
+                g.extend(tytuly)
+                break
+        else:
+            grupy.append(list(tytuly) or [frozenset({host})])
+    return len(grupy)
+
+
+def _slowa_tytulu(tytul: Any) -> frozenset:
+    return frozenset(w for w in re.findall(r"[a-z0-9]+", str(tytul or "").lower().replace("centre", "center"))
+                     if len(w) > 2)
+
+
+def _ten_sam_tytul(a: frozenset, b: frozenset) -> bool:
+    """Ten sam tekst pod dwoma hostami: oba tytuly maja co najmniej 5 znaczacych slow i 80%
+    wspolnych (Jaccard). Krotkie tytuly („PHP 8.2.35") bywaja rozne mimo tych samych slow."""
+    return len(a) >= 5 and len(b) >= 5 and len(a & b) / len(a | b) >= 0.8
+
+
+def ocena_historii(h: dict[str, Any], min_serwisow: int | None = None) -> tuple[bool, str]:
+    """Czy te historie warto badac: dosc niezaleznych zrodel i jeszcze nie badana.
+
+    `min_serwisow` — ile serwisow DO POBRANIA trzeba (domyslnie `MIN_ZRODEL`); premiera
+    modelu ma nizszy prog (`MIN_SERWISOW_PREMIERY`) przy zasiegu co najmniej `MIN_ZRODEL`,
+    bo jej material (karta modelu, oceny, glosy, cena) dobiera badanie.
+    """
+    prog = MIN_ZRODEL if min_serwisow is None else min_serwisow
     zrodla = zrodla_historii(h)
     hosty = {z["host"] for z in zrodla}
-    if len(hosty) < MIN_ZRODEL:
-        return False, "tylko %d niezaleznych serwisow (prog %d)" % (len(hosty), MIN_ZRODEL)
+    if len(hosty) < prog:
+        return False, "tylko %d niezaleznych serwisow (prog %d)" % (len(hosty), prog)
+    # Zasieg (bez przedrukow, z kanalami YouTube) tez co najmniej `MIN_ZRODEL` — takze
+    # przy zwyklym sledztwie, zeby przedruk nie robil z jednego tekstu dwoch serwisow.
+    if zasieg_historii(h) < MIN_ZRODEL:
+        return False, "zasieg %d wydawcow bez przedrukow (prog %d)" % (zasieg_historii(h), MIN_ZRODEL)
     nasze = {_klucz(z["url"]) for z in zrodla}
     for r in _rekordy(DNI_PAMIECI):
         wspolne = nasze & set(r.get("zrodla") or [])
@@ -441,8 +503,9 @@ def wybierz_historie(historie: list[dict[str, Any]], conn=None, run_id: int | No
             h["dolaczone"] = dolacz_z_korpusu(h, korpus, h["klucze"])
     dobre, ranking = [], []
     for h in historie:
-        ok, powod = ocena_historii(h)
-        h["serwisy"] = len({z["host"] for z in zrodla_historii(h)})
+        ok, powod = ocena_historii(h, MIN_SERWISOW_PREMIERY if h["kategoria"] == "PREMIERA_MODELU" else None)
+        # WIELKOSC = ZASIEG (serwisy i kanaly YouTube), nie same serwisy do pobrania.
+        h["serwisy"] = zasieg_historii(h)
         ranking.append({"miejsce": h["miejsce"], "tytul": h.get("tytul"), "ok": ok,
                         "powod": powod + (" (+%d z korpusu)" % h["dolaczone"] if h.get("dolaczone") else "")})
         if ok:
