@@ -32,7 +32,13 @@ i drazy go dalej.
 Reszta lancucha zostaje bez zmian: dyskoveria, pobieranie, klasyfikacja,
 synteza, bramka warto_pisac, pisarz, recenzent, forma, zapis, grafika.
 """
+import copy
+import json
+import os
+import re
 import sys
+import time
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -110,22 +116,28 @@ SOURCE: {url} (published {data})
 """
 
 
-def temat_z_faktu(conn, run_id, fakt: dict) -> dict:
-    """Zamienia udokumentowany fakt w brief artykulu."""
-    from datetime import datetime, timezone
+def temat_z_faktu(conn, run_id, fakt: dict, ponow: str | None = None) -> dict:
+    """Zamienia udokumentowany fakt w brief artykulu.
 
-    tekst = llm.call(
-        "wybor", SYSTEM,
-        PYTANIE.format(
-            dzis=datetime.now(timezone.utc).strftime("%d %B %Y"),
-            fact=fakt.get("fact", ""),
-            mit=fakt.get("wrong_belief", ""),
-            prawda=fakt.get("actually", ""),
-            decyzja=fakt.get("decision", ""),
-            skutek=fakt.get("consequence", ""),
-            url=fakt.get("url", ""),
-            data=fakt.get("source_date", "brak daty")),
-        conn=conn, run_id=run_id)
+    `ponow` — pytanie z poprzedniej proby, ktore wyszlo ogolnikowe (sledztwo,
+    `_brief_sledztwa`): prompt dostaje wtedy jeden akapit `PONOWKA_PYTANIA`
+    PRZED sekcja danych. Bez `ponow` prompt jest bajt w bajt taki jak dotad,
+    wiec artykul z puli nie zmienia sie ani o znak.
+    """
+    prompt = PYTANIE.format(
+        dzis=datetime.now(timezone.utc).strftime("%d %B %Y"),
+        fact=fakt.get("fact", ""),
+        mit=fakt.get("wrong_belief", ""),
+        prawda=fakt.get("actually", ""),
+        decyzja=fakt.get("decision", ""),
+        skutek=fakt.get("consequence", ""),
+        url=fakt.get("url", ""),
+        data=fakt.get("source_date", "brak daty"))
+    if ponow:
+        prompt = prompt.replace(
+            "## Supplied finding", PONOWKA_PYTANIA.format(
+                pytanie=" ".join(str(ponow).split())[:300]) + "\n\n## Supplied finding", 1)
+    tekst = llm.call("wybor", SYSTEM, prompt, conn=conn, run_id=run_id)
     brief = llm.parse_json(tekst)
     if not isinstance(brief, dict) or not brief.get("question"):
         raise ValueError("brief bez pytania: %r" % str(tekst)[:200])
@@ -483,6 +495,36 @@ def _rozszerz_najstarsze(card: dict, data_faktu) -> None:
 def _przebieg(conn, run_id: int) -> int:
     print("== artykul z puli ciekawostek ==", flush=True)
 
+    # SLEDZTWO (27.09.2026) — osobna droga do tematu i do notek. Stoi PRZED odmowa
+    # artykulu ponizej, bo sledztwo artykulu juz nie pisze (spec §9 pkt 1, patrz
+    # `_przebieg_sledztwa`) — proba na kopii w trybie testu ma przez nie przejsc.
+    if "--sledztwo" in sys.argv:
+        return _przebieg_sledztwa(conn, run_id)
+
+    # ODMOWA ARTYKULU W TRYBIE TESTU — BEZWZGLEDNA (25.10.2026). Proba sledztwa na
+    # kopii danych szla z `--wyslij` (tak jak zegar, inaczej katy nie trafilyby do
+    # kolejki kopii) i zaplacila 1,98 USD za pisanie na Fable. Flaga nie chroni
+    # pieniedzy, skoro proba MUSI ja miec — chroni stan przebiegu: tryb test
+    # w bazie, znacznik kopii testowej obok kodu albo jawne `--bez-artykulu`.
+    # Wtedy pisarz nie rusza wcale, a w logu stoi jedna, zawsze ta sama linia.
+    # `--do-karty` i `--tylko-temat` koncza przed pisarzem z definicji, wiec
+    # zostaja narzedziem do ogladania materialu takze w probie (ale nie razem
+    # z `--z-karty`, ktore pisze).
+    zakaz = _zakaz_artykulu(conn, run_id)
+    podglad = (("--do-karty" in sys.argv or "--tylko-temat" in sys.argv)
+               and "--z-karty" not in sys.argv)
+    if zakaz and not podglad:
+        # Wybor kandydata ze sledztwa jest darmowy (sam kod na zapisanym stanie),
+        # wiec proba pokazuje, co zegar tygodniowy by wybral — i na tym konczy.
+        try:
+            _kandydat_ze_sledztwa(w_tescie=True)
+        except Exception as exc:
+            print("  [artykul] podglad kandydatow padl (%s)" % type(exc).__name__,
+                  flush=True)
+        print("ARTICLE SKIPPED (test)", flush=True)
+        print("  powod: %s — pisarz artykulu nie jest wolany" % zakaz, flush=True)
+        return 1
+
     # --- SCIEZKA Z ZATWIERDZONEJ KARTY ------------------------------------
     #
     # `--z-karty` pomija szukanie tematu i caly research: wczytuje karte
@@ -501,12 +543,10 @@ def _przebieg(conn, run_id: int) -> int:
         print("  pytanie: %s" % str(brief.get("question"))[:130], flush=True)
         return _napisz_i_zapisz(conn, run_id, brief, card)
 
-    # SLEDZTWO (27.09.2026) — osobna droga do tematu, te same etapy badania
-    # i pisania. Patrz `sledztwo.py` i `_przebieg_sledztwa`.
-    if "--sledztwo" in sys.argv:
-        return _przebieg_sledztwa(conn, run_id)
     # ARTYKUL ZE SLEDZTWA ZASTEPUJE ARTYKUL Z PULI w tym tygodniu — wlasciciel
-    # 27.09: sledztwo ma byc unikatowe, a koszt ma zostac jak jest.
+    # 27.09: sledztwo ma byc unikatowe, a koszt ma zostac jak jest. Od 25.10 ten
+    # artykul pisze TEN zegar (ponizej), wiec licznik pilnuje juz tylko recznego
+    # drugiego przebiegu w tym samym tygodniu.
     try:
         import sledztwo as _sledztwo
         if (_sledztwo.ile_artykulow(6) >= _sledztwo.ARTYKULOW_NA_TYDZIEN
@@ -518,6 +558,17 @@ def _przebieg(conn, run_id: int) -> int:
     except Exception as exc:
         print("  [sledztwo] nie sprawdzilem limitu (%s)" % type(exc).__name__,
               flush=True)
+
+    # NAJPIERW KANDYDAT ZE SLEDZTWA, POTEM PULA (25.10.2026, wlasciciel: „ma byc
+    # artykul tez pisany"; spec §5 „Article-size rule"). Sledztwo samo artykulu juz
+    # nie pisze — zostawia stan w `data/sledztwa/`, a raz w tygodniu ten zegar
+    # bierze najlepsze sledztwo z ostatnich pieciu dni, ktore unosi dluga forme.
+    # Bez takiego sledztwa idzie artykul z puli, dokladnie jak dotad. Przy
+    # `--do-karty` i `--tylko-temat` (narzedzia puli) kandydata nie ma.
+    if not podglad:
+        kod = _artykul_ze_sledztwa(conn, run_id)
+        if kod is not None:
+            return kod
 
     fakt = wybierz_fakt(conn, run_id)
     print()
@@ -860,6 +911,1581 @@ def _przebieg(conn, run_id: int) -> int:
     return _napisz_i_zapisz(conn, run_id, brief, card, evidence)
 
 
+# =============================================================================
+# SLEDZTWO — PRZEBIEG (fala 1, 25.10.2026)
+# =============================================================================
+#
+# DLACZEGO TEN PRZEBIEG ZOSTAL PRZEBUDOWANY. Proby 25.10.2026 na kopii danych
+# pokazaly trzy wady, z ktorych zadnej nie dalo sie naprawic w jednym miejscu:
+#
+#   1. PYTANIA Z SAMYCH NAGLOWKOW. Plan pisal pytania, zanim pobralismy choc
+#      jedno zrodlo historii — wiec pytal o to, co i tak stoi w tytulach, a nie
+#      o to, czego relacje NIE mowia (w probie o luce PHP nikt nie zapytal, ile
+#      pracy zdjelo AI; przy premierze modelu — o sprzet, licencje i wyscig).
+#      Teraz zrodla historii ida PRZED planem, a plan dostaje poczatki dwoch
+#      najdluzszych tekstow (`ledes`).
+#   2. ARTYKUL W SRODKU SLEDZTWA. Proba odpalona z `--wyslij` (tak jak zegar)
+#      zaplacila 1,98 USD za Fable, bo galaz artykulu stala w tym samym
+#      przebiegu. Flaga nie chroni, skoro proba MUSI isc z `--wyslij`, zeby
+#      katy trafily do kolejki kopii. Dlatego tej galezi tu NIE MA w ogole;
+#      artykul pisze tylko zegar tygodniowy (`_przebieg` ->
+#      `_artykul_ze_sledztwa`), tylko w produkcji (`_zakaz_artykulu`).
+#   3. OPLACONE ETAPY GINELY PRZY WYJATKU. Rekord sledztwa stal ZA kolejka, a
+#      kolejka indeksowala tabele rodzajow katow wprost — nowy rodzaj dawal
+#      KeyError po oplaconym Opusie, rekord sie nie zapisywal i nazajutrz ta
+#      sama historia bylaby badana i oplacana drugi raz.
+#
+# Stad trzy zasady ponizej: kazdy etap, ktory moze pasc, ma zapas i linie w
+# logu (nowe moduly planu, ksiegi i katow sa swieze i moga zawiesc — sledztwo
+# nie moze przepasc po oplaconych etapach); stan po kazdym etapie lezy w
+# `data/sledztwa/<run_id>.json` (`--z-sledztwa <run_id>` wznawia od katow);
+# rekord sledztwa idzie ZAWSZE przed kolejka, takze gdy na serie jest za malo.
+
+# BADANIE KSIEGI I KRYTYK (spec §2 etapy 10-11). Do 25.10 trzy rundy dogrywki
+# na cale sledztwo; w trzech z czterech prob ta sama runda szla dwa razy, a
+# pytania z planu zostawaly bez proby. Ksiega daje po jednej rundzie na
+# otwarte pytanie (do szesciu), krytyk dokupuje najwyzej dwie na swoje luki.
+# Caly research sledztwa ma sufit 0,10 USD — krytyk nie rusza, gdy badanie ksiegi
+# juz go wyczerpalo.
+RUND_KSIEGI = 6
+RUND_PO_KRYTYKU = 2
+SLEDZTWO_STOP_USD = 0.10
+# Poscig za dokumentami pierwotnymi: najwyzej cztery nazwane w planie (spec §6).
+MAKS_DOKUMENTOW = 4
+# Plan dostaje poczatki dwoch najdluzszych pobranych zrodel (spec §3, `{ledes}`).
+ILE_LEDES = 2
+DLUGOSC_LEDE = 1200
+# Tekst wpisu z zapasu feedu krotszy niz to nie zastapi niepobranej strony.
+MIN_TEKSTU_Z_KANALU = 200
+# PONIZEJ TEGO OPUS NIE JEST WOLANY (spec §2 etap 15): karta z mniej niz szescioma
+# potwierdzonymi twierdzeniami albo z jednego serwisu nie uniesie dwoch katow, a
+# katy to najdrozsze wywolanie sledztwa (okolo 0,18 USD). Ta sama granica stoi w
+# `sledztwo.przeslania`; tu jest druga, zeby pieniadze nie zalezaly od jednego miejsca.
+MIN_TWIERDZEN_NA_KATY = 6
+MIN_HOSTOW_NA_KATY = 2
+KATALOG_SLEDZTW = "sledztwa"
+# ARTYKUL TYGODNIA ZE SLEDZTWA (spec §5 „Article-size rule"). Zapisany stan
+# najwyzej sprzed pieciu dni: katy schodza w dwa-trzy dni, a artykul ma isc,
+# zanim historia ostygnie. Progi z tej samej reguly: poziom co najmniej L,
+# 10 twierdzen z 4 serwisow, 2 rekordy pierwotne albo niezalezne pomiary,
+# 6 pytan ksiegi z odpowiedzia (pelna albo czesciowa) i kat-werdykt, ktorego
+# dowody za i przeciw stoja w ksiedze.
+DNI_KANDYDATA = 5
+MIN_TWIERDZEN_ARTYKULU = 10
+MIN_HOSTOW_ARTYKULU = 4
+MIN_REKORDOW_ARTYKULU = 2
+MIN_ODPOWIEDZI_ARTYKULU = 6
+# SWIEZE TWIERDZENIA DLA ARTYKULU. Regula mowi: co najmniej 40% twierdzen
+# cytowanych w artykule nie moze stac w opublikowanych notkach serii. Artykul
+# cytuje okolo dziesieciu, wiec karta musi miec co najmniej cztery twierdzenia,
+# ktorych zadna wydana notka serii nie uzyla — inaczej reguly nie da sie spelnic.
+MIN_SWIEZYCH_TWIERDZEN = 4
+POZIOMY_ARTYKULU = ("L", "XL")
+_RANGA_POZIOMU = {"S": 0, "M": 1, "L": 2, "XL": 3}
+_STATUSY_Z_ODPOWIEDZIA = ("answered", "partial")
+
+# OGOLNIKOWE PYTANIE GLOWNE (spec §2 etap 5). „What does X really mean?" nie
+# wskazuje sporu, wiec plan i badanie nie maja czego szukac — w probach takie
+# pytanie dawalo streszczenie relacji zamiast sledztwa. Jedna ponowka.
+_PYTANIE_OGOLNE = re.compile(r"what does .* (really|actually) (mean|prove)", re.IGNORECASE)
+PONOWKA_PYTANIA = (
+    "Your previous main question was too generic: \"{pytanie}\". Do not ask what the "
+    "story really means or proves. Ask the question readers would actually argue about: "
+    "name the actor or product and the specific thing in dispute.")
+
+# HISTORIE O BEZPIECZENSTWIE NIGDY NIE POBIERAJA EXPLOITOW (spec §2 etap 8).
+# Poscig za dokumentem pierwotnym przy luce w oprogramowaniu potrafi znalezc
+# repozytorium z dowodem koncepcji; nam potrzebne jest ostrzezenie i poprawka.
+_ADRES_EXPLOITA = re.compile(
+    r"exploit|proof[-_]?of[-_]?concept|(?<![a-z0-9])poc(?![a-z0-9])|metasploit", re.IGNORECASE)
+_RSS_TRESC = "{http://purl.org/rss/1.0/modules/content/}encoded"
+
+# PYTANIA ZAPASOWE PLANU — tylko gdy modul planu w ogole nie ruszy (brak modulu,
+# wyjatek spoza jego wlasnych zapasow). Soczewki z listy obowiazkowych (spec §3),
+# a nie z pamieci o jednej historii: zadna nazwa z prob tu nie stoi.
+_PLAN_ZAPASOWY = (
+    ("NEW", "What exactly changed in {t}, and against which baseline?"),
+    ("HOW_IT_WORKS", "How does the AI in {t} actually work, in plain words, and what does it "
+                     "show AI can now do that it could not before?"),
+    ("CLAIM", "Which claims about {t} were measured independently and which are only "
+              "asserted, and by whom?"),
+    ("BIG", "Is {t} bigger or smaller than it looks, and what evidence would settle it?"),
+    ("CONSEQUENCES", "Who does {t} affect first, and who pays?"),
+    ("TIDBIT", "What surprising detail about {t} sits in the primary record (filing, "
+               "model card, changelog, pricing page)?"),
+)
+
+
+def _teraz() -> datetime:
+    """Zegar przebiegu — osobna funkcja, zeby test mogl przestawic czas
+    (wiek zapisanego stanu przy wyborze kandydata na artykul)."""
+    return datetime.now(timezone.utc)
+
+
+def _arg(nazwa: str) -> str | None:
+    """Wartosc flagi `nazwa <wartosc>`; None, gdy flagi nie ma, pusty napis,
+    gdy stoi bez wartosci."""
+    argv = sys.argv
+    if nazwa not in argv:
+        return None
+    i = argv.index(nazwa)
+    if i + 1 < len(argv) and not str(argv[i + 1]).startswith("--"):
+        return str(argv[i + 1])
+    return ""
+
+
+def _wydano(conn, run_id) -> float:
+    """Ile przebieg wydal do tej pory (tabela `calls`). Awaria = 0: to licznik
+    do raportu, nie bramka."""
+    try:
+        w = conn.execute("SELECT COALESCE(SUM(cost_usd), 0) FROM calls WHERE run_id = ?",
+                         (run_id,)).fetchone()
+        return float(w[0] or 0.0)
+    except Exception:
+        return 0.0
+
+
+def _klucz_url(url) -> str:
+    """Ten sam klucz adresu, ktorym `sledztwo.ocena_historii` porownuje zrodla
+    historii z rekordami (`research.url_key`, a gdy ten nie umie — goly adres)."""
+    try:
+        return research.url_key(url) or str(url or "")
+    except Exception:
+        return str(url or "").split("#")[0].rstrip("/")
+
+
+def _host_url(url) -> str:
+    from urllib.parse import urlparse
+    h = (urlparse(str(url or "")).netloc or "").lower()
+    return h[4:] if h.startswith("www.") else h
+
+
+def _twierdzenia(card: dict) -> list[dict]:
+    return [c for c in ((card or {}).get("confirmed_claims") or [])
+            if isinstance(c, dict) and c.get("claim")]
+
+
+def _norm(tekst) -> str:
+    return " ".join(str(tekst or "").casefold().split())
+
+
+# --- stan sledztwa na dysku ---------------------------------------------------
+
+def _plik_stanu(rid) -> Path:
+    return config.DATA_DIR / KATALOG_SLEDZTW / ("%s.json" % rid)
+
+
+def _zapisz_stan(stan: dict) -> None:
+    """Stan na dysk po kazdym etapie — atomowo i bez wyjatku.
+
+    Zapis ma chronic oplacone etapy, wiec sam nie moze ich zabic: blad dysku to
+    linia w logu, a sledztwo idzie dalej.
+    """
+    try:
+        plik = _plik_stanu(stan.get("run_id"))
+        plik.parent.mkdir(parents=True, exist_ok=True)
+        tymczasowy = plik.with_name("." + plik.name + ".tmp")
+        tymczasowy.write_text(json.dumps(stan, ensure_ascii=False, indent=1, default=str),
+                              encoding="utf-8")
+        os.replace(tymczasowy, plik)
+    except Exception as exc:
+        print("  [stan] nie zapisalem stanu sledztwa (%s: %s)"
+              % (type(exc).__name__, str(exc)[:120]), flush=True)
+
+
+def _wczytaj_stan(rid) -> dict | None:
+    try:
+        stan = json.loads(_plik_stanu(rid).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return stan if isinstance(stan, dict) else None
+
+
+class _Zegar:
+    """Koszt i czas kazdego etapu do raportu (spec §8: „cost and time per stage").
+
+    Liczy od poprzedniego etapu, a po pomiarze zapisuje stan — jeden wiersz w
+    przebiegu zamiast dwoch, ktore latwo rozdzielic i zgubic.
+    """
+
+    def __init__(self, conn, run_id):
+        self.conn, self.run_id = conn, run_id
+        self._t, self._k = time.monotonic(), _wydano(conn, run_id)
+
+    def etap(self, stan: dict, nazwa: str) -> None:
+        t, k = time.monotonic(), _wydano(self.conn, self.run_id)
+        stan.setdefault("etapy", {})[nazwa] = {"czas_s": round(t - self._t, 1),
+                                               "koszt_usd": round(k - self._k, 4)}
+        self._t, self._k = t, k
+        stan["etap"] = nazwa
+        stan["zaktualizowano"] = _teraz().isoformat()
+        _zapisz_stan(stan)
+
+
+# --- etapy sledztwa ------------------------------------------------------------
+
+def _tekst_z_kanalu(zrodlo: dict) -> str:
+    """Tekst wpisu z zapasu feedu (`korpus_kanalow`), gdy strony nie dalo sie pobrac.
+
+    Spec §2 etap 6: przy 403 tresc wpisu z pamieci kanalu zamiast dziury. Feed
+    to wlasna publikacja wydawcy (opis albo pelna tresc wpisu), nie archiwum —
+    archiwow nie uzywamy. Pamiec kanalu zyje dobe (`ZAPAS_TRESCI_GODZIN`).
+    Nigdy nie podnosi wyjatku: brak = pusty napis.
+    """
+    try:
+        import html as _html
+        from xml.etree import ElementTree as ET
+
+        import korpus_kanalow as kk
+        cel = _klucz_url(zrodlo.get("url"))
+        nazwa = str(zrodlo.get("publisher") or "")
+        if not cel or not nazwa:
+            return ""
+        for klucz in ("zrodlo:" + nazwa, nazwa):
+            surowy = kk._tresc_z_zapasu(klucz)
+            if not surowy:
+                continue
+            korzen = ET.fromstring(surowy.encode("utf-8"))
+            for e in korzen.findall(".//a:entry", kk.NS) + korzen.findall(".//item"):
+                if _klucz_url(kk._link_wpisu(e)) != cel:
+                    continue
+                kawalki = []
+                w = e.find(_RSS_TRESC)
+                if w is not None and w.text:
+                    kawalki.append(w.text)
+                for pole in ("content", "description", "summary"):
+                    t = kk._pole(e, pole)
+                    if t:
+                        kawalki.append(t)
+                tekst = max(kawalki, key=len) if kawalki else ""
+                tekst = " ".join(_html.unescape(re.sub(r"<[^>]+>", " ", tekst)).split())
+                return tekst if len(tekst) >= MIN_TEKSTU_Z_KANALU else ""
+    except Exception as exc:
+        print("  [pobranie] zapas kanalu nieczytelny (%s)" % type(exc).__name__, flush=True)
+    return ""
+
+
+def _pobierz_zrodla_historii(conn, run_id, zrodla: list[dict]) -> tuple[list[dict], list[dict]]:
+    """(pobrane dokumenty, raport pobran) — zrodla historii PRZED planem."""
+    try:
+        pobrane = [c for c in (stages.fetch(conn, run_id, zrodla) or []) if isinstance(c, dict)]
+    except PRZERYWAJA:
+        raise
+    except Exception as exc:
+        print("  [pobranie] pobieranie zrodel historii padlo (%s) — plan dostanie same"
+              " naglowki" % type(exc).__name__, flush=True)
+        pobrane = []
+    dlugosci = {_klucz_url(c.get("url")): len(str(c.get("text") or ""))
+                for c in pobrane if c.get("text")}
+    raport, z_kanalu = [], 0
+    for z in zrodla:
+        k = _klucz_url(z.get("url"))
+        if k in dlugosci:
+            raport.append({"url": z.get("url"), "ok": True, "znakow": dlugosci[k]})
+            continue
+        tekst = _tekst_z_kanalu(z)
+        if tekst:
+            pobrane.append(dict(z, text=tekst, z_zapasu_kanalu=True))
+            z_kanalu += 1
+            print("  [pobranie] %s: strona niedostepna — tekst z feedu wydawcy (%d znakow)"
+                  % (_host_url(z.get("url")), len(tekst)), flush=True)
+            raport.append({"url": z.get("url"), "ok": True, "znakow": len(tekst),
+                           "z_zapasu_kanalu": True})
+        else:
+            raport.append({"url": z.get("url"), "ok": False})
+    print("  [pobranie] zrodla historii: %d z %d z trescia (z feedu %d)"
+          % (sum(1 for r in raport if r["ok"]), len(zrodla), z_kanalu), flush=True)
+    return pobrane, raport
+
+
+def _ledes(corpus: list[dict], ile: int = ILE_LEDES) -> list[dict]:
+    """Poczatki najdluzszych pobranych zrodel historii — material planu."""
+    z_trescia = sorted((c for c in corpus if isinstance(c, dict) and c.get("text")),
+                       key=lambda c: -len(str(c.get("text"))))
+    return [{"publisher": str(c.get("publisher") or c.get("host") or ""),
+             "title": str(c.get("title") or ""),
+             "lede": " ".join(str(c.get("text")).split())[:DLUGOSC_LEDE]}
+            for c in z_trescia[:ile]]
+
+
+def _brief_sledztwa(conn, run_id, wybrana: dict, sledztwo) -> dict:
+    """Pytanie glowne sledztwa (spec §2 etap 5) z jedna ponowka ogolnika."""
+    fakt = sledztwo.fakt_z_historii(wybrana)
+    try:
+        brief = temat_z_faktu(conn, run_id, fakt)
+    except PRZERYWAJA:
+        raise
+    except Exception as exc:
+        tytul = " ".join(str(wybrana.get("tytul") or "").split())[:200]
+        print("  [brief] pytanie nie wyszlo (%s) — pytanie zapasowe z tytulu"
+              % type(exc).__name__, flush=True)
+        return {"title": tytul, "question": "What does %s change, for whom, and what is it "
+                                            "based on?" % tytul,
+                "kind": "SYSTEM_UNDER_TEST", "sub_questions": [], "broken_belief": "",
+                "zrodlo_faktu": fakt.get("url", ""), "data_zrodla": fakt.get("source_date", ""),
+                "fakt_wyjsciowy": fakt.get("fact", ""), "zapas": True}
+    pytanie = str(brief.get("question") or "")
+    if _PYTANIE_OGOLNE.search(pytanie):
+        print("  [brief] pytanie ogolnikowe („%s”) — jedna ponowka jako spor czytelnikow"
+              % pytanie[:120], flush=True)
+        try:
+            nowy = temat_z_faktu(conn, run_id, fakt, ponow=pytanie)
+            nowy["pytanie_przed_ponowka"] = pytanie
+            brief = nowy
+        except PRZERYWAJA:
+            raise
+        except Exception as exc:
+            print("  [brief] ponowka nie wyszla (%s) — zostaje pierwsze pytanie"
+                  % type(exc).__name__, flush=True)
+    return brief
+
+
+def _plan_zapasowy(wybrana: dict, powod: str) -> dict:
+    """Plan ze stalych pytan, gdy modul planu nie oddal niczego uzywalnego.
+
+    Linia z „FALLBACK" jest celowo jednym slowem: raport proby liczy takie
+    linie jako twarda miare (spec §8), wiec zapas nie moze przejsc po cichu.
+    """
+    print("  [plan] FALLBACK: %s — pytania stale" % powod, flush=True)
+    tytul = " ".join(str(wybrana.get("tytul") or "this story").split())[:140]
+    try:
+        import sledztwo
+        slowa = " ".join(sledztwo.nazwy_wlasne(wybrana.get("klucze")))
+    except Exception:
+        slowa = ""
+    pytania = [{"id": "Q%d" % i, "soczewka": soczewka, "q": wzor.replace("{t}", tytul),
+                "waga": 1 if i <= 4 else 2, "dowod": "", "gdzie": "",
+                "zapytanie": slowa or tytul[:60]}
+               for i, (soczewka, wzor) in enumerate(_PLAN_ZAPASOWY, 1)]
+    return {"pytania": pytania, "dokumenty": [], "rdzen_ai": "", "zalozenie_czytelnika": "",
+            "wielkie_pytanie": {}, "smaczek": {}, "termin": [], "pominiete_soczewki": [],
+            "odrzucone": [], "fallback": True, "model": "", "zapas_przebiegu": powod}
+
+
+def _plan(conn, run_id, wybrana: dict, pytanie: str, ledes: list[dict], typ: str) -> dict:
+    """Plan redaktora (`sledztwo_plan.plan_sledztwa`) z zewnetrznym zapasem."""
+    try:
+        import sledztwo_plan
+        plan = sledztwo_plan.plan_sledztwa(conn, run_id, wybrana, pytanie, ledes, typ=typ)
+        if not isinstance(plan, dict):
+            raise ValueError("plan nie jest slownikiem")
+    except PRZERYWAJA:
+        raise
+    except Exception as exc:
+        return _plan_zapasowy(wybrana, "plan padl (%s: %s)" % (type(exc).__name__, str(exc)[:100]))
+    pytania = [q for q in (plan.get("pytania") or [])
+               if isinstance(q, dict) and str(q.get("q") or "").strip()]
+    if not pytania:
+        return _plan_zapasowy(wybrana, "plan bez pytan")
+    plan["pytania"] = pytania
+    print("  [plan] %d pytan, %d dokumentow do zdobycia, %d odrzuconych%s"
+          % (len(pytania), len(plan.get("dokumenty") or []), len(plan.get("odrzucone") or []),
+             " (plan zapasowy modulu planu)" if plan.get("fallback") else ""), flush=True)
+    for q in pytania:
+        print("    %s [%s] %s" % (q.get("id"), q.get("soczewka"), str(q.get("q"))[:140]), flush=True)
+    return plan
+
+
+def _pytania_tekstem(pytania: list[dict]) -> str:
+    """Lista pytan do klasyfikacji i syntezy — z modulu planu, a gdy ten nie
+    umie, w tym samym ksztalcie tutaj."""
+    try:
+        import sledztwo_plan
+        tekst = sledztwo_plan.pytania_tekstem(pytania)
+        if isinstance(tekst, str) and tekst.strip():
+            return tekst
+    except Exception as exc:
+        print("  [plan] pytania_tekstem padlo (%s) — lista z przebiegu" % type(exc).__name__,
+              flush=True)
+
+    def _waga(q):
+        try:
+            return int(q.get("waga") or 3)
+        except (TypeError, ValueError):
+            return 3
+    return "\n".join("- [%s|%s] %s" % (q.get("id"), q.get("soczewka"), " ".join(str(q.get("q")).split()))
+                     for q in sorted(pytania, key=_waga))
+
+
+def _plan_do_kart(plan: dict) -> dict:
+    try:
+        import sledztwo_plan
+        wynik = sledztwo_plan.plan_do_kart(plan)
+        if isinstance(wynik, dict):
+            return wynik
+    except Exception as exc:
+        print("  [plan] plan_do_kart padlo (%s) — do katow ida same pytania"
+              % type(exc).__name__, flush=True)
+    return {"pytania": [{k: q.get(k) for k in ("id", "soczewka", "q")}
+                        for q in plan.get("pytania") or [] if isinstance(q, dict)]}
+
+
+def _poscig_dokumentow(conn, run_id, plan: dict, corpus: list[dict]) -> tuple[list[dict], list[dict]]:
+    """(pobrane dokumenty pierwotne, raport: nazwane wobec zdobytych) — spec §6.
+
+    Zastepuje dyskoverie „tylko pierwotne" w sledztwie: ogolne szukanie w probach
+    pobieralo strony nie na temat, a komunikat firmy o luce przepadl na 403.
+    Teraz kazdy dokument nazwany w planie ma wlasne celowane szukanie.
+    """
+    nazwane = [d for d in (plan.get("dokumenty") or [])
+               if isinstance(d, dict) and str(d.get("co") or "").strip()][:MAKS_DOKUMENTOW]
+    widziane = {_klucz_url(c.get("url")) for c in corpus if isinstance(c, dict)} - {""}
+    raport, zdobyte = [], []
+    for d in nazwane:
+        wpis = {"co": d.get("co"), "kto": d.get("kto"), "gdzie": d.get("gdzie"),
+                "znalezione": [], "pobrane": []}
+        try:
+            znalezione = research.dokument(conn, run_id, d.get("co") or "", d.get("kto") or "",
+                                           d.get("gdzie") or "", seen=widziane) or []
+        except PRZERYWAJA:
+            raise
+        except Exception as exc:
+            wpis["blad"] = type(exc).__name__
+            print("  [dokumenty] szukanie „%s” padlo (%s)" % (str(d.get("co"))[:80], type(exc).__name__),
+                  flush=True)
+            znalezione = []
+        dobre = []
+        for z in znalezione:
+            if not isinstance(z, dict) or not z.get("url"):
+                continue
+            from urllib.parse import urlsplit
+            if _ADRES_EXPLOITA.search(urlsplit(str(z["url"])).path or ""):
+                print("  [dokumenty] pomijam adres z exploitem: %s" % str(z["url"])[:100], flush=True)
+                continue
+            dobre.append(z)
+        wpis["znalezione"] = [z["url"] for z in dobre]
+        if dobre:
+            try:
+                pobrane = [c for c in (stages.fetch(conn, run_id, dobre) or []) if isinstance(c, dict)]
+            except PRZERYWAJA:
+                raise
+            except Exception as exc:
+                print("  [dokumenty] pobranie padlo (%s)" % type(exc).__name__, flush=True)
+                pobrane = []
+            zdobyte.extend(pobrane)
+            wpis["pobrane"] = [c.get("url") for c in pobrane]
+            widziane |= {_klucz_url(z["url"]) for z in dobre}
+        raport.append(wpis)
+    print("  [dokumenty] nazwane %d, znalezione %d, pobrane %d"
+          % (len(nazwane), sum(1 for w in raport if w["znalezione"]),
+             sum(1 for w in raport if w["pobrane"])), flush=True)
+    return zdobyte, raport
+
+
+def _nazwany_model(wybrana: dict) -> bool:
+    """Czy klucze historii wygladaja na nazwe modelu (litery i cyfry: „X-5", „K3.1")
+    — wtedy cennik OpenRouter ma sens takze poza kategoria premiery."""
+    for k in wybrana.get("klucze") or []:
+        k = str(k)
+        if re.search(r"[A-Za-z]", k) and re.search(r"\d", k):
+            return True
+    return False
+
+
+def _glosy_i_cennik(sledztwo, wybrana: dict, typ: str) -> list[dict]:
+    """Glosy ludzi z Hacker News i cennik OpenRouter (darmowe, bez klucza)."""
+    out: list[dict] = []
+    zapytanie = wybrana.get("zapytanie") or ""
+    try:
+        out += [d for d in (sledztwo.glosy_hn(zapytanie, klucze=wybrana.get("klucze")) or [])
+                if isinstance(d, dict)]
+    except Exception as exc:
+        print("  [glosy] Hacker News padl (%s)" % type(exc).__name__, flush=True)
+    if typ == "premiera" or _nazwany_model(wybrana):
+        try:
+            out += [d for d in (sledztwo.cennik_openrouter(zapytanie) or []) if isinstance(d, dict)]
+        except Exception as exc:
+            print("  [cennik] OpenRouter padl (%s)" % type(exc).__name__, flush=True)
+    return out
+
+
+def _dossier_do_stanu(dossier: dict) -> dict:
+    """Dossier bez dowodow i starych ocen — dowody leza w stanie osobno."""
+    return {k: v for k, v in (dossier or {}).items() if k not in ("evidence", "assessments")}
+
+
+def _scal_dossier(pierwsze: dict, drugie: dict) -> dict:
+    """Ksiega planu + ksiega krytyka w jednym dossier.
+
+    Drugie badanie dostaje WYLACZNIE pytania krytyka (kontrakt: „max 2 rundy
+    z nimi"), wiec jego ksiega ma tylko je. Statusy pytan planu zostaja z
+    pierwszego badania — moga byc o jedna runde mniej swieze, ale nie zawyzaja.
+    """
+    out = dict(pierwsze or {})
+    juz = {e.get("id") for e in out.get("ksiega") or [] if isinstance(e, dict)}
+    out["ksiega"] = list(out.get("ksiega") or []) + [
+        e for e in (drugie or {}).get("ksiega") or [] if isinstance(e, dict) and e.get("id") not in juz]
+    out["rundy_ksiegi"] = list(out.get("rundy_ksiegi") or []) + list((drugie or {}).get("rundy_ksiegi") or [])
+    out["cost_usd"] = max(float(out.get("cost_usd") or 0), float((drugie or {}).get("cost_usd") or 0))
+    out["stop_reason_krytyk"] = (drugie or {}).get("stop_reason")
+    return out
+
+
+def _stan_ksiegi(dossier: dict) -> dict:
+    try:
+        wynik = research.stan_ksiegi(dossier)
+        if isinstance(wynik, dict):
+            return wynik
+    except Exception as exc:
+        print("  [ksiega] stan_ksiegi padl (%s) — licze sam" % type(exc).__name__, flush=True)
+    wpisy = [e for e in (dossier or {}).get("ksiega") or [] if isinstance(e, dict)]
+    statusy = [str(e.get("status") or "") for e in wpisy]
+    wazne = [e for e in wpisy if str(e.get("waga")) in ("1", "2")]
+    return {"pytan": len(wpisy), "odpowiedziane": statusy.count("answered"),
+            "czesciowe": statusy.count("partial"), "otwarte": statusy.count("open"),
+            "nie_teraz": statusy.count("not_yet"),
+            "pokrycie_waga12": round(sum(1 for e in wazne if e.get("status") in _STATUSY_Z_ODPOWIEDZIA)
+                                     / len(wazne), 3) if wazne else 0.0}
+
+
+def _ranking_do_rekordu(ranking: list[dict], historie: list[dict], ile: int = 8) -> list[dict]:
+    """Czolowka rankingu do rekordu sledztwa — material MYSL na inny temat
+    (`sledztwo.tematy_obok`). Najpierw historie, ktore przeszly bramke (po wyniku),
+    potem reszta po miejscu radaru; kategoria z historii, bo ranking niesie ja
+    tylko dla przepuszczonych."""
+    po_miejscu = {h.get("miejsce"): h for h in historie or [] if isinstance(h, dict)}
+    z_wynikiem = sorted((r for r in ranking or [] if r.get("wynik") is not None),
+                        key=lambda r: -float(r.get("wynik") or 0))
+    reszta = [r for r in ranking or [] if r.get("wynik") is None]
+    return [{"tytul": r.get("tytul"),
+             "kategoria": r.get("kategoria") or (po_miejscu.get(r.get("miejsce")) or {}).get("kategoria") or "",
+             "wynik": r.get("wynik"), "miejsce": r.get("miejsce")}
+            for r in (z_wynikiem + reszta)[:ile]]
+
+
+def _rekord_sledztwa(stan: dict) -> dict:
+    """Rekord do `sledztwa.jsonl` — pamiec dla bramki, limitow, planu (6 ostatnich
+    planow do testu podmiany) i MYSL (ranking i klucze serii)."""
+    w = stan.get("wybrana") or {}
+    plan = stan.get("plan") or {}
+    katy = [p for p in stan.get("katy") or [] if isinstance(p, dict)]
+    rekord = {
+        "run_id": stan.get("run_id"), "historia": w.get("tytul"),
+        "zrodla": sorted({_klucz_url(z.get("url")) for z in stan.get("zrodla") or []
+                          if isinstance(z, dict) and z.get("url")} - {""}),
+        "pytanie": (stan.get("brief") or {}).get("question"),
+        "nowosc": stan.get("nowosc") or {},
+        "przeslania": [p.get("rodzaj") for p in katy],
+        "kategoria": w.get("kategoria") or "", "typ": stan.get("typ") or "",
+        "serwisy": w.get("serwisy"), "wynik_wyboru": w.get("wynik_wyboru"),
+        "artykul_opublikowany": False,
+        "plan_pytania": [{k: q.get(k) for k in ("id", "soczewka", "q", "waga")}
+                         for q in plan.get("pytania") or [] if isinstance(q, dict)],
+        "ranking": stan.get("ranking_rekord") or [],
+        "klucze": [str(k) for k in w.get("klucze") or []],
+        "poziom": stan.get("poziom") or {},
+        "ksiega_stan": stan.get("ksiega_stan") or {},
+        "artykul_kandydat": bool(stan.get("artykul_kandydat")),
+        "seria": len(katy) >= 2,
+        "stan": str(_plik_stanu(stan.get("run_id"))),
+    }
+    if stan.get("przerwane"):
+        rekord["przerwane"] = stan["przerwane"]
+    return rekord
+
+
+def _zapisz_rekord(stan: dict, sledztwo, na_serio: bool) -> None:
+    if not na_serio:
+        print("  (bez --wyslij: rekord sledztwa NIE idzie do pamieci)", flush=True)
+        return
+    if stan.get("rekord_zapisany"):
+        print("  rekord sledztwa %s juz jest w pamieci — nie dubluje" % stan.get("run_id"), flush=True)
+        return
+    try:
+        sledztwo.zapisz_sledztwo(_rekord_sledztwa(stan))
+        stan["rekord_zapisany"] = True
+        print("  rekord sledztwa zapisany (przed kolejka)", flush=True)
+    except Exception as exc:
+        print("  [rekord] zapis rekordu padl (%s: %s)" % (type(exc).__name__, str(exc)[:120]),
+              flush=True)
+
+
+def _do_kolejki(sledztwo, przes: list[dict], wybrana: dict, card: dict, rid, poziom: dict) -> int:
+    """Katy do kolejki notek; zly kat odpada z logiem, reszta wchodzi.
+
+    `dodaj_do_kolejki` zapisuje kolejke raz, na koncu — wiec wyjatek w srodku nie
+    zostawia polowy serii i pojedyncze dokladanie nie dubluje katow.
+    """
+    try:
+        return int(sledztwo.dodaj_do_kolejki(przes, wybrana, card, run_id=rid, poziom=poziom) or 0)
+    except Exception as exc:
+        print("  [kolejka] seria nie weszla w calosci (%s: %s) — dokladam katy pojedynczo,"
+              " zly odpada" % (type(exc).__name__, str(exc)[:120]), flush=True)
+    dodane = 0
+    for p in przes:
+        try:
+            dodane += int(sledztwo.dodaj_do_kolejki([p], wybrana, card, run_id=rid, poziom=poziom) or 0)
+        except Exception as exc:
+            print("  [kolejka] kat %s odpada (%s: %s)" % (p.get("rodzaj"), type(exc).__name__,
+                                                       str(exc)[:100]), flush=True)
+    return dodane
+
+
+def _poziom(sledztwo, wybrana: dict, card: dict, dossier: dict) -> dict:
+    """Poziom tematu (`sledztwo.poziom_tematu`, spec §5) z zapasem S."""
+    try:
+        poziom = sledztwo.poziom_tematu(wybrana, card, dossier)
+        if not isinstance(poziom, dict) or "n_max" not in poziom:
+            raise ValueError("poziom bez n_max")
+        poziom = dict(poziom)
+    except PRZERYWAJA:
+        raise
+    except Exception as exc:
+        poziom = {"n_max": 3 if len(_twierdzenia(card)) >= 8 else 2, "poziom": "S",
+                  "powod": "poziom_tematu padl (%s) — zapas S" % type(exc).__name__}
+        print("  [poziom] %s" % poziom["powod"], flush=True)
+    try:
+        poziom["n_max"] = max(2, min(6, int(poziom.get("n_max") or 2)))
+    except (TypeError, ValueError):
+        poziom["n_max"] = 2
+    return poziom
+
+
+def _katy_serii(conn, run_id, stan: dict, zegar: _Zegar, sledztwo, na_serio: bool) -> int:
+    """Etapy 15-17: poziom -> katy -> REKORD -> kolejka. Wspolne dla swiezego
+    sledztwa i dla wznowienia `--z-sledztwa`."""
+    card = stan.get("karta") or {}
+    wybrana = stan.get("wybrana") or {}
+    dossier = stan.get("dossier") or {}
+    plan = stan.get("plan") or {}
+    typ = stan.get("typ") or "sledztwo"
+
+    print()
+    print("-- poziom tematu --", flush=True)
+    poziom = _poziom(sledztwo, wybrana, card, dossier)
+    stan["poziom"] = poziom
+    print("  poziom %s, do %d katow (%s)" % (poziom.get("poziom"), poziom["n_max"],
+                                            str(poziom.get("powod") or "")[:160]), flush=True)
+    zegar.etap(stan, "poziom")
+
+    print()
+    print("-- katy serii --", flush=True)
+    twierdzenia = _twierdzenia(card)
+    hosty = {_host_url(c.get("url")) for c in twierdzenia} - {""}
+    if len(twierdzenia) < MIN_TWIERDZEN_NA_KATY or len(hosty) < MIN_HOSTOW_NA_KATY:
+        print("  karta ma %d potwierdzonych twierdzen z %d serwisow (prog %d z %d) — katow nie"
+              " zamawiam" % (len(twierdzenia), len(hosty), MIN_TWIERDZEN_NA_KATY, MIN_HOSTOW_NA_KATY),
+              flush=True)
+        przes = []
+    else:
+        # N = min(n_max, katy po bramkach, C/2) — spec §5: kat na kazde dwa twierdzenia.
+        ile = max(2, min(poziom["n_max"], len(twierdzenia) // 2))
+        try:
+            przes = sledztwo.przeslania(conn, run_id, card, dossier, wybrana, typ=typ, ile=ile,
+                                        artykulowy=poziom.get("poziom") in POZIOMY_ARTYKULU, plan=plan)
+        except PRZERYWAJA:
+            raise
+        except Exception as exc:
+            print("  [katy] przeslania padly (%s: %s)" % (type(exc).__name__, str(exc)[:120]), flush=True)
+            przes = []
+    przes = [p for p in przes or [] if isinstance(p, dict)]
+    for p in przes:
+        print("  [%s]%s %s" % (p.get("rodzaj"), " (lead)" if p.get("lead") else "",
+                               str(p.get("wniosek") or p.get("przeslanie") or "")[:160]), flush=True)
+    stan["katy"] = przes
+    stan["karta"] = card          # przeslania dopisuja do karty sedno i ustalenia do artykulu
+    zegar.etap(stan, "katy")
+
+    # REKORD PRZED KOLEJKA, NA KAZDEJ SCIEZCE. Gdy na serie jest za malo, historia
+    # i tak zostala zbadana i oplacona — bez rekordu jutro wrocilaby na nowo.
+    ok, braki, _ = _ocena_kandydata(stan, w_tescie=True)
+    stan["artykul_kandydat"] = ok
+    stan["artykul_kandydat_braki"] = braki
+    _zapisz_rekord(stan, sledztwo, na_serio)
+    zegar.etap(stan, "rekord")
+
+    if len(przes) < 2:
+        # Jeden kat to nie seria (spec §5: N < 2 — bez serii), a pojedyncza notka
+        # o zbadanej historii wyszlaby bez reszty, na ktorej stoi.
+        print(">> za malo katow na serie (%d) — %s, kolejka notek nietknieta"
+              % (len(przes), "rekord zapisany" if stan.get("rekord_zapisany") else "bez rekordu"),
+              flush=True)
+        _zapisz_raport(stan)
+        return 1
+    if not na_serio:
+        print("  (bez --wyslij: katy NIE ida do kolejki notek)", flush=True)
+        _zapisz_raport(stan)
+        return 0
+    if stan.get("kolejka_dodana") and "--mimo-kolejki" not in sys.argv:
+        print("  katy tego sledztwa juz sa w kolejce (%s) — nie dubluje (--mimo-kolejki, zeby"
+              " dodac mimo to)" % stan["kolejka_dodana"], flush=True)
+    else:
+        dodane = _do_kolejki(sledztwo, przes, wybrana, card, stan.get("run_id"), poziom)
+        stan["kolejka_dodana"] = dodane
+        print("  do kolejki notek: %d" % dodane, flush=True)
+    zegar.etap(stan, "kolejka")
+    _zapisz_raport(stan)
+    return 0
+
+
+def _badanie_sledztwa(conn, run_id, stan: dict, zegar: _Zegar, sledztwo, na_serio: bool) -> int:
+    """Etapy 5-14 po wyborze historii, potem `_katy_serii`."""
+    wybrana = stan["wybrana"]
+    zrodla = sledztwo.zrodla_historii(wybrana)
+    stan["zrodla"] = zrodla
+    print("  ZRODLA HISTORII (%d):" % len(zrodla), flush=True)
+    for z in zrodla:
+        print("    - %s | %s" % (z.get("publisher"), str(z.get("title"))[:90]), flush=True)
+    typ = sledztwo.typ_sledztwa(wybrana.get("kategoria"))
+    stan["typ"] = typ
+
+    brief = _brief_sledztwa(conn, run_id, wybrana, sledztwo)
+    stan["brief"] = brief
+    print()
+    print("  TYP: %s | PYTANIE: %s" % (typ, brief.get("question")), flush=True)
+    zegar.etap(stan, "brief")
+
+    print()
+    print("-- pobieranie zrodel historii (przed planem) --", flush=True)
+    corpus, pobrania = _pobierz_zrodla_historii(conn, run_id, zrodla)
+    ledes = _ledes(corpus)
+    stan["pobrania"], stan["ledes"] = pobrania, ledes
+    zegar.etap(stan, "pobranie")
+
+    print()
+    print("-- plan redaktora --", flush=True)
+    plan = _plan(conn, run_id, wybrana, brief.get("question") or "", ledes, typ)
+    stan["plan"] = plan
+    zegar.etap(stan, "plan")
+
+    print()
+    print("-- dokumenty pierwotne --", flush=True)
+    dokumenty, raport_dok = _poscig_dokumentow(conn, run_id, plan, corpus)
+    corpus = corpus + dokumenty
+    stan["dokumenty"] = raport_dok
+    zegar.etap(stan, "dokumenty")
+
+    # GLOSY LUDZI I CENA (25.10.2026): watki Hacker News o tej sprawie (opinie, tak
+    # podpisane) i cennik OpenRouter, gdy w historii jest nazwa modelu.
+    glosy = _glosy_i_cennik(sledztwo, wybrana, typ)
+    corpus = corpus + glosy
+    stan["glosy"] = [{"url": d.get("url"), "title": d.get("title")} for d in glosy]
+    zegar.etap(stan, "glosy")
+
+    print()
+    print("-- klasyfikacja wzgledem calej ksiegi --", flush=True)
+    # TRAFNOSC WZGLEDEM WSZYSTKICH PYTAN SLEDZTWA, nie samego glownego (25.10.2026): w probie
+    # o premierze modelu pytanie glowne bylo o benchmarkach i klasyfikacja wyrzucila cennik
+    # (trafnosc 0,10) oraz watek Hacker News — zniknely cena i opinie ludzi, a z nimi katy.
+    pytanie = (brief.get("question") or "") + "\n\nThe investigation must also answer:\n" \
+        + _pytania_tekstem(plan["pytania"])
+    try:
+        evidence = [e for e in (stages.classify(conn, run_id, pytanie, corpus) or []) if isinstance(e, dict)]
+    except PRZERYWAJA:
+        raise
+    except Exception as exc:
+        print("  [klasyfikacja] padla (%s: %s) — badanie bez wyciagow z korpusu"
+              % (type(exc).__name__, str(exc)[:120]), flush=True)
+        evidence = []
+    zegar.etap(stan, "klasyfikacja")
+
+    print()
+    print("-- ksiega pytan: badanie --", flush=True)
+    try:
+        evidence, dossier = research.deepen(conn, run_id, pytanie, evidence, corpus,
+                                            max_rund=RUND_KSIEGI, pytania=plan["pytania"],
+                                            stop_usd=SLEDZTWO_STOP_USD)
+    except PRZERYWAJA:
+        raise
+    except Exception as exc:
+        print("  [ksiega] badanie padlo (%s: %s) — ide z tym, co dala klasyfikacja"
+              % (type(exc).__name__, str(exc)[:120]), flush=True)
+        dossier = {"question": pytanie, "stop_reason": "failed:%s" % type(exc).__name__,
+                   "ksiega": [], "rundy_ksiegi": [], "assessment": {}}
+    dossier = dossier if isinstance(dossier, dict) else {}
+    stan["dossier"] = _dossier_do_stanu(dossier)
+    stan["sciezka_dossier"] = dossier.get("path")
+    stan["ksiega_stan"] = _stan_ksiegi(dossier)
+    zegar.etap(stan, "ksiega")
+
+    print()
+    print("-- starszy redaktor --", flush=True)
+    krytyk: dict = {"pytania": [], "uwagi": []}
+    wydane_na_badanie = float(dossier.get("cost_usd") or 0.0)
+    if wydane_na_badanie >= SLEDZTWO_STOP_USD:
+        krytyk["pominiety"] = "badanie wydalo %.3f USD (sufit %.2f)" % (wydane_na_badanie, SLEDZTWO_STOP_USD)
+        print("  [krytyk] pomijam: %s" % krytyk["pominiety"], flush=True)
+    else:
+        try:
+            import sledztwo_plan
+            wynik = sledztwo_plan.krytyk(conn, run_id, wybrana, plan, dossier.get("ksiega") or [])
+            if isinstance(wynik, dict):
+                krytyk = {"pytania": [q for q in wynik.get("pytania") or [] if isinstance(q, dict)][:3],
+                          "uwagi": [str(u) for u in wynik.get("uwagi") or []]}
+        except PRZERYWAJA:
+            raise
+        except Exception as exc:
+            print("  [krytyk] padl (%s: %s) — badanie bez dogrywki" % (type(exc).__name__, str(exc)[:120]),
+                  flush=True)
+        for q in krytyk["pytania"]:
+            print("    %s [%s] %s" % (q.get("id"), q.get("soczewka"), str(q.get("q"))[:140]), flush=True)
+        if krytyk["pytania"]:
+            try:
+                evidence, drugie = research.deepen(conn, run_id, pytanie, evidence, corpus,
+                                                   max_rund=RUND_PO_KRYTYKU, pytania=krytyk["pytania"],
+                                                   stop_usd=SLEDZTWO_STOP_USD)
+                dossier = _scal_dossier(dossier, drugie if isinstance(drugie, dict) else {})
+                stan["dossier"] = _dossier_do_stanu(dossier)
+                stan["ksiega_stan"] = _stan_ksiegi(dossier)
+            except PRZERYWAJA:
+                raise
+            except Exception as exc:
+                print("  [krytyk] dogrywka padla (%s: %s)" % (type(exc).__name__, str(exc)[:120]),
+                      flush=True)
+    stan["krytyk"] = krytyk
+    zegar.etap(stan, "krytyk")
+
+    print()
+    print("-- karta sledcza --", flush=True)
+    wszystkie = list(plan["pytania"]) + list(krytyk.get("pytania") or [])
+    pytanie_karty = (brief.get("question") or "") + "\n\nThe investigation must also answer:\n" \
+        + _pytania_tekstem(wszystkie)
+    try:
+        pytanie_karty = research.synthesis_question(pytanie_karty, dossier)
+    except Exception as exc:
+        print("  [karta] briefing badania nie dolaczony (%s)" % type(exc).__name__, flush=True)
+    try:
+        card = stages.synthesis(conn, run_id, pytanie_karty, evidence, tryb="sledztwo")
+        if not isinstance(card, dict):
+            raise ValueError("karta nie jest slownikiem")
+    except PRZERYWAJA:
+        raise
+    except Exception as exc:
+        print("  synteza padla (%s) — karta zapasowa" % type(exc).__name__, flush=True)
+        try:
+            card = stages.fallback_card(brief.get("question") or "", evidence)
+        except Exception:
+            card = {"working_thesis": brief.get("question") or "", "confirmed_claims": [],
+                    "not_established": [], "_fallback": True}
+    try:
+        sprawdzona = stages.sprawdz_karte(card, evidence)
+        if isinstance(sprawdzona, dict) and "confirmed_claims" in sprawdzona:
+            card = sprawdzona
+    except PRZERYWAJA:
+        raise
+    except Exception as exc:
+        card["_karta_niesprawdzona"] = type(exc).__name__
+        print("  [karta] sprawdz_karte padlo (%s: %s) — twierdzenia NIESPRAWDZONE kodem"
+              % (type(exc).__name__, str(exc)[:120]), flush=True)
+    try:
+        research.attach(card, dossier)
+    except Exception as exc:
+        print("  [karta] attach padl (%s)" % type(exc).__name__, flush=True)
+    card["investigation_plan"] = _plan_do_kart(plan)
+    card.setdefault("broken_belief", brief.get("broken_belief") or "")
+    card.setdefault("why_they_believe_it", brief.get("why_they_believe_it") or "")
+    print("  karta: %d potwierdzonych twierdzen z %d serwisow" % (
+        len(_twierdzenia(card)), len({_host_url(c.get("url")) for c in _twierdzenia(card)} - {""})),
+        flush=True)
+    stan["karta"] = card
+    stan["evidence"] = evidence
+    zegar.etap(stan, "karta")
+
+    print()
+    print("-- czy laczenie zrodel cos ustalilo --", flush=True)
+    # PELNE TEKSTY ZRODEL do sprawdzenia, czy ustalenie nie stoi juz w jednym
+    # z nich — pobrane strony plus fragmenty dograne w sledztwie.
+    teksty_zrodel: dict[str, str] = {}
+    for c in corpus:
+        if isinstance(c, dict) and c.get("text"):
+            teksty_zrodel[str(c.get("url"))] = str(c.get("text"))
+    for e in evidence:
+        if e.get("url"):
+            teksty_zrodel.setdefault(str(e["url"]), " ".join(str(x) for x in e.get("excerpts") or []))
+    try:
+        nowe = sledztwo.nowosc(conn, run_id, card, wybrana, teksty_zrodel=teksty_zrodel)
+        nowe = nowe if isinstance(nowe, dict) else {"jest": False, "powod": "nowosc bez slownika"}
+    except PRZERYWAJA:
+        raise
+    except Exception as exc:
+        nowe = {"jest": False, "powod": "ocena nowosci padla (%s)" % type(exc).__name__}
+    print("  %s: %s" % ("USTALENIE" if nowe.get("jest") else "BRAK USTALENIA",
+                        nowe.get("ustalenie") or nowe.get("powod")), flush=True)
+    stan["nowosc"] = nowe
+    zegar.etap(stan, "nowosc")
+
+    return _katy_serii(conn, run_id, stan, zegar, sledztwo, na_serio)
+
+
+def _po_awarii(stan: dict, sledztwo, na_serio: bool, exc: BaseException) -> None:
+    """Wyjatek w srodku sledztwa: stan, raport i — po oplaconym planie — rekord.
+
+    Bez rekordu jutrzejszy zegar wybralby te sama historie i zaplacil za nia
+    jeszcze raz (spec §9 pkt 1). Rekord niesie `przerwane`, wiec widac, ze seria
+    nie powstala. Przed planem prawie nic nie kosztowalo — wtedy historia
+    zostaje do zbadania. Nigdy nie podnosi wlasnego wyjatku: wolajacy robi
+    `raise` z pierwotnym.
+    """
+    try:
+        stan["przerwane"] = "%s na etapie po %s: %s" % (type(exc).__name__, stan.get("etap") or "starcie",
+                                                       " ".join(str(exc).split())[:160])
+        print("  [sledztwo] PRZERWANE: %s" % stan["przerwane"], flush=True)
+        if "plan" in (stan.get("etapy") or {}):
+            _zapisz_rekord(stan, sledztwo, na_serio)
+        _zapisz_stan(stan)
+        _zapisz_raport(stan)
+    except Exception as blad:  # noqa: BLE001 — patrz docstring
+        print("  [sledztwo] zapis po awarii padl (%s)" % type(blad).__name__, flush=True)
+
+
+def _nowy_stan(conn, run_id, na_serio: bool) -> dict:
+    try:
+        tryb = db.tryb_przebiegu(conn, run_id)
+    except Exception:
+        tryb = "nieznany"
+    return {"run_id": run_id, "kiedy": _teraz().isoformat(), "tryb": tryb, "na_serio": na_serio,
+            "argv": list(sys.argv[1:]), "etapy": {}}
+
+
+def _przebieg_sledztwa(conn, run_id: int) -> int:
+    """Sledztwo: wybor historii -> brief -> zrodla historii (PRZED planem) -> plan
+    redaktora -> dokumenty pierwotne -> glosy i cena -> klasyfikacja wzgledem calej
+    ksiegi -> badanie ksiegi -> starszy redaktor (do 2 rund) -> karta sledcza
+    i jej sprawdzenie -> nowosc -> poziom tematu -> katy -> REKORD -> kolejka
+    notek (spec §2 etapy 4-17).
+
+    ARTYKULU TU NIE MA I NIE MOZE BYC (spec §9 pkt 1) — patrz komentarz nad
+    `RUND_KSIEGI`. Artykul ze sledztwa pisze wylacznie zegar tygodniowy
+    (`_przebieg` -> `_artykul_ze_sledztwa`), z zapisanego stanu.
+
+    Bez `--wyslij` nic nie trafia do produkcji: ani katy (kolejka notek), ani
+    rekord sledztwa (limity i pamiec). Stan i raport w `data/sledztwa/` powstaja
+    zawsze — to zapis roboczy, nie decyzja.
+
+    Flagi: `--historia <n>` wymusza historie z miejsca n rankingu (proba na tym
+    samym korpusie), `--z-sledztwa <run_id>` wznawia zapisane sledztwo od katow
+    (etapy 15-17), `--mimo-limitu` omija limity tygodnia i kolejki.
+    """
+    import sledztwo
+
+    wznow = _arg("--z-sledztwa")
+    if wznow is not None:
+        return _wznow_sledztwo(conn, run_id, wznow)
+    import korpus_kanalow
+
+    na_serio = "--wyslij" in sys.argv
+    print("== sledztwo ==", flush=True)
+    if (sledztwo.ile_sledztw(7) >= sledztwo.SLEDZTW_NA_TYDZIEN
+            and "--mimo-limitu" not in sys.argv):
+        print("  limit tygodnia: %d sledztw w 7 dni — nie badam"
+              % sledztwo.ile_sledztw(7), flush=True)
+        return 1
+    # NOWE SLEDZTWO, GDY KOLEJKA PRAWIE ZESZLA. Zegar budzi sledztwo co dobe, a
+    # katy (oplacone Opusem) wychodza od jutra po `PRZESLAN_NA_DOBE` dziennie.
+    # Do 25.10.2026 czekalismy na pusta kolejke przy jednym przeslaniu na dobe;
+    # teraz wystarczy, ze reszta poprzedniej historii zmiesci sie jutro obok
+    # nowej (najstarsza historia idzie pierwsza), wiec temat zmienia sie co dwa-
+    # trzy dni bez dziury i bez katow, ktore wygasna w kolejce.
+    czeka = sledztwo.czekajace_przeslania()
+    if czeka >= sledztwo.PRZESLAN_NA_DOBE and "--mimo-limitu" not in sys.argv:
+        print("  kolejka: %d katow z poprzedniego sledztwa jeszcze czeka"
+              " — nowe sledztwo, gdy zostanie mniej niz %d"
+              % (czeka, sledztwo.PRZESLAN_NA_DOBE), flush=True)
+        return 1
+    stan = _nowy_stan(conn, run_id, na_serio)
+    zegar = _Zegar(conn, run_id)
+    # KORPUS + NAJPOPULARNIEJSZE WATKI AI Z HACKER NEWS (`sledztwo.popularne_hn`): to, co
+    # naprawde porusza ludzi, nie tylko to, co maja nasze kanaly RSS.
+    _korpus = korpus_kanalow.korpus_kanalow(400) + sledztwo.popularne_hn()
+    # RADAR (ciekawosc) + DETEKTOR DUZYCH HISTORII (zasieg) — patrz `sledztwo.wielkie_historie`.
+    historie = sledztwo.scal_historie(sledztwo.historie(_korpus, conn=conn, run_id=run_id),
+                                      sledztwo.wielkie_historie(_korpus, conn=conn, run_id=run_id))
+    # NAJWIEKSZA HISTORIA, NIE PIERWSZA Z RADARU (25.10.2026) — `sledztwo.wybierz_historie`:
+    # wielkosc (niezalezne serwisy) x waga kategorii z badania klikalnosci x kara za
+    # powtorke dziedziny.
+    wybrana, ranking = sledztwo.wybierz_historie(historie, conn=conn, run_id=run_id, korpus=_korpus)
+    for r in ranking:
+        print("  [radar %d] %s — %s%s" % (
+            r["miejsce"], str(r["tytul"])[:80], r["powod"],
+            ("; %s, wynik %.2f%s" % (r.get("kategoria") or "?", r["wynik"],
+                                     " (kara: ta sama dziedzina niedawno)" if r.get("kara") else ""))
+            if "wynik" in r else ""), flush=True)
+    # WYMUSZONA HISTORIA (spec §8): proba ma przejsc przez wybrana historie z tego
+    # samego rankingu, a nie przez to, co radar wylosuje dzis.
+    wymuszona = _arg("--historia")
+    if wymuszona is not None:
+        try:
+            miejsce = int(wymuszona)
+        except ValueError:
+            print(">> --historia wymaga numeru miejsca z rankingu, dostalem %r" % wymuszona, flush=True)
+            return 1
+        wybrana = next((h for h in historie if h.get("miejsce") == miejsce), None)
+        if wybrana is None:
+            print(">> --historia %d: nie ma takiej historii w rankingu" % miejsce, flush=True)
+            return 1
+        print("  WYMUSZONA (--historia %d)" % miejsce, flush=True)
+    if wybrana is None:
+        print(">> zadna historia z czolowki radaru nie nadaje sie na sledztwo",
+              flush=True)
+        return 1
+    print("  WYBRANA: [radar %d] %s — %s, %d serwisow, wynik %.2f" % (
+        wybrana["miejsce"], wybrana["tytul"][:80], wybrana.get("kategoria") or "?",
+        wybrana.get("serwisy") or 0, wybrana.get("wynik_wyboru") or 0.0), flush=True)
+    stan["ranking"] = ranking
+    stan["ranking_rekord"] = _ranking_do_rekordu(ranking, historie)
+    stan["wybrana"] = wybrana
+    zegar.etap(stan, "wybor")
+    try:
+        return _badanie_sledztwa(conn, run_id, stan, zegar, sledztwo, na_serio)
+    except BaseException as exc:
+        _po_awarii(stan, sledztwo, na_serio, exc)
+        raise
+
+
+def _wznow_sledztwo(conn, run_id: int, rid_tekst: str) -> int:
+    """`--z-sledztwa <run_id>`: zapisany stan -> etapy 15-17 (poziom, katy, rekord,
+    kolejka), bez placenia drugi raz za zrodla, plan, badanie i karte.
+
+    Po co (spec §8): katy i bramki zmieniaja sie czesciej niz badanie, a proba
+    nowych katow na tym samym dossier ma kosztowac jedno wywolanie, nie cale
+    sledztwo. Rekord, ktory juz jest w pamieci, nie jest dublowany (limit tygodnia
+    liczy rekordy); katy, ktore juz sa w kolejce, tez nie — chyba ze `--mimo-kolejki`.
+    """
+    import sledztwo
+
+    na_serio = "--wyslij" in sys.argv
+    # Sam numer przebiegu: wartosc flagi skleja sie w sciezke pliku stanu.
+    stan = _wczytaj_stan(rid_tekst) if str(rid_tekst or "").isdigit() else None
+    if not stan or not isinstance(stan.get("karta"), dict) or not isinstance(stan.get("wybrana"), dict):
+        print(">> --z-sledztwa %s: brak zapisanego stanu z karta w %s"
+              % (rid_tekst or "?", config.DATA_DIR / KATALOG_SLEDZTW), flush=True)
+        return 1
+    print("== sledztwo: wznowienie %s od katow (etapy 15-17) ==" % stan.get("run_id"), flush=True)
+    print("  historia: %s" % str(stan["wybrana"].get("tytul"))[:100], flush=True)
+    try:
+        tryb = db.tryb_przebiegu(conn, run_id)
+    except Exception:
+        tryb = "nieznany"
+    stan.setdefault("wznowienia", []).append({"run_id": run_id, "kiedy": _teraz().isoformat(),
+                                              "tryb": tryb, "na_serio": na_serio})
+    # Stan dotkniety proba nie moze potem udawac produkcyjnego (kandydat na artykul).
+    if tryb == "test":
+        stan["tryb"] = "test"
+    stan["na_serio"] = bool(stan.get("na_serio")) or na_serio
+    stan.pop("przerwane", None)
+    zegar = _Zegar(conn, run_id)
+    try:
+        return _katy_serii(conn, run_id, stan, zegar, sledztwo, na_serio)
+    except BaseException as exc:
+        _po_awarii(stan, sledztwo, na_serio, exc)
+        raise
+
+
+# --- artykul tygodnia ze sledztwa -------------------------------------------------
+
+def _kat_analizy(sledztwo, rodzaj) -> bool:
+    katy = getattr(sledztwo, "KATY", None)
+    if isinstance(katy, dict) and rodzaj in katy:
+        return bool((katy.get(rodzaj) or {}).get("analiza"))
+    return rodzaj in tuple(getattr(sledztwo, "ANALIZY", ()) or ())
+
+
+def _rekordy_pierwotne(card: dict) -> int:
+    """Ile roznych zrodel PRIMARY albo INDEPENDENT stoi za potwierdzonymi
+    twierdzeniami karty (klase nadaje kod w `stages.sprawdz_karte`)."""
+    adresy = set()
+    for c in _twierdzenia(card):
+        klasa = str(c.get("klasa") or c.get("klasa_zrodla") or c.get("source_class")
+                    or c.get("class") or "").upper()
+        if klasa in ("PRIMARY", "INDEPENDENT") and not c.get("not_fetched"):
+            adresy.add(_klucz_url(c.get("url")))
+    return len(adresy - {""})
+
+
+def _werdykt_z_dowodami(stan: dict) -> bool:
+    """Kat-werdykt, ktorego dowody za i przeciw stoja w ksiedze (spec §5).
+
+    Za: pytanie ksiegi, na ktorym werdykt stoi (`q`), ma odpowiedz (pelna albo
+    czesciowa) i zrodla. Przeciw: wielkie pytanie (soczewka BIG) jest z definicji
+    badane w obie strony; razem z pytaniem werdyktu musza stac na co najmniej dwoch
+    roznych zrodlach — jedno zrodlo nie daje dwoch stron.
+    """
+    ksiega = {e.get("id"): e for e in ((stan.get("dossier") or {}).get("ksiega") or [])
+              if isinstance(e, dict)}
+    for p in stan.get("katy") or []:
+        if not isinstance(p, dict) or str(p.get("rodzaj") or "").upper() != "VERDICT":
+            continue
+        wpis = ksiega.get(p.get("q"))
+        if not wpis or wpis.get("status") not in _STATUSY_Z_ODPOWIEDZIA or not wpis.get("zrodla"):
+            continue
+        adresy = {str(z.get("url")) for z in wpis.get("zrodla") or [] if isinstance(z, dict) and z.get("url")}
+        for e in ksiega.values():
+            if str(e.get("soczewka") or "").upper() == "BIG" and e.get("status") in _STATUSY_Z_ODPOWIEDZIA:
+                adresy |= {str(z.get("url")) for z in e.get("zrodla") or []
+                           if isinstance(z, dict) and z.get("url")}
+        if len(adresy) >= 2:
+            return True
+    return False
+
+
+def _ocena_kandydata(stan: dict, teraz: datetime | None = None, w_tescie: bool = False,
+                     uzyte: set | None = None) -> tuple[bool, list[str], dict]:
+    """(nadaje sie, czego brakuje, miary) — regula artykulu ze sledztwa (spec §5),
+    w zakresie, ktory da sie sprawdzic z zapisanego stanu.
+
+    `w_tescie=True` pomija warunki produkcji (tryb, `--wyslij`, wiek): tak liczymy
+    `artykul_kandydat` w rekordzie i podglad w probie. `uzyte` to znormalizowane
+    twierdzenia z wydanych notek serii; None = nie wiadomo, warunek pominiety.
+    """
+    card = stan.get("karta") or {}
+    poziom = stan.get("poziom") or {}
+    braki: list[str] = []
+    if not w_tescie:
+        if not stan.get("na_serio"):
+            braki.append("sledztwo bez --wyslij")
+        if stan.get("tryb") == "test":
+            braki.append("sledztwo w trybie test")
+        try:
+            wiek = (teraz or _teraz()) - datetime.fromisoformat(str(stan.get("kiedy")))
+            if wiek > timedelta(days=DNI_KANDYDATA):
+                braki.append("stan sprzed %.1f dni (prog %d)" % (wiek.total_seconds() / 86400,
+                                                                 DNI_KANDYDATA))
+        except (TypeError, ValueError):
+            braki.append("stan bez daty")
+        artykul = stan.get("artykul")
+        if artykul:
+            braki.append("artykul z tego sledztwa juz byl (%s)" % (
+                artykul.get("kod") if isinstance(artykul, dict) else artykul))
+    if stan.get("przerwane"):
+        braki.append("sledztwo przerwane")
+    katy = [p for p in stan.get("katy") or [] if isinstance(p, dict)]
+    if not katy:
+        braki.append("brak katow")
+    twierdzenia = [c for c in _twierdzenia(card) if not c.get("not_fetched")]
+    hosty = {_host_url(c.get("url")) for c in twierdzenia} - {""}
+    pr = poziom.get("Pr")
+    pr = pr if isinstance(pr, int) and not isinstance(pr, bool) else _rekordy_pierwotne(card)
+    ksiega = [e for e in ((stan.get("dossier") or {}).get("ksiega") or []) if isinstance(e, dict)]
+    odpowiedzi = sum(1 for e in ksiega if e.get("status") in _STATUSY_Z_ODPOWIEDZIA)
+    miary = {"poziom": poziom.get("poziom"), "C": len(twierdzenia), "H": len(hosty), "Pr": pr,
+             "A": odpowiedzi, "W": poziom.get("W") or (stan.get("wybrana") or {}).get("serwisy") or 0,
+             "nowosc": bool((stan.get("nowosc") or {}).get("jest"))}
+    if poziom.get("poziom") not in POZIOMY_ARTYKULU:
+        braki.append("poziom %s (potrzeba L albo XL)" % poziom.get("poziom"))
+    if len(twierdzenia) < MIN_TWIERDZEN_ARTYKULU or len(hosty) < MIN_HOSTOW_ARTYKULU:
+        braki.append("%d twierdzen z %d serwisow (prog %d z %d)" % (
+            len(twierdzenia), len(hosty), MIN_TWIERDZEN_ARTYKULU, MIN_HOSTOW_ARTYKULU))
+    if pr < MIN_REKORDOW_ARTYKULU:
+        braki.append("%d rekordow pierwotnych (prog %d)" % (pr, MIN_REKORDOW_ARTYKULU))
+    if odpowiedzi < MIN_ODPOWIEDZI_ARTYKULU:
+        braki.append("%d pytan ksiegi z odpowiedzia (prog %d)" % (odpowiedzi, MIN_ODPOWIEDZI_ARTYKULU))
+    if not _werdykt_z_dowodami(stan):
+        braki.append("brak werdyktu z dowodami za i przeciw w ksiedze")
+    if uzyte is not None:
+        swieze = sum(1 for c in twierdzenia if _norm(c.get("claim")) not in uzyte)
+        miary["swieze"] = swieze
+        if swieze < MIN_SWIEZYCH_TWIERDZEN:
+            braki.append("%d twierdzen spoza wydanych notek (prog %d)" % (swieze, MIN_SWIEZYCH_TWIERDZEN))
+    return not braki, braki, miary
+
+
+def _uzyte_twierdzenia(sledztwo, stan: dict) -> set | None:
+    """Twierdzenia, na ktorych staly WYDANE notki serii tej historii. None, gdy
+    kolejki albo dziennika nie da sie przeczytac — warunek swiezosci odpada
+    wtedy z logiem, zamiast blokowac artykul tygodnia."""
+    try:
+        wydane, _ = sledztwo._wydane_przeslania()
+        tytul = (stan.get("wybrana") or {}).get("tytul")
+        uzyte = set()
+        for q in sledztwo._kolejka():
+            if q.get("historia") == tytul and str(q.get("id")) in wydane:
+                uzyte |= {_norm(f.get("claim")) for f in q.get("fakty") or [] if isinstance(f, dict)}
+        return uzyte
+    except Exception as exc:
+        print("  [artykul] nie sprawdzilem, ktore twierdzenia juz wyszly (%s)" % type(exc).__name__,
+              flush=True)
+        return None
+
+
+def _kandydat_ze_sledztwa(w_tescie: bool = False) -> dict | None:
+    """Najlepszy zapisany stan sledztwa na artykul tygodnia albo None.
+
+    Wybor (spec §5): najwyzszy poziom, potem nowe ustalenie (podwojnie zgodne —
+    podnosi priorytet, nigdy nie zastepuje progu), potem wielkosc tematu,
+    potem swiezosc. Drukuje ocene kazdego stanu z ostatnich dni.
+    """
+    import sledztwo
+
+    katalog = config.DATA_DIR / KATALOG_SLEDZTW
+    granica = _teraz() - timedelta(days=DNI_KANDYDATA)
+    dobre = []
+    for plik in sorted(katalog.glob("*.json")) if katalog.exists() else []:
+        try:
+            stan = json.loads(plik.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if not isinstance(stan, dict) or not stan.get("run_id"):
+            continue
+        try:
+            if datetime.fromisoformat(str(stan.get("kiedy"))) < granica - timedelta(days=2):
+                continue        # starych stanow nawet nie wypisujemy
+        except (TypeError, ValueError):
+            continue
+        uzyte = _uzyte_twierdzenia(sledztwo, stan)
+        ok, braki, miary = _ocena_kandydata(stan, w_tescie=w_tescie, uzyte=uzyte)
+        print("  [kandydat %s] %s — %s | %s" % (
+            stan.get("run_id"), str((stan.get("wybrana") or {}).get("tytul"))[:70],
+            "NADAJE SIE" if ok else "nie: " + "; ".join(braki),
+            ", ".join("%s=%s" % kv for kv in miary.items())), flush=True)
+        if ok:
+            dobre.append((stan, miary))
+    if not dobre:
+        return None
+
+    def _waga(sm):
+        try:
+            w = float(sm[1]["W"] or 0)
+        except (TypeError, ValueError):
+            w = 0.0
+        return (_RANGA_POZIOMU.get(str(sm[1]["poziom"]), 0), bool(sm[1]["nowosc"]), w,
+                str(sm[0].get("kiedy") or ""))
+    return max(dobre, key=_waga)[0]
+
+
+def _karta_artykulu(stan: dict) -> tuple[dict, dict]:
+    """(brief, karta dla pisarza) z zapisanego stanu sledztwa.
+
+    Te same pola, ktore do 25.10 dokladala galaz artykulu w samym sledztwie
+    (`prompts/pisarz.md` je zna), plus ustalenia zarezerwowane dla artykulu
+    (`do_artykulu`), ktorych notki nie uzyly — ida pierwsze.
+    """
+    import sledztwo
+
+    card = copy.deepcopy(stan.get("karta") or {})
+    brief = dict(stan.get("brief") or {})
+    przes = [p for p in stan.get("katy") or [] if isinstance(p, dict)]
+    nowe = stan.get("nowosc") or {}
+    twierdzenia = _twierdzenia(card)
+    if nowe.get("jest"):
+        card["investigation_finding"] = {
+            "finding": nowe.get("ustalenie"),
+            "how_the_sources_combine": nowe.get("powod") or "",
+            "claims": [twierdzenia[i - 1].get("claim") for i in nowe.get("twierdzenia") or []
+                       if isinstance(i, int) and 1 <= i <= len(twierdzenia)]}
+    card["editorial_hypotheses"] = [
+        {k: p.get(k) for k in ("rodzaj", "przeslanie", "wniosek", "tresc", "zalozenie", "za", "przeciw",
+                               "co_obali")}
+        for p in przes if _kat_analizy(sledztwo, p.get("rodzaj"))]
+    card["investigation_type"] = "model_release" if stan.get("typ") == "premiera" else "investigation"
+    zarezerwowane = []
+    for x in card.get("do_artykulu") or []:
+        if isinstance(x, dict):
+            zarezerwowane.append(dict(x, rodzaj=x.get("rodzaj") or "RESERVED_FOR_ARTICLE"))
+        elif str(x).strip():
+            zarezerwowane.append({"rodzaj": "RESERVED_FOR_ARTICLE", "przeslanie": str(x)})
+    # WSZYSTKIE KATY SERII DO ARTYKULU — artykul ma byc pelnym sledztwem
+    # (`prompts/pisarz.md`, „investigation_angles"), nie streszczeniem karty.
+    card["investigation_angles"] = zarezerwowane + [
+        {k: p.get(k) for k in ("rodzaj", "przeslanie", "wniosek", "naglowek", "hak", "tresc",
+                               "ai_link", "why_care") if p.get(k)}
+        for p in przes]
+    brief["sledztwo_run_id"] = stan.get("run_id")
+    return brief, card
+
+
+def _artykul_ze_sledztwa(conn, run_id: int) -> int | None:
+    """Artykul tygodnia z zapisanego sledztwa; None = nie ma kandydata albo
+    pisarz odmowil — wtedy wolajacy pisze artykul z puli, jak dotad."""
+    import sledztwo
+
+    print()
+    print("-- artykul tygodnia: najpierw kandydat ze sledztwa --", flush=True)
+    # WYBOR W OSLONIE, PISANIE NIE. Awaria wyboru (zly plik stanu, zmieniony ksztalt
+    # katow) ma oddac tydzien puli. Awaria w `_napisz_i_zapisz` NIE: tam juz
+    # zaplacono za pisanie, a przejscie do puli zaplaciloby za drugi artykul.
+    try:
+        stan = _kandydat_ze_sledztwa()
+        if stan is not None:
+            brief, card = _karta_artykulu(stan)
+            evidence = [e for e in stan.get("evidence") or [] if isinstance(e, dict)] or None
+    except Exception as exc:
+        print("  [artykul] wybor kandydata ze sledztwa padl (%s: %s) — artykul z puli"
+              % (type(exc).__name__, str(exc)[:120]), flush=True)
+        return None
+    if stan is None:
+        print("  brak sledztwa, ktore unosi artykul — artykul z puli", flush=True)
+        return None
+    print("  BIORE sledztwo %s: %s" % (stan.get("run_id"), (stan.get("wybrana") or {}).get("tytul")),
+          flush=True)
+    pisarz = config.MODEL_FOR.get("write")
+    try:
+        kod = _napisz_i_zapisz(conn, run_id, brief, card, evidence)
+    except llm.OdmowaDostawcy as exc:
+        # ODMOWA DOSTAWCY NIE KONCZY TYGODNIA BEZ ARTYKULU. 27.09.2026 pisarz (Fable,
+        # potem Opus) odmowil artykulu o agentach na stronach rzadow w kategorii
+        # „cyber". Odmowa nic nie kosztowala; tydzien dostaje artykul z puli.
+        # PISARZ WRACA NA SWOJ MODEL: powtorka w `_napisz_i_zapisz` przestawia
+        # `MODEL_FOR["write"]` na Opusa na caly proces, a artykul z puli ma isc
+        # na tym, co wybral wlasciciel, nie na zapasie po cudzej odmowie.
+        config.MODEL_FOR["write"] = pisarz
+        print(">> dostawca odmowil artykulu ze sledztwa %s (%s) — artykul z puli"
+              % (stan.get("run_id"), str(exc)[:160]), flush=True)
+        if "--wyslij" in sys.argv:
+            stan["artykul"] = {"run_id": run_id, "kod": "odmowa", "kiedy": _teraz().isoformat()}
+            _zapisz_stan(stan)
+        return None
+    if "--wyslij" in sys.argv and kod in (0, KOD_NIEOPUBLIKOWANY):
+        stan["artykul"] = {"run_id": run_id, "kod": kod, "kiedy": _teraz().isoformat()}
+        _zapisz_stan(stan)
+        if kod == 0:
+            sledztwo.oznacz_artykul(stan.get("run_id"))
+    return kod
+
+
+def _zakaz_artykulu(conn, run_id) -> str:
+    """Powod, dla ktorego artykulu NIE wolno pisac, albo pusty napis.
+
+    TRZY NIEZALEZNE SYGNALY, kazdy wystarcza: przebieg w trybie test
+    (`db.tryb_przebiegu`), znacznik kopii testowej obok kodu
+    (`run.ZNACZNIK_KOPII_TESTOWEJ`) i jawna flaga `--bez-artykulu`.
+
+    Wyjatek z `db.tryb_przebiegu` nie blokuje: prawdziwa funkcja nie rzuca na
+    prawdziwym polaczeniu (blad bazy zamienia sama na „produkcja"), wiec rzuca
+    tylko atrapa bazy w tescie bez platnych wywolan. Proba na kopii zawsze ma
+    prawdziwa baze (`start_run` z `NIA_TRYB=test`) i znacznik kopii.
+    """
+    powody = []
+    if "--bez-artykulu" in sys.argv:
+        powody.append("flaga --bez-artykulu")
+    try:
+        if db.tryb_przebiegu(conn, run_id) == "test":
+            powody.append("przebieg %s w trybie test" % run_id)
+    except Exception as exc:
+        print("  [artykul] tryb przebiegu nieznany (%s) — decyduja znacznik kopii i flaga"
+              % type(exc).__name__, flush=True)
+    try:
+        import run as _run
+        znacznik = Path(_run.ZNACZNIK_KOPII_TESTOWEJ)
+    except Exception:
+        znacznik = config.AGENT_DIR / "TO_JEST_KOPIA_TESTOWA"
+    if znacznik.exists():
+        powody.append("kopia testowa (%s)" % znacznik)
+    return "; ".join(powody)
+
+
+# --- raport sledztwa ------------------------------------------------------------------
+
+def _raport_sledztwa(stan: dict) -> str:
+    """Raport jednego sledztwa do czytania przez czlowieka (spec §8, fala 1: bez
+    nagran i bez zegara do odtwarzania). Kazda sekcja w osobnej oslonie — raport
+    z dziura jest lepszy niz brak raportu."""
+    linie: list[str] = []
+    card = stan.get("karta") or {}
+    plan = stan.get("plan") or {}
+    dossier = stan.get("dossier") or {}
+    w = stan.get("wybrana") or {}
+
+    def _sek_naglowek():
+        linie.append("RAPORT SLEDZTWA %s — %s" % (stan.get("run_id"), w.get("tytul")))
+        linie.append("start %s | tryb %s | %s | ostatni etap: %s" % (
+            stan.get("kiedy"), stan.get("tryb"), "z --wyslij" if stan.get("na_serio") else "bez --wyslij",
+            stan.get("etap")))
+        if stan.get("przerwane"):
+            linie.append("PRZERWANE: %s" % stan["przerwane"])
+        for x in stan.get("wznowienia") or []:
+            linie.append("wznowienie: przebieg %s, %s, tryb %s" % (x.get("run_id"), x.get("kiedy"), x.get("tryb")))
+
+    def _sek_ranking():
+        linie.append("== 1. RANKING ==")
+        for r in stan.get("ranking") or []:
+            linie.append("  [%s] %s %s | %s | wynik %s | %s" % (
+                r.get("miejsce"), "OK " if r.get("ok") else "NIE", str(r.get("tytul"))[:80],
+                r.get("kategoria") or "?", r.get("wynik", "-"), r.get("powod")))
+        linie.append("  WYBRANA: [%s] %s | kategoria %s | serwisy %s | punkty HN %s | klucze %s" % (
+            w.get("miejsce"), w.get("tytul"), w.get("kategoria"), w.get("serwisy"), w.get("punkty_hn"),
+            ", ".join(str(k) for k in w.get("klucze") or [])))
+
+    def _sek_brief():
+        b = stan.get("brief") or {}
+        linie.append("== 2. BRIEF ==")
+        linie.append("  typ: %s | pytanie: %s" % (stan.get("typ"), b.get("question")))
+        if b.get("pytanie_przed_ponowka"):
+            linie.append("  (ponowka ogolnika: %s)" % b["pytanie_przed_ponowka"])
+
+    def _sek_pobranie():
+        linie.append("== 3. ZRODLA HISTORII (pobrane przed planem) ==")
+        for p in stan.get("pobrania") or []:
+            linie.append("  %s %s%s%s" % ("OK " if p.get("ok") else "NIE", p.get("url"),
+                                         " (%s znakow)" % p["znakow"] if p.get("znakow") else "",
+                                         " [z feedu]" if p.get("z_zapasu_kanalu") else ""))
+
+    def _sek_plan():
+        linie.append("== 4. PLAN REDAKTORA ==")
+        linie.append("  model: %s | fallback: %s%s" % (plan.get("model") or "?", bool(plan.get("fallback")),
+                                                      " (zapas przebiegu: %s)" % plan["zapas_przebiegu"]
+                                                      if plan.get("zapas_przebiegu") else ""))
+        for k in ("rdzen_ai", "zalozenie_czytelnika"):
+            if plan.get(k):
+                linie.append("  %s: %s" % (k, plan[k]))
+        if plan.get("wielkie_pytanie"):
+            linie.append("  wielkie pytanie: %s" % json.dumps(plan["wielkie_pytanie"], ensure_ascii=False))
+        if plan.get("smaczek"):
+            linie.append("  smaczek: %s" % json.dumps(plan["smaczek"], ensure_ascii=False))
+        for q in plan.get("pytania") or []:
+            linie.append("  %s [%s] waga %s: %s" % (q.get("id"), q.get("soczewka"), q.get("waga"), q.get("q")))
+            if q.get("dowod") or q.get("gdzie"):
+                linie.append("      dowod: %s | gdzie: %s | szukaj: %s" % (q.get("dowod"), q.get("gdzie"),
+                                                                       q.get("zapytanie")))
+        for s in plan.get("pominiete_soczewki") or []:
+            linie.append("  pominieta soczewka: %s" % (json.dumps(s, ensure_ascii=False)
+                                                      if isinstance(s, dict) else s))
+        for o in plan.get("odrzucone") or []:
+            linie.append("  odrzucone (test podmiany): %s — %s" % (
+                (o or {}).get("q") if isinstance(o, dict) else o, (o or {}).get("powod") if isinstance(o, dict) else ""))
+        for t in plan.get("termin") or []:
+            linie.append("  termin: %s" % (json.dumps(t, ensure_ascii=False) if isinstance(t, dict) else t))
+
+    def _sek_dokumenty():
+        dok = stan.get("dokumenty") or []
+        linie.append("== 5. DOKUMENTY: NAZWANE %d, ZDOBYTE %d ==" % (
+            len(dok), sum(1 for d in dok if d.get("pobrane"))))
+        for d in dok:
+            linie.append("  %s | %s | %s -> znalezione %s, pobrane %s%s" % (
+                d.get("co"), d.get("kto"), d.get("gdzie"), d.get("znalezione") or "-", d.get("pobrane") or "-",
+                " (blad %s)" % d["blad"] if d.get("blad") else ""))
+        linie.append("  glosy i cennik: %s" % (", ".join(str(g.get("url")) for g in stan.get("glosy") or [])
+                                                or "brak"))
+
+    def _sek_ksiega():
+        linie.append("== 6. KSIEGA PYTAN ==")
+        linie.append("  stan: %s | koniec badania: %s%s" % (
+            json.dumps(stan.get("ksiega_stan") or {}, ensure_ascii=False), dossier.get("stop_reason"),
+            " | krytyk: %s" % dossier["stop_reason_krytyk"] if dossier.get("stop_reason_krytyk") else ""))
+        for e in dossier.get("ksiega") or []:
+            if not isinstance(e, dict):
+                continue
+            linie.append("  %s [%s|waga %s] %s -> %s (prob %s, zrodel %d)" % (
+                e.get("id"), e.get("soczewka"), e.get("waga"), str(e.get("q"))[:110], e.get("status"),
+                e.get("proby"), len(e.get("zrodla") or [])))
+            if e.get("odpowiedz"):
+                linie.append("      %s" % str(e["odpowiedz"])[:300])
+        for r in dossier.get("rundy_ksiegi") or []:
+            if isinstance(r, dict):
+                linie.append("  runda: %s „%s” -> %d adresow, dodane %s" % (
+                    r.get("id"), r.get("zapytanie"), len(r.get("urls") or []), r.get("dodane")))
+
+    def _sek_krytyk():
+        k = stan.get("krytyk") or {}
+        linie.append("== 7. STARSZY REDAKTOR ==")
+        if k.get("pominiety"):
+            linie.append("  pominiety: %s" % k["pominiety"])
+        statusy = {e.get("id"): e.get("status") for e in dossier.get("ksiega") or [] if isinstance(e, dict)}
+        for q in k.get("pytania") or []:
+            linie.append("  %s [%s] %s -> %s" % (q.get("id"), q.get("soczewka"), q.get("q"),
+                                                statusy.get(q.get("id"), "nie badane")))
+        for u in k.get("uwagi") or []:
+            linie.append("  uwaga: %s" % u)
+
+    def _sek_karta():
+        tw = _twierdzenia(card)
+        linie.append("== 8. KARTA: %d potwierdzonych, %d niepewnych%s ==" % (
+            len(tw), len(card.get("uncertain_claims") or []),
+            " | NIESPRAWDZONA KODEM (%s)" % card["_karta_niesprawdzona"] if card.get("_karta_niesprawdzona") else ""))
+        for i, c in enumerate(tw, 1):
+            linie.append("  [%d] (%s | %s | %s | %s) %s" % (
+                i, c.get("kind") or "?", c.get("klasa") or c.get("klasa_zrodla") or c.get("class") or "?",
+                _host_url(c.get("url")), c.get("as_of") or "-", str(c.get("claim"))[:200]))
+        for x in (card.get("not_established") or [])[:8]:
+            linie.append("  nie ustalono: %s" % str(x)[:200])
+        linie.append("  liczby pochodne (kalkulator): poza fala 1")
+
+    def _sek_nowosc():
+        linie.append("== 9. NOWOSC ==")
+        linie.append("  %s" % json.dumps(stan.get("nowosc") or {}, ensure_ascii=False)[:1200])
+
+    def _sek_katy():
+        p = stan.get("poziom") or {}
+        linie.append("== 10. POZIOM I KATY ==")
+        linie.append("  poziom: %s" % json.dumps(p, ensure_ascii=False))
+        if card.get("sedno"):
+            linie.append("  sedno: %s" % json.dumps(card["sedno"], ensure_ascii=False)[:1500])
+        for k, kat in enumerate(stan.get("katy") or [], 1):
+            if not isinstance(kat, dict):
+                continue
+            linie.append("  %d. [%s] lead=%s kierunek=%s os=%s wariant=%s q=%s" % (
+                k, kat.get("rodzaj"), bool(kat.get("lead")), kat.get("kierunek"), kat.get("os"),
+                kat.get("wariant"), kat.get("q")))
+            linie.append("      wniosek: %s" % (kat.get("wniosek") or kat.get("przeslanie")))
+            linie.append("      pierwsze zdanie: %s" % (kat.get("linia") or kat.get("naglowek") or "(swobodnie)"))
+            for pole in ("ai_link", "why_care", "zalozenie"):
+                if kat.get(pole):
+                    linie.append("      %s: %s" % (pole, kat[pole]))
+            for pole in ("bramki", "zlamane", "odrzucone"):
+                if kat.get(pole):
+                    linie.append("      %s: %s" % (pole, json.dumps(kat[pole], ensure_ascii=False)[:400]))
+            linie.append("      twierdzen: %d" % len(kat.get("fakty") or []))
+        if card.get("do_artykulu"):
+            linie.append("  do artykulu: %s" % json.dumps(card["do_artykulu"], ensure_ascii=False)[:800])
+        linie.append("  notki pisze potem `stages.notki_dnia` — ich tekst nie powstaje w tym przebiegu")
+
+    def _sek_rekord():
+        linie.append("== 11. REKORD I KOLEJKA ==")
+        linie.append("  rekord zapisany: %s | do kolejki: %s | kandydat na artykul: %s%s" % (
+            bool(stan.get("rekord_zapisany")), stan.get("kolejka_dodana", 0), bool(stan.get("artykul_kandydat")),
+            " (brakuje: %s)" % "; ".join(stan.get("artykul_kandydat_braki") or [])
+            if stan.get("artykul_kandydat_braki") else ""))
+
+    def _sek_koszt():
+        etapy = stan.get("etapy") or {}
+        linie.append("== 12. KOSZT I CZAS NA ETAP ==")
+        for nazwa, e in etapy.items():
+            linie.append("  %-14s %8.4f USD %8.1f s" % (nazwa, float(e.get("koszt_usd") or 0),
+                                                       float(e.get("czas_s") or 0)))
+        linie.append("  %-14s %8.4f USD %8.1f s" % ("RAZEM", sum(float(e.get("koszt_usd") or 0) for e in etapy.values()),
+                                                   sum(float(e.get("czas_s") or 0) for e in etapy.values())))
+
+    def _sek_miary():
+        etapy = stan.get("etapy") or {}
+        koszt = sum(float(e.get("koszt_usd") or 0) for e in etapy.values())
+        czas = sum(float(e.get("czas_s") or 0) for e in etapy.values())
+        ksiega = [e for e in dossier.get("ksiega") or [] if isinstance(e, dict)]
+        wazne = [e for e in ksiega if str(e.get("waga")) in ("1", "2")]
+        pokrycie = (sum(1 for e in wazne if e.get("status") in _STATUSY_Z_ODPOWIEDZIA) / len(wazne)) if wazne else 0.0
+        rundy: dict = {}
+        for r in dossier.get("rundy_ksiegi") or []:
+            if isinstance(r, dict):
+                rundy[r.get("id")] = rundy.get(r.get("id"), 0) + 1
+        pr = (stan.get("poziom") or {}).get("Pr")
+        pr = pr if isinstance(pr, int) else _rekordy_pierwotne(card)
+
+        def _m(nazwa, ok, opis):
+            linie.append("  %s  %s (%s)" % ("PASS" if ok else "FAIL", nazwa, opis))
+        linie.append("== 13. TWARDE MIARY (te, ktore liczy ten przebieg) ==")
+        _m("pytania waga 1-2 z odpowiedzia >= 60%", pokrycie >= 0.6, "%.0f%% z %d" % (100 * pokrycie, len(wazne)))
+        _m("co najmniej 1 rekord PRIMARY/INDEPENDENT", pr >= 1, "%d" % pr)
+        _m("zero linii FALLBACK", not plan.get("fallback"), "plan %s" % ("zapasowy" if plan.get("fallback") else "z modelu"))
+        _m("brak wywolania pisarza", True, "sciezka sledztwa nie ma galezi artykulu")
+        _m("koszt sledztwa <= 0,80 USD", koszt <= 0.80, "%.3f USD" % koszt)
+        _m("czas <= 60 min", czas <= 3600, "%.1f min" % (czas / 60))
+        linie.append("  INFO  pytania badane wiecej niz raz: %d (dozwolone przy warunku z §2 etap 10)"
+                     % sum(1 for n in rundy.values() if n > 1))
+        dok = stan.get("dokumenty") or []
+        linie.append("  INFO  trafienia dokumentow pierwotnych: %d z %d" % (
+            sum(1 for d in dok if d.get("pobrane")), len(dok)))
+        linie.append("  n/d   miary notek (liczby, pierwsza osoba, MYSL, fakt-check) — notki powstaja w notki_dnia")
+
+    for sekcja in (_sek_naglowek, _sek_ranking, _sek_brief, _sek_pobranie, _sek_plan, _sek_dokumenty,
+                   _sek_ksiega, _sek_krytyk, _sek_karta, _sek_nowosc, _sek_katy, _sek_rekord,
+                   _sek_koszt, _sek_miary):
+        try:
+            if linie:
+                linie.append("")
+            sekcja()
+        except Exception as exc:  # noqa: BLE001 — patrz docstring
+            linie.append("  (sekcja %s nie wyszla: %s: %s)" % (sekcja.__name__, type(exc).__name__, exc))
+    return "\n".join(linie) + "\n"
+
+
+def _zapisz_raport(stan: dict) -> None:
+    try:
+        plik = config.DATA_DIR / KATALOG_SLEDZTW / ("%s-raport.txt" % stan.get("run_id"))
+        plik.parent.mkdir(parents=True, exist_ok=True)
+        plik.write_text(_raport_sledztwa(stan), encoding="utf-8")
+        print("  raport sledztwa: %s" % plik, flush=True)
+    except Exception as exc:
+        print("  [raport] nie zapisalem raportu (%s: %s)" % (type(exc).__name__, str(exc)[:120]), flush=True)
+
+
 # GDZIE LADUJE URATOWANY TEKST — I DLACZEGO NIE W `ARTICLES_DIR`.
 #
 # Pierwsza wersja ratunku wolala `stages.save`, czyli pisala `.md` i `.uwagi.md`
@@ -910,232 +2536,6 @@ def _przebieg(conn, run_id: int) -> int:
 # jako `.karta.json`, w DOKLADNIE tym ksztalcie, ktory czyta `--z-karty`
 # (linia ~441): material nie jest skasowany, tylko czeka na swiadoma decyzje
 # czlowieka zamiast wchodzic do obiegu sam.
-def _przebieg_sledztwa(conn, run_id: int) -> int:
-    """Sledztwo: historia z radaru -> pytania -> zrodla -> badanie -> karta ->
-    bramka nowosci -> katy serii do notek (4-5, `sledztwo.RODZAJE`) i artykul
-    (z ustaleniem albo pelnym obrazem z analiza, raz na tydzien).
-
-    Bez `--wyslij` nic nie trafia do produkcji: ani artykul (zostaje na dysku),
-    ani przeslania (kolejka notek), ani zapis sledztwa (limity i pamiec).
-    """
-    import korpus_kanalow
-    import sledztwo
-
-    na_serio = "--wyslij" in sys.argv
-    print("== sledztwo ==", flush=True)
-    if (sledztwo.ile_sledztw(7) >= sledztwo.SLEDZTW_NA_TYDZIEN
-            and "--mimo-limitu" not in sys.argv):
-        print("  limit tygodnia: %d sledztw w 7 dni — nie badam"
-              % sledztwo.ile_sledztw(7), flush=True)
-        return 1
-    # NOWE SLEDZTWO, GDY KOLEJKA PRAWIE ZESZLA. Zegar budzi sledztwo co dobe, a
-    # katy (oplacone Opusem) wychodza od jutra po `PRZESLAN_NA_DOBE` dziennie.
-    # Do 25.10.2026 czekalismy na pusta kolejke przy jednym przeslaniu na dobe;
-    # teraz wystarczy, ze reszta poprzedniej historii zmiesci sie jutro obok
-    # nowej (najstarsza historia idzie pierwsza), wiec temat zmienia sie co dwa-
-    # trzy dni bez dziury i bez katow, ktore wygasna w kolejce.
-    czeka = sledztwo.czekajace_przeslania()
-    if czeka >= sledztwo.PRZESLAN_NA_DOBE and "--mimo-limitu" not in sys.argv:
-        print("  kolejka: %d katow z poprzedniego sledztwa jeszcze czeka"
-              " — nowe sledztwo, gdy zostanie mniej niz %d"
-              % (czeka, sledztwo.PRZESLAN_NA_DOBE), flush=True)
-        return 1
-    # KORPUS + NAJPOPULARNIEJSZE WATKI AI Z HACKER NEWS (`sledztwo.popularne_hn`): to, co
-    # naprawde porusza ludzi, nie tylko to, co maja nasze kanaly RSS.
-    _korpus = korpus_kanalow.korpus_kanalow(400) + sledztwo.popularne_hn()
-    # RADAR (ciekawosc) + DETEKTOR DUZYCH HISTORII (zasieg) — patrz `sledztwo.wielkie_historie`.
-    historie = sledztwo.scal_historie(sledztwo.historie(_korpus, conn=conn, run_id=run_id),
-                                      sledztwo.wielkie_historie(_korpus, conn=conn, run_id=run_id))
-    # NAJWIEKSZA HISTORIA, NIE PIERWSZA Z RADARU (25.10.2026) — `sledztwo.wybierz_historie`:
-    # wielkosc (niezalezne serwisy) x waga kategorii z badania klikalnosci x kara za
-    # powtorke dziedziny.
-    wybrana, ranking = sledztwo.wybierz_historie(historie, conn=conn, run_id=run_id, korpus=_korpus)
-    for r in ranking:
-        print("  [radar %d] %s — %s%s" % (
-            r["miejsce"], str(r["tytul"])[:80], r["powod"],
-            ("; %s, wynik %.2f%s" % (r.get("kategoria") or "?", r["wynik"],
-                                     " (kara: ta sama dziedzina niedawno)" if r.get("kara") else ""))
-            if "wynik" in r else ""), flush=True)
-    if wybrana is not None:
-        print("  WYBRANA: [radar %d] %s — %s, %d serwisow, wynik %.2f" % (
-            wybrana["miejsce"], wybrana["tytul"][:80], wybrana.get("kategoria") or "?",
-            wybrana.get("serwisy") or 0, wybrana.get("wynik_wyboru") or 0.0), flush=True)
-    if wybrana is None:
-        print(">> zadna historia z czolowki radaru nie nadaje sie na sledztwo",
-              flush=True)
-        return 1
-    zrodla = sledztwo.zrodla_historii(wybrana)
-    print("  ZRODLA HISTORII (%d):" % len(zrodla), flush=True)
-    for z in zrodla:
-        print("    - %s | %s" % (z["publisher"], z["title"][:90]), flush=True)
-
-    typ = sledztwo.typ_sledztwa(wybrana.get("kategoria"))
-    brief = temat_z_faktu(conn, run_id, sledztwo.fakt_z_historii(wybrana))
-    print()
-    print("  TYP: %s | PYTANIE: %s" % (typ, brief.get("question")), flush=True)
-    pod = [q for q in (brief.get("sub_questions") or []) if str(q).strip()]
-    # PREMIERA MODELU: benchmarki z niezaleznymi ocenami, testy ludzi, cena, wielkie
-    # pytanie, smaczki z karty modelu — badanie szuka odpowiedzi na kazde z nich.
-    if typ == "premiera":
-        pod += list(sledztwo.PYTANIA_PREMIERY)
-    # PYTANIA CIEKAWOSCI — patrz `sledztwo.pytania_ciekawosci`.
-    _ciekawe, _plan = sledztwo.pytania_ciekawosci(conn, run_id, wybrana, brief.get("question") or "")
-    pod += _ciekawe
-    pod.append(sledztwo.PYTANIE_PIERWOTNE)
-    for q in pod:
-        print("    - %s" % str(q)[:110], flush=True)
-    pytanie = brief["question"] + (
-        ("\n\nThe investigation must also answer:\n"
-         + "\n".join("- %s" % q for q in pod)) if pod else "")
-
-    print()
-    print("-- pobieranie zrodel historii --", flush=True)
-    corpus = stages.fetch(conn, run_id, zrodla)
-    # GLOSY LUDZI I CENA (25.10.2026): watki Hacker News o tej sprawie (opinie, tak
-    # podpisane) i — przy premierze — cennik OpenRouter. Darmowe, bez klucza.
-    _zapytanie = wybrana.get("zapytanie") or ""
-    corpus = corpus + sledztwo.glosy_hn(_zapytanie, klucze=wybrana.get("klucze"))
-    if typ == "premiera":
-        corpus = corpus + sledztwo.cennik_openrouter(_zapytanie)
-    _z_trescia = [c for c in corpus if c.get("text")]
-    _pierwotnych = sum(1 for c in _z_trescia if c.get("class") == "PRIMARY")
-    if _pierwotnych < config.MIN_PRIMARY_SOURCES:
-        # DOKUMENT PIERWOTNY TO GLEBIA — komunikat firmy, stenogram, pismo
-        # urzedu. Serwisy go streszczaja; sledztwo ma go przeczytac samo.
-        print("-- dokumenty pierwotne (%d/%d) --"
-              % (_pierwotnych, config.MIN_PRIMARY_SOURCES), flush=True)
-        juz = {c.get("host") or c.get("url", "") for c in corpus}
-        recent = db.recent_domains(conn, config.DIVERSITY_LOOKBACK)
-        dodatkowe = [s for s in stages.discovery(conn, run_id, pytanie, recent,
-                                                 tylko_pierwotne=True)
-                     if (s.get("host") or s.get("url", "")) not in juz]
-        if dodatkowe:
-            corpus = corpus + stages.fetch(conn, run_id, dodatkowe)
-
-    print()
-    print("-- klasyfikacja --", flush=True)
-    # TRAFNOSC WZGLEDEM WSZYSTKICH PYTAN SLEDZTWA, nie samego glownego (25.10.2026): w probie
-    # o Kimi K3.1 Pro pytanie glowne bylo o benchmarkach i klasyfikacja wyrzucila cennik
-    # (trafnosc 0,10) oraz watek Hacker News — zniknely cena i opinie ludzi, a z nimi katy.
-    evidence = stages.classify(conn, run_id, pytanie, corpus)
-    print("\n-- sledztwo: hipotezy i brakujace odpowiedzi --", flush=True)
-    evidence, dossier = research.deepen(conn, run_id, pytanie, evidence, corpus,
-                                        max_rund=sledztwo.RUND_SLEDZTWA)
-    print()
-    print("-- synteza --", flush=True)
-    try:
-        card = stages.synthesis(conn, run_id,
-                                research.synthesis_question(brief["question"], dossier),
-                                evidence)
-    except PRZERYWAJA:
-        raise
-    except Exception as exc:
-        print("  synteza padla (%s) — karta zapasowa" % type(exc).__name__,
-              flush=True)
-        card = stages.fallback_card(brief["question"], evidence)
-    research.attach(card, dossier)
-    if _plan:
-        card["investigation_plan"] = _plan
-    card.setdefault("broken_belief", brief.get("broken_belief") or "")
-    card.setdefault("why_they_believe_it", brief.get("why_they_believe_it") or "")
-
-    print()
-    print("-- czy laczenie zrodel cos ustalilo --", flush=True)
-    # PELNE TEKSTY ZRODEL do sprawdzenia, czy ustalenie nie stoi juz w jednym
-    # z nich — pobrane strony plus fragmenty dograne w sledztwie.
-    teksty_zrodel: dict[str, str] = {}
-    for c in corpus:
-        if c.get("text"):
-            teksty_zrodel[str(c.get("url"))] = str(c.get("text"))
-    for e in evidence:
-        if isinstance(e, dict) and e.get("url"):
-            teksty_zrodel.setdefault(str(e["url"]), " ".join(str(x) for x in e.get("excerpts") or []))
-    nowe = sledztwo.nowosc(conn, run_id, card, wybrana, teksty_zrodel=teksty_zrodel)
-    print("  %s: %s" % ("USTALENIE" if nowe.get("jest") else "BRAK USTALENIA",
-                        nowe.get("ustalenie") or nowe.get("powod")), flush=True)
-    print()
-    print("-- katy serii --", flush=True)
-    # ILE NOTEK UNIESIE TEMAT — wielkosc i bogactwo karty (`sledztwo.ile_katow`).
-    _ile = sledztwo.ile_katow(wybrana, card)
-    print("  katow dla tego tematu: %d (zasieg %s, twierdzen %d)" % (
-        _ile, wybrana.get("serwisy"), len(sledztwo._twierdzenia(card))), flush=True)
-    przes = sledztwo.przeslania(conn, run_id, card, dossier, wybrana, typ=typ, ile=_ile)
-    for p in przes:
-        print("  [%s] %s" % (p["rodzaj"], p["przeslanie"]), flush=True)
-    if na_serio:
-        print("  do kolejki notek: %d"
-              % sledztwo.dodaj_do_kolejki(przes, wybrana, card, run_id), flush=True)
-        sledztwo.zapisz_sledztwo({
-            "run_id": run_id, "historia": wybrana.get("tytul"),
-            "zrodla": sorted({sledztwo._klucz(z["url"]) for z in zrodla}),
-            "pytanie": brief.get("question"), "nowosc": nowe,
-            "przeslania": [p["rodzaj"] for p in przes],
-            "kategoria": wybrana.get("kategoria") or "", "typ": typ,
-            "serwisy": wybrana.get("serwisy"), "wynik_wyboru": wybrana.get("wynik_wyboru"),
-            "artykul_opublikowany": False})
-    else:
-        print("  (bez --wyslij: przeslania NIE ida do kolejki notek)", flush=True)
-
-    # KIEDY ARTYKUL. Nowe ustalenie (sprawdzone kodem) to premia, nie warunek:
-    # pierwszy zywy test pokazal, ze prawdziwie nowe ustalenia sa rzadkie, a
-    # artykul z pelnym obrazem historii i NASZA analiza (motyw, za dwa lata)
-    # jest tym, czego nie da zaden pojedynczy serwis. Bez pelnego obrazu albo
-    # bez analiz — tylko notki.
-    #
-    # 25.10.2026: wystarczy JEDNA nasza analiza (motyw albo scenariusz) przy co
-    # najmniej czterech katach serii. Zywy test na historii o luce PHP2Shell dal
-    # pelny obraz (8 twierdzen z 5 serwisow) i piec katow, w tym ustalenie, ze AI
-    # nie znalazlo nowego bledu, tylko domknelo teorie z 2024 — a motywu karta nie
-    # niosla, wiec stary warunek (motyw I scenariusz) nie wpuscilby artykulu.
-    #
-    # 25.10.2026 (wlasciciel: „czy temat jest wystarczajaco duzy na artykul"): do tego
-    # zasieg co najmniej `sledztwo.MIN_ZASIEG_ARTYKULU` wydawcow — `temat_na_artykul`.
-    art_ok, art_powod = sledztwo.temat_na_artykul(wybrana, card, nowe, przes)
-    print("  temat na artykul: %s (%s)" % ("TAK" if art_ok else "NIE", art_powod), flush=True)
-    if not art_ok:
-        print(">> temat za maly albo za ubogi na artykul — historia idzie w notkach", flush=True)
-        return 1
-    # JEDEN ARTYKUL ZE SLEDZTWA NA TYDZIEN (25.10.2026). Sledztw jest teraz kilka
-    # w tygodniu (jeden temat co dwa-trzy dni), a artykul — pelne sledztwo —
-    # wychodzi raz; reszta historii zostaje w notkach.
-    if (sledztwo.ile_artykulow(6) >= sledztwo.ARTYKULOW_NA_TYDZIEN
-            and "--mimo-limitu" not in sys.argv):
-        print(">> w ostatnich 6 dniach wyszedl artykul ze sledztwa — ta historia"
-              " idzie tylko w notkach", flush=True)
-        return 1
-    twierdzenia = sledztwo._twierdzenia(card)
-    if nowe.get("jest"):
-        card["investigation_finding"] = {
-            "finding": nowe["ustalenie"],
-            "how_the_sources_combine": nowe.get("powod") or "",
-            "claims": [twierdzenia[i - 1].get("claim") for i in nowe.get("twierdzenia") or []
-                       if 1 <= i <= len(twierdzenia)]}
-    card["editorial_hypotheses"] = [
-        {k: p.get(k) for k in ("rodzaj", "przeslanie", "tresc", "zalozenie", "za", "przeciw", "co_obali")}
-        for p in przes if p["rodzaj"] in sledztwo.ANALIZY]
-    card["investigation_type"] = "model_release" if typ == "premiera" else "investigation"
-    # WSZYSTKIE KATY SERII DO ARTYKULU — artykul ma byc pelnym sledztwem
-    # (`prompts/pisarz.md`, „investigation_angles"), nie streszczeniem karty.
-    card["investigation_angles"] = [
-        {k: p.get(k) for k in ("rodzaj", "przeslanie", "hak", "tresc")} for p in przes]
-    # ODMOWA DOSTAWCY NIE KONCZY SLEDZTWA TRACEBACKIEM. 27.09.2026, pierwsze
-    # sledztwo na produkcji: historia o agentach OpenAI na stronach rzadow USA,
-    # ustalenie i trzy przeslania gotowe, a pisarz artykulu (Fable, potem Opus)
-    # odmowil w kategorii „cyber". Przeslania i zapis sledztwa sa juz wyzej,
-    # wiec jedyna strata to artykul; przebieg ma to powiedziec, a nie wywrocic
-    # sie ze stanem ERROR. Odmowa nic nie kosztowala (0 tokenow).
-    try:
-        kod = _napisz_i_zapisz(conn, run_id, brief, card, evidence)
-    except llm.OdmowaDostawcy as exc:
-        print(">> dostawca odmowil napisania artykulu (%s) — przeslania sa juz"
-              " w kolejce notek, artykulu z tego sledztwa nie bedzie"
-              % str(exc)[:160], flush=True)
-        return 1
-    if kod == 0 and na_serio:
-        sledztwo.oznacz_artykul(run_id)
-    return kod
-
-
 NAZWA_KATALOGU_RATUNKU = "artykuly-przerwane"
 NAZWA_SPISU = "CZYTAJ_TO.txt"
 
@@ -1434,6 +2834,16 @@ def _napisz_i_zapisz(conn, run_id, brief, card, evidence=None) -> int:
     Wydzielone, zeby `--z-karty` mogl tu wejsc z zatwierdzona karta bez
     placenia researchu drugi raz.
     """
+    # OSTATNIA LINIA PRZED PISARZEM (25.10.2026). `_przebieg` odmawia juz na
+    # wejsciu, ale pisarz ma kilku wolajacych (`--z-karty`, pula, artykul ze
+    # sledztwa) i kolejny moglby o tamtej odmowie zapomniec — a proba na kopii
+    # zaplacila juz raz 1,98 USD za Fable. Tutaj odmowa stoi przed PIERWSZYM
+    # platnym wywolaniem kazdej drogi do artykulu.
+    zakaz = _zakaz_artykulu(conn, run_id)
+    if zakaz:
+        print("ARTICLE SKIPPED (test)", flush=True)
+        print("  powod: %s — pisarz artykulu nie jest wolany" % zakaz, flush=True)
+        return 1
     print()
     print("-- czy jest tu luka --", flush=True)
     # BRAMKA JEST DORADCZA — I DOTAD MOGLA ZABIC CALY PRZEBIEG.
