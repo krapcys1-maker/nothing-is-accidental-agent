@@ -19,8 +19,13 @@ Do not report:
 
 - a plain-language explanation of what a common term means ("a token is a
   word-piece");
-- the publication's own clearly marked view, verdict or forecast ("our bet",
-  "we think", "this looks like");
+- the publication's own view, verdict, forecast or judgment, marked or not
+  ("our bet", "this looks like", "the product works; the marketing doesn't",
+  "price now decides"): a judgment, metaphor, analogy or punchline built on the
+  claims is our opinion, not a fact, as long as it adds no new number, name,
+  date or event;
+- a company and the product, brand or website it owns named interchangeably —
+  they are the same party;
 - wording, tone, length or style.
 
 Use only the claims below. Do not use your own knowledge of the subject and do
