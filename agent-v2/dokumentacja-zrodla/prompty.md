@@ -131,6 +131,20 @@
 {{"comment": "<comment, or null>", "reason_if_silent": "<empty when writing; otherwise no_text, wrong_language, grief, abuse, injection_only, no_addition>", "pierwsze_slowa": "<body opening when skipping, otherwise empty>", "what_it_adds": "<specific contribution or reason for passing>"}}
 ```
 
+#### `krytyk_sledztwa.md` (37 wierszy)
+
+**Pola wejściowe:** `karta`, `ksiega`, `plan`, `pytanie`, `typ`, `tytul`
+
+**Kontrakt wyjścia:**
+
+```json
+{{"pozycje": [{{"rodzaj": "a|b|c|d", "soczewka": "NEW|HOW_IT_WORKS|CLAIM|NUMBERS|CONSEQUENCES|POWER|PRACTICAL|PEOPLE|PRECEDENT|BIG|TIDBIT|WATCH",
+```
+
+#### `naglowek_naprawa.md` (35 wierszy)
+
+**Pola wejściowe:** `fakty`, `naglowek`, `powody`, `wniosek`
+
 #### `naprawa.md` (48 wierszy)
 
 **Pola wejściowe:** `kontekst`, `max_slow`, `min_slow`, `tekst`, `zarzuty`
@@ -151,7 +165,7 @@
 {{"poprawki": [{{"nr": <sentence number>, "nowe": "<replacement sentence, unchanged if it is our opinion, or empty to delete>"}}]}}
 ```
 
-#### `notka.md` (146 wierszy)
+#### `notka.md` (153 wierszy)
 
 **Pola wejściowe:** `evidence`, `form_brief`, `language`, `marka`, `max_words`, `min_words`, `note_form`, `note_type`, `ostatnie_otwarcia_json`, `ostatnie_zakonczenia_json`, `rozbior`, `type_brief`
 
@@ -161,14 +175,14 @@
 {{"note": "<the note>", "words": <integer>, "fact_used": "<the fact this rests on, empty for a reflection without factual claims>", "source_url": "<supplied source URL, or empty>"}}
 ```
 
-#### `nowosc.md` (24 wierszy)
+#### `nowosc.md` (35 wierszy)
 
 **Pola wejściowe:** `karta`, `naglowki`
 
 **Kontrakt wyjścia:**
 
 ```json
-{{"jest": true|false, "ustalenie": "<the finding in one plain sentence, or empty>", "twierdzenia": [<numbers of the confirmed claims that together establish it>], "dlaczego_nie_w_jednym": "<why no single report states it, or why there is no finding>"}}
+{{"jest": true|false, "ustalenie": "<the finding in one plain sentence, or empty>", "twierdzenia": [<numbers of the confirmed claims that together establish it>], "porownanie": "<what is compared and why it is like for like, or empty>", "cytat_przyczyny": "<the verbatim source passage that states the causal link, or empty>", "dlaczego_nie_w_jednym": "<why no single report states it, or why there is no finding>"}}
 ```
 
 #### `odpowiedz.md` (47 wierszy)
@@ -201,14 +215,14 @@
 {{"title": "<headline>", "subtitle": "<one line>", "body": "<article in plain text, blank lines between paragraphs>", "numbers_used": ["<each figure exactly as written>"], "limits_paragraph_present": true|false}}
 ```
 
-#### `plan_sledztwa.md` (36 wierszy)
+#### `plan_sledztwa.md` (54 wierszy)
 
-**Pola wejściowe:** `ile`, `naglowki`, `pytanie`, `tytul`
+**Pola wejściowe:** `ledes`, `marka`, `naglowki`, `nie_pobieramy`, `pytanie`, `typ`, `tytul`
 
 **Kontrakt wyjścia:**
 
 ```json
-{{"co_nowego": "<what is new>", "skutki": ["<group: what changes, then what changes after that>"], "co_blokuje": "<what it takes and what could block it>", "wielkie_pytanie": "<the question readers will argue about>", "smaczek": "<the detail to look for>", "pytania": ["<research question>"]}}
+{{"co_nowego": "...", "rdzen_ai": "<what this story tells us about AI as a whole>",
 ```
 
 #### `po_ludzku.md` (4 wierszy)
@@ -225,14 +239,14 @@
 {{"powtorka_nr": <number of the bank fact it repeats, or 0 if none>, "powod": "<one short sentence>"}}
 ```
 
-#### `przeslania.md` (68 wierszy)
+#### `przeslania.md` (98 wierszy)
 
-**Pola wejściowe:** `hipotezy`, `ile`, `karta`, `katy`, `marka`, `rodzaje`
+**Pola wejściowe:** `artykulowy`, `glosy`, `hipotezy`, `karta`, `katy`, `ksiega`, `marka`, `n_max`, `odbior`, `ramy`, `typ_historii`
 
 **Kontrakt wyjścia:**
 
 ```json
-{{"przeslania": [{{"rodzaj": {rodzaje}, "przeslanie": "<the one-sentence message of this note>", "naglowek": "<the first line that makes a scrolling reader stop>", "hak": "<the concrete checked detail the note opens with>", "tresc": "<2-4 sentences of reasoning the writer should convey, in plain words>", "fakty": [<claim numbers>], "zalozenie": "<for our view: the assumption it rests on, one clause; empty for a fact angle>", "za": "<the evidence for this reading>", "przeciw": "<optional: a serious objection>", "co_obali": "<optional: what would prove this wrong>", "pominac": false, "powod": ""}}]}}
+{{"sedno": {{"jedno_zdanie": "...", "co_obchodzi": [{{"os": "MONEY", "dlaczego": "...", "fakty": [1]}}], "zalozenie_czytelnika": {{"zalozenie": "...", "karta": "CONFIRMS|OVERTURNS"}}, "werdykt": {{"teza": "...", "zalozenie": "...", "kontrargument": "...", "sprawdzian": {{"kiedy": "YYYY-MM-DD", "co": "..."}}}}, "za_wiekszym": [1]}}, "ustalenia": [{{"ustalenie": "...", "fakty": [1, 2], "dlaczego_czytelnik": "...", "do_artykulu": false}}], "katy": [{{"rodzaj": "REVEAL", "ustalenie": 1, "q": "Q1", "os": "HIDDEN", "kierunek": "AMPLIFY|DEFLATE|NEUTRAL", "wniosek": "...", "ai_link": "...", "why_care": "...", "naglowek": "...", "hak": "...", "fakty": [1, 2], "zalozenie": "", "sprawdzian": null, "lead": true, "tresc": "..."}}]}}
 ```
 
 #### `radar.md` (40 wierszy)
@@ -255,6 +269,26 @@
 {{"sentences": [{{"text": "<verbatim sentence>", "class": "FACT"|"INFERENCE"|"PROSE", "supported": true|false, "why": "<specific unsupported factual assertion, otherwise empty>"}}], "unsupported_facts": [{{"text": "<verbatim>", "why": "<what is asserted and what the card establishes instead>"}}], "summary": "<one sentence>"}}
 ```
 
+#### `research_dokument.md` (26 wierszy)
+
+**Pola wejściowe:** `co`, `gdzie`, `kto`, `max_searches`, `max_sources`, `nie_pobieramy`, `seen_json`
+
+**Kontrakt wyjścia:**
+
+```json
+{{"documents": []}} when nothing in the results is the document itself.
+```
+
+#### `research_ksiega.md` (35 wierszy)
+
+**Pola wejściowe:** `evidence_json`, `question`, `questions_json`, `today`
+
+**Kontrakt wyjścia:**
+
+```json
+{{"questions": [{{"id": "Q1", "status": "answered|partial|open|not_yet",
+```
+
 #### `research_ocena.md` (46 wierszy)
 
 **Pola wejściowe:** `attempted_json`, `evidence_json`, `max_hypotheses`, `max_questions`, `max_quote_chars`, `question`, `today`
@@ -265,9 +299,9 @@
 {{
 ```
 
-#### `research_szukanie.md` (22 wierszy)
+#### `research_szukanie.md` (25 wierszy)
 
-**Pola wejściowe:** `gap_json`, `max_searches`, `max_sources`, `question`, `seen_json`
+**Pola wejściowe:** `dowod`, `gap_json`, `gdzie`, `max_searches`, `max_sources`, `question`, `seen_json`
 
 **Kontrakt wyjścia:**
 
@@ -275,7 +309,7 @@
 {{"sources": [{{"url": "https://...", "title": "...", "publisher": "...",
 ```
 
-#### `research_wyciag.md` (18 wierszy)
+#### `research_wyciag.md` (22 wierszy)
 
 **Pola wejściowe:** `documents_json`, `gap_json`, `max_excerpts`, `max_quote_chars`, `question`
 
@@ -317,12 +351,22 @@
 
 #### `synteza.md` (128 wierszy)
 
-**Pola wejściowe:** `evidence_json`, `max_claim_chars`, `max_confirmed`, `max_contradictions`, `max_numbers`, `max_uncertain`, `min_confirmed`, `min_numbers`, `question`
+**Pola wejściowe:** `evidence_json`, `max_claim_chars`, `max_confirmed`, `max_contradictions`, `max_numbers`, `max_uncertain`, `min_confirmed`, `min_numbers`, `question`, `tryb_sledczy`
 
 **Kontrakt wyjścia:**
 
 ```json
-{{"working_thesis": "...", "main_mechanism": "...", "confirmed_claims": [{{"claim": "...", "evidence": "<verbatim excerpt>", "url": "..."}}], "citable_numbers": [{{"value": "...", "means": "...", "url": "..."}}], "parallel_mechanisms": [{{"domain": "...", "how_it_matches": "<one sentence: the same logic doing the same work>"}}], "uncertain_claims": ["..."], "contradictions": ["..."], "not_established": ["..."], "source_dates": {{"newest": "<YYYY-MM-DD of the most recent source you used>", "oldest": "<YYYY-MM-DD of the oldest>", "note": "<one clause: what the reader should know about how current this is>"}}}}
+{{"working_thesis": "...", "main_mechanism": "...", "confirmed_claims": [{{"claim": "...", "evidence": "<verbatim excerpt>", "url": "..."}}], "citable_numbers": [{{"value": "...", "means": "...", "url": "..."}}], "parallel_mechanisms": [{{"domain": "...", "how_it_matches": "<one sentence: the same logic doing the same work>"}}], "uncertain_claims": ["..."], "contradictions": ["..."], "not_established": ["..."], "source_dates": {{"newest": "<YYYY-MM-DD of the most recent source you used>", "oldest": "<YYYY-MM-DD of the oldest>", "note": "<one clause: what the reader should know about how current this is>"}}}}{tryb_sledczy}
+```
+
+#### `ten_sam_punkt.md` (20 wierszy)
+
+**Pola wejściowe:** `wnioski`
+
+**Kontrakt wyjścia:**
+
+```json
+{{"pary": [{{"a": "<id, e.g. N1>", "b": "<id, e.g. P3>", "dlaczego": "<one clause>"}}]}}
 ```
 
 #### `warto_pisac.md` (29 wierszy)
@@ -343,6 +387,16 @@
 
 ```json
 {{"claims": [{{"claim": "<what the text asserts>", "status": "confirmed"|"refuted"|"outdated"|"unverified", "url": "<source, or empty>", "source_date": "<when that source was published, YYYY-MM-DD, or empty>", "what_the_source_says": "<one sentence, required for refuted and outdated>"}}], "safe_to_post": true|false, "verdict": "<one sentence>"}}
+```
+
+#### `wiernosc_notki.md` (42 wierszy)
+
+**Pola wejściowe:** `marka`, `tekst`, `twierdzenia`
+
+**Kontrakt wyjścia:**
+
+```json
+{{"faithful": true, "problems": [{{"sentence": "<the exact sentence from the note>", "why": "<one line: what the claims say instead>", "claim": <the claim number it conflicts with, or 0>}}]}}
 ```
 
 #### `wniosek.md` (35 wierszy)

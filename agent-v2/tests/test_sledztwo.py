@@ -316,34 +316,19 @@ try:
             and not any("AGI at maths" in k["opis"] for k in sledztwo.KATY.values()))
     sprawdz("granica zostaje: fakty tylko z karty",
             "facts (numbers, quotes, people, dates, events) come only" in _prompty["przeslania.md"].lower())
-    # PYTANIA CIEKAWOSCI (wlasciciel 25.10: „pytania zadawac i odpowiadac ciekawe pytania").
-    llm.call = lambda purpose, system, user, **kw: json.dumps({"pytania": [
-        "Why did the benchmark score appear before anyone could test it?", "not a question", 7,
-        "Who pays for the free weights?"]})
-    with contextlib.redirect_stdout(io.StringIO()):
-        _pc, _plan = sledztwo.pytania_ciekawosci(None, None, DUZA, "What happened?")
-    sprawdz("plan sledztwa: tylko prawdziwe pytania z modelu",
-            _pc == ["Why did the benchmark score appear before anyone could test it?",
-                    "Who pays for the free weights?"], _pc)
-    llm.call = lambda purpose, system, user, **kw: (_ for _ in ()).throw(RuntimeError("padlo"))
-    with contextlib.redirect_stdout(io.StringIO()):
-        sprawdz("KONTRDOWOD: awaria modelu = pytania stale, nie pusto",
-                sledztwo.pytania_ciekawosci(None, None, DUZA, "x") == (list(sledztwo.PYTANIA_CIEKAWOSCI_STALE), {}))
-    # Plan idzie do katow jako nasze myslenie, nie fakty.
-    llm.call = lambda purpose, system, user, **kw: json.dumps({
-        "co_nowego": "An open model matches closed ones on one test.", "skutki": ["Labs: prices fall"],
-        "co_blokuje": "Needs eight GPUs.", "wielkie_pytanie": "Has open caught up?", "smaczek": "It talks a lot.",
-        "pytania": ["What hardware does it need?"]})
-    with contextlib.redirect_stdout(io.StringIO()):
-        _pc2, _plan2 = sledztwo.pytania_ciekawosci(None, None, DUZA, "x")
+    # PLAN SLEDZTWA idzie do katow jako nasze myslenie, nie fakty. Od fali 1 (25.10.2026) plan robi
+    # `sledztwo_plan.plan_sledztwa` (testy: `tests/test_sledztwo_plan.py`); tu tylko jego ksztalt
+    # `plan_do_kart` w karcie katow.
+    _plan2 = {"pytania": [{"id": "Q1", "soczewka": "PRACTICAL", "q": "What hardware does it need?"}],
+              "wielkie_pytanie": {"pytanie": "Has open caught up?",
+                                  "wieksze_niz_wyglada": "Prices fall for everyone.",
+                                  "mniejsze_niz_wyglada": "Only one test moved."},
+              "rdzen_ai": "Open models close the gap.", "zalozenie_czytelnika": "Closed labs lead."}
     _kp = sledztwo._karta_do_promptu(dict(KARTA, investigation_plan=_plan2))
-    sprawdz("plan sledztwa trafia do karty katow jako nasze myslenie (nie fakty)",
-            _pc2 == ["What hardware does it need?"] and "OUR PLAN BEFORE RESEARCH (our thinking, not facts)" in _kp
-            and "Has open caught up?" in _kp and "Needs eight GPUs." in _kp, _kp[-400:])
-    _pp = pathlib.Path("agent-v2/prompts/plan_sledztwa.md").read_text(encoding="utf-8")
-    sprawdz("schemat planu jest ogolny: co nowego, skutki dla grup, co blokuje, wielkie pytanie, smaczek",
-            all(k in _pp for k in ("What is actually new", "second-order", "What could block it",
-                                   "big question", "wait, really")) and "open-weights" not in _pp.lower())
+    sprawdz("plan sledztwa trafia do karty katow jako nasze myslenie (nie fakty), z oboma przypadkami BIG",
+            "OUR PLAN BEFORE RESEARCH (our thinking, not facts)" in _kp
+            and "Has open caught up?" in _kp and "Only one test moved." in _kp
+            and "Prices fall for everyone." in _kp, _kp[:600])
     sprawdz("kazdy tag tabeli ma typ notki i opis; stare menu (KURIOZUM, LICZBY) nie istnieje",
             all(sledztwo.KATY[r]["typ_notki"] in config.NOTE_TYPES and sledztwo.KATY[r]["opis"] for r in sledztwo.KATY)
             and "KURIOZUM" not in sledztwo.KATY and "LICZBY" not in sledztwo.KATY)
@@ -575,11 +560,12 @@ for p in _kol:
 _td = sledztwo.temat_dnia()
 sprawdz("temat dnia dla MYSL: historia serii, a zanim cokolwiek wyszlo — bez naszych notek",
         _td and _td["story"] == DUZA["tytul"] and _td["our_published_notes"] == [], _td)
-_st_kod = pathlib.Path("agent-v2/stages.py").read_text(encoding="utf-8")
-sprawdz("MYSL w dzien serii dostaje temat dnia, a prompt notki mowi, co z nim zrobic",
-        'material["temat_dnia"] = _temat_dnia' in _st_kod
-        and _st_kod.index('elif typ == "MYSL":') < _st_kod.index('material["temat_dnia"] = _temat_dnia')
-        and "`temat_dnia`" in pathlib.Path("agent-v2/prompts/notka.md").read_text(encoding="utf-8"))
+# MYSL OBOK SERII, NIE O NIEJ (fala 1, 25.10.2026, spec §5 „MYSL"): stages nie wklada juz
+# `temat_dnia` do MYSL (w probach powtarzala liczby i wniosek serii). Material MYSL to tematy
+# obok i zakaz kluczy serii — testy w `tests/test_notki_sledcze.py`.
+_mat_mysli, _zakaz = stages.material_mysli()
+sprawdz("MYSL nie dostaje tematu dnia serii; klucze serii sa na liscie zakazanych",
+        "temat_dnia" not in _mat_mysli and isinstance(_zakaz, list), (list(_mat_mysli), _zakaz))
 p1 = sledztwo.wez_przeslanie()
 sprawdz("pierwszy idzie prowadzacy kat serii", (p1 or {}).get("rodzaj") == "REVEAL" and p1["k"] == 1, p1)
 fakt, material = sledztwo.material_notki(p1)
@@ -649,27 +635,9 @@ def _kod(sciezka):
 
 
 _art, _st, _run = _kod("agent-v2/artykul_z_puli.py"), _kod("agent-v2/stages.py"), _kod("agent-v2/run.py")
-sprawdz("artykul: droga --sledztwo i pominiecie artykulu z puli po artykule ze sledztwa",
-        '"--sledztwo" in sys.argv' in _art and "_sledztwo.ile_artykulow(6)" in _art)
-sprawdz("sledztwo bez --wyslij nie rusza kolejki ani pamieci",
-        "if na_serio:" in _art and "sledztwo.dodaj_do_kolejki" in _art)
-# 27.09 pierwsze sledztwo na produkcji: pisarz artykulu odmowil („cyber") i
-# przebieg wywrocil sie tracebackiem, choc przeslania byly juz w kolejce.
-sprawdz("odmowa dostawcy przy artykule sledztwa konczy przebieg komunikatem, po zapisie przeslan",
-        "except llm.OdmowaDostawcy" in _art
-        and _art.index("sledztwo.dodaj_do_kolejki") < _art.index("except llm.OdmowaDostawcy")
-        < _art.index("sledztwo.oznacz_artykul(run_id)"))
-sprawdz("nowe sledztwo, gdy w kolejce zostalo mniej niz dzien katow (przed wyborem historii)",
-        "czeka = sledztwo.czekajace_przeslania()" in _art
-        and "if czeka >= sledztwo.PRZESLAN_NA_DOBE" in _art
-        and _art.index("sledztwo.czekajace_przeslania()") < _art.index("sledztwo.historie("))
-sprawdz("artykul ze sledztwa raz na tydzien: limit przed pisaniem, po kolejce katow",
-        "sledztwo.ile_artykulow(6) >= sledztwo.ARTYKULOW_NA_TYDZIEN" in _art
-        and _art.index("sledztwo.dodaj_do_kolejki") < _art.index("sledztwo.ile_artykulow(6) >= sledztwo.ARTYKULOW")
-        < _art.index("kod = _napisz_i_zapisz(conn, run_id, brief, card, evidence)"))
-sprawdz("artykul tylko o temacie dosc duzym (sledztwo.temat_na_artykul), liczba katow z wielkosci",
-        "art_ok, art_powod = sledztwo.temat_na_artykul(wybrana, card, nowe, przes)" in _art
-        and "_ile = sledztwo.ile_katow(wybrana, card)" in _art)
+# PRZEBIEG SLEDZTWA (kolejnosc etapow, rekord przed kolejka, brak galezi artykulu, odmowa artykulu
+# w trybie testu, --wyslij) sprawdzaja od fali 1 (25.10.2026) testy ZACHOWANIA w
+# `tests/test_przebieg_sledztwa.py` — tu staly asercje po tekscie starego `_przebieg_sledztwa`.
 _k8 = {"confirmed_claims": [{"claim": "c%d" % i, "url": "https://s%d.example/x" % (i % 5)} for i in range(12)]}
 _k4 = {"confirmed_claims": [{"claim": "c%d" % i, "url": "https://s%d.example/x" % i} for i in range(5)]}
 # 25.10.2026 (spec §5 „Number of notes", §9 pkt 18): liczba notek z bogactwa sledztwa, nie z samego
@@ -686,28 +654,19 @@ _katy4 = [{"rodzaj": r} for r in ("REVEAL", "HOW_IT_WORKS", "VERDICT", "MOTIVE")
 sprawdz("temat na artykul: bez ksiegi i zrodel pierwotnych nie; nowe ustalenie samo tez nie (spec §9 pkt 17)",
         not sledztwo.temat_na_artykul({"serwisy": 6}, _k8, {}, _katy4)[0]
         and not sledztwo.temat_na_artykul({"serwisy": 4}, _k4, {"jest": True, "zgodne": True}, _katy4[:2])[0])
-_sl = _art[_art.index("def _przebieg_sledztwa"):]
-sprawdz("kazde sledztwo pyta o dokumenty pierwotne i ma 6 rund ksiegi (spec §9 pkt 4)",
-        "pod.append(sledztwo.PYTANIE_PIERWOTNE)" in _sl and "max_rund=sledztwo.RUND_SLEDZTWA" in _sl
-        and "_ciekawe, _plan = sledztwo.pytania_ciekawosci(conn, run_id, wybrana" in _sl
-        and 'card["investigation_plan"] = _plan' in _sl
-        and "sledztwo.scal_historie(" in _sl and "sledztwo.wielkie_historie(_korpus" in _sl
-        and sledztwo.RUND_SLEDZTWA == 6 and "original document" in sledztwo.PYTANIE_PIERWOTNE)
-sprawdz("przebieg: wybor duzego tematu, pytania premiery, glosy HN i cennik w korpusie, typ do pisarza",
-        "sledztwo.wybierz_historie(historie" in _art and "pod += list(sledztwo.PYTANIA_PREMIERY)" in _art
-        and "sledztwo.glosy_hn(_zapytanie, klucze=" in _art and "sledztwo.cennik_openrouter(_zapytanie)" in _art
-        and 'card["investigation_type"]' in _art and "przeslania(conn, run_id, card, dossier, wybrana, typ=typ, ile=_ile)" in _art
-        and _sl.index("corpus = stages.fetch(conn, run_id, zrodla)") < _sl.index("sledztwo.glosy_hn(_zapytanie, klucze=")
-        < _sl.index("evidence = stages.classify("))
 sprawdz("pisarz notki dostaje wczesniejsze katy w prompcie",
         "earlier_angles_already_published" in pathlib.Path("agent-v2/prompts/notka.md").read_text(encoding="utf-8"))
 sprawdz("pisarz artykulu dostaje wszystkie katy serii",
         'card["investigation_angles"]' in _art and "investigation_angles" in
         pathlib.Path("agent-v2/prompts/pisarz.md").read_text(encoding="utf-8"))
-sprawdz("notke z przeslania pisze Opus, zwykla notka zostaje przy rotacji pisarzy",
-        'etap_pisarza = "notka_przeslania"' in _st
-        and _st.index("etap_pisarza = _pisarze[") < _st.index('etap_pisarza = "notka_przeslania"')
+# D1 fali 1 (25.10.2026): kazdy kat serii pisze Opus — prowadzacy i analiza celem
+# `notka_przeslania`, kat faktow celem `notka_przeslania_fakt` (Flash gubil wiernosc w probie).
+sprawdz("notke z przeslania pisze Opus (oba cele notki serii), zwykla notka zostaje przy rotacji pisarzy",
+        stages.etap_notki_serii({"rodzaj": "VERDICT", "lead": False}) == "notka_przeslania"
+        and stages.etap_notki_serii({"rodzaj": "REVEAL", "lead": True}) == "notka_przeslania"
+        and stages.etap_notki_serii({"rodzaj": "NUMBER_FELT", "lead": False}) == "notka_przeslania_fakt"
         and config.MODEL_FOR.get("notka_przeslania") == config.CLAUDE
+        and config.MODEL_FOR.get("notka_przeslania_fakt") == config.CLAUDE
         and config.MAX_TOKENS.get("notka_przeslania") and config.EFFORT.get("notka_przeslania"))
 sprawdz("notka bierze przeslanie i zapisuje jego identyfikator",
         "_sledztwo.wez_przeslanie()" in _st and 'wynik["przeslanie_id"]' in _st
@@ -758,7 +717,7 @@ ETAPY = []
 
 def _atrapa_note(conn, run_id, typ, material, link=None, note_form="PROSTA", etap="note", **k):
     ETAPY.append(etap)
-    if etap == "notka_przeslania":
+    if etap.startswith("notka_przeslania"):
         return {"type": typ, "forma": note_form, "candidates": []}
     return {"type": typ, "forma": note_form,
             "candidates": [{"note": "A plain note.", "safe_to_post": True}]}

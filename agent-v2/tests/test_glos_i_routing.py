@@ -50,9 +50,15 @@ class VoiceRoutingTest(unittest.TestCase):
         # trzech modeli na tych samych historiach, Sonnet planowal jak Opus za 1/3 ceny,
         # Flash pytal zbyt technicznie.
         self.assertEqual(config.MODEL_FOR["pytania_ciekawosci"], config.SONNET)
+        # `krytyk_sledztwa` — starszy redaktor sledztwa na Sonnecie (spec 25.10 §2 etap 11);
+        # `notka_przeslania_fakt` — notka kata faktow na Opusie (decyzja D1 fali 1: Flash
+        # gubil wiernosc w probie 25.10, Flash z mysleniem nie przeszedl jeszcze proby).
+        self.assertEqual(config.MODEL_FOR["krytyk_sledztwa"], config.SONNET)
+        self.assertEqual(config.MODEL_FOR["notka_przeslania_fakt"], config.CLAUDE)
         for purpose, model in config.MODEL_FOR.items():
             if purpose not in {"write", "obraz", "przeslania", "notka_przeslania", "note_mimo",
-                               "restack_opus", "pytania_ciekawosci"}:
+                               "restack_opus", "pytania_ciekawosci", "krytyk_sledztwa",
+                               "notka_przeslania_fakt"}:
                 with self.subTest(purpose=purpose):
                     self.assertEqual(model, config.DEEPSEEK)
 

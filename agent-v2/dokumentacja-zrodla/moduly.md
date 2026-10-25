@@ -48,7 +48,7 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-11393 wierszy, 193 funkcji na poziomie modułu, 0 klas
+12491 wierszy, 227 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -136,7 +136,17 @@
 | `zapowiedzi_artykulu(link, ile)` | Nasze notki, ktore juz promowaly ten artykul — po adresie w tresci. |
 | `powtorzenie(tekst, wzorce, n)` | Jaka czesc n-slowowych ciagow tekstu stoi juz w ktoryms ze wzorcow (0-1). |
 | `z_pytaniem_na_koncu(prompt)` | Prompt notki z poleceniem zakonczenia pytaniem (E18, ramie „on"). |
-| `note(conn, run_id, note_type, evidence, link, note_form, etap, seria, wariant)` | Jedna notka danego typu i danej FORMY — do szuflady. |
+| `pierwsze_zdanie_tekstu(tekst)` | Pierwsze zdanie notki (do logu i do porownan). |
+| `zachowuje_pierwsze_zdanie(tekst, linia)` | Czy notka zaczyna sie od zdania `linia` — po normalizacji, z dowolnym |
+| `pierwsza_osoba(tekst)` | Slowa pierwszej osoby liczby pojedynczej POZA CYTATAMI (spec §5 „MYSL"). |
+| `_slowa_nazwy(klucz)` *(wewn.)* | Slowa klucza serii, ktore cos nazywaja: z wielka litera albo z cyfra, od 3 znakow. |
+| `nazwy_serii_w_tekscie(tekst, klucze)` | Klucze serii, ktorych nazwa pada w tekscie (bez wielkosci liter). |
+| `bramka_mysli(tekst, klucze)` | Reguly MYSL sprawdzane kodem (spec §5 „MYSL", §9 pkt 8). Pusta lista = OK. |
+| `_podobne_zdanie(zdanie, tekst)` *(wewn.)* | Czy zdanie wskazane przez sprawdzajacego naprawde stoi w notce. |
+| `wiernosc_notki(conn, run_id, tekst, twierdzenia)` | Czy notka serii mowi to samo, co twierdzenia, na ktorych stoi (spec §6 „Verification chain" 6). |
+| `_problemy_bramki(conn, run_id, tekst, bramka, twierdzenia_kata, data)` *(wewn.)* | Najpierw darmowe reguly kodu; wiernosc (platna) tylko dla tekstu, ktory je przeszedl. |
+| `_przez_bramke_notki(conn, run_id, etap, prompt, data, bramka, twierdzenia_kata, wariant)` *(wewn.)* | Notka po regulach: przeszla, przeszla po JEDNEJ poprawce, albo `bramka_odrzucila`. |
+| `note(conn, run_id, note_type, evidence, link, note_form, etap, seria, wariant, bramka, twierdzenia_kata, bez_rozbioru, pierwsze_zdanie)` | Jedna notka danego typu i danej FORMY — do szuflady. |
 | `_host_adresu(url)` *(wewn.)* | — |
 | `_adres_bez_ogona(url)` *(wewn.)* | — |
 | `styk_ze_zrodla(fakt, tresci)` | (styk, skad): `skad` to `adres`, `host`, `rejestr` albo `brak`. |
@@ -164,6 +174,11 @@
 | `_host_faktu(fakt)` *(wewn.)* | Host zrodla, bez `www.` — do pilnowania ROZNORODNOSCI ZRODEL. |
 | `_tematy_zrodel()` *(wewn.)* | Tematy z korpusu kanalow — drugi mianownik dla rzadkosci nazw. |
 | `wybierz_material(zapas, unikaj, wczesniej, teksty, korpus_zrodel, conn, run_id, kwota)` | Bierze fakt, ktory NIE jest o tym samym, co juz dzis wystawiamy. |
+| `_z_sledztwa(nazwa, *argumenty)` *(wewn.)* | `sledztwo.<nazwa>(*argumenty)`; brak funkcji albo awaria = `domyslnie` z linia w logu. |
+| `material_mysli()` | (material MYSL, klucze biezacej serii) — spec §5 „MYSL", §9 pkt 8. |
+| `etap_notki_serii(p)` | Cel pisarza notki serii (D1): prowadzacy i analiza -> `notka_przeslania`, |
+| `_sprawdz_notke_sledztwa(tekst, fakty, kontekst)` *(wewn.)* | — |
+| `kontekst_notki_serii(p, material)` | Wszystko, czego `note` potrzebuje do notki serii: zdanie po bramce, twierdzenia |
 | `notki_dnia(conn, run_id, dzien_artykulu, karta, ciekawostki, link_artykulu, ile, od)` | Do pieciu notek z dziennego planu, kazda z innego materialu. |
 | `ocen_restack(conn, run_id, notka)` | Czy podac te notke dalej i z jakim zdaniem. |
 | `_podloga_z_pamieci(tekst)` *(wewn.)* | Dwie podlogi, ktore dzialaja BEZ karty dowodowej. |
@@ -177,6 +192,8 @@
 | `_liczby(tekst)` *(wewn.)* | — |
 | `zdania_o_warsztacie(body)` | Zdania artykulu, ktore mowia o naszym researchu zamiast o temacie. |
 | `popraw_bez_pokrycia(conn, run_id, body, card, bez_pokrycia)` | (poprawiony tekst, log). Nigdy nie podnosi wyjatku — awaria = tekst jak byl. |
+| `_json_weryfikacji(raw)` *(wewn.)* | Obiekt weryfikacji z odpowiedzi albo None, gdy JSON-u w niej nie ma. |
+| `_weryfikacja_bez_jsonu(conn, run_id, raw, prompt, szukaj)` *(wewn.)* | Druga szansa dla weryfikacji, ktora oddala proze. Nigdy nie oddaje `safe_to_post` |
 | `zweryfikuj(conn, run_id, tekst, kontekst, szukaj)` | Sprawdza to, co model NAPISAŁ — nie to, czego szukał przed pisaniem. |
 | `_zapora_notki(tekst)` *(wewn.)* | Pusty napis, gdy tekst notki przechodzi zapory. Inaczej powod. |
 | `_zapora_komentarza(tekst)` *(wewn.)* | To samo dla komentarza — ale komentarz ma zapore o jedna wiecej. |
@@ -194,10 +211,27 @@
 | `pamiec_rozmowcy(uchwyt, teraz)` | Co wlasny dziennik wie o wczesniejszych rozmowach z ta osoba (E21). |
 | `comment_on(conn, run_id, post, fakty)` | Komentarz do cudzego posta — do szuflady. |
 | `fallback_card(question, evidence)` | Karta złożona z dowodów bez modelu — gdy synteza padnie. |
-| `synthesis(conn, run_id, question, evidence)` | Etap 6 — karta dowodowa (DeepSeek V4 Pro). |
+| `_slot_twierdzenia(c)` *(wewn.)* | — |
+| `przytnij_ze_slotami(twierdzenia, limit)` | Do `limit` twierdzen, najpierw po jednym z kazdego slotu, potem reszta. |
+| `synthesis(conn, run_id, question, evidence, tryb)` | Etap 6 — karta dowodowa (DeepSeek). |
 | `_do_porownania(tekst)` *(wewn.)* | Postac do porownania cytatu z dokumentem. Minimalna i celowo taka. |
 | `cytat_jest_w_dokumencie(cytat, tekst)` | Czy ten fragment NAPRAWDE stoi w tym dokumencie. |
 | `classify(conn, run_id, question, corpus)` | Etap 5 — klasyfikacja i wyciąg fragmentów (DeepSeek). |
+| `_host_w(host, lista)` *(wewn.)* | — |
+| `_slowa_klucza(klucz)` *(wewn.)* | (slowa nazwy, znaczniki wersji) klucza historii, male litery. |
+| `_slowo_w(slowo, tekst_niski)` *(wewn.)* | — |
+| `_klucz_w_tekscie(klucz, tekst_niski)` *(wewn.)* | Klucz stoi w tekscie: KAZDY znacznik wersji i co najmniej jedno slowo nazwy. |
+| `_historia_w_tekscie(klucze, tekst)` *(wewn.)* | Czy tekst jest o TEJ historii — z wersja, gdy ktorykolwiek klucz ja ma. |
+| `_domena_aktora(host, klucze, rekord)` *(wewn.)* | Czy host nalezy do aktora historii: czlon hosta = slowo klucza albo rekordu. |
+| `klasa_zrodla(url, tekst, klucze, rekord)` | PRIMARY | INDEPENDENT | SECONDARY | LISTING | VOICE — kodem (spec §6). |
+| `_adres_karty(url)` *(wewn.)* | Adres do porownan w karcie: bez schematu, `www.`, koncowego `/` i znacznikow kampanii. |
+| `_dowod_w_fragmentach(dowod, fragmenty)` *(wewn.)* | Dowod twierdzenia stoi DOSLOWNIE w ktoryms fragmencie tego samego adresu. |
+| `_liczby_twierdzenia(tekst, ze_wszystkimi)` *(wewn.)* | Liczby, ktore twierdzenie PODAJE: bez wersji i bez lat. |
+| `_liczba_w_cytacie(liczba, cytat)` *(wewn.)* | — |
+| `_iso_daty(x)` *(wewn.)* | — |
+| `_daty_w_tekscie(tekst)` *(wewn.)* | Daty zapisane w tekscie (ISO, „October 23, 2026", „23 Oct 2026"). |
+| `_rodzaj_twierdzenia(podany, klasa)` *(wewn.)* | Rodzaj twierdzenia: model proponuje, kod nie pozwala go PODNIESC. |
+| `sprawdz_karte(card, evidence, klucze, rekord)` | Karta sledztwa sprawdzona KODEM (spec §6 „Source classes", „Verification chain" 2-3). |
 | `_dobierz_przegladarka(conn, run_id, brakujace, juz_mamy)` *(wewn.)* | Drugie podejscie do stron, ktore zwyklemu pobieraniu daly pusty szkielet. |
 | `fetch(conn, run_id, sources)` | Etap 4 — pobranie stron. Zwykły HTTP, żadnego modelu, 0 USD. |
 | `_host(url)` *(wewn.)* | — |
@@ -372,10 +406,12 @@
 
 ### `llm.py` — JEDYNA warstwa dostępu do modeli i liczenia kosztu
 
-1164 wierszy, 20 funkcji na poziomie modułu, 5 klas
+1243 wierszy, 23 funkcji na poziomie modułu, 5 klas
 
 | funkcja | co robi |
 |---|---|
+| `_zapamietaj_model(model)` *(wewn.)* | Transport: zapisz nazwe modelu z odpowiedzi dostawcy (albo nic). |
+| `_model_z_odpowiedzi()` *(wewn.)* | — |
 | `_z_terminem(fn, termin_s)` *(wewn.)* | `fn()` z terminem CALKOWITYM, liczonym zegarem — albo `httpx.ReadTimeout`. |
 | `_zawieszenie(exc, trwalo_s)` *(wewn.)* | Czy nieudana proba to zawieszenie dostawcy, a nie zwykly blad odpowiedzi. |
 | `dostawca(model)` | Kto wystawia rachunek za ten model. |
@@ -383,10 +419,11 @@
 | `_narzedzie_wyszukiwania(model)` *(wewn.)* | Nazwa narzedzia wyszukiwania; ostrzega RAZ NA PROCES o braku wpisu. |
 | `_cost(model, tokens_in, tokens_out, web_searches, cache_hit)` *(wewn.)* | — |
 | `_log(purpose, model, tin, tout, searches, usd, verified)` *(wewn.)* | — |
-| `_call_claude(purpose, system, user, web_search, model)` *(wewn.)* | — |
+| `effort_dziala(model)` | Czy model przyjmuje `output_config.effort` — po DOSTAWCY i rodzinie, nie po nazwie. |
+| `_call_claude(purpose, system, user, web_search, model, max_szukan)` *(wewn.)* | — |
 | `_call_deepseek_responses(purpose, system, user, model)` *(wewn.)* | DeepSeek przez /responses z server-side `web_search`. |
 | `_deepseek_pick_from_urls(purpose, system, user, urls, model)` *(wewn.)* | Drugie, tanie wywołanie: wybierz z adresów, które wyszukiwanie już zwróciło. |
-| `_call_deepseek_z_siecia(purpose, system, user, model)` *(wewn.)* | DeepSeek z wyszukiwaniem przez endpoint zgodny z API Anthropic. |
+| `_call_deepseek_z_siecia(purpose, system, user, model, max_szukan)` *(wewn.)* | DeepSeek z wyszukiwaniem przez endpoint zgodny z API Anthropic. |
 | `_call_deepseek(purpose, system, user)` *(wewn.)* | — |
 | `_call_mimo(purpose, system, user)` *(wewn.)* | Xiaomi MiMo przez API zgodne z OpenAI (`/v1/chat/completions`), BEZ szukania. |
 | `przejsciowy(exc)` | Czy ten błąd ma szansę minąć sam. |
@@ -424,7 +461,7 @@
 
 ### `db.py` — schemat i zapis
 
-377 wierszy, 11 funkcji na poziomie modułu, 1 klas
+388 wierszy, 11 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -527,7 +564,7 @@
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-4074 wierszy, 44 funkcji na poziomie modułu, 0 klas
+4213 wierszy, 45 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -539,6 +576,7 @@
 | `myslenie_deepseek(etap, siec)` | Kopia ustawienia thinking; None pozostawia domyslne ustawienie API. |
 | `_ceny_zamian(stan)` *(wewn.)* | — |
 | `stawka_modelu(model)` | Wpis cennika dla modelu; dla nieznanego — cena sprawdzona przy zamianie, |
+| `modele_sledztwa_ponizej(stan)` | Opisy rol sledztwa, ktorych model jest starszy niz zalozony albo bez ceny. |
 | `model_rozliczeniowy(model, kiedy)` | Model, po ktorego stawce dostawca liczy wywolanie `model` w chwili `kiedy`. |
 | `stawka_deepseek(model, kiedy)` | Stawka DeepSeeka z uwzglednieniem pory doby po wejsciu nowej taryfy. |
 | `pora_na_publikacje(kiedy)` | Czy teraz wolno wystawiac NOTKI — wg zegara CZYTELNIKOW, nie serwera. |
@@ -706,13 +744,12 @@
 | `_znakow_spizarni()` *(wewn.)* | — |
 | `dla_weryfikatora(karta)` | Cytaty z karty w postaci wierszy rekordu dla weryfikatora faktow. |
 
-### `sledztwo.py` — śledztwo — historia z radaru, bramka nowości sprawdzana kodem, seria 4–5 kątów (kuriozum, mechanizm, ustalenie, kto płaci, motyw, za dwa lata) i kolejka notek
+### `sledztwo.py` — śledztwo — wybór największej historii, rdzeń (sedno) i kąty serii z jednej tabeli KATY, uczciwy hak sprawdzany kodem, poziom tematu (liczba notek), bramka nowości i kolejka notek
 
-1311 wierszy, 48 funkcji na poziomie modułu, 0 klas
+3129 wierszy, 131 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
-| `pytania_ciekawosci(conn, run_id, h, pytanie, ile)` | (pytania badawcze, plan sledztwa) — myslenie redaktora sledczego przed badaniem. |
 | `_teraz()` *(wewn.)* | — |
 | `_host(url)` *(wewn.)* | — |
 | `_klucz(url)` *(wewn.)* | — |
@@ -738,28 +775,179 @@
 | `glosy_hn(zapytanie, dni, http, klucze)` | Najwieksze watki Hacker News o tej sprawie z ostatnich `dni` jako dokumenty korpusu. |
 | `cennik_openrouter(zapytanie, http, ile)` | Ceny i okno kontekstu modeli pasujacych do zapytania — jako dokument korpusu. |
 | `fakt_z_historii(h)` | Historia w ksztalcie faktu, ktory przyjmuje `artykul_z_puli.temat_z_faktu`. |
+| `_jedna_linia(x)` *(wewn.)* | — |
+| `_przerywaja()` *(wewn.)* | Wyjatki, ktore przepuszczamy z kazdego etapu (budzet, wylacznik) — patrz |
+| `_json_odpowiedzi(purpose, surowe, ksztalt, conn, run_id)` *(wewn.)* | JSON z odpowiedzi modelu, a gdy go nie ma — jedna proba `llm.ratuj_json` (25.10.2026, |
+| `_bez_liczb(x)` *(wewn.)* | Proza bez liczb — sedno i plan nie moga przenosic niesprawdzonych liczb do pisarza |
+| `_przytnij(x, dl)` *(wewn.)* | — |
+| `_klasa(c)` *(wewn.)* | Klasa zrodla twierdzenia nadana kodem (`stages.sprawdz_karte`, spec §6). |
+| `_rodzaj_twierdzenia(c)` *(wewn.)* | — |
+| `_zweryfikowane(c)` *(wewn.)* | Twierdzenie karty sprawdzone kodem. `sprawdz_karte` przenosi niesprawdzone do |
 | `_twierdzenia(card)` *(wewn.)* | — |
-| `_karta_do_promptu(card, limit)` *(wewn.)* | — |
+| `_plan_tekstem(plan)` *(wewn.)* | Plan redaktora w prozie dla katow: pytania, oba przypadki wielkiego pytania, rdzen AI, |
+| `_twierdzenie_tekstem(i, c, dl_dowodu)` *(wewn.)* | — |
+| `_karta_do_promptu(card, limit)` *(wewn.)* | Karta dla planisty katow i oceny nowosci (spec §9 pkt 6). |
 | `_znaczniki(tekst)` *(wewn.)* | Daty (miesiac + dzien albo sam miesiac) i liczby z tekstu, w jednej postaci. |
 | `w_jednym_zrodle(ustalenie, teksty)` | Adres zrodla, ktore samo zawiera wszystkie daty i liczby ustalenia, albo pusto. |
+| `_norm_cytatu(t)` *(wewn.)* | — |
+| `_cytat_w_zrodlach(cytat, teksty, twierdzenia)` *(wewn.)* | — |
+| `_nowosc_raz(conn, run_id, card, h, teksty_zrodel, twierdzenia)` *(wewn.)* | Jeden przebieg oceny nowosci z bramkami kodu. Nigdy nie podnosi wyjatku (poza budzetem). |
 | `nowosc(conn, run_id, card, h, teksty_zrodel)` | Czy laczenie zrodel ustalilo cos, czego nie mowi zadne z nich. |
-| `ile_katow(h, card)` | Ile notek uniesie ten temat (25.10.2026, wlasciciel: „pomysl, ile notek z jednego |
-| `temat_na_artykul(h, card, nowe, przes)` | Czy temat jest dosc duzy na artykul (wlasciciel 25.10.2026: „czy temat jest |
+| `_wielkosc(h)` *(wewn.)* | (W, najwiecej punktow Hacker News) — spec §5 „Story size": W = wydawcy + jednostki uwagi. |
+| `_ksiega(dossier)` *(wewn.)* | — |
+| `_status(e)` *(wewn.)* | — |
+| `_odpowiedziane(dossier)` *(wewn.)* | Pytania ksiegi z odpowiedzia (answered/partial) o ROZNYCH rdzeniach: dwa pytania, ktorym |
+| `_glosy_karty(card)` *(wewn.)* | Podpisane glosy ludzi z karty: osobna lista glosow (`voices`/`glosy`) plus twierdzenia |
+| `poziom_tematu(h, card, dossier)` | Ile notek uniesie temat — regula poziomu (spec §5 „Number of notes"), zamiast `ile_katow`. |
+| `ile_katow(h, card)` | Zgodnosc ze starym przebiegiem: `poziom_tematu(...)["n_max"]` bez ksiegi. |
+| `temat_na_artykul(h, card, nowe, przes, poziom, dossier)` | Czy sledztwo uniesie artykul — regula rozmiaru (spec §5 „Article-size rule") bez wieku |
 | `pelny_obraz(card, min_twierdzen, min_serwisow)` | Czy karta daje czytelnikowi pelny obraz historii: dosc potwierdzonych |
+| `_oczysc(slowo)` *(wewn.)* | Slowo bez interpunkcji na brzegach i bez dopelniacza „'s"; srodek („K3.1", „8,675") zostaje. |
+| `_slowa(tekst)` *(wewn.)* | — |
+| `_kanon(v)` *(wewn.)* | — |
+| `_jest_wielka(s)` *(wewn.)* | — |
+| `_litery_i_cyfry(s)` *(wewn.)* | — |
+| `_jest_liczba(s)` *(wewn.)* | — |
+| `_dziesiatki(m)` *(wewn.)* | „twenty-five" -> 25. |
+| `_liczby_slow(slowa, nazwy)` *(wewn.)* | Liczby tekstu po normalizacji (spec §4 pkt 2): (postac kanoniczna, indeks slowa). |
+| `_liczby(tekst)` *(wewn.)* | — |
+| `_indeksy_nazw(czyste, tekst_dowodow, encje)` *(wewn.)* | Indeksy liczb, ktore sa czescia nazwy (wersji): spec §4 pkt 2 „version tokens from the |
+| `_encje_linii(czyste, nazwy, tekst_dowodow)` *(wewn.)* | Encje nazwane w linii: ciagi slow z wielkiej litery, nazw z cyframi („K3.1") i wersji |
+| `_encja_w(tokeny, tekst)` *(wewn.)* | Czy encja stoi w tekscie: wszystkie jej slowa albo — dla nazwy z wersja — wszystkie poza |
+| `_zdanie_ma_encje(zdanie)` *(wewn.)* | — |
+| `_zdania(tekst)` *(wewn.)* | — |
+| `_slug(url)` *(wewn.)* | — |
+| `_zrodla_twierdzenia(c)` *(wewn.)* | Slowa, ktorymi linia moze nazwac zrodlo: etykieta hosta („artificialanalysis", „kimi", |
+| `_podpisane(tekst, c)` *(wewn.)* | — |
+| `_wymaga_podpisu(c, hosty_szczegolu)` *(wewn.)* | Powod, dla ktorego linia musi nazwac zrodlo (spec §4 pkt 5), albo pusto: twierdzenie |
+| `_porownania(czyste)` *(wewn.)* | — |
+| `_glosa_przy(tekst, m)` *(wewn.)* | Glosa w zasiegu 12 slow za terminem (nawias, myslnik, dwukropek, dopowiedzenie) albo |
+| `_zargon_bez_glosy(tekst)` *(wewn.)* | — |
+| `_powszechny(linia, naglowki, encje)` *(wewn.)* | Kotwica haka stoi w co najmniej dwoch naglowkach (spec §4 pkt 8): liczba haka w dwoch |
+| `_slowa_tresci(t)` *(wewn.)* | — |
+| `_nazwy_z_wersja(tekst)` *(wewn.)* | Nazwy z wersja z tekstu: „Claude Opus 5.5", „Terminal-Bench 4.0", „Kimi K3.1 Pro", „GPT-6". |
+| `_encje_z_karty(card, h)` *(wewn.)* | Lista encji sledztwa: nazwy wlasne historii plus nazwy z wersja z twierdzen karty |
+| `sprawdz_linie(linia, fakty, kontekst)` | Kontrakt uczciwego haka (spec §4 pkt 1-9): lista zlamanych regul, pusta = OK. |
+| `_bez_cytatow(tekst)` *(wewn.)* | — |
+| `_pierwsza_osoba(tekst)` *(wewn.)* | „I/my/me" poza cytatami, z pominieciem liczb rzymskich („Type I", „Phase I"). |
+| `_chwyt_otwarcia(tekst)` *(wewn.)* | — |
+| `_zglosowany(tekst, term)` *(wewn.)* | Termin AI objasniony gdziekolwiek w notce: „A token is...", „tokens (...)", „tokens — ...". |
+| `_zaczyna_od(tekst, linia)` *(wewn.)* | — |
+| `sprawdz_notke(tekst, fakty, kontekst)` | Bramka gotowej notki serii (spec §9 pkt 7, §5 „Angle choice"). Pusta lista = OK. |
+| `pierwsze_zdanie(tekst)` | Pierwsze zdanie notki — do logu bramki, gdy kat poszedl bez stalej linii (wariant W). |
 | `_hipotezy_do_promptu(dossier)` *(wewn.)* | — |
-| `_katy_do_promptu(zestaw)` *(wewn.)* | — |
-| `przeslania(conn, run_id, card, dossier, h, typ, ile)` | Seria notek o jednej historii: `ile` katow (`ile_katow`: wielkosc tematu) z zestawu |
+| `_katy_do_promptu()` *(wewn.)* | — |
+| `_ksiega_do_promptu(dossier)` *(wewn.)* | — |
+| `_glosy_do_promptu(card)` *(wewn.)* | — |
+| `_ramy_do_promptu(h)` *(wewn.)* | — |
+| `_odbior_do_promptu(ile)` *(wewn.)* | Tabela odbioru naszych notek serii (spec §4: „top 5 and bottom 5 series notes"): przyrost = |
+| `_numery(x, ile_twierdzen)` *(wewn.)* | — |
+| `_sprawdzian(x)` *(wewn.)* | — |
+| `_sedno(surowe, ile_twierdzen)` *(wewn.)* | Sedno z odpowiedzi planisty i bledy, ktore ida do rundy zwrotnej (spec §4 „Quintessence"). |
+| `_ustalenia(surowe, ile_twierdzen, artykulowy)` *(wewn.)* | — |
+| `_kat_z_odpowiedzi(p, idx, twierdzenia)` *(wewn.)* | — |
+| `_analiza(kat)` *(wewn.)* | — |
+| `_powod_odrzucenia(kat, statusy)` *(wewn.)* | Powod odrzucenia kata przez kod (po angielsku — idzie do rundy zwrotnej) albo pusto. |
+| `_ten_sam_punkt(conn, run_id, kandydaci, zarezerwowane, opublikowane)` *(wewn.)* | {idx kata: powod} — katy, ktore powtarzaja punkt innego kata serii, ustalenia zarezerwowanego |
+| `_sila(kat)` *(wewn.)* | — |
+| `_wybierz(pula, n, wymagania)` *(wewn.)* | N katow z puli wedlug regul skladu (spec §5 „Angle choice"): prowadzacy (fakt), potem |
+| `_uloz_serie(wybrane)` *(wewn.)* | Kolejnosc publikacji (spec §5 „Order and pacing"): prowadzacy pierwszy; werdykt drugi |
+| `_plan_dla_katow(card, plan)` *(wewn.)* | Karta z planem dla katow. Przebieg wklada `sledztwo_plan.plan_do_kart(plan)` do |
+| `_wywolaj_planiste(conn, run_id, prompt, cel)` *(wewn.)* | (dane JSON albo None, cel, ktory odpowiedzial, surowa odpowiedz). Odmowa albo uciecie Opusa |
+| `_ocen_odpowiedz(conn, run_id, dane, card, dossier, h, ile, artykulowy, opublikowane, naglowki)` *(wewn.)* | Bramki kodu na odpowiedzi planisty: pola katow, ksiega, rdzenie, ustalenia, powtorki punktu, |
+| `_runda_zwrotna(wynik)` *(wewn.)* | — |
+| `_napraw_naglowek(conn, run_id, kat, bledy)` *(wewn.)* | Jedna naprawa pierwszego zdania tanim modelem (spec §4 pkt 9). Pusto przy awarii. |
+| `przeslania(conn, run_id, card, dossier, h, typ, ile, artykulowy, plan)` | Seria notek o jednej historii (spec §4, §5 „Angle choice", „Order and pacing", §9 pkt 7 i 12). |
+| `_bramka_hakow(conn, run_id, seria, wynik, card, h, naglowki)` *(wewn.)* | Pierwsze zdanie kazdego kata przez kontrakt haka, w kolejnosci serii; zbudowanie wyjscia. |
 | `zapisz_sledztwo(rekord)` | Jedna linia na sledztwo — pamiec dla bramki i limitow. Nigdy nie wywala. |
 | `oznacz_artykul(run_id)` | Artykul ze sledztwa z tego przebiegu wyszedl — liczy sie do limitu tygodnia. |
 | `_kolejka()` *(wewn.)* | — |
 | `_zapisz_kolejke(kolejka)` *(wewn.)* | — |
-| `dodaj_do_kolejki(lista, h, card, run_id)` | Przeslania do kolejki notek, kazde wazne `WAZNOSC_PRZESLANIA_DNI` dni. |
+| `_na_dobe(h)` *(wewn.)* | — |
+| `dodaj_do_kolejki(lista, h, card, run_id, poziom)` | Katy do kolejki notek, kazdy wazny `WAZNOSC_PRZESLANIA_DNI` dni. Oddaje, ile weszlo. |
+| `_notki_dziennika()` *(wewn.)* | Opublikowane notki z dziennika (rodzaj notka, udane), w kolejnosci zapisu. |
 | `_wydane_przeslania()` *(wewn.)* | (identyfikatory juz opublikowanych, ile wyszlo dzis). |
-| `czekajace_przeslania()` | Ile przeslan czeka na notke: wazne i jeszcze nie wydane. |
-| `wez_przeslanie()` | Nastepne przeslanie do notki — do `PRZESLAN_NA_DOBE` na dobe (jedno na |
+| `_do_wydania(p, teraz_iso, wydane)` *(wewn.)* | — |
+| `czekajace_przeslania()` | Ile przeslan czeka na notke: wazne, jeszcze nie wydane i nie pominiete po probach. |
+| `_ma_klucz(tekst, klucze)` *(wewn.)* | — |
+| `wez_przeslanie(promocja)` | Nastepne przeslanie do notki (jedno na przebieg pilnuje `stages.notki_dnia`), najstarsza |
+| `oznacz_probe(przeslanie_id, powod)` | Notka z kata sie nie udala (bramka notki, wiernosc, weryfikacja) — `stages` wola to po |
 | `_wczesniejsze_katy(p)` *(wewn.)* | Katy TEJ SAMEJ historii, ktore juz wyszly — przeslanie i hak kazdego. |
 | `temat_dnia()` | Historia, ktorej katy wychodza teraz — kontekst dla notki MYSL w dzien serii. |
+| `_rodzenstwo(p)` *(wewn.)* | Inne katy tej samej historii z tej samej serii (ten sam przebieg sledztwa). |
+| `kontekst_notki(p)` | Kontekst bramki notki (`sprawdz_notke`) dla wpisu kolejki: linia kata, encje, teksty |
+| `_kontekst_z(kontekst)` *(wewn.)* | Kontekst bramki notki z tego, co poda wolajacy: gotowy slownik, wpis kolejki albo material. |
 | `material_notki(p)` | (fakt do dziennika i straznikow, material dla pisarza) z przeslania. |
+| `tematy_obok(ile)` | Tytuly historii z rankingu ostatniego sledztwa POZA wybrana (rekord sledztwa ma pole |
+| `klucze_serii()` | Nazwy wlasne historii, ktorych katy sa teraz w waznej kolejce — zakazane w MYSL |
+| `opublikowane_katy(dni)` | Opublikowane notki serii i MYSL z ostatnich `dni` dni (z `dziennik.jsonl`): tekst notki |
+
+### `sledztwo_plan.py` — plan redaktora śledztwa — 12 soczewek, pytania sprawdzane kodem (test podmiany), dokumenty pierwotne do znalezienia i starszy redaktor wskazujący luki
+
+1249 wierszy, 60 funkcji na poziomie modułu, 0 klas
+
+| funkcja | co robi |
+|---|---|
+| `_system_planu()` *(wewn.)* | — |
+| `_system_krytyka()` *(wewn.)* | — |
+| `_tekst(x, n)` *(wewn.)* | — |
+| `_norm(tok)` *(wewn.)* | — |
+| `_jest_liczba(tok)` *(wewn.)* | — |
+| `_liczba(tok)` *(wewn.)* | — |
+| `_tokeny(tekst)` *(wewn.)* | (slowo, czy zaczyna zdanie) — poczatek zdania z wielkiej litery to nie nazwa. |
+| `_nazwopodobny(tok, pierwszy)` *(wewn.)* | Czy slowo wyglada na nazwe: cyfra albo wielka litera w srodku (GPT-6, OpenAI), |
+| `_mocny(tok)` *(wewn.)* | Nazwa nie do pomylenia ze zwyklym slowem: cyfra albo wielka litera w srodku. |
+| `_slowa(tekst)` *(wewn.)* | Slowa tresci (bez slow bez tresci), liczby w jednej postaci — do porownan wprost. |
+| `_wzor(tekst, klucze)` *(wewn.)* | Pytanie po PODMIANIE: nazwy (klucze historii, slowa z wielkiej litery, cyfry) |
+| `_jaccard(a, b)` *(wewn.)* | — |
+| `_bez_cyfr(tekst)` *(wewn.)* | Proza planu bez liczb (spec §3 ostatni akapit): liczby z planu pochodza z naglowkow, |
+| `_bezpieczenstwo(h)` *(wewn.)* | — |
+| `_typ_dla_modelu(typ, bezp)` *(wewn.)* | — |
+| `_nazwa_historii(h)` *(wewn.)* | — |
+| `_nie_pobieramy(conn)` *(wewn.)* | Hosty, ktorych nie pobieramy — plan ma wskazac `gdzie` osiagalne (spec §3 regula 3). |
+| `_naglowki(h)` *(wewn.)* | — |
+| `_ledes(ledes)` *(wewn.)* | Poczatki DWOCH NAJDLUZSZYCH zrodel. Dlugosc z pola `dlugosc` (pelny tekst zrodla), |
+| `_linie_soczewek()` *(wewn.)* | Opis kazdej soczewki tak, jak widzi go model — prosto z `prompts/plan_sledztwa.md`. |
+| `_wzory_szablonow()` *(wewn.)* | — |
+| `_poprzednie_plany(run_id, ile)` *(wewn.)* | Szesc ostatnich planow z `sledztwa.jsonl` (pole `plan_pytania` rekordu sledztwa). |
+| `_klucze_tokeny(klucze)` *(wewn.)* | — |
+| `_kontekst(h, pytanie, ledes, run_id, dodatkowe, poprzednie)` *(wewn.)* | Wszystko, co walidacja wie o historii: jej nazwy, liczby, szablony i poprzednie plany. |
+| `_nazywa_historie(q, kont)` *(wewn.)* | Czy pytanie nazywa aktora, produkt albo liczbe TEJ historii (spec §3 regula 2). |
+| `_ma_wyrozniajace(q, kont)` *(wewn.)* | — |
+| `_zapytanie(tekst, q, kont)` *(wewn.)* | 3-8 slow do wyszukiwarki; bez nazwy historii dostaje ja na poczatek — zapytanie |
+| `_soczewka(x)` *(wewn.)* | — |
+| `_pytanie_z_modelu(p, i)` *(wewn.)* | — |
+| `_powod_odrzucenia(p, kont, juz, z_poprzednimi)` *(wewn.)* | Pusto = pytanie dobre; inaczej powod odrzucenia (do logu i raportu). |
+| `_wielkie(x)` *(wewn.)* | — |
+| `_smaczek(x)` *(wewn.)* | — |
+| `_terminy(x)` *(wewn.)* | Daty ze sprawdzalnym zdarzeniem. Data idzie dalej TYLKO z przebiegu, ktory ja |
+| `_dokumenty(x, kont, odrzucone)` *(wewn.)* | — |
+| `_waliduj_plan(dane, kont)` *(wewn.)* | Walidacja planu KODEM (spec §2 etap 7, §3 reguly 1-7) — prosba w prompcie nie jest bramka. |
+| `_wymaga_ponowienia(w)` *(wewn.)* | — |
+| `_ocena(w)` *(wewn.)* | Lepsza z dwoch prob: najpierw prog pytan, potem wymagane soczewki, liczba soczewek. |
+| `_uloz(pytania)` *(wewn.)* | Kolejnosc wagi (przy remisie kolejnosc modelu), cztery pierwsze z waga 1, numery Q1.. |
+| `_pytania_stale(kont, pokryte, ile_juz)` *(wewn.)* | Pytania stale dla soczewek, ktorych nie pokryly dobre pytania modelu — wymagane |
+| `_dokumenty_stale(typ, kont)` *(wewn.)* | Rekordy, ktore musza istniec za historia danego typu (spec §6 „Primary documents"). |
+| `_json_albo_ratunek(cel, surowe, ksztalt, conn, run_id)` *(wewn.)* | Obiekt JSON z odpowiedzi; proza zamiast JSON-u -> `llm.ratuj_json` (odzyskuje to, |
+| `_proba_planu(conn, run_id, zapas, prompt)` *(wewn.)* | Jedno wywolanie planu: Sonnet 5.5 albo (zapas) DeepSeek z mysleniem. |
+| `_proba_krytyka(conn, run_id, zapas, prompt)` *(wewn.)* | Jedno wywolanie starszego redaktora: Sonnet 5.5 albo (zapas) DeepSeek z mysleniem. |
+| `_opis_awarii(exc)` *(wewn.)* | — |
+| `plan_sledztwa(conn, run_id, h, pytanie, ledes, typ)` | Plan redaktora sledczego przed badaniem (spec §2 etap 7, §3). |
+| `_plan(conn, run_id, h, pytanie, ledes, typ)` *(wewn.)* | — |
+| `_zloz(w, kont, h, typ, pytanie, proby, fallback, powod)` *(wewn.)* | — |
+| `_plan_awaryjny(h, pytanie, typ, powod)` *(wewn.)* | Plan z samych pytan stalych, gdy padlo cos poza modelem (zle dane wejscia). |
+| `_wypisz_plan(plan)` *(wewn.)* | — |
+| `pytania_tekstem(pytania)` | Lista pytan do klasyfikacji i syntezy: '- [Q1|NEW] ...?' w kolejnosci wagi |
+| `plan_do_kart(plan)` | Co z planu idzie do katow (spec §3 ostatni akapit): pytania (id, soczewka, q), oba |
+| `_wydatki_badania(conn, run_id)` *(wewn.)* | Ile zaplacilo badanie tego przebiegu (cele `research.PURPOSES`). |
+| `_prog_badania()` *(wewn.)* | — |
+| `_plan_do_krytyka(plan)` *(wewn.)* | — |
+| `_ksiega_do_krytyka(ksiega)` *(wewn.)* | — |
+| `_karta_do_krytyka(karta)` *(wewn.)* | — |
+| `_teksty_ksiegi(ksiega)` *(wewn.)* | — |
+| `_waliduj_krytyka(dane, kont, ksiega, plan)` *(wewn.)* | Pozycje starszego redaktora jako pytania ksiegi (waga 1, id K1..K3). |
+| `krytyk(conn, run_id, h, plan, ksiega, karta)` | Starszy redaktor (spec §2 etap 11, §3 „Senior editor"). |
+| `_krytyk(conn, run_id, h, plan, ksiega, karta)` *(wewn.)* | — |
 
 ### `eksperymenty.py` — pomiar zmian — odbiór notek w grupach względem tła tygodnia, 95% przedział i werdykt (lepiej / gorzej / brak dowodu / za mało danych)
 
@@ -923,9 +1111,9 @@
 | `version(model)` | — |
 | `in_family(model, provider, family)` | — |
 
-### `research.py` — dogrywka researchu artykułu: konkurencyjne wyjaśnienia, dosłowne cytaty, twardy sufit kosztu
+### `research.py` — dogrywka researchu: księga pytań śledztwa (status każdego pytania z cytatem), pościg za dokumentem pierwotnym, konkurencyjne wyjaśnienia artykułu z puli, twardy sufit kosztu
 
-434 wierszy, 19 funkcji na poziomie modułu, 1 klas
+1451 wierszy, 49 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -937,17 +1125,47 @@
 | `_write(path, value)` *(wewn.)* | — |
 | `_spent(conn, run_id)` *(wewn.)* | — |
 | `_parse(raw)` *(wewn.)* | — |
-| `_call(conn, run_id, purpose, prompt, **kwargs)` *(wewn.)* | — |
+| `_call(conn, run_id, purpose, prompt, stop_usd, **kwargs)` *(wewn.)* | — |
 | `_prompt(name, **fields)` *(wewn.)* | — |
 | `_view(evidence)` *(wewn.)* | Whole passages only, with a bounded aggregate input. |
 | `_refs(items, sources)` *(wewn.)* | — |
 | `_assessment(raw, view)` *(wewn.)* | No invented URLs/quotes; unsupported answers stay unresolved. |
-| `_assess(conn, run_id, question, evidence, attempted)` *(wewn.)* | — |
-| `_search(conn, run_id, question, gap, seen)` *(wewn.)* | — |
-| `_extract(conn, run_id, question, gap, corpus)` *(wewn.)* | — |
-| `deepen(conn, run_id, question, evidence, corpus, max_rund)` | Return enriched evidence and an auditable dossier. At most `max_rund` searches |
+| `_assess(conn, run_id, question, evidence, attempted, stop_usd)` *(wewn.)* | — |
+| `_search(conn, run_id, question, gap, seen, dowod, gdzie, stop_usd, odrzuc)` *(wewn.)* | `dowod` i `gdzie` z planu redaktora (25.10.2026): czego szukamy i gdzie taki |
+| `_liczba(tekst)` *(wewn.)* | „8,675" i „8675" to ta sama liczba w pytaniu i w dokumencie. |
+| `_terminy(tekst)` *(wewn.)* | — |
+| `_podziel(tekst)` *(wewn.)* | Kawalki ok. `ROZMIAR_KAWALKA` znakow, ciete na akapitach, a dlugi akapit |
+| `uloz_kawalki(tekst, slowa, limit)` | Tekst dokumentu przyciety do `limit` znakow, ale z kawalkow najblizszych pytaniu. |
+| `_extract(conn, run_id, question, gap, corpus, slowa, stop_usd)` *(wewn.)* | Doslowne fragmenty z nowych dokumentow. `slowa` (tryb ksiegi) wlacza ukladanie |
+| `deepen(conn, run_id, question, evidence, corpus, max_rund, pytania, stop_usd)` | Return enriched evidence and an auditable dossier. At most `max_rund` searches |
+| `_host_na_liscie(host, lista)` *(wewn.)* | — |
+| `_zrodlo_zakazane(url)` *(wewn.)* | — |
+| `_warianty(key)` *(wewn.)* | Ten sam dokument pod „www." i bez, przez http i https. 25.10.2026: w probie o Kimi |
+| `_norm_zapytania(zapytanie)` *(wewn.)* | Zapytanie do porownania: male litery, bez cudzyslowow i interpunkcji. |
+| `_norm_fragmentu(tekst)` *(wewn.)* | — |
+| `_int(value)` *(wewn.)* | — |
+| `_data_zdarzenia(value)` *(wewn.)* | YYYY-MM-DD, YYYY-MM albo YYYY — inaczej None. |
+| `_wpis_ksiegi(p, ident)` *(wewn.)* | Pytanie planu (albo wpis wczesniejszej ksiegi) w ksztalcie wpisu ksiegi. |
+| `_wpisy_z_pytan(question, pytania)` *(wewn.)* | Ksiega z pytan planu: stale id, waga 1-3, plus Q0 — glowne pytanie briefu. |
+| `_widok_ksiegi(grupy, limit)` *(wewn.)* | Widok dla modelu: zrodla w kolejnosci `grupy` [(zrodlo, [fragmenty])], kazdy |
+| `_teksty_dowodow(evidence)` *(wewn.)* | — |
+| `_sprawdz_zasiane(wpisy, evidence)` *(wewn.)* | Wpis z poprzedniej ksiegi zachowuje odpowiedz tylko wtedy, gdy jej fragment stoi |
+| `_cytaty_ksiegi(cites, widok_po_id, teksty)` *(wewn.)* | Cytat ksiegi = fragment wskazany para {source_id, excerpt_index}. Kod sprawdza, ze |
+| `_wywolaj_ksiege(conn, run_id, question, paczka, widok, stop_usd, dzis)` *(wewn.)* | Jedna paczka statusow, z pamiecia podrecza jak `_assess` (ten sam prompt w ciagu |
+| `_scal_statusy(paczka, raw, widok, teksty, dzis)` *(wewn.)* | Wynik paczki do ksiegi. Zasady kodu, nie prosby w prompcie: |
+| `_ocen_ksiege(conn, run_id, question, wpisy, widok, evidence, stop_usd, dzis)` *(wewn.)* | Jedno przejscie statusow w paczkach po `PACZKA_KSIEGI`. Ucieta odpowiedz albo zly |
+| `_nastepne_pytanie(wpisy)` *(wewn.)* | Ktore pytanie dostaje runde i jakim zapytaniem — albo None. |
+| `_instytucja(cytat)` *(wewn.)* | — |
+| `_dodaj_oryginaly(wpisy, evidence)` *(wewn.)* | — |
+| `_runda_ksiegi(conn, run_id, question, wpis, zapytanie, seen, znane, evidence, stop_usd, rekord)` *(wewn.)* | Szukanie, pobranie i wyciag dla jednego pytania. Oddaje NOWE dowody albo []. |
+| `_nakladka(wpisy)` *(wewn.)* | Ksiega w starym ksztalcie `assessment` — dla `attach`, `synthesis_question` |
+| `_drukuj_ksiege(wpisy)` *(wewn.)* | — |
+| `_deepen_ksiega(conn, run_id, question, evidence, corpus, max_rund, pytania, stop_usd)` *(wewn.)* | Badanie sledztwa wedlug ksiegi pytan (opis przy `deepen`). |
+| `stan_ksiegi(dossier)` | {"pytan","odpowiedziane","czesciowe","otwarte","nie_teraz","pokrycie_waga12"} — |
+| `_ksiega_tekstem(dossier)` *(wewn.)* | Ksiega dla syntezy: status, odpowiedz i hosty zrodel, otwarte nazwane wprost. |
 | `synthesis_question(question, dossier)` | — |
 | `attach(card, dossier)` | — |
+| `dokument(conn, run_id, co, kto, gdzie, seen)` | Celowane szukanie JEDNEGO dokumentu pierwotnego (spec §6 „Primary documents"). |
 
 ### `karta_wynikow.py` — te same liczby dla poligonu i produkcji co tydzień — jeden przyrząd, jedne definicje, tylko odczyt
 
@@ -997,11 +1215,11 @@
 
 ### `artykul_z_puli.py` — artykuł bierze temat z tej samej puli, co notki
 
-1800 wierszy, 15 funkcji na poziomie modułu, 0 klas
+3210 wierszy, 60 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
-| `temat_z_faktu(conn, run_id, fakt)` | Zamienia udokumentowany fakt w brief artykulu. |
+| `temat_z_faktu(conn, run_id, fakt, ponow)` | Zamienia udokumentowany fakt w brief artykulu. |
 | `glebokosc_z_oceny(ocena)` | RICH / SINGLE / THIN — liczone z tego, co `warto_pisac` ZOBACZYLO. |
 | `uniesie_artykul(brief)` | Allow documented breadth, a later development or distinct explanatory questions. |
 | `wybierz_fakt(conn, run_id, ile)` | Swiezy fakt z puli ciekawostek, ktory NIE powtarza zadnego artykulu. |
@@ -1009,7 +1227,52 @@
 | `_zrob_miejsce_na_fakt(card)` *(wewn.)* | Robi miejsce na wstrzykniete twierdzenie, nie tracac zadnego ZRODLA. |
 | `_rozszerz_najstarsze(card, data_faktu)` *(wewn.)* | Data wstrzyknietego zrodla wazy — ale TYLKO w strone ostrzezenia. |
 | `_przebieg(conn, run_id)` *(wewn.)* | — |
-| `_przebieg_sledztwa(conn, run_id)` *(wewn.)* | Sledztwo: historia z radaru -> pytania -> zrodla -> badanie -> karta -> |
+| `_teraz()` *(wewn.)* | Zegar przebiegu — osobna funkcja, zeby test mogl przestawic czas |
+| `_arg(nazwa)` *(wewn.)* | Wartosc flagi `nazwa <wartosc>`; None, gdy flagi nie ma, pusty napis, |
+| `_wydano(conn, run_id)` *(wewn.)* | Ile przebieg wydal do tej pory (tabela `calls`). Awaria = 0: to licznik |
+| `_klucz_url(url)` *(wewn.)* | Ten sam klucz adresu, ktorym `sledztwo.ocena_historii` porownuje zrodla |
+| `_host_url(url)` *(wewn.)* | — |
+| `_twierdzenia(card)` *(wewn.)* | — |
+| `_norm(tekst)` *(wewn.)* | — |
+| `_plik_stanu(rid)` *(wewn.)* | — |
+| `_zapisz_stan(stan)` *(wewn.)* | Stan na dysk po kazdym etapie — atomowo i bez wyjatku. |
+| `_wczytaj_stan(rid)` *(wewn.)* | — |
+| `_tekst_z_kanalu(zrodlo)` *(wewn.)* | Tekst wpisu z zapasu feedu (`korpus_kanalow`), gdy strony nie dalo sie pobrac. |
+| `_pobierz_zrodla_historii(conn, run_id, zrodla)` *(wewn.)* | (pobrane dokumenty, raport pobran) — zrodla historii PRZED planem. |
+| `_ledes(corpus, ile)` *(wewn.)* | Poczatki najdluzszych pobranych zrodel historii — material planu. |
+| `_brief_sledztwa(conn, run_id, wybrana, sledztwo)` *(wewn.)* | Pytanie glowne sledztwa (spec §2 etap 5) z jedna ponowka ogolnika. |
+| `_plan_zapasowy(wybrana, powod)` *(wewn.)* | Plan ze stalych pytan, gdy modul planu nie oddal niczego uzywalnego. |
+| `_plan(conn, run_id, wybrana, pytanie, ledes, typ)` *(wewn.)* | Plan redaktora (`sledztwo_plan.plan_sledztwa`) z zewnetrznym zapasem. |
+| `_pytania_tekstem(pytania)` *(wewn.)* | Lista pytan do klasyfikacji i syntezy — z modulu planu, a gdy ten nie |
+| `_plan_do_kart(plan)` *(wewn.)* | — |
+| `_poscig_dokumentow(conn, run_id, plan, corpus)` *(wewn.)* | (pobrane dokumenty pierwotne, raport: nazwane wobec zdobytych) — spec §6. |
+| `_nazwany_model(wybrana)` *(wewn.)* | Czy klucze historii wygladaja na nazwe modelu (litery i cyfry: „X-5", „K3.1") |
+| `_glosy_i_cennik(sledztwo, wybrana, typ)` *(wewn.)* | Glosy ludzi z Hacker News i cennik OpenRouter (darmowe, bez klucza). |
+| `_dossier_do_stanu(dossier)` *(wewn.)* | Dossier bez dowodow i starych ocen — dowody leza w stanie osobno. |
+| `_scal_dossier(pierwsze, drugie)` *(wewn.)* | Ksiega planu + ksiega krytyka w jednym dossier. |
+| `_stan_ksiegi(dossier)` *(wewn.)* | — |
+| `_ranking_do_rekordu(ranking, historie, ile)` *(wewn.)* | Czolowka rankingu do rekordu sledztwa — material MYSL na inny temat |
+| `_rekord_sledztwa(stan)` *(wewn.)* | Rekord do `sledztwa.jsonl` — pamiec dla bramki, limitow, planu (6 ostatnich |
+| `_zapisz_rekord(stan, sledztwo, na_serio)` *(wewn.)* | — |
+| `_do_kolejki(sledztwo, przes, wybrana, card, rid, poziom)` *(wewn.)* | Katy do kolejki notek; zly kat odpada z logiem, reszta wchodzi. |
+| `_poziom(sledztwo, wybrana, card, dossier)` *(wewn.)* | Poziom tematu (`sledztwo.poziom_tematu`, spec §5) z zapasem S. |
+| `_katy_serii(conn, run_id, stan, zegar, sledztwo, na_serio)` *(wewn.)* | Etapy 15-17: poziom -> katy -> REKORD -> kolejka. Wspolne dla swiezego |
+| `_badanie_sledztwa(conn, run_id, stan, zegar, sledztwo, na_serio)` *(wewn.)* | Etapy 5-14 po wyborze historii, potem `_katy_serii`. |
+| `_po_awarii(stan, sledztwo, na_serio, exc)` *(wewn.)* | Wyjatek w srodku sledztwa: stan, raport i — po oplaconym planie — rekord. |
+| `_nowy_stan(conn, run_id, na_serio)` *(wewn.)* | — |
+| `_przebieg_sledztwa(conn, run_id)` *(wewn.)* | Sledztwo: wybor historii -> brief -> zrodla historii (PRZED planem) -> plan |
+| `_wznow_sledztwo(conn, run_id, rid_tekst)` *(wewn.)* | `--z-sledztwa <run_id>`: zapisany stan -> etapy 15-17 (poziom, katy, rekord, |
+| `_kat_analizy(sledztwo, rodzaj)` *(wewn.)* | — |
+| `_rekordy_pierwotne(card)` *(wewn.)* | Ile roznych zrodel PRIMARY albo INDEPENDENT stoi za potwierdzonymi |
+| `_werdykt_z_dowodami(stan)` *(wewn.)* | Kat-werdykt, ktorego dowody za i przeciw stoja w ksiedze (spec §5). |
+| `_ocena_kandydata(stan, teraz, w_tescie, uzyte)` *(wewn.)* | (nadaje sie, czego brakuje, miary) — regula artykulu ze sledztwa (spec §5), |
+| `_uzyte_twierdzenia(sledztwo, stan)` *(wewn.)* | Twierdzenia, na ktorych staly WYDANE notki serii tej historii. None, gdy |
+| `_kandydat_ze_sledztwa(w_tescie)` *(wewn.)* | Najlepszy zapisany stan sledztwa na artykul tygodnia albo None. |
+| `_karta_artykulu(stan)` *(wewn.)* | (brief, karta dla pisarza) z zapisanego stanu sledztwa. |
+| `_artykul_ze_sledztwa(conn, run_id)` *(wewn.)* | Artykul tygodnia z zapisanego sledztwa; None = nie ma kandydata albo |
+| `_zakaz_artykulu(conn, run_id)` *(wewn.)* | Powod, dla ktorego artykulu NIE wolno pisac, albo pusty napis. |
+| `_raport_sledztwa(stan)` *(wewn.)* | Raport jednego sledztwa do czytania przez czlowieka (spec §8, fala 1: bez |
+| `_zapisz_raport(stan)` *(wewn.)* | — |
 | `_katalog_ratunku()` *(wewn.)* | Katalog OBOK `ARTICLES_DIR`, nigdy w nim. |
 | `_opublikuj(sciezka)` *(wewn.)* | Wystawia gotowy artykul, probujac wiecej niz raz. NIE JEST BRAMKA. |
 | `_ramka(powod, brak, katalog)` *(wewn.)* | Ostrzezenie, ktore idzie na POCZATEK `.md`, a nie tylko obok niego. |

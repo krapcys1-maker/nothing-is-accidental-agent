@@ -26,7 +26,7 @@ def record_call(conn: sqlite3.Connection, **fields: Any) -> None:
     keys = [k for k in (
         "run_id", "provider", "model", "purpose", "tokens_in", "tokens_out",
         "cache_hit", "web_searches", "cost_usd", "price_verified", "ok", "note",
-        "akcja",
+        "akcja", "model_served",
     ) if k in fields]
     conn.execute(
         f"INSERT INTO calls (at, {', '.join(keys)})"
@@ -82,11 +82,17 @@ def call(
     run_id: int | None = None,
     web_search: bool = False,
     collect_urls: list[str] | None = None,
+    max_szukan: int | None = None,
 ) -> str:
     """Woła model właściwy dla etapu i zapisuje koszt. Zwraca tekst odpowiedzi.
 
     `collect_urls`, jeśli podane, zostanie wypełnione adresami, które realnie
     zwróciła wyszukiwarka — do sprawdzenia, czy model nie zmyślił URL-a.
+
+    `max_szukan` — nizszy limit wyszukiwan TEGO wywolania niz `config.max_szukan`
+    etapu (25.10.2026: ponowka weryfikacji bez JSON-a w `stages.zweryfikuj`
+    szuka mniej, bo pierwsza proba juz przepalila swoje rundy). Bez niego —
+    limit etapu, jak dotad.
     """
     model = config.MODEL_FOR[purpose]
 
@@ -157,12 +163,18 @@ def call(
             f"{provider} wylaczony do konca przebiegu ({_WYLACZENI[provider]})")
     termin = config.TERMIN_CALKOWITY_RAZY * config.timeout_for(config.MAX_TOKENS[purpose])
 
+    # Nizszy limit wyszukiwan idzie do transportu TYLKO wtedy, gdy ktos go podal:
+    # atrapy transportow w testach maja stale sygnatury bez tego argumentu.
+    _limit = {"max_szukan": int(max_szukan)} if max_szukan else {}
+
     def _jedna_proba() -> tuple:
-        """(tekst, wejscie, wyjscie, wyszukiwania, adresy, trafienia w cache)."""
+        """(tekst, wejscie, wyjscie, wyszukiwania, adresy, trafienia w cache,
+        model podany w odpowiedzi albo None)."""
+        _zapamietaj_model(None)
         if provider == "anthropic":
             text, tin, tout, searches, urls = _call_claude(
-                purpose, system, user, web_search, model=model)
-            return text, tin, tout, searches, urls, 0
+                purpose, system, user, web_search, model=model, **_limit)
+            return text, tin, tout, searches, urls, 0, _model_z_odpowiedzi()
         if provider == "mimo":
             # MiMo tylko pisze (E11). Jego szukanie jest platne osobno
             # i nieobslugiwane tu — wywolanie z siecia to blad konfiguracji.
@@ -170,16 +182,18 @@ def call(
                 raise PreflightFailed(
                     f"etap {purpose!r}: MiMo bez szukania w tym kodzie")
             text, tin, tout, searches, cache_hit = _call_mimo(purpose, system, user)
-            return text, tin, tout, searches, [], cache_hit
+            return text, tin, tout, searches, [], cache_hit, _model_z_odpowiedzi()
         if web_search:
-            return _call_deepseek_z_siecia(purpose, system, user, model=model)
+            return (*_call_deepseek_z_siecia(purpose, system, user, model=model, **_limit),
+                    _model_z_odpowiedzi())
         text, tin, tout, searches, cache_hit = _call_deepseek(purpose, system, user)
-        return text, tin, tout, searches, [], cache_hit
+        return text, tin, tout, searches, [], cache_hit, _model_z_odpowiedzi()
 
     for proba in range(1, config.PONOWIENIA + 2):
         start_proby = time.monotonic()
         try:
-            text, tin, tout, searches, urls, cache_hit = _z_terminem(_jedna_proba, termin)
+            text, tin, tout, searches, urls, cache_hit, podany = _z_terminem(
+                _jedna_proba, termin)
             _ZAWIESZENIA[provider] = 0
             if collect_urls is not None:
                 collect_urls.extend(urls)
@@ -226,8 +240,19 @@ def call(
         tokens_in=tin, tokens_out=tout, cache_hit=trafienia,
         web_searches=searches, cost_usd=usd,
         price_verified=int(verified), ok=1, note=None,
+        # Tylko gdy dostawca cos podal: brak pola to NULL w kolumnie, a nie
+        # nowa kolumna w INSERT (bazy zbudowane recznie w testach jej nie maja).
+        **({"model_served": podany} if podany else {}),
     )
     _log(purpose, model, tin, tout, searches, usd, verified)
+    # ROZJAZD MIEDZY PROSBA A ODPOWIEDZIA — raz na proces na pare. Migawka
+    # z data (`claude-opus-5-5-20261001` przy prosbie o `claude-opus-5-5`) to ta
+    # sama rzecz i nie halasuje; inna nazwa to przekierowanie dostawcy albo inny
+    # model, niz myslimy, i ma byc widoczna w logu, a nie tylko w bazie.
+    if podany and not podany.startswith(model) and (purpose, podany) not in _INNY_MODEL:
+        _INNY_MODEL.add((purpose, podany))
+        print(f"  [model] {purpose}: prosilismy o {model}, odpowiedzial {podany}",
+              flush=True)
     return text
 ```
 

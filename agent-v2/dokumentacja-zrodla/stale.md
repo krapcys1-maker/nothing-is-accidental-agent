@@ -65,6 +65,7 @@
 | `PRICING` | `{ # "cache" = trafienia w cache, z cennika A` | KLUCZEM JEST NAZWA MODELU, NIE STALA. Do 13 wrzesnia 2026 slownik byl zbudowany na stalych (`CLAUDE: {...}`) i przy nazwach wpisanych na szt |
 | `RODZINY_CEN` | `{ "opus": "claude-opus-5", "sonnet": "claude` | NAJTANSZY I NAJDROZSZY WPIS KAZDEJ RODZINY — stawka dla modelu, ktorego nie ma w cenniku, bo wszedl automatycznie. Rodzina, nie „jakikolwiek |
 | `MAKS_PODWYZKA_PRZY_ZAMIANIE` | `0.25` | CENY SPRAWDZONE PRZY ZAMIANIE MODELU — `nowe_modele` odczytuje stawke nastepcy z cennika dostawcy (`cennik_dostawcy`) i zapisuje ja przy zam |
+| `MODELE_SLEDZTWA_OD` | `{"CLAUDE": "claude-opus-5-5", "SONNET": "cla` | MODELE, NA KTORYCH STOI SLEDZTWO (25.10.2026, spec §9 pkt 2). Plan i krytyk sledztwa chodza na `SONNET`, katy i notki serii na `CLAUDE`, a o |
 | `STAWKI_PRZED_PODWYZKA` | `{ "deepseek-v4-flash": {"in": 0.14, "out": 0` | --- taryfa szczytowa DeepSeeka ----------------------------------------------- Od 2026-08-16 16:00 UTC DeepSeek wprowadza ceny szczytowe i p |
 | `PRZEKIEROWANIA_DEEPSEEK` | `( (DEEPSEEK_V4_FLASH, "2026-09-10T04:00:00+0` | PRZEKIEROWANIA U DOSTAWCY: stara nazwa przyjmowana dalej, ale rozliczana po stawce modelu, na ktory DeepSeek ja przestawil. Od 10.09 04:00 U |
 | `TARYFA_SZCZYTOWA_OD` | `"2026-08-16T16:00:00+00:00"` | — |
@@ -117,6 +118,8 @@
 | `CLASSIFY_MAX_EXCERPT_CHARS` | `700` | — |
 | `CARD_MIN_CONFIRMED` | `5` | --- karta dowodowa ---------------------------------------------------------- |
 | `CARD_MAX_CONFIRMED` | `8` | — |
+| `CARD_MAX_CONFIRMED_SLEDZTWO` | `16` | KARTA SLEDZTWA: SZESNASCIE (25.10.2026, spec §9 pkt 6). Sufit osmiu byl osiagany w kazdej probie sledztwa tego dnia, a seria do szesciu note |
+| `CARD_MAX_GLOSOW` | `4` | Glosy ludzi w karcie sledztwa — osobna lista, nie twierdzenia (spec §2 etap 13). |
 | `CARD_MAX_UNCERTAIN` | `3` | — |
 | `CARD_MAX_CONTRADICTIONS` | `3` | — |
 | `CARD_MIN_NUMBERS` | `3` | — |
@@ -163,7 +166,7 @@
 | `NOTE_FORMS` | `{ 'PROSTA': 'Explain the point directly. Use` | Typy notek. W dniu publikacji artykułu lecą notki typu ARTYKUL z linkiem; w pozostałe dni — pozostałe typy, oparte na fragmentach, których a |
 | `FORMY_NIEMOZLIWE` | `{ "MYSL": frozenset({"LICZBA", "LISTA", "KON` | FORMY, KTORYCH DANY TYP NIE MOZE WYKONAC — bo zadaja tego, czego typ zabrania. ZMIERZONE 5 wrzesnia 2026 na rotacji z calego roku: 730 z 109 |
 | `NOTE_FORM_MIX` | `("SCENA", "KONTRAST", "ZACZEP_I_KONKRET", "P` | — |
-| `NOTE_TYPES` | `{ 'MYSL': 'An editorial view, a genuine open` | — |
+| `NOTE_TYPES` | `{ 'MYSL': 'An editorial view, a genuine open` | MYSL W GLOSIE PUBLIKACJI (25.10.2026, spec §5 „MYSL"). Bylo „Reasoning and first-person judgment are welcome" i dwie z trzech MYSLI z prob t |
 | `PUBLISH_TIMEZONE` | `"America/New_York"` | Strefa czasowa publikacji. Liczy się strefa CZYTELNIKÓW, nie właściciela: konto jest anglojęzyczne, więc publiczność jest głównie amerykańsk |
 | `WORST_NOTE_HOURS` | `(12, 13)` | NAJGORSZE OKNO — I TO JEST STALA EGZEKWOWANA, nie zapis ustalen. `pora_na_publikacje` odmawia publikacji w tych godzinach, wiec miedzy 12:00 |
 | `BEST_NOTE_HOURS` | `(6, 7, 8)` | UWAGA: DWIE PONIZSZE STALE NIE SA UZYWANE PRZEZ ZADNA LINIE KODU. Agent nie wazy notek wedlug tych godzin ani dni — rozklada je losowo w okn |
