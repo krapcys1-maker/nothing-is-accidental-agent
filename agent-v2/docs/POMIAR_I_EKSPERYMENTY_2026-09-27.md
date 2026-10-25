@@ -604,10 +604,76 @@ komentarzach przycisk odpowiedzi musi stać pod nazwą autora (najbliższy bywa�
 komentarzu (`MAKS_NIEUDANYCH_ODPOWIEDZI_POD_ARTYKULEM`) komentarz odpada przed
 wyborem i pisaniem, bez kosztu.
 
+## Plan naprawczy: dziennikarz śledczy, 25.10.2026 (decyzja właściciela)
+
+**Dlaczego.** Cała historia NIE, 177 notek, okresami:
+
+| okres | notek dziennie | mediana słów | mediana wyświetleń notki | polubienia na notkę |
+|---|---|---|---|---|
+| do 13.09 | 4,1 | 62 | 22 | 3,1 |
+| 14–27.09 | 2,8 | 96 | 13 | 2,1 |
+| 28.09–11.10 | 2,9 | 109 | 10 | 1,7 |
+| 12–21.10 | 3,0 | 113 | 9 | 1,0 |
+
+Notki urosły prawie dwukrotnie, a zasięg spadł ponad dwukrotnie. Najlepsze notki
+w historii (272, 97, 82 i 60 wyświetleń) miały 52–64 słowa i odsłaniały ukryty
+mechanizm albo zaskakujący fakt. Notki ze śledztw miały ten sam słaby zasięg, bo
+wychodziły jako długie notki newsowe, i było ich 8 w miesiącu. Przyrost
+subskrybentów idzie za wyświetleniami; tygodnie z większą liczbą naszych
+subskrypcji innych kont nie dały szybszego przyrostu (liczby obu kont w rejestrze
+lokalnym).
+
+**Co weszło (`ce7b682`):**
+1. **Notki 40–65 słów jako zasada** (`config.NOTE_MIN_WORDS`/`NOTE_MAX_WORDS`), bez
+   długiej formy (`FORMY_DLUGIE` puste). E17 zakończony 25.10, przed terminem.
+2. **Seria śledcza.** Śledztwo rozkłada jedną historię na 4–5 kątów z sześciu
+   (`sledztwo.RODZAJE`): KURIOZUM (najdziwniejszy sprawdzony szczegół), MECHANIZM
+   (jak to działa), USTALENIE (co pokazuje zestawienie źródeł, słowa kontra czyny),
+   KTO_PLACI (kto traci i ile), MOTYW i ZA_DWA_LATA (nasza analiza z dowodem przeciw
+   i tym, co by ją obaliło). Każdy kąt ma `hak`: konkretny sprawdzony szczegół na
+   otwarcie; kąt bez haka kod odrzuca. Kąty wychodzą w tej kolejności, do trzech
+   dziennie (jeden na przebieg), od dnia po śledztwie; kąt jest ważny 4 dni. Notki
+   pisze Opus (`notka_przeslania`).
+3. **Tempo tematów.** Nowe śledztwo rusza, gdy w kolejce zostało mniej kątów niż
+   jeden dzień serii, czyli jeden temat co ok. dwa dni (sufit 4 w tygodniu).
+4. **Naprawa licznika.** `sledztwo.ile_sledztw` liczył wpis „artykuł opublikowany”
+   jako drugie śledztwo, więc od 18 do 24.10 zegar codziennie stawał na limicie
+   (2) po jednym śledztwie z 17.10.
+5. **Artykuł = pełne śledztwo, raz na 6 dni.** Pisarz dostaje wszystkie kąty
+   (`investigation_angles`, `prompts/pisarz.md`): otwarcie od najmocniejszego
+   szczegółu, pytanie, przebieg, mechanizm, kto płaci, słowa kontra czyny, analiza
+   z dowodem przeciw, czego nie wiadomo. Kolejne śledztwa w tym tygodniu idą tylko
+   w notkach.
+6. **Cztery notki dziennie, MYSL wraca** na ostatnim miejscu. Dzień z serią to
+   trzy kąty tematu plus jedna zwykła notka.
+7. **Subskrypcje innych kont 4 → 1 dziennie** (stopień rampy 25.10). Obserwacje
+   (5) i komentarze (14–20) bez zmian.
+8. **E16 i E18 przesunięte na 9.11–6.12**, żeby przez dwa tygodnie oceny połowa
+   notek nie dostawała dodatkowej zmiany.
+
+**Zasady pisania** (praktyka redakcji śledczych): hipoteza i oś czasu przed
+pisaniem, stawka (kto traci i ile), otwarcie od jednego sprawdzonego szczegółu,
+konkretna osoba albo firma, zestawienie słów i czynów, ważne podane ciekawie, i
+wartość, której nie daje żadne pojedyncze źródło.
+
+**Reguła oceny, zapisana przed startem (9.11, po dwóch tygodniach):**
+- Miara główna: mediana wyświetleń notki po 3 dniach, notki z 26.10–6.11
+  wobec 12–21.10 (9). Zmianę utrzymujemy, jeśli mediana wzrośnie co najmniej
+  o połowę (do ≥ 14) i różnica wobec drugiego konta jako tła zmaleje (rejestr
+  lokalny). Bez tego wracamy do analizy przed następną zmianą.
+- Osobno: notki serii kontra zwykłe, odwiedziny profilu i subskrypcje
+  przypisane przez Substack (`zrodla.jsonl`), koszt na notkę.
+- Przyrost subskrybentów w dwa tygodnie to kilkanaście osób, więc jest miarą
+  pomocniczą, nie rozstrzygającą.
+
+**Koszt:** śledztwo bez artykułu ok. 0,17 USD, z artykułem 0,6–0,7 USD, notka z
+kąta ok. 0,06 USD. Przy ok. trzech śledztwach i ok. 18 notkach serii w tygodniu
+to ok. 2 USD tygodniowo (dotąd ok. 0,8 USD).
+
 ## Śledztwa — co mierzyć
 
-- **Przesłania:** grupa „przeslanie" w karcie i w `eksperymenty.py`. To ok. 6
-  notek tygodniowo, więc po 4 tygodniach zobaczymy tylko duże różnice.
+- **Przesłania:** grupa „przeslanie" w karcie i w `eksperymenty.py`. Od 26.10
+  do ok. 18 notek tygodniowo (wcześniej ok. 6).
 - **Artykuły ze śledztw kontra z puli:** zapisy przypisane przez Substack
   (`zrodla.jsonl`, `zapisy_per_notka`) i wyświetlenia. To ok. 1 artykuł
   tygodniowo, więc ocena dopiero po ok. 2 miesiącach.

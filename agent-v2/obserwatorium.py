@@ -1257,6 +1257,7 @@ def main(argv: list[str] | None = None) -> int:
     m.add_argument("--kiedy", default="")
     lz = sub.add_parser("zmiany")
     lz.add_argument("--dni", type=int, default=30)
+    sub.add_parser("laboratorium")
     a = p.parse_args(argv)
     if a.cmd == "zbierz":
         print("zebrane:", zbierz(), flush=True)
@@ -1264,6 +1265,16 @@ def main(argv: list[str] | None = None) -> int:
             tekst = raport()
             (katalog() / "raport.md").write_text(tekst, encoding="utf-8")
             print(tekst)
+            # LABORATORIUM (25.10.2026) — tygodniowy raport badawczy obu kont, liczony
+            # z tych samych dni co wyzej. Jego awaria nie zatrzymuje raportu dobowego.
+            try:
+                import laboratorium
+                print("laboratorium:", laboratorium.zapisz(), flush=True)
+            except Exception as exc:
+                print("laboratorium: nie policzone (%s: %s)" % (type(exc).__name__, exc), flush=True)
+    elif a.cmd == "laboratorium":
+        import laboratorium
+        print(laboratorium.zapisz().read_text(encoding="utf-8"))
     elif a.cmd == "raport":
         tekst = raport(a.dni)
         (katalog() / "raport.md").write_text(tekst, encoding="utf-8")
