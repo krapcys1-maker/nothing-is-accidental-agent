@@ -460,7 +460,12 @@ MODEL_FOR = {
     # wobec Flash 3,83/3,50, uczciwosc 5,00/5,00 wobec 4,50/3,83. Koszt 0,055
     # zamiast 0,004 USD za notke; ok. 6 takich notek tygodniowo = ok. 1,3 USD
     # miesiecznie. Patrz `agent-v2/docs/WNIOSEK_2026-09-27.md`.
-    "notka_przeslania": CLAUDE,
+    #
+    # 25.10.2026 WIECZOREM — ZMIANA NA TANIO (polecenie wlasciciela: „ma byc ciekawe i tanie”,
+    # notka nie moze kosztowac dolara ani 50 centow). Notki z przeslan (stare katy w kolejce i
+    # gleboki tor) pisze teraz DeepSeek Flash z myslenie, jak cala seria lekka; Opus zostaje
+    # tylko tam, gdzie liczy sie osad (`przeslania` — gleboki tor, artykul).
+    "notka_przeslania": DEEPSEEK,
     # SLEDZTWO — FALA 1 (25.10.2026, kontrakt `robocze/proby_25_10/KONTRAKT_FALA1.md`,
     # spec §9 pkt 2). KAZDY cel ma tu wpis, bo `llm.call` na nieznanym celu rzuca
     # `KeyError` (`config.MODEL_FOR[purpose]`), a ogolne `except` w przebiegu
@@ -489,7 +494,8 @@ MODEL_FOR = {
     # z 25.10 pokazalo, ze Flash bez rozumowania mial bledy wiernosci, ktorych
     # sprawdzenie faktow nie zlapalo, a Flash z rozumowaniem proby jeszcze nie
     # przeszedl. Osobny cel zostaje, zeby przelaczenie po probie bylo jedna linia.
-    "notka_przeslania_fakt": CLAUDE,
+    # (25.10.2026 wieczorem: j.w. — tez Flash z myslenie, bo wlasciciel chce notki za centy.)
+    "notka_przeslania_fakt": DEEPSEEK,
     # Wiernosc notki serii wobec JEJ twierdzen, przed sprawdzeniem w sieci —
     # proba 25.10: „its comparison was Sonnet, not Opus" przeczylo cytowanemu
     # „the highest score of any model" i przeszlo przez weryfikacje.
@@ -588,6 +594,8 @@ DEEPSEEK_MYSLENIE: dict[str, dict[str, str]] = {
     "przeslania": {"type": "enabled"},
     "przeslania_zapas": {"type": "enabled"},
     "seria_lekka": {"type": "enabled"},
+    "notka_przeslania": {"type": "enabled"},
+    "notka_przeslania_fakt": {"type": "enabled"},
     "seria_lekka_zapas": {"type": "enabled"},
     "kategoria_historii": {"type": "disabled"},
     "wielkie_historie": {"type": "disabled"},
@@ -1680,8 +1688,6 @@ EFFORT = {
     # samego tekstu znaczylyby, ze druga wersja mysli inaczej niz pierwsza.
     "note": "medium",
     "naprawa": "medium",
-    # Notka z przeslania na Opusie — ten sam wysilek, co w A/B 27.09.
-    "notka_przeslania": "medium",
     # E13 — jedno zdanie do 40 slow: niski wysilek, bo rozumowanie liczy sie
     # jak wyjscie (25 USD/mln), a Flash pisze to zdanie bez rozumowania.
     "restack_opus": "low",
@@ -1691,9 +1697,7 @@ EFFORT = {
     "przeslania": "medium",
     "pytania_ciekawosci": "medium",
     # SLEDZTWO — FALA 1 (25.10.2026, kontrakt): starszy redaktor jak plan,
-    # notka kata faktow jak notka z przeslania — ten sam pisarz, ten sam wysilek.
     "krytyk_sledztwa": "medium",
-    "notka_przeslania_fakt": "medium",
     # PONIZEJ: piec wpisow, ktore NIC NIE ROBIA — wszystkie te etapy chodza na
     # DeepSeeku, ktory tego pokretla nie czyta. Zostaja jako zapis intencji na
     # wypadek przepiecia etapu na Claude, i `llm.call` mowi raz na proces,
@@ -1774,8 +1778,8 @@ MAX_TOKENS = {
     "note": _tokens_for(400) + 8000,
     "note_tani": _tokens_for(400) + 8000,   # ten sam kontrakt, inny pisarz
     "note_mimo": _tokens_for(400) + 8000,   # ten sam kontrakt, Xiaomi MiMo (E11)
-    "notka_przeslania": _tokens_for(400) + 8000,   # ten sam kontrakt, Opus
-    "notka_przeslania_fakt": _tokens_for(400) + 8000,   # D1: tez Opus
+    "notka_przeslania": _tokens_for(400) + 8000,   # ten sam kontrakt, Flash z myslenie
+    "notka_przeslania_fakt": _tokens_for(400) + 8000,   # j.w.
     "comment": _tokens_for(600) + 8000,
     "reply": _tokens_for(600) + 8000,
     "bank": 24000,

@@ -38,8 +38,8 @@ class VoiceRoutingTest(unittest.TestCase):
         # `przeslania` (sledztwo, 27.09.2026) swiadomie na Opusie — zywe A/B
         # trzech modeli na tym samym sledztwie, patrz config.MODEL_FOR.
         self.assertEqual(config.MODEL_FOR["przeslania"], config.CLAUDE)
-        # `notka_przeslania` tez: Flash gubil hipoteze z przeslania (A/B 27.09).
-        self.assertEqual(config.MODEL_FOR["notka_przeslania"], config.CLAUDE)
+        # `notka_przeslania` od 25.10.2026 wieczorem na Flashu z myslenie (wlasciciel: notka ma kosztowac centy).
+        self.assertEqual(config.MODEL_FOR["notka_przeslania"], config.DEEPSEEK)
         # `note_mimo` — pisarz ramienia „on" eksperymentu E11 (polecenie
         # wlasciciela 28.09.2026: Xiaomi MiMo pisze polowe notek, tylko NIE).
         self.assertEqual(config.MODEL_FOR["note_mimo"], config.MIMO)
@@ -51,14 +51,12 @@ class VoiceRoutingTest(unittest.TestCase):
         # Flash pytal zbyt technicznie.
         self.assertEqual(config.MODEL_FOR["pytania_ciekawosci"], config.SONNET)
         # `krytyk_sledztwa` — starszy redaktor sledztwa na Sonnecie (spec 25.10 §2 etap 11);
-        # `notka_przeslania_fakt` — notka kata faktow na Opusie (decyzja D1 fali 1: Flash
-        # gubil wiernosc w probie 25.10, Flash z mysleniem nie przeszedl jeszcze proby).
+        # `notka_przeslania_fakt` — notka kata faktow od 25.10 wieczorem tez na Flashu z myslenie.
         self.assertEqual(config.MODEL_FOR["krytyk_sledztwa"], config.SONNET)
-        self.assertEqual(config.MODEL_FOR["notka_przeslania_fakt"], config.CLAUDE)
+        self.assertEqual(config.MODEL_FOR["notka_przeslania_fakt"], config.DEEPSEEK)
         for purpose, model in config.MODEL_FOR.items():
-            if purpose not in {"write", "obraz", "przeslania", "notka_przeslania", "note_mimo",
-                               "restack_opus", "pytania_ciekawosci", "krytyk_sledztwa",
-                               "notka_przeslania_fakt"}:
+            if purpose not in {"write", "obraz", "przeslania", "note_mimo",
+                               "restack_opus", "pytania_ciekawosci", "krytyk_sledztwa"}:
                 with self.subTest(purpose=purpose):
                     self.assertEqual(model, config.DEEPSEEK)
 

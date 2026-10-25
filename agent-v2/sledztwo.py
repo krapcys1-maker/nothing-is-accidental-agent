@@ -116,7 +116,7 @@ KATY: dict[str, dict[str, Any]] = {
         "from the facts and from an assumption named in a clause.")},
     "WHERE_IT_LEADS": {"typ_notki": "DYSKUSJA", "analiza": True, "opis": (
         "a concrete call on what changes next and for whom, built on a named assumption, with a date "
-        "and the thing that would show it (`sprawdzian`).")},
+        "and the observable thing that would show it.")},
     # ROZLICZENIE — notka po terminie obietnicy (spec §2 etap 21). Etap sprawdzania zakladow jest
     # poza fala 1 (decyzja D5), wiec tag istnieje dla kolejki i pomiaru, a planista go nie dostaje.
     "ROZLICZENIE": {"typ_notki": "CIEKAWOSTKA", "analiza": False, "opis": (
@@ -2850,7 +2850,7 @@ def seria_lekka(conn, run_id, card: dict[str, Any], h: dict[str, Any], typ: str 
                     "naglowek": "", "linia": "", "wariant": "lekka", "lead": not out,
                     "fakty": [{k: twierdzenia[i - 1].get(k) for k in ("claim", "evidence", "url")} for i in nr]
                     or [{k: twierdzenia[0].get(k) for k in ("claim", "evidence", "url")}],
-                    "wiedza": [" ".join(str(w).split())[:240] for w in (p.get("wiedza") or [])[:8] if str(w).strip()]})
+                    "wiedza": [" ".join(str(w).split())[:240] for w in (p.get("wiedza") or [])[:8] if w is not None and str(w).strip()]})
         if len(out) >= ile:
             break
     print("  [seria] %d notek: %s" % (len(out), ", ".join(p["rodzaj"] for p in out) or "zadna"), flush=True)

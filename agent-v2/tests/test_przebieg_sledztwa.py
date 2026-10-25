@@ -40,6 +40,8 @@ sys.path.insert(0, "agent-v2")
 import config   # noqa: E402
 
 config.uzyj_katalogu_danych(pathlib.Path(tempfile.mkdtemp()))
+# Domyslny tor to LEKKI (25.10.2026); ten plik pilnuje GLEBOKIEGO (plan, ksiega, krytyk) — lekki ma sekcje na koncu.
+config.SLEDZTWO_TRYB = "gleboko"
 
 import db                        # noqa: E402
 import llm                       # noqa: E402
@@ -969,6 +971,98 @@ SLEDZTWO.poziom = dict(SLEDZTWO.poziom, poziom="XL", n_max=6)
 kod, log, _, exc = uruchom(["--sledztwo", "--wyslij", "--mimo-limitu"])
 sprawdz("temat XL z nowym ustaleniem i --wyslij: nadal zero wywolan pisarza",
         kod == 0 and not NAPISANE and not zdarzenia("_napisz_i_zapisz"), (kod, exc, nazwy()))
+
+print()
+print("=== 12. LEKKI TOR (domyslny): fakty + jedna seria jednym wywolaniem, bez planu i krytyka ===")
+SERIA = [{"rodzaj": "REVEAL", "tekst": "Orbit calls Q7 open, but the weights are not released. " * 3, "lead": True,
+          "fakty": [1], "wiedza": ["background"]},
+         {"rodzaj": "VERDICT", "tekst": "Our read: open in name only. " * 4, "lead": False, "fakty": [3], "wiedza": []},
+         {"rodzaj": "HOW_IT_WORKS", "tekst": "Open weights means you can run it yourself. " * 3, "lead": False,
+          "fakty": [5], "wiedza": []}]
+
+
+def _seria_lekka(conn, run_id, card, h, typ="sledztwo", ile=None):
+    zd("seria_lekka", typ=typ, fakty=len(card.get("confirmed_claims") or []), ile=ile)
+    SLEDZTWO._pada("seria_lekka")
+    return copy.deepcopy(SERIA_L[0])
+
+
+SERIA_L = [SERIA]
+SLEDZTWO.seria_lekka = _seria_lekka
+config.SLEDZTWO_TRYB = "lekkie"
+zeruj()
+SERIA_L[0] = SERIA
+kod, log, RL, exc = uruchom(["--sledztwo", "--wyslij"])
+sprawdz("lekki: przebieg konczy sie kodem 0, bez wyjatku", kod == 0 and exc is None, (kod, exc, log[-1200:]))
+sprawdz("lekki: ZERO planu, krytyka, pogoni za dokumentami i przeslan ciezkiego toru",
+        not (set(nazwy()) & {"plan", "krytyk", "dokument", "przeslania", "poziom", "nowosc"}), nazwy())
+sprawdz("lekki: kolejnosc zrodla -> glosy -> klasyfikacja -> dogrywka -> karta -> seria -> REKORD -> kolejka",
+        gdzie("fetch") < gdzie("glosy_hn") < gdzie("classify") < gdzie("deepen") < gdzie("synthesis")
+        < gdzie("sprawdz_karte") < gdzie("seria_lekka") < gdzie("zapisz_sledztwo") < gdzie("dodaj_do_kolejki"),
+        nazwy())
+_dl = zdarzenia("deepen")
+sprawdz("lekki: jedna dogrywka starego badania, 2 rundy, tani sufit, bez ksiegi pytan",
+        len(_dl) == 1 and _dl[0]["max_rund"] == azp.RUND_LEKKIE == 2 and _dl[0]["pytania"] == []
+        and _dl[0]["stop_usd"] == azp.SLEDZTWO_LEKKIE_STOP_USD, _dl)
+sprawdz("lekki: pytanie badania jest szerokie (brief + lista czego szuka redaktor)",
+        "numbers, dates, who said or did what" in str(_dl[0]["question"]) and "Orbit Labs" in str(_dl[0]["question"]),
+        str(_dl[0]["question"])[:400])
+_sl = (zdarzenia("seria_lekka") or [{}])[0]
+sprawdz("lekki: seria dostaje karte (12 twierdzen) i typ historii", _sl.get("fakty") == 12 and _sl.get("typ"),
+        _sl)
+sprawdz("lekki: kolejka dostaje cala serie pod numerem sledztwa, z poziomem LEKKI",
+        len(SLEDZTWO.kolejka) == 3 and all(k["id"].startswith("%s-" % RL) for k in SLEDZTWO.kolejka)
+        and zdarzenia("dodaj_do_kolejki")[0]["poziom"] == "LEKKI", (SLEDZTWO.kolejka, zdarzenia("dodaj_do_kolejki")))
+sprawdz("lekki: zadnego platnego wywolania poza `wybor`, pisarz artykulu nietkniety", not zakazane() and not NAPISANE,
+        zakazane())
+_stl = stan_z_dysku(RL)
+sprawdz("lekki: stan zna tryb i serie; rekord zapisany", _stl.get("tryb_badania") == "lekkie"
+        and len(_stl.get("katy") or []) == 3 and _stl.get("rekord_zapisany") and len(SLEDZTWO.rekordy) == 1, _stl.keys())
+
+zeruj()
+SERIA_L[0] = SERIA
+kod, log, _, exc = uruchom(["--sledztwo", "--wyslij", "--gleboko"])
+sprawdz("KONTRDOWOD: --gleboko wybiera ciezki tor mimo lekkiego domyslnego (plan i krytyk sa)",
+        kod == 0 and zdarzenia("plan") and zdarzenia("przeslania") and not zdarzenia("seria_lekka"), nazwy())
+
+zeruj()
+SERIA_L[0] = SERIA
+kod, log, _, exc = uruchom(["--sledztwo"])
+sprawdz("lekki bez --wyslij: seria jest, ale ani rekord, ani kolejka",
+        kod == 0 and zdarzenia("seria_lekka") and not SLEDZTWO.rekordy and not SLEDZTWO.kolejka, (kod, nazwy()))
+
+zeruj()
+SERIA_L[0] = SERIA
+RESEARCH.pada = RuntimeError("dogrywka padla")
+kod, log, _, exc = uruchom(["--sledztwo", "--wyslij"])
+sprawdz("lekki: dogrywka pada — seria idzie z tym, co dala klasyfikacja", kod == 0 and exc is None
+        and zdarzenia("seria_lekka") and len(SLEDZTWO.kolejka) == 3 and "dogrywka padla" in log, (kod, exc, log[-600:]))
+
+zeruj()
+SERIA_L[0] = SERIA[:1]
+kod, log, _, exc = uruchom(["--sledztwo", "--wyslij"])
+sprawdz("lekki: jedna notka to za malo na serie — rekord jest, kolejki nie ma, kod 1",
+        kod == 1 and len(SLEDZTWO.rekordy) == 1 and not SLEDZTWO.kolejka and not zdarzenia("dodaj_do_kolejki"),
+        (kod, nazwy()))
+
+zeruj()
+SERIA_L[0] = SERIA
+SLEDZTWO.pada = {"seria_lekka": RuntimeError("Flash padl")}
+kod, log, RP, exc = uruchom(["--sledztwo", "--wyslij"])
+sprawdz("lekki: seria pada — rekord jest (nie placimy badania drugi raz), kolejki nie ma, kod 1",
+        kod == 1 and len(SLEDZTWO.rekordy) == 1 and not SLEDZTWO.kolejka and "Flash padl" in log, (kod, exc, nazwy()))
+ZDARZENIA.clear()
+SLEDZTWO.pada = {}
+kod, log, RPw, exc = uruchom(["--sledztwo", "--wyslij", "--z-sledztwa", str(RP)])
+sprawdz("lekkie wznowienie: tylko seria i kolejka — zrodla, badanie i karta NIE sa placone drugi raz",
+        kod == 0 and exc is None and set(nazwy()) == {"seria_lekka", "dodaj_do_kolejki"}
+        and len(SLEDZTWO.rekordy) == 1 and len(SLEDZTWO.kolejka) == 3, (kod, exc, nazwy()))
+ZDARZENIA.clear()
+kod, log, _, exc = uruchom(["--sledztwo", "--wyslij", "--z-sledztwa", str(RP)])
+sprawdz("KONTRDOWOD: drugie wznowienie nie dubluje serii w kolejce",
+        kod == 0 and not zdarzenia("dodaj_do_kolejki") and len(SLEDZTWO.kolejka) == 3 and "nie dubluje" in log, log[-300:])
+config.SLEDZTWO_TRYB = "gleboko"
+del SLEDZTWO.seria_lekka
 
 llm.call = _prawdziwy_llm
 print()

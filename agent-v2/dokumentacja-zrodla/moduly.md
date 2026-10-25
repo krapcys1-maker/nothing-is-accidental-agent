@@ -48,7 +48,7 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-12585 wierszy, 229 funkcji na poziomie modułu, 0 klas
+12608 wierszy, 229 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -148,7 +148,7 @@
 | `wiernosc_notki(conn, run_id, tekst, twierdzenia)` | Czy notka serii mowi to samo, co twierdzenia, na ktorych stoi (spec §6 „Verification chain" 6). |
 | `_problemy_bramki(conn, run_id, tekst, bramka, twierdzenia_kata, data)` *(wewn.)* | Najpierw darmowe reguly kodu; wiernosc (platna) tylko dla tekstu, ktory je przeszedl. |
 | `_przez_bramke_notki(conn, run_id, etap, prompt, data, bramka, twierdzenia_kata, wariant)` *(wewn.)* | Notka po regulach: przeszla, przeszla po JEDNEJ poprawce, albo `bramka_odrzucila`. |
-| `note(conn, run_id, note_type, evidence, link, note_form, etap, seria, wariant, bramka, twierdzenia_kata, bez_rozbioru, pierwsze_zdanie)` | Jedna notka danego typu i danej FORMY — do szuflady. |
+| `note(conn, run_id, note_type, evidence, link, note_form, etap, seria, wariant, bramka, twierdzenia_kata, bez_rozbioru, pierwsze_zdanie, gotowy_tekst)` | Jedna notka danego typu i danej FORMY — do szuflady. |
 | `_host_adresu(url)` *(wewn.)* | — |
 | `_adres_bez_ogona(url)` *(wewn.)* | — |
 | `styk_ze_zrodla(fakt, tresci)` | (styk, skad): `skad` to `adres`, `host`, `rejestr` albo `brak`. |
@@ -566,7 +566,7 @@
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-4223 wierszy, 45 funkcji na poziomie modułu, 0 klas
+4243 wierszy, 45 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -748,7 +748,7 @@
 
 ### `sledztwo.py` — śledztwo — wybór największej historii, rdzeń (sedno) i kąty serii z jednej tabeli KATY, uczciwy hak sprawdzany kodem, poziom tematu (liczba notek), bramka nowości i kolejka notek
 
-3173 wierszy, 132 funkcji na poziomie modułu, 0 klas
+3283 wierszy, 136 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -861,6 +861,10 @@
 | `_napraw_naglowek(conn, run_id, kat, bledy)` *(wewn.)* | Jedna naprawa pierwszego zdania tanim modelem (spec §4 pkt 9). Pusto przy awarii. |
 | `przeslania(conn, run_id, card, dossier, h, typ, ile, artykulowy, plan)` | Seria notek o jednej historii (spec §4, §5 „Angle choice", „Order and pacing", §9 pkt 7 i 12). |
 | `_bramka_hakow(conn, run_id, seria, wynik, card, h, naglowki)` *(wewn.)* | Pierwsze zdanie kazdego kata przez kontrakt haka, w kolejnosci serii; zbudowanie wyjscia. |
+| `ile_notek_lekko(card)` | Ile notek uniesie temat: z bogactwa karty, nie z reguly o poziomach. Malo faktow -> 2-3 notki. |
+| `_fakty_do_promptu(card)` *(wewn.)* | — |
+| `_ostatnie_do_promptu(ile)` *(wewn.)* | — |
+| `seria_lekka(conn, run_id, card, h, typ, ile)` | Seria notek JEDNYM wywolaniem: [{rodzaj, tekst, wniosek, fakty, wiedza, lead, ...}] — gotowe teksty |
 | `zapisz_sledztwo(rekord)` | Jedna linia na sledztwo — pamiec dla bramki i limitow. Nigdy nie wywala. |
 | `oznacz_artykul(run_id)` | Artykul ze sledztwa z tego przebiegu wyszedl — liczy sie do limitu tygodnia. |
 | `_kolejka()` *(wewn.)* | — |
@@ -1221,7 +1225,7 @@
 
 ### `artykul_z_puli.py` — artykuł bierze temat z tej samej puli, co notki
 
-3248 wierszy, 61 funkcji na poziomie modułu, 1 klas
+3416 wierszy, 64 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -1264,6 +1268,9 @@
 | `_poziom(sledztwo, wybrana, card, dossier)` *(wewn.)* | Poziom tematu (`sledztwo.poziom_tematu`, spec §5) z zapasem S. |
 | `_katy_serii(conn, run_id, stan, zegar, sledztwo, na_serio)` *(wewn.)* | Etapy 15-17: poziom -> katy -> REKORD -> kolejka. Wspolne dla swiezego |
 | `_badanie_sledztwa(conn, run_id, stan, zegar, sledztwo, na_serio)` *(wewn.)* | Etapy 5-14 po wyborze historii, potem `_katy_serii`. |
+| `_badanie(conn, run_id, stan, zegar, sledztwo, na_serio)` *(wewn.)* | Wybor toru badania: lekki (domyslny) albo gleboki (`--gleboko` / `config.SLEDZTWO_TRYB`). |
+| `_badanie_lekkie(conn, run_id, stan, zegar, sledztwo, na_serio)` *(wewn.)* | — |
+| `_seria_lekka_etap(conn, run_id, stan, zegar, sledztwo, na_serio)` *(wewn.)* | Seria jednym wywolaniem -> REKORD PRZED KOLEJKA -> kolejka (jak `_katy_serii`, bez poziomow). |
 | `_po_awarii(stan, sledztwo, na_serio, exc)` *(wewn.)* | Wyjatek w srodku sledztwa: stan, raport i — po oplaconym planie — rekord. |
 | `_nowy_stan(conn, run_id, na_serio)` *(wewn.)* | — |
 | `_przebieg_sledztwa(conn, run_id)` *(wewn.)* | Sledztwo: wybor historii -> brief -> zrodla historii (PRZED planem) -> plan |

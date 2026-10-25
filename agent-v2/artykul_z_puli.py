@@ -1986,7 +1986,7 @@ def _seria_lekka_etap(conn, run_id, stan: dict, zegar: "_Zegar", sledztwo, na_se
         print("  seria tego sledztwa juz jest w kolejce (%s) — nie dubluje (--mimo-kolejki)"
               % stan["kolejka_dodana"], flush=True)
     else:
-        dodane = _do_kolejki(sledztwo, przes, wybrana, card, stan.get("run_id"), {})
+        dodane = _do_kolejki(sledztwo, przes, wybrana, card, stan.get("run_id"), stan.get("poziom") or {})
         stan["kolejka_dodana"] = dodane
         print("  do kolejki notek: %d" % dodane, flush=True)
     zegar.etap(stan, "kolejka")

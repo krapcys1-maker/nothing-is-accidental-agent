@@ -145,7 +145,7 @@
 
 **Pola wejściowe:** `fakty`, `naglowek`, `powody`, `wniosek`
 
-#### `naprawa.md` (48 wierszy)
+#### `naprawa.md` (49 wierszy)
 
 **Pola wejściowe:** `kontekst`, `max_slow`, `min_slow`, `tekst`, `zarzuty`
 
@@ -165,7 +165,7 @@
 {{"poprawki": [{{"nr": <sentence number>, "nowe": "<replacement sentence, unchanged if it is our opinion, or empty to delete>"}}]}}
 ```
 
-#### `notka.md` (153 wierszy)
+#### `notka.md` (159 wierszy)
 
 **Pola wejściowe:** `evidence`, `form_brief`, `language`, `marka`, `max_words`, `min_words`, `note_form`, `note_type`, `ostatnie_otwarcia_json`, `ostatnie_zakonczenia_json`, `rozbior`, `type_brief`
 
@@ -337,6 +337,16 @@
 
 ```json
 {{"w_prostych_slowach": "<plain explanation>", "skala": "<comparison in the material, or empty>", "pytania": [{{"pytanie": "<question>", "odpowiedz": "<answer, inference or unknown>", "z_dowodu": true|false}}], "jesli_sie_utrzyma": "<supported or conditional implications, with the steps explained>", "gdzie_by_peklo": "<specific limitation, or empty>", "co_o_tym_sadze": "<judgment and reason, or what prevents one>", "czego_nie_wiadomo": ["<unanswered question>"]}}
+```
+
+#### `seria_lekka.md` (39 wierszy)
+
+**Pola wejściowe:** `fakty`, `katy`, `marka`, `n_max`, `nieustalone`, `ostatnie`, `typ_historii`, `tytul`
+
+**Kontrakt wyjścia:**
+
+```json
+{{"notki": [{{"rodzaj": "<one angle tag from the list>", "tekst": "<the finished note>", "fakty": [<numbers of the facts it uses>], "wiedza": ["<each background claim from your own knowledge that the note relies on>"]}}]}}
 ```
 
 #### `skaut.md` (65 wierszy)

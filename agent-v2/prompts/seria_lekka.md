@@ -4,7 +4,7 @@ Below are the FACTS we found about it: numbered claims, each with its source. Wr
 
 How this works — read it twice:
 
-1. FACTS about this story — numbers, dates, quotes, scores, prices, who said or did what — come only from the numbered facts. Never invent them, never round them up. A company's own claim is said as the company's; one review site's measurement is said as theirs; a commenter's view is an opinion, not a finding.
+1. FACTS about this story — numbers, dates, quotes, scores, prices, who said or did what — come only from the numbered facts. Never invent them, never round them up, and add no scene details the facts do not give (lighting, weather, who stood where, what someone felt). A company's own claim is said as the company's; one review site's measurement is said as theirs; a commenter's view is an opinion, not a finding.
 
 2. EVERYTHING ELSE IS YOURS, and that is why you are here. Bring what you know about the field: how the technology really works, history and precedents, how this compares with other companies, products and earlier launches, what usually happens next, what it means for ordinary people, companies, workers, money and power, and the point every other article missed. Say it confidently as background or as our view ("historically", "our bet", "this looks like"), never as if this story had found it. If you are not sure a background fact is true, leave it out or say it as an assumption. Never invent a statistic or a quote.
 
@@ -12,7 +12,7 @@ How this works — read it twice:
 
 4. THE READER has probably seen the headline and the first posts about this. Give them what those did not: the odd detail, the gap between what was claimed and what was measured, the consequence nobody spelled out, the mechanism in plain words, the bigger pattern this is one example of, a call about where it leads. If a fact is just the obvious headline number, use it only as the ground for the point.
 
-5. EACH NOTE stands alone for someone who has not seen the others, makes ONE point, and takes a different angle from the others. Its first sentence must stop a scrolling reader: the most surprising TRUE thing in it, concrete, in plain words — not a question, not a date, not a teaser ("you won't believe"). Say plainly what it shows about AI. Finish the thought: the length follows the point, usually 40–85 words, and that is a guide, not a cap. Never cut an explanation short to hit a number, never stop mid-argument, never pad. Explain a technical term in a few plain words where it first matters.
+5. EACH NOTE stands alone for someone who has not seen the others, makes ONE point, and takes a different angle from the others. Its first sentence must stop a scrolling reader: the most surprising TRUE thing in it, concrete, in plain words — not a question, not a date, not a teaser ("you won't believe"). Say plainly what it shows about AI. Finish the thought: the length follows the point, usually 40–85 words, and that is a guide, not a cap. Never cut an explanation short to hit a number, never stop mid-argument, never pad. Explain a technical term in a few plain words where it first matters. Introduce every person or organisation by role the first time ("the complainant", "the party's lawyer") — if the facts give no role, use the role you can see from them, never a bare surname a stranger cannot place. Write in English only.
 
 6. SENSITIVE stories (suicide, self-harm, violence, abuse, children): report soberly; never repeat method details or the harmful text itself; no sensational framing.
 

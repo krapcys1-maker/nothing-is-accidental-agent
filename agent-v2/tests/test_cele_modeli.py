@@ -136,8 +136,8 @@ KONTRAKT = {
     # 6000 (recenzja 25.10.2026): z sufitu liczy sie termin wywolania, 600/1500 dawalo 29-72 s.
     "naglowek_naprawa": (config.DEEPSEEK, 6000, None, "disabled"),
     "ten_sam_punkt": (config.DEEPSEEK, 6000, None, "disabled"),
-    "notka_przeslania": (config.CLAUDE, config.MAX_TOKENS.get("notka_przeslania"), "medium", None),
-    "notka_przeslania_fakt": (config.CLAUDE, config.MAX_TOKENS.get("notka_przeslania"), "medium", None),
+    "notka_przeslania": (config.DEEPSEEK, config.MAX_TOKENS.get("notka_przeslania"), None, "enabled"),
+    "notka_przeslania_fakt": (config.DEEPSEEK, config.MAX_TOKENS.get("notka_przeslania"), None, "enabled"),
     "wiernosc_notki": (config.DEEPSEEK, 6000, None, "disabled"),
 }
 for cel, (model, sufit, wysilek, myslenie) in KONTRAKT.items():
@@ -158,8 +158,8 @@ for cel in ("investigation_search", "investigation_extract", "nowosc", "synthesi
             and cel in config.MAX_TOKENS, config.MODEL_FOR.get(cel))
 sprawdz("dokument pierwotny: najwyzej dwa szukania",
         config.max_szukan("investigation_document") == 2, config.max_szukan("investigation_document"))
-sprawdz("D1: notki serii z katow faktow pisze ten sam Opus co prowadzace",
-        config.MODEL_FOR["notka_przeslania_fakt"] == config.MODEL_FOR["notka_przeslania"] == config.CLAUDE)
+sprawdz("notki z przeslan (stare katy i gleboki tor) pisze tani model, nie Opus — polecenie wlasciciela 25.10",
+        config.MODEL_FOR["notka_przeslania_fakt"] == config.MODEL_FOR["notka_przeslania"] == config.DEEPSEEK)
 sprawdz("karta sledztwa: 16 twierdzen, artykul zostaje przy 8",
         config.CARD_MAX_CONFIRMED_SLEDZTWO == 16 and config.CARD_MAX_CONFIRMED == 8)
 sprawdz("sufit syntezy liczony z wiekszego trybu",
@@ -317,8 +317,8 @@ _stary_klient = llm.anthropic.Anthropic
 llm.anthropic.Anthropic = _Klient
 try:
     # Pisarz podany z boku (np. `AGENT_V2_WRITER`), rozny od stalych CLAUDE/SONNET/FABLE.
-    llm._call_claude("notka_przeslania", "s", "u", False, model="claude-opus-5-5-20261101")
-    llm._call_claude("notka_przeslania", "s", "u", False, model="claude-haiku-4-5-20251001")
+    llm._call_claude("przeslania", "s", "u", False, model="claude-opus-5-5-20261101")
+    llm._call_claude("przeslania", "s", "u", False, model="claude-haiku-4-5-20251001")
 finally:
     llm.anthropic.Anthropic = _stary_klient
 sprawdz("model spoza stalych dostaje output_config.effort",

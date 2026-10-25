@@ -28,7 +28,7 @@
 | `RESTACK_DZIENNIE_E12` | `{"on": (3, 5), "off": (1, 3)}` | E12 — dobowe widelki restackow w obu ramionach (srednio 4 i 2). Widelki, nie stala: ta sama liczba dzien po dniu to podpis maszyny (`stages. |
 | `SWIEZY_CEL_MIN` | `120` | E15 — „swiezy cel" to wpis mlodszy niz tyle minut. |
 | `PORA_NOTKI_OD_PRZEBIEGU` | `3` | E16 — w ramieniu „on" notki wychodza od tego przebiegu doby (liczac od 1). |
-| `KROTKA_NOTKA_SLOW` | `(33, 60)` | E17 — okno krotkiej notki (obecne: `NOTE_MIN_WORDS`-`NOTE_MAX_WORDS`). |
+| `KROTKA_NOTKA_SLOW` | `(33, 80)` | E17 — okno krotkiej notki (obecne: `NOTE_MIN_WORDS`-`NOTE_MAX_WORDS`). |
 | `MAKS_ODPOWIEDZI_W_ROZMOWIE` | `2` | ILE RAZY ODPISUJEMY W JEDNEJ ROZMOWIE. Rozmowa to galaz komentarzy: ten, ktory ja zaczal, i wszystko pod nim. Liczy `browser.nasze_odpowiedz |
 | `MAKS_ODPOWIEDZI_KONTU_SIOSTRZANEMU` | `1` | — |
 | `MAKS_NIEUDANYCH_ODPOWIEDZI_POD_ARTYKULEM` | `2` | ILE NIEUDANYCH PROB ODPOWIEDZI POD ARTYKULEM NA JEDEN KOMENTARZ (20.10.2026). Komentarz czeka w kazdym przebiegu, dopoki nie ma pod nim nasz |
@@ -144,10 +144,11 @@
 | `EFFORT` | `{ # NOTKI: `medium`, WPISANE SWIADOMIE — bo ` | Głębokość myślenia. Jawnie, bo domyślne `high` na Opusie 5 potrafi podwoić rachunek za wyjście bez pytania. TO JEST POKRETLO WYLACZNIE DLA M |
 | `MAX_TOKENS` | `{ # 6 tematow: tytul, pytanie, ZLAMANE PRZEK` | — |
 | `NOTE_MIN_WORDS` | `40` | --- notki i komentarze ------------------------------------------------------ SUFIT PODNIESIONY 4 wrzesnia 2026 DECYZJA WLASCICIELA: „chce z |
-| `NOTE_MAX_WORDS` | `65` | — |
+| `NOTE_MAX_WORDS` | `85` | — |
 | `NOTE_MIN_WORDS_DLUGA` | `120` | DLUGA NOTKA — OKNO OSOBNE, BO SUFIT 64 SLOW MA ZMIERZONY KOSZT. Sufit wyzej optymalizuje ZAANGAZOWANIE i ma zrodlo. Nie optymalizuje ZROZUMI |
 | `NOTE_MAX_WORDS_DLUGA` | `200` | — |
-| `NOTE_CANDIDATES` | `1` | Ilu kandydatow generujemy. Dawniej bylo pieciu, potem trzech; dodatkowe warianty tego samego zdania niczego nie dokladaly, a placilismy za n |
+| `SLEDZTWO_TRYB` | `"lekkie"` | Ilu kandydatow generujemy. Dawniej bylo pieciu, potem trzech; dodatkowe warianty tego samego zdania niczego nie dokladaly, a placilismy za n |
+| `NOTE_CANDIDATES` | `1` | — |
 | `DZIEDZINY_CIEKAWOSTEK` | `( # --- co te systemy realnie robia i jak sa` | Ile ciekawostek szukamy naraz. Cztery z pięciu notek dziennie stoją na nich, a jedno szukanie kosztuje tyle co jedno — więc bierzemy zapas n |
 | `ILE_DZIEDZIN_NA_PRZEBIEG` | `5` | — |
 | `ZACZYN_CO_DRUGIE_SZUKANIE` | `True` | CO DRUGIE SZUKANIE BEZ ZACZYNU Z KANALOW — 7 wrzesnia 2026. CO ZMIERZYLEM. Wlasciciel: „na koncie zrobila sie monotonia, jak na tablicy oglo |
