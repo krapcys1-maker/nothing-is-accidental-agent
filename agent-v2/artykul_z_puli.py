@@ -1086,6 +1086,12 @@ def _przebieg_sledztwa(conn, run_id: int) -> int:
         print(">> ani nowego ustalenia, ani pelnego obrazu z analiza — artykulu nie"
               " pisze; przeslania ida do notek", flush=True)
         return 1
+    # ARTYKUL ZE SLEDZTWA WYLACZONY, dopoki wlasciciel nie zaakceptuje researchu
+    # (`config.ARTYKUL_ZE_SLEDZTWA`). Katy sa juz w kolejce notek.
+    if not getattr(config, "ARTYKUL_ZE_SLEDZTWA", True):
+        print(">> artykul ze sledztwa wylaczony (config.ARTYKUL_ZE_SLEDZTWA) — historia idzie"
+              " w notkach", flush=True)
+        return 1
     # JEDEN ARTYKUL ZE SLEDZTWA NA TYDZIEN (25.10.2026). Sledztw jest teraz kilka
     # w tygodniu (jeden temat co dwa-trzy dni), a artykul — pelne sledztwo —
     # wychodzi raz; reszta historii zostaje w notkach.

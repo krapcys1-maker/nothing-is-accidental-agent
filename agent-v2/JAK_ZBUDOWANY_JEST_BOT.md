@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **37 plików**, 44 928 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **37 plików**, 44 953 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -114,7 +114,7 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
 się testować bez przeglądarki i bez pieniędzy**. 207 zestawów
-testów, 5434 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+testów, 5436 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -669,7 +669,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-4071 wierszy, 44 funkcji na poziomie modułu, 0 klas
+4077 wierszy, 44 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -850,7 +850,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `sledztwo.py` — śledztwo — historia z radaru, bramka nowości sprawdzana kodem, seria 4–5 kątów (kuriozum, mechanizm, ustalenie, kto płaci, motyw, za dwa lata) i kolejka notek
 
-1207 wierszy, 45 funkcji na poziomie modułu, 0 klas
+1220 wierszy, 45 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -1136,7 +1136,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `artykul_z_puli.py` — artykuł bierze temat z tej samej puli, co notki
 
-1791 wierszy, 15 funkcji na poziomie modułu, 0 klas
+1797 wierszy, 15 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -12012,6 +12012,7 @@ wartosc i komentarz stojacy bezposrednio nad definicja.
 | `NOTE_MIX_ARTICLE_DAY` | `("ARTYKUL", "CIEKAWOSTKA", "SPROSTOWANIE", "` | MIESZANKA DNIA. Ostatnia pozycja to MYSL — notka bez zadnego dowodu. Powod jest w NOTE_TYPES przy samym typie: wszystkie pozostale wymagaja  |
 | `KSZTALTY_MYSLI` | `{ 'PYTANIE': 'Consider a genuine open questi` | KSZTALTY NOTKI TYPU MYSL. Losowane w kodzie i podawane jako PRZYDZIAL. Powod jest zmierzony: opis typu wymienial pytanie i obserwacje jako d |
 | `NOTE_MIX_OTHER_DAY` | `("CIEKAWOSTKA", "DYSKUSJA", "SPROSTOWANIE", ` | TRZY NOTKI NA DOBE ZAMIAST DZIESIECIU — decyzja wlasciciela, 7 wrzesnia 2026. Liczba notek na dobe to DLUGOSC TEJ KROTKI i tylko ona. POWOD  |
+| `ARTYKUL_ZE_SLEDZTWA` | `False` | ARTYKUL ZE SLEDZTWA WYLACZONY (25.10.2026, wlasciciel: „nie pisz artykulow, zanim nie mamy ogarnietego researchu, tematow, pytan (...) na hu |
 | `PISARZE_NOTEK` | `("note",)` | KTO PISZE NOTKI — decyzja wlasciciela z 7 wrzesnia 2026: „zostaw Opusa". Naprzemiennosc weszla 3 wrzesnia jako SLEPA PROBA: polowa notek Opu |
 | `LAJKI_DZIENNIE` | `(0, 0)` | --- zachowanie spoleczne: widelki, nie stale liczby ------------------------- Stala liczba dziennie wyglada jak robot, bo czlowiek nie ma no |
 | `KOMENTARZE_DZIENNIE` | `(14, 20)` | Osiemnascie komentarzy dziennie pod cudzymi tekstami to nie jest tempo czytelnika, tylko podpis bota — i kosztuje najwiecej po pisaniu, bo k |

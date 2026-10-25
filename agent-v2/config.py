@@ -2647,6 +2647,12 @@ def losowy_ksztalt_mysli() -> str:
 # (`sledztwo.PRZESLAN_NA_DOBE`, zastepuja typ miejsca) plus zwykla notka.
 NOTE_MIX_OTHER_DAY = ("CIEKAWOSTKA", "DYSKUSJA", "SPROSTOWANIE", "MYSL")
 
+# ARTYKUL ZE SLEDZTWA WYLACZONY (25.10.2026, wlasciciel: „nie pisz artykulow, zanim nie mamy
+# ogarnietego researchu, tematow, pytan (...) na huj przepalac kase na artykul, zanim bedziemy
+# mieli to"). Sledztwo robi badanie i serie notek; artykul wroci, gdy wlasciciel zaakceptuje
+# jakosc researchu. Artykul z puli (wtorek) dziala jak dotad.
+ARTYKUL_ZE_SLEDZTWA = False
+
 # KTO PISZE NOTKI — decyzja wlasciciela z 7 wrzesnia 2026: „zostaw Opusa".
 #
 # Naprzemiennosc weszla 3 wrzesnia jako SLEPA PROBA: polowa notek Opusem,

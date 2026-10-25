@@ -153,6 +153,16 @@ PYTANIA_PREMIERY = (
     "Does it change the answer to a big open question (for example AI doing original mathematics, or claims "
     "of AGI)? What is the evidence for and against?",
     "What surprising details appear in its model card, system card or safety testing?",
+    # Wlasciciel 25.10.2026, przy premierze Kimi K3.1 Pro: „czy modele open source dogonily
+    # juz zamkniete, co to oznacza dla firm, jak zmieniaja sie sily w wyscigu, jakie beda
+    # ekonomiczne reperkusje, jaki serwer trzeba miec, zeby odpalic to lokalnie, czy firmy
+    # zachodnie moga zaczac wreszcie korzystac z otwartych wag".
+    "If it is an open-weights model: has open AI caught up with the best closed models, and how does that "
+    "shift the balance of power and prices in the AI race?",
+    "What does it mean for companies that build on AI, and what are the economic repercussions?",
+    "What hardware or server would a company or an individual need to run it locally, and at what cost?",
+    "Can Western and regulated companies actually use it (licence, data, security, the developer's country), "
+    "and what holds them back?",
 )
 # DOKUMENT PIERWOTNY ZA KAZDYM KLUCZOWYM TWIERDZENIEM (25.10.2026): w probie o NextDC
 # liczby z testu warunkow skrajnych MFW przyszly z greckiego portalu, a raport Banku Anglii
@@ -187,10 +197,13 @@ def pytania_ciekawosci(conn, run_id, h: dict[str, Any], pytanie: str, ile: int =
                          for w in (h.get("naglowki") or [])[:12])
     prompt = ("Story: %s\nMain question already planned: %s\nHeadlines about it:\n%s\n\n"
               "Write %d questions a smart, curious reader would ask about THIS story that the "
-              "headlines do not already answer — the kind whose answer could surprise: the strangest "
-              "detail, who quietly gains or loses, what an expert would find odd, what it means for an "
-              "ordinary person, whether it is a real breakthrough (for example a step toward AGI). Each "
-              "must be answerable by research, in English, one sentence.\n"
+              "headlines do not already answer — the kind whose answer could surprise. Think through "
+              "these lenses and keep the strongest: the strangest detail; who quietly gains or loses; "
+              "what it means for companies and the economy; how it shifts the balance of power in the AI "
+              "race; what it takes in practice (cost, hardware, skills) to use or copy it; what an expert "
+              "would find odd; what it means for an ordinary person; whether it is a real breakthrough "
+              "(for example a step toward AGI). Each must be answerable by research, in English, one "
+              "sentence.\n"
               "Return {\"pytania\": [\"...\"]}" % (h.get("tytul"), pytanie[:400], naglowki, ile))
     try:
         import llm

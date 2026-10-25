@@ -527,7 +527,7 @@
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-4071 wierszy, 44 funkcji na poziomie modułu, 0 klas
+4077 wierszy, 44 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -708,7 +708,7 @@
 
 ### `sledztwo.py` — śledztwo — historia z radaru, bramka nowości sprawdzana kodem, seria 4–5 kątów (kuriozum, mechanizm, ustalenie, kto płaci, motyw, za dwa lata) i kolejka notek
 
-1207 wierszy, 45 funkcji na poziomie modułu, 0 klas
+1220 wierszy, 45 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -994,7 +994,7 @@
 
 ### `artykul_z_puli.py` — artykuł bierze temat z tej samej puli, co notki
 
-1791 wierszy, 15 funkcji na poziomie modułu, 0 klas
+1797 wierszy, 15 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|

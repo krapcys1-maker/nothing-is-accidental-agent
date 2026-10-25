@@ -638,6 +638,14 @@ sprawdz("artykul ze sledztwa raz na tydzien: limit przed pisaniem, po kolejce ka
 sprawdz("artykul: pelny obraz i JEDNA nasza analiza przy co najmniej czterech katach",
         'analiza_ok = bool(rodzaje & set(sledztwo.ANALIZY)) and len(przes) >= 4' in _art)
 _sl = _art[_art.index("def _przebieg_sledztwa"):]
+sprawdz("artykul ze sledztwa wylaczony (wlasciciel 25.10), wylacznik przed pisaniem, po kolejce katow",
+        config.ARTYKUL_ZE_SLEDZTWA is False
+        and _sl.index("sledztwo.dodaj_do_kolejki") < _sl.index('if not getattr(config, "ARTYKUL_ZE_SLEDZTWA", True):')
+        < _sl.index("kod = _napisz_i_zapisz(conn, run_id, brief, card, evidence)"))
+sprawdz("premiera pyta o dogonienie zamknietych, firmy, sily w wyscigu, sprzet i firmy zachodnie",
+        any("caught up" in q for q in sledztwo.PYTANIA_PREMIERY)
+        and any("hardware" in q for q in sledztwo.PYTANIA_PREMIERY)
+        and any("Western" in q for q in sledztwo.PYTANIA_PREMIERY))
 sprawdz("kazde sledztwo pyta o dokumenty pierwotne i ma 3 rundy dogrywki",
         "pod.append(sledztwo.PYTANIE_PIERWOTNE)" in _sl and "max_rund=sledztwo.RUND_SLEDZTWA" in _sl
         and "pod += sledztwo.pytania_ciekawosci(conn, run_id, wybrana" in _sl
