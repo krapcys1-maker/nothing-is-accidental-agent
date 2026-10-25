@@ -116,8 +116,15 @@ def _klucz(url: Any) -> str:
 # --- historie z radaru --------------------------------------------------------
 
 def historie(korpus: list[dict[str, Any]], conn=None, run_id: int | None = None,
-             ile: int = 5) -> list[dict[str, Any]]:
-    """Grupy naglowkow z radaru: najlepszy naglowek na poczatku, potem warianty."""
+             ile: int | None = None) -> list[dict[str, Any]]:
+    """Grupy naglowkow z radaru: najlepszy naglowek na poczatku, potem warianty.
+
+    WSZYSTKIE HISTORIE RADARU, NIE PIERWSZE PIEC (25.10.2026). Bramka (`ocena_historii`)
+    jest darmowa, a kolejnosc radaru zmienia sie miedzy losowaniami: w jednej probie
+    tego dnia luka PHP2Shell (9 zrodel z 8 serwisow) byla pierwsza, w drugiej spoza
+    piatki — i piec historii z 1-3 serwisami dalo „zadna nie nadaje sie na sledztwo".
+    Kolejnosc zostaje radaru: pierwsza historia, ktora przejdzie bramke, wygrywa.
+    """
     import radar
     grupy: dict[int, dict[str, Any]] = {}
     for w in radar.uporzadkuj(korpus, conn=conn, run_id=run_id) or []:
@@ -134,7 +141,7 @@ def historie(korpus: list[dict[str, Any]], conn=None, run_id: int | None = None,
     wynik = [g for _, g in sorted(grupy.items()) if g["naglowki"]]
     for g in wynik:
         g["tytul"] = str(g["naglowki"][0].get("temat") or "")
-    return wynik[:ile]
+    return wynik[:ile] if ile else wynik
 
 
 def zrodla_historii(h: dict[str, Any]) -> list[dict[str, Any]]:

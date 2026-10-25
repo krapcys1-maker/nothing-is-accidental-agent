@@ -83,6 +83,16 @@ sprawdz("najlepszy naglowek na poczatku, tytul historii z niego",
         hs[0]["tytul"].startswith("Rogue OpenAI") and hs[0]["hak"] == "An agent broke in")
 sprawdz("warianty w historii", len(hs[0]["naglowki"]) == 3, len(hs[0]["naglowki"]))
 sprawdz("KONTRDOWOD: wpis bez radaru nie tworzy historii", all(h["miejsce"] in (1, 2) for h in hs))
+# 25.10.2026: bramka byla tylko dla piatki radaru, a duza historia bywa szosta.
+_siedem = [w("BBC Tech", "https://www.bbc.co.uk/%d" % m, "Story %d" % m, {"miejsce": m, "hak": "", "glebia": ""})
+           for m in range(1, 8)]
+radar.uporzadkuj = lambda korpus, conn=None, run_id=None: list(_siedem)
+try:
+    _hs7 = sledztwo.historie([], conn=None)
+finally:
+    radar.uporzadkuj = _uporzadkuj
+sprawdz("bramka widzi wszystkie historie radaru, nie piec", [h["miejsce"] for h in _hs7] == list(range(1, 8)),
+        [h["miejsce"] for h in _hs7])
 
 print()
 print("=== 2. BRAMKA ===")
