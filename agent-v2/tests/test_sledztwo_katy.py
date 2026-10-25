@@ -74,7 +74,8 @@ sprawdz("ROZLICZENIE nie idzie do planisty (etap 21 poza fala 1), reszta tak",
 _prz = pathlib.Path("agent-v2/prompts/przeslania.md").read_text(encoding="utf-8")
 sprawdz("bez dosłownego „AGI at maths” w opisach katow i w prompcie katow",
         "AGI at maths" not in _menu and "AGI at maths" not in _prz
-        and not any("AGI at maths" in q for q in sledztwo.PYTANIA_PREMIERY))
+        # `PYTANIA_PREMIERY` zniknely z fala 1 (plan robi `sledztwo_plan`) — sprawdzamy prompt planu.
+        and "AGI at maths" not in pathlib.Path("agent-v2/prompts/plan_sledztwa.md").read_text(encoding="utf-8"))
 _NAZWY_Z_PROB = ("Kimi", "Moonshot", "PHP2Shell", "NextDC", "Medicare", "Chainguard", "Willison")
 sprawdz("zadnej nazwy firmy ani historii z prob w promptach i opisach katow",
         not any(n.lower() in t.lower() for n in _NAZWY_Z_PROB for t in (

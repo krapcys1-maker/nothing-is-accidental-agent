@@ -1147,7 +1147,13 @@ def _tekst_z_kanalu(zrodlo: dict) -> str:
             surowy = kk._tresc_z_zapasu(klucz)
             if not surowy:
                 continue
-            korzen = ET.fromstring(surowy.encode("utf-8"))
+            # KAZDY KLUCZ OSOBNO (proba 25.10.2026: „zapas kanalu nieczytelny (ParseError)"
+            # przy 403 z interconnects.ai). Zapis pod sama nazwa bywa nie-XML-em (inny
+            # rodzaj kanalu o tej nazwie) i przerywal cale szukanie, zamiast przejsc dalej.
+            try:
+                korzen = ET.fromstring(surowy.encode("utf-8"))
+            except ET.ParseError:
+                continue
             for e in korzen.findall(".//a:entry", kk.NS) + korzen.findall(".//item"):
                 if _klucz_url(kk._link_wpisu(e)) != cel:
                     continue
