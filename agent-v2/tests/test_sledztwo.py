@@ -650,8 +650,19 @@ sprawdz("artykul ze sledztwa raz na tydzien: limit przed pisaniem, po kolejce ka
         "sledztwo.ile_artykulow(6) >= sledztwo.ARTYKULOW_NA_TYDZIEN" in _art
         and _art.index("sledztwo.dodaj_do_kolejki") < _art.index("sledztwo.ile_artykulow(6) >= sledztwo.ARTYKULOW")
         < _art.index("kod = _napisz_i_zapisz(conn, run_id, brief, card, evidence)"))
-sprawdz("artykul: pelny obraz i JEDNA nasza analiza przy co najmniej czterech katach",
-        'analiza_ok = bool(rodzaje & set(sledztwo.ANALIZY)) and len(przes) >= 4' in _art)
+sprawdz("artykul tylko o temacie dosc duzym (sledztwo.temat_na_artykul), liczba katow z wielkosci",
+        "art_ok, art_powod = sledztwo.temat_na_artykul(wybrana, card, nowe, przes)" in _art
+        and "_ile = sledztwo.ile_katow(wybrana, card)" in _art)
+_k8 = {"confirmed_claims": [{"claim": "c%d" % i, "url": "https://s%d.example/x" % (i % 5)} for i in range(12)]}
+_k4 = {"confirmed_claims": [{"claim": "c%d" % i, "url": "https://s%d.example/x" % i} for i in range(5)]}
+sprawdz("ile katow: duzy temat 6, sredni 5, ubogi 3",
+        sledztwo.ile_katow({"serwisy": 9}, _k8) == 6 and sledztwo.ile_katow({"serwisy": 5}, _k8) == 5
+        and sledztwo.ile_katow({"serwisy": 9}, _k4) == 3)
+_katy4 = [{"rodzaj": r} for r in ("KURIOZUM", "MECHANIZM", "USTALENIE", "MOTYW")]
+sprawdz("temat na artykul: szeroki zasieg + pelny obraz + analiza; maly zasieg nie; ustalenie zawsze",
+        sledztwo.temat_na_artykul({"serwisy": 6}, _k8, {}, _katy4)[0]
+        and not sledztwo.temat_na_artykul({"serwisy": 4}, _k8, {}, _katy4)[0]
+        and sledztwo.temat_na_artykul({"serwisy": 4}, _k4, {"jest": True}, _katy4[:2])[0])
 _sl = _art[_art.index("def _przebieg_sledztwa"):]
 sprawdz("kazde sledztwo pyta o dokumenty pierwotne i ma 3 rundy dogrywki",
         "pod.append(sledztwo.PYTANIE_PIERWOTNE)" in _sl and "max_rund=sledztwo.RUND_SLEDZTWA" in _sl
@@ -662,7 +673,7 @@ sprawdz("kazde sledztwo pyta o dokumenty pierwotne i ma 3 rundy dogrywki",
 sprawdz("przebieg: wybor duzego tematu, pytania premiery, glosy HN i cennik w korpusie, typ do pisarza",
         "sledztwo.wybierz_historie(historie" in _art and "pod += list(sledztwo.PYTANIA_PREMIERY)" in _art
         and "sledztwo.glosy_hn(_zapytanie, klucze=" in _art and "sledztwo.cennik_openrouter(_zapytanie)" in _art
-        and 'card["investigation_type"]' in _art and "przeslania(conn, run_id, card, dossier, wybrana, typ=typ)" in _art
+        and 'card["investigation_type"]' in _art and "przeslania(conn, run_id, card, dossier, wybrana, typ=typ, ile=_ile)" in _art
         and _sl.index("corpus = stages.fetch(conn, run_id, zrodla)") < _sl.index("sledztwo.glosy_hn(_zapytanie, klucze=")
         < _sl.index("evidence = stages.classify("))
 sprawdz("pisarz notki dostaje wczesniejsze katy w prompcie",

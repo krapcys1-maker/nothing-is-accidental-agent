@@ -708,7 +708,7 @@
 
 ### `sledztwo.py` — śledztwo — historia z radaru, bramka nowości sprawdzana kodem, seria 4–5 kątów (kuriozum, mechanizm, ustalenie, kto płaci, motyw, za dwa lata) i kolejka notek
 
-1227 wierszy, 45 funkcji na poziomie modułu, 0 klas
+1262 wierszy, 47 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -742,10 +742,12 @@
 | `_znaczniki(tekst)` *(wewn.)* | Daty (miesiac + dzien albo sam miesiac) i liczby z tekstu, w jednej postaci. |
 | `w_jednym_zrodle(ustalenie, teksty)` | Adres zrodla, ktore samo zawiera wszystkie daty i liczby ustalenia, albo pusto. |
 | `nowosc(conn, run_id, card, h, teksty_zrodel)` | Czy laczenie zrodel ustalilo cos, czego nie mowi zadne z nich. |
+| `ile_katow(h, card)` | Ile notek uniesie ten temat (25.10.2026, wlasciciel: „pomysl, ile notek z jednego |
+| `temat_na_artykul(h, card, nowe, przes)` | Czy temat jest dosc duzy na artykul (wlasciciel 25.10.2026: „czy temat jest |
 | `pelny_obraz(card, min_twierdzen, min_serwisow)` | Czy karta daje czytelnikowi pelny obraz historii: dosc potwierdzonych |
 | `_hipotezy_do_promptu(dossier)` *(wewn.)* | — |
 | `_katy_do_promptu(zestaw)` *(wewn.)* | — |
-| `przeslania(conn, run_id, card, dossier, h, typ)` | Seria notek o jednej historii: 4-5 katow z zestawu typu (`ZESTAWY_KATOW`) — |
+| `przeslania(conn, run_id, card, dossier, h, typ, ile)` | Seria notek o jednej historii: `ile` katow (`ile_katow`: wielkosc tematu) z zestawu |
 | `zapisz_sledztwo(rekord)` | Jedna linia na sledztwo — pamiec dla bramki i limitow. Nigdy nie wywala. |
 | `oznacz_artykul(run_id)` | Artykul ze sledztwa z tego przebiegu wyszedl — liczy sie do limitu tygodnia. |
 | `_kolejka()` *(wewn.)* | — |
@@ -994,7 +996,7 @@
 
 ### `artykul_z_puli.py` — artykuł bierze temat z tej samej puli, co notki
 
-1794 wierszy, 15 funkcji na poziomie modułu, 0 klas
+1798 wierszy, 15 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|

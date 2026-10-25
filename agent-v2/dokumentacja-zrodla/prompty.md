@@ -151,7 +151,7 @@
 {{"poprawki": [{{"nr": <sentence number>, "nowe": "<replacement sentence, unchanged if it is our opinion, or empty to delete>"}}]}}
 ```
 
-#### `notka.md` (144 wierszy)
+#### `notka.md` (146 wierszy)
 
 **Pola wejściowe:** `evidence`, `form_brief`, `language`, `marka`, `max_words`, `min_words`, `note_form`, `note_type`, `ostatnie_otwarcia_json`, `ostatnie_zakonczenia_json`, `rozbior`, `type_brief`
 
@@ -225,14 +225,14 @@
 {{"powtorka_nr": <number of the bank fact it repeats, or 0 if none>, "powod": "<one short sentence>"}}
 ```
 
-#### `przeslania.md` (57 wierszy)
+#### `przeslania.md` (68 wierszy)
 
-**Pola wejściowe:** `hipotezy`, `karta`, `katy`, `marka`, `rodzaje`
+**Pola wejściowe:** `hipotezy`, `ile`, `karta`, `katy`, `marka`, `rodzaje`
 
 **Kontrakt wyjścia:**
 
 ```json
-{{"przeslania": [{{"rodzaj": {rodzaje}, "przeslanie": "<the one-sentence message of this note>", "hak": "<the concrete checked detail the note opens with>", "tresc": "<2-4 sentences of reasoning the writer should convey, in plain words>", "fakty": [<claim numbers>], "zalozenie": "<for our view: the assumption it rests on, one clause; empty for a fact angle>", "za": "<the evidence for this reading>", "przeciw": "<optional: a serious objection>", "co_obali": "<optional: what would prove this wrong>", "pominac": false, "powod": ""}}]}}
+{{"przeslania": [{{"rodzaj": {rodzaje}, "przeslanie": "<the one-sentence message of this note>", "naglowek": "<the first line that makes a scrolling reader stop>", "hak": "<the concrete checked detail the note opens with>", "tresc": "<2-4 sentences of reasoning the writer should convey, in plain words>", "fakty": [<claim numbers>], "zalozenie": "<for our view: the assumption it rests on, one clause; empty for a fact angle>", "za": "<the evidence for this reading>", "przeciw": "<optional: a serious objection>", "co_obali": "<optional: what would prove this wrong>", "pominac": false, "powod": ""}}]}}
 ```
 
 #### `radar.md` (40 wierszy)

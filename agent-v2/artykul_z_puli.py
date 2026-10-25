@@ -1012,7 +1012,10 @@ def _przebieg_sledztwa(conn, run_id: int) -> int:
 
     print()
     print("-- klasyfikacja --", flush=True)
-    evidence = stages.classify(conn, run_id, brief["question"], corpus)
+    # TRAFNOSC WZGLEDEM WSZYSTKICH PYTAN SLEDZTWA, nie samego glownego (25.10.2026): w probie
+    # o Kimi K3.1 Pro pytanie glowne bylo o benchmarkach i klasyfikacja wyrzucila cennik
+    # (trafnosc 0,10) oraz watek Hacker News — zniknely cena i opinie ludzi, a z nimi katy.
+    evidence = stages.classify(conn, run_id, pytanie, corpus)
     print("\n-- sledztwo: hipotezy i brakujace odpowiedzi --", flush=True)
     evidence, dossier = research.deepen(conn, run_id, pytanie, evidence, corpus,
                                         max_rund=sledztwo.RUND_SLEDZTWA)
@@ -1050,7 +1053,11 @@ def _przebieg_sledztwa(conn, run_id: int) -> int:
                         nowe.get("ustalenie") or nowe.get("powod")), flush=True)
     print()
     print("-- katy serii --", flush=True)
-    przes = sledztwo.przeslania(conn, run_id, card, dossier, wybrana, typ=typ)
+    # ILE NOTEK UNIESIE TEMAT — wielkosc i bogactwo karty (`sledztwo.ile_katow`).
+    _ile = sledztwo.ile_katow(wybrana, card)
+    print("  katow dla tego tematu: %d (zasieg %s, twierdzen %d)" % (
+        _ile, wybrana.get("serwisy"), len(sledztwo._twierdzenia(card))), flush=True)
+    przes = sledztwo.przeslania(conn, run_id, card, dossier, wybrana, typ=typ, ile=_ile)
     for p in przes:
         print("  [%s] %s" % (p["rodzaj"], p["przeslanie"]), flush=True)
     if na_serio:
@@ -1078,16 +1085,13 @@ def _przebieg_sledztwa(conn, run_id: int) -> int:
     # pelny obraz (8 twierdzen z 5 serwisow) i piec katow, w tym ustalenie, ze AI
     # nie znalazlo nowego bledu, tylko domknelo teorie z 2024 — a motywu karta nie
     # niosla, wiec stary warunek (motyw I scenariusz) nie wpuscilby artykulu.
-    obraz_ok, obraz_opis = sledztwo.pelny_obraz(card)
-    rodzaje = {p["rodzaj"] for p in przes}
-    analiza_ok = bool(rodzaje & set(sledztwo.ANALIZY)) and len(przes) >= 4
-    print("  pelny obraz: %s (%s); nasze analizy: %s"
-          % ("TAK" if obraz_ok else "NIE", obraz_opis,
-             "TAK" if analiza_ok else "NIE (%s)" % ", ".join(sorted(rodzaje)) or "brak"),
-          flush=True)
-    if not nowe.get("jest") and not (obraz_ok and analiza_ok):
-        print(">> ani nowego ustalenia, ani pelnego obrazu z analiza — artykulu nie"
-              " pisze; przeslania ida do notek", flush=True)
+    #
+    # 25.10.2026 (wlasciciel: „czy temat jest wystarczajaco duzy na artykul"): do tego
+    # zasieg co najmniej `sledztwo.MIN_ZASIEG_ARTYKULU` wydawcow — `temat_na_artykul`.
+    art_ok, art_powod = sledztwo.temat_na_artykul(wybrana, card, nowe, przes)
+    print("  temat na artykul: %s (%s)" % ("TAK" if art_ok else "NIE", art_powod), flush=True)
+    if not art_ok:
+        print(">> temat za maly albo za ubogi na artykul — historia idzie w notkach", flush=True)
         return 1
     # JEDEN ARTYKUL ZE SLEDZTWA NA TYDZIEN (25.10.2026). Sledztw jest teraz kilka
     # w tygodniu (jeden temat co dwa-trzy dni), a artykul — pelne sledztwo —

@@ -72,9 +72,11 @@ The evidence may carry `perspective` and `investigation`: one angle
 (`perspective.rodzaj`) of a story we investigated, with the claims it stands
 on. Other notes cover other angles of the same story on other days, but this
 one must stand alone: a reader who sees only it gets a complete point. Don't
-number it, mention a series or promise more. Open with the concrete detail in
-`perspective.hak`, in plain words, deliver `perspective.przeslanie`, and end on
-what it means for someone. Skip the background a headline already gave. A
+number it, mention a series or promise more. Open with `perspective.naglowek`
+when it is given — the line chosen to make a scrolling reader stop; you may
+tighten it but keep its surprise — then the concrete detail in `perspective.hak`
+in plain words, deliver `perspective.przeslanie`, and end on what it means for
+someone. Skip the background a headline already gave. A
 finding is stated plainly, with its sources. A motive, a two-year call or a
 verdict on the big question is OUR view: say it with conviction, the way a
 writer with an opinion would ("Our bet:", "This is what AGI at maths looks

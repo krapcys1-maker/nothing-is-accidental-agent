@@ -937,6 +937,41 @@ def nowosc(conn, run_id, card: dict[str, Any], h: dict[str, Any],
             "powod": " ".join(str(dane.get("dlaczego_nie_w_jednym") or "").split())[:300]}
 
 
+def ile_katow(h: dict[str, Any], card: dict[str, Any]) -> int:
+    """Ile notek uniesie ten temat (25.10.2026, wlasciciel: „pomysl, ile notek z jednego
+    tematu"): maly temat nie ma szesciu stron, duzy nie zmiesci sie w trzech. Liczy sie
+    zasieg (ilu wydawcow) i to, ile potwierdzonych twierdzen dala karta.
+    """
+    tw, z = len(_twierdzenia(card)), int(h.get("serwisy") or zasieg_historii(h))
+    if tw >= 12 and z >= 8:
+        return 6
+    if tw >= 8 and z >= 5:
+        return 5
+    if tw >= 6:
+        return 4
+    return 3
+
+
+# Artykul tylko o temacie dosc duzym: tylu wydawcow (bez przedrukow, z YouTube).
+MIN_ZASIEG_ARTYKULU = 5
+
+
+def temat_na_artykul(h: dict[str, Any], card: dict[str, Any], nowe: dict[str, Any],
+                     przes: list[dict[str, Any]]) -> tuple[bool, str]:
+    """Czy temat jest dosc duzy na artykul (wlasciciel 25.10.2026: „czy temat jest
+    wystarczajaco duzy na artykul"). Tak, gdy laczenie zrodel cos ustalilo, albo gdy jest
+    szeroki zasieg, pelny obraz w karcie, nasza analiza i co najmniej 4 katy."""
+    z = int(h.get("serwisy") or zasieg_historii(h))
+    obraz_ok, obraz_opis = pelny_obraz(card)
+    analiza = bool({p["rodzaj"] for p in przes} & set(ANALIZY))
+    if nowe.get("jest"):
+        return True, "nowe ustalenie z zestawienia zrodel; zasieg %d" % z
+    if z >= MIN_ZASIEG_ARTYKULU and obraz_ok and analiza and len(przes) >= 4:
+        return True, "zasieg %d wydawcow, %s, %d katow z analiza" % (z, obraz_opis, len(przes))
+    return False, "zasieg %d (prog %d), %s, analiza %s, katow %d" % (
+        z, MIN_ZASIEG_ARTYKULU, obraz_opis, "tak" if analiza else "nie", len(przes))
+
+
 def pelny_obraz(card: dict[str, Any], min_twierdzen: int = 8, min_serwisow: int = 4) -> tuple[bool, str]:
     """Czy karta daje czytelnikowi pelny obraz historii: dosc potwierdzonych
     twierdzen z dosc roznych serwisow. Artykul ze sledztwa bez nowego ustalenia
@@ -970,14 +1005,14 @@ def _katy_do_promptu(zestaw: tuple[str, ...]) -> str:
 
 
 def przeslania(conn, run_id, card: dict[str, Any], dossier: dict[str, Any] | None,
-               h: dict[str, Any], typ: str = "sledztwo") -> list[dict[str, Any]]:
-    """Seria notek o jednej historii: 4-5 katow z zestawu typu (`ZESTAWY_KATOW`) —
-    albo mniej, gdy karta ktoregos nie uniesie.
+               h: dict[str, Any], typ: str = "sledztwo", ile: int = MAKS_PRZESLAN) -> list[dict[str, Any]]:
+    """Seria notek o jednej historii: `ile` katow (`ile_katow`: wielkosc tematu) z zestawu
+    typu (`ZESTAWY_KATOW`) — albo mniej, gdy karta ktoregos nie uniesie.
 
     KOD ODRZUCA: rodzaj spoza zestawu, przeslanie bez tresci, przeslanie bez
     numerow twierdzen karty, kat bez haka (konkretnego szczegolu na otwarcie).
     Analiza NIE musi miec dowodu przeciw (wlasciciel 25.10.2026 — patrz `ANALIZY`).
-    Ponad `MAKS_PRZESLAN` odpada kat faktow z najmniejsza liczba twierdzen. Oddaje
+    Ponad `ile` odpada kat faktow z najmniejsza liczba twierdzen. Oddaje
     katy w kolejnosci publikacji. Nigdy nie podnosi wyjatku.
     """
     zestaw = ZESTAWY_KATOW.get(typ) or RODZAJE
@@ -990,7 +1025,7 @@ def przeslania(conn, run_id, card: dict[str, Any], dossier: dict[str, Any] | Non
         prompt = stages._prompt("przeslania.md", karta=_karta_do_promptu(card),
                                 hipotezy=_hipotezy_do_promptu(dossier),
                                 katy=_katy_do_promptu(zestaw),
-                                rodzaje="|".join('"%s"' % r for r in zestaw))
+                                rodzaje="|".join('"%s"' % r for r in zestaw), ile=ile)
         try:
             dane = llm.parse_json(llm.call("przeslania", PRZESLANIA_SYSTEM, prompt,
                                            conn=conn, run_id=run_id))
@@ -1011,7 +1046,7 @@ def przeslania(conn, run_id, card: dict[str, Any], dossier: dict[str, Any] | Non
             continue
         rodzaj = str(p.get("rodzaj") or "").upper()
         tekst = {k: " ".join(str(p.get(k) or "").split()) for k in
-                 ("przeslanie", "tresc", "hak", "zalozenie", "za", "przeciw", "co_obali")}
+                 ("przeslanie", "naglowek", "tresc", "hak", "zalozenie", "za", "przeciw", "co_obali")}
         nr = []
         for x in p.get("fakty") or []:
             try:
@@ -1032,12 +1067,12 @@ def przeslania(conn, run_id, card: dict[str, Any], dossier: dict[str, Any] | Non
                     "fakty": [{k: twierdzenia[i - 1].get(k) for k in ("claim", "evidence", "url")}
                               for i in nr]})
     out.sort(key=lambda p: zestaw.index(p["rodzaj"]))
-    while len(out) > MAKS_PRZESLAN:
+    while len(out) > ile:
         # Przy remisie odpada pozniejszy kat: `min` bierze pierwszy z odwroconej listy.
         faktow = [p for p in out if p["rodzaj"] in KATY_FAKTOW] or out
         slaby = min(reversed(faktow), key=lambda p: len(p["fakty"]))
         out.remove(slaby)
-        odrzucone.append("%s: ponad %d katow" % (slaby["rodzaj"], MAKS_PRZESLAN))
+        odrzucone.append("%s: ponad %d katow" % (slaby["rodzaj"], ile))
     print("  [sledztwo] przeslania: %s%s" % (
         ", ".join(p["rodzaj"] for p in out) or "zadne",
         (" (odrzucone: %s)" % "; ".join(odrzucone)) if odrzucone else ""), flush=True)
@@ -1102,7 +1137,7 @@ def dodaj_do_kolejki(lista: list[dict[str, Any]], h: dict[str, Any], card: dict[
             "kategoria": h.get("kategoria") or "", "typ_sledztwa": typ_sledztwa(h.get("kategoria")),
             "wazny_do": (teraz + timedelta(days=WAZNOSC_PRZESLANIA_DNI)).isoformat(),
             "styk": naj.get("styk") or "branza", "radar_miejsce": h.get("miejsce"),
-            "perspektywa": {k: p.get(k) for k in ("rodzaj", "przeslanie", "tresc", "hak",
+            "perspektywa": {k: p.get(k) for k in ("rodzaj", "przeslanie", "naglowek", "tresc", "hak",
                                                    "zalozenie", "za", "przeciw", "co_obali")},
             "fakty": p.get("fakty") or [],
             "teza_sledztwa": " ".join(str(card.get("working_thesis") or "").split())[:700],
