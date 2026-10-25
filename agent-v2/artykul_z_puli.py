@@ -942,14 +942,20 @@ def _przebieg_sledztwa(conn, run_id: int) -> int:
         return 1
     historie = sledztwo.historie(korpus_kanalow.korpus_kanalow(400),
                                  conn=conn, run_id=run_id)
-    wybrana = None
-    for h in historie:
-        ok, powod = sledztwo.ocena_historii(h)
-        print("  [radar %d] %s — %s" % (h["miejsce"], h["tytul"][:80], powod),
-              flush=True)
-        if ok:
-            wybrana = h
-            break
+    # NAJWIEKSZA HISTORIA, NIE PIERWSZA Z RADARU (25.10.2026) — `sledztwo.wybierz_historie`:
+    # wielkosc (niezalezne serwisy) x waga kategorii z badania klikalnosci x kara za
+    # powtorke dziedziny.
+    wybrana, ranking = sledztwo.wybierz_historie(historie, conn=conn, run_id=run_id)
+    for r in ranking:
+        print("  [radar %d] %s — %s%s" % (
+            r["miejsce"], str(r["tytul"])[:80], r["powod"],
+            ("; %s, wynik %.2f%s" % (r.get("kategoria") or "?", r["wynik"],
+                                     " (kara: ta sama dziedzina niedawno)" if r.get("kara") else ""))
+            if "wynik" in r else ""), flush=True)
+    if wybrana is not None:
+        print("  WYBRANA: [radar %d] %s — %s, %d serwisow, wynik %.2f" % (
+            wybrana["miejsce"], wybrana["tytul"][:80], wybrana.get("kategoria") or "?",
+            wybrana["serwisy"], wybrana["wynik_wyboru"]), flush=True)
     if wybrana is None:
         print(">> zadna historia z czolowki radaru nie nadaje sie na sledztwo",
               flush=True)
@@ -959,10 +965,15 @@ def _przebieg_sledztwa(conn, run_id: int) -> int:
     for z in zrodla:
         print("    - %s | %s" % (z["publisher"], z["title"][:90]), flush=True)
 
+    typ = sledztwo.typ_sledztwa(wybrana.get("kategoria"))
     brief = temat_z_faktu(conn, run_id, sledztwo.fakt_z_historii(wybrana))
     print()
-    print("  PYTANIE: %s" % brief.get("question"), flush=True)
+    print("  TYP: %s | PYTANIE: %s" % (typ, brief.get("question")), flush=True)
     pod = [q for q in (brief.get("sub_questions") or []) if str(q).strip()]
+    # PREMIERA MODELU: benchmarki z niezaleznymi ocenami, testy ludzi, cena, wielkie
+    # pytanie, smaczki z karty modelu — badanie szuka odpowiedzi na kazde z nich.
+    if typ == "premiera":
+        pod += list(sledztwo.PYTANIA_PREMIERY)
     for q in pod:
         print("    - %s" % str(q)[:110], flush=True)
     pytanie = brief["question"] + (
@@ -972,6 +983,12 @@ def _przebieg_sledztwa(conn, run_id: int) -> int:
     print()
     print("-- pobieranie zrodel historii --", flush=True)
     corpus = stages.fetch(conn, run_id, zrodla)
+    # GLOSY LUDZI I CENA (25.10.2026): watki Hacker News o tej sprawie (opinie, tak
+    # podpisane) i — przy premierze — cennik OpenRouter. Darmowe, bez klucza.
+    _zapytanie = wybrana.get("zapytanie") or ""
+    corpus = corpus + sledztwo.glosy_hn(_zapytanie)
+    if typ == "premiera":
+        corpus = corpus + sledztwo.cennik_openrouter(_zapytanie)
     _z_trescia = [c for c in corpus if c.get("text")]
     _pierwotnych = sum(1 for c in _z_trescia if c.get("class") == "PRIMARY")
     if _pierwotnych < config.MIN_PRIMARY_SOURCES:
@@ -1024,7 +1041,7 @@ def _przebieg_sledztwa(conn, run_id: int) -> int:
                         nowe.get("ustalenie") or nowe.get("powod")), flush=True)
     print()
     print("-- katy serii --", flush=True)
-    przes = sledztwo.przeslania(conn, run_id, card, dossier, wybrana)
+    przes = sledztwo.przeslania(conn, run_id, card, dossier, wybrana, typ=typ)
     for p in przes:
         print("  [%s] %s" % (p["rodzaj"], p["przeslanie"]), flush=True)
     if na_serio:
@@ -1035,6 +1052,8 @@ def _przebieg_sledztwa(conn, run_id: int) -> int:
             "zrodla": sorted({sledztwo._klucz(z["url"]) for z in zrodla}),
             "pytanie": brief.get("question"), "nowosc": nowe,
             "przeslania": [p["rodzaj"] for p in przes],
+            "kategoria": wybrana.get("kategoria") or "", "typ": typ,
+            "serwisy": wybrana.get("serwisy"), "wynik_wyboru": wybrana.get("wynik_wyboru"),
             "artykul_opublikowany": False})
     else:
         print("  (bez --wyslij: przeslania NIE ida do kolejki notek)", flush=True)
@@ -1052,7 +1071,7 @@ def _przebieg_sledztwa(conn, run_id: int) -> int:
     # niosla, wiec stary warunek (motyw I scenariusz) nie wpuscilby artykulu.
     obraz_ok, obraz_opis = sledztwo.pelny_obraz(card)
     rodzaje = {p["rodzaj"] for p in przes}
-    analiza_ok = bool(rodzaje & {"MOTYW", "ZA_DWA_LATA"}) and len(przes) >= 4
+    analiza_ok = bool(rodzaje & set(sledztwo.ANALIZY)) and len(przes) >= 4
     print("  pelny obraz: %s (%s); nasze analizy: %s"
           % ("TAK" if obraz_ok else "NIE", obraz_opis,
              "TAK" if analiza_ok else "NIE (%s)" % ", ".join(sorted(rodzaje)) or "brak"),
@@ -1077,8 +1096,9 @@ def _przebieg_sledztwa(conn, run_id: int) -> int:
             "claims": [twierdzenia[i - 1].get("claim") for i in nowe.get("twierdzenia") or []
                        if 1 <= i <= len(twierdzenia)]}
     card["editorial_hypotheses"] = [
-        {k: p.get(k) for k in ("rodzaj", "przeslanie", "tresc", "za", "przeciw", "co_obali")}
-        for p in przes if p["rodzaj"] in ("MOTYW", "ZA_DWA_LATA")]
+        {k: p.get(k) for k in ("rodzaj", "przeslanie", "tresc", "zalozenie", "za", "przeciw", "co_obali")}
+        for p in przes if p["rodzaj"] in sledztwo.ANALIZY]
+    card["investigation_type"] = "model_release" if typ == "premiera" else "investigation"
     # WSZYSTKIE KATY SERII DO ARTYKULU — artykul ma byc pelnym sledztwem
     # (`prompts/pisarz.md`, „investigation_angles"), nie streszczeniem karty.
     card["investigation_angles"] = [

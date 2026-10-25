@@ -58,9 +58,36 @@ rather than background, and make the question the piece answers clear early.
 Show the sequence of events where the order matters, explain the mechanism in
 plain words, make the stakes concrete (who pays, how much, where the card says),
 and set what the actors said beside what they did. Give the motive and the
-scenario as labelled analysis. Close with what is still unknown and what would
-settle it (`not_established`). These are materials, not a required outline:
+scenario as labelled analysis. These are materials, not a required outline:
 merge, reorder or drop an angle that does not earn its place.
+
+When `investigation_type` is `model_release`, the angles are a model launch:
+the telling detail (SMACZEK), claimed versus measured benchmarks (LICZBY), what
+hands-on testers and practitioners found (TEST), the big question (WIELKIE_PYTANIE),
+who gains and what it costs (KTO_ZYSKA), what it leads to (CO_Z_TEGO). Put the
+developer's own scores next to independent ones and say which is which; explain
+what each test measures in a sentence a non-engineer can repeat; give the price
+in human terms; include at least one place where it failed or disappointed;
+attribute reader comments as opinions. Answer the big question with a verdict:
+if it looks like AGI at maths, or like the end of some job, say so and argue
+it, using the human baseline and test conditions from the card as evidence.
+
+Write it like the best AI writers: with a point of view. Take a side, make the
+call, reason from a named assumption where the evidence stops short. Not
+everything has to be proven; the reader must only be able to tell which part
+is fact and which is our view.
+
+End an investigation article with two short parts under plain-text
+subheadings, after the body:
+- "Our conclusion": what we think this story really shows, in two to four
+  confident sentences. Add the strongest objection in one sentence only if it
+  is serious.
+- "What this could lead to": two or three bold, concrete calls for the next
+  year or two (who wins, what changes, what people will do differently), each
+  with the assumption it rests on, then the one open question that matters
+  most (`not_established`).
+These are our own view, labelled as such; facts in them still come only from
+the card.
 
 One claim may carry `"not_fetched": true`. That is the fact this article was
 commissioned from, and its `evidence` is not a passage lifted from a document we

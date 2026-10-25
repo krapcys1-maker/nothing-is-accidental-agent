@@ -230,8 +230,11 @@ try:
     sprawdz("zostaja: ustalenie, drugi motyw (pierwszy bez dowodu przeciw), scenariusz z faktami"
             " — w kolejnosci publikacji, nie odpowiedzi modelu",
             rodzaje == ["USTALENIE", "MOTYW", "ZA_DWA_LATA"], rodzaje)
-    sprawdz("KONTRDOWOD: motyw bez dowodu przeciw odrzucony (log)",
-            "motyw bez dowodu przeciw" in _log.getvalue(), _log.getvalue())
+    # 25.10.2026 (wlasciciel: „mamy byc wyrazisci, nie wszystko musi byc na 100% udowodnione"):
+    # analiza bez dowodu przeciw PRZECHODZI — drugi motyw odpada juz jako powtorka.
+    sprawdz("motyw bez dowodu przeciw PRZYJETY (wyrazistosc), drugi motyw to powtorka",
+            [p["przeslanie"] for p in pr if p["rodzaj"] == "MOTYW"] == ["They let victims decide publicity."]
+            and "analiza bez dowodu przeciw" not in _log.getvalue(), _log.getvalue())
     sprawdz("scenariusz bez twierdzen karty odrzucony", "bez twierdzen karty" in _log.getvalue())
     sprawdz("powtorzony rodzaj odrzucony z nazwanym powodem", "powtorzony rodzaj" in _log.getvalue())
     sprawdz("KONTRDOWOD: kat bez haka (konkretnego szczegolu na otwarcie) odrzucony",
@@ -274,9 +277,146 @@ try:
         sprawdz("KONTRDOWOD: gdy odmowi tez zapas — pusto, bez wyjatku",
                 sledztwo.przeslania(sqlite3.connect(":memory:"), None, KARTA, {}, DUZA) == [])
     llm.call = lambda purpose, system, user, **kw: json.dumps(ODP[purpose])
-    sprawdz("kazdy rodzaj ma typ notki, a kolejnosc zaczyna od kuriozum",
-            set(sledztwo.TYP_NOTKI) == set(sledztwo.RODZAJE) and sledztwo.RODZAJE[0] == "KURIOZUM"
-            and sledztwo.RODZAJE[-2:] == ("MOTYW", "ZA_DWA_LATA"))
+    sprawdz("kazdy rodzaj obu zestawow ma typ notki i opis, kolejnosc zaczyna od haka, konczy analiza",
+            set(sledztwo.TYP_NOTKI) == set(sledztwo.RODZAJE) | set(sledztwo.RODZAJE_PREMIERY)
+            == set(sledztwo.OPISY_KATOW) and sledztwo.RODZAJE[0] == "KURIOZUM"
+            and sledztwo.RODZAJE_PREMIERY[0] == "SMACZEK"
+            and sledztwo.RODZAJE[-2:] == ("MOTYW", "ZA_DWA_LATA")
+            and sledztwo.RODZAJE_PREMIERY[-1] == "CO_Z_TEGO")
+
+    print()
+    print("=== 4b. PREMIERA MODELU: WLASNY ZESTAW KATOW (25.10.2026) ===")
+    PROMPTY_KATOW = []
+
+    def _premiera(purpose, system, user, **kw):
+        PROMPTY_KATOW.append(user)
+        return json.dumps({"przeslania": [
+            {"rodzaj": "KURIOZUM", "przeslanie": "Not in this set.", "tresc": "x", "hak": "y", "fakty": [1]},
+            {"rodzaj": "WIELKIE_PYTANIE", "przeslanie": "Is it AGI at maths?", "tresc": "x", "hak": "a score",
+             "fakty": [1], "za": "score", "przeciw": "", "co_obali": "c"},
+            {"rodzaj": "CO_Z_TEGO", "przeslanie": "Cheaper proofs.", "tresc": "x", "hak": "price", "fakty": [2],
+             "za": "a", "przeciw": "b", "co_obali": ""},
+            {"rodzaj": "LICZBY", "przeslanie": "Claimed 70, measured 52.", "tresc": "x", "hak": "70 vs 52",
+             "fakty": [1, 2], "za": "", "przeciw": "", "co_obali": ""},
+            {"rodzaj": "SMACZEK", "przeslanie": "It refused its own test.", "tresc": "x", "hak": "system card 4.2",
+             "fakty": [3]}]})
+    llm.call = _premiera
+    with contextlib.redirect_stdout(io.StringIO()) as _log:
+        _pr_p = sledztwo.przeslania(sqlite3.connect(":memory:"), None, KARTA, {}, DUZA, typ="premiera")
+    sprawdz("premiera: zostaja katy premiery w jej kolejnosci, analizy bez „przeciw” tez",
+            [p["rodzaj"] for p in _pr_p] == ["SMACZEK", "LICZBY", "WIELKIE_PYTANIE", "CO_Z_TEGO"],
+            [p["rodzaj"] for p in _pr_p])
+    sprawdz("KONTRDOWOD: kat zwyklego sledztwa w premierze odrzucony",
+            "nieznany rodzaj 'KURIOZUM'" in _log.getvalue(), _log.getvalue())
+    _prompty = {n: pathlib.Path("agent-v2/prompts/%s" % n).read_text(encoding="utf-8")
+                for n in ("przeslania.md", "notka.md", "pisarz.md")}
+    sprawdz("prompty kaza miec zdanie i nie zakazuja werdyktu AGI",
+            "Have opinions" in _prompty["przeslania.md"] and "Have a point of view" in _prompty["notka.md"]
+            and "point of view" in _prompty["pisarz.md"]
+            and not any("Never declare AGI" in t for t in _prompty.values())
+            and "If it looks like AGI at maths" in sledztwo.OPISY_KATOW["WIELKIE_PYTANIE"])
+    sprawdz("granica zostaje: fakty tylko z karty",
+            "facts (numbers, quotes, people, dates, events) come only" in _prompty["przeslania.md"])
+    sprawdz("prompt premiery opisuje jej katy, nie katy sledztwa",
+            PROMPTY_KATOW and "LICZBY" in PROMPTY_KATOW[-1] and "claimed versus measured" in PROMPTY_KATOW[-1]
+            and "KURIOZUM —" not in PROMPTY_KATOW[-1] and '"SMACZEK"|"LICZBY"' in PROMPTY_KATOW[-1])
+    sprawdz("typ sledztwa z kategorii", sledztwo.typ_sledztwa("PREMIERA_MODELU") == "premiera"
+            and sledztwo.typ_sledztwa("PRACA_EKONOMIA") == "sledztwo" and sledztwo.typ_sledztwa(None) == "sledztwo")
+
+    print()
+    print("=== 4c. DUZY TEMAT: WIELKOSC x WAGA KATEGORII x KARA ZA POWTORKE ===")
+
+    def _hist(m, tytul, hosty):
+        return {"miejsce": m, "tytul": tytul, "hak": "", "glebia": "", "naglowki": [
+            w("K%d" % i, "https://%s/%d/%d" % (h, m, i), "%s %d" % (tytul, i)) for i, h in enumerate(hosty)]}
+    _hosty = ["www.bbc.co.uk", "www.npr.org", "www.wired.com", "arstechnica.com", "www.theverge.com",
+              "techcrunch.com", "www.reuters.com", "www.ft.com"]
+    H_RYZYKO = _hist(1, "Security flaw", _hosty[:4])        # radar 1, 4 serwisy
+    H_PRAWO = _hist(2, "New AI law", _hosty[:5])            # 5 serwisow
+    H_PREMIERA = _hist(3, "New model launch", _hosty[:8])   # 8 serwisow
+    H_MALA = _hist(4, "Tiny story", _hosty[:2])             # za mala
+    KATEGORIE_ATRAPA = {"historie": [{"nr": 1, "kategoria": "RYZYKO_BEZPIECZENSTWO", "zapytanie": "flaw"},
+                                     {"nr": 2, "kategoria": "POLITYKA_PRAWO", "zapytanie": "AI law"},
+                                     {"nr": 3, "kategoria": "PREMIERA_MODELU", "zapytanie": "Model X"}]}
+    llm.call = lambda purpose, system, user, **kw: json.dumps(KATEGORIE_ATRAPA)
+    with contextlib.redirect_stdout(io.StringIO()):
+        _wyb, _rank = sledztwo.wybierz_historie([H_RYZYKO, H_PRAWO, H_PREMIERA, H_MALA])
+    sprawdz("wygrywa najwieksza historia o najlepszej kategorii, nie pierwsza z radaru",
+            _wyb is H_PREMIERA and _wyb["kategoria"] == "PREMIERA_MODELU" and _wyb["zapytanie"] == "Model X"
+            and _wyb["serwisy"] == 8, (_wyb or {}).get("tytul"))
+    sprawdz("ranking ma kazda historie, zbyt mala z powodem, ocenione z wynikiem",
+            len(_rank) == 4 and not _rank[3]["ok"] and all("wynik" in r for r in _rank[:3]), _rank)
+    # KARA: dwa ostatnie sledztwa byly premierami, a duza historia firmowa ma 6 serwisow.
+    sledztwo.zapisz_sledztwo({"historia": "x", "zrodla": [], "kategoria": "PREMIERA_MODELU"})
+    H_FIRMA = _hist(5, "Company drama", _hosty[:6])
+    KATEGORIE_ATRAPA["historie"].append({"nr": 5, "kategoria": "FIRMY_WLADZA", "zapytanie": "drama"})
+    with contextlib.redirect_stdout(io.StringIO()):
+        _wyb2, _rank2 = sledztwo.wybierz_historie([H_PREMIERA, H_FIRMA])
+    sprawdz("ta sama dziedzina co niedawne sledztwo dostaje kare i przegrywa z inna duza",
+            _wyb2 is H_FIRMA and any(r.get("kara") for r in _rank2), [(r["tytul"], r.get("wynik")) for r in _rank2])
+    llm.call = lambda purpose, system, user, **kw: (_ for _ in ()).throw(RuntimeError("padlo"))
+    with contextlib.redirect_stdout(io.StringIO()):
+        _wyb3, _ = sledztwo.wybierz_historie([H_RYZYKO, H_PRAWO, H_PREMIERA])
+    sprawdz("KONTRDOWOD: bez kategorii (awaria) wybor sama wielkoscia — nadal najwieksza",
+            _wyb3 is H_PREMIERA, (_wyb3 or {}).get("tytul"))
+    (config.DATA_DIR / sledztwo.PLIK_SLEDZTW).unlink()
+
+    print()
+    print("=== 4d. GLOSY LUDZI (Hacker News) I CENNIK (OpenRouter) NA ATRAPIE SIECI ===")
+
+    class _Odp:
+        def __init__(self, d):
+            self._d = d
+
+        def json(self):
+            return self._d
+
+    class _Siec:
+        def __init__(self):
+            self.zapytania = []
+
+        def get(self, url, params=None, timeout=None):
+            self.zapytania.append((url, params))
+            if url == sledztwo.HN_SZUKAJ:
+                return _Odp({"hits": [
+                    {"objectID": "1", "title": "Model X is out", "points": 900, "num_comments": 400},
+                    {"objectID": "2", "title": "Tiny thread", "points": 999, "num_comments": 3},
+                    {"objectID": "3", "title": "Model X benchmarks", "points": 300, "num_comments": 120},
+                    {"objectID": "4", "title": "Third big thread", "points": 100, "num_comments": 90}]})
+            if url.startswith("https://hn.algolia.com/api/v1/items/"):
+                return _Odp({"children": [
+                    {"text": "<p>I ran it on my own repo for a week &amp; it fixed real bugs, but it also invented an API that does not exist.</p>"},
+                    {"text": "short"}]})
+            if url == sledztwo.OPENROUTER_MODELE:
+                return _Odp({"data": [
+                    {"id": "lab/model-x", "name": "Lab: Model X", "created": 1792000000, "context_length": 400000,
+                     "pricing": {"prompt": "0.000003", "completion": "0.000015"}},
+                    {"id": "lab/model-y", "name": "Lab: Model Y", "created": 1790000000, "context_length": 100000,
+                     "pricing": {"prompt": "0.000001", "completion": "0.000002"}}]})
+            raise AssertionError(url)
+    _siec = _Siec()
+    with contextlib.redirect_stdout(io.StringIO()):
+        _gl = sledztwo.glosy_hn("Model X", http=_siec)
+    sprawdz("Hacker News: dwa najwieksze watki z >= 20 komentarzami, maly pominiety",
+            [d["url"] for d in _gl] == ["https://news.ycombinator.com/item?id=1",
+                                        "https://news.ycombinator.com/item?id=3"], [d["url"] for d in _gl])
+    sprawdz("komentarz bez HTML, krotki pominiety, dokument podpisany jako opinie",
+            "fixed real bugs, but it also invented" in _gl[0]["text"] and "&amp;" not in _gl[0]["text"]
+            and "short" not in _gl[0]["text"] and _gl[0]["text"].startswith(sledztwo.NAGLOWEK_GLOSOW), _gl[0]["text"][:200])
+    sprawdz("zapytanie z oknem dat (created_at_i)", "created_at_i>" in str(_siec.zapytania[0][1]))
+    with contextlib.redirect_stdout(io.StringIO()):
+        _cn = sledztwo.cennik_openrouter("Model X", http=_siec)
+    sprawdz("OpenRouter: pasujacy model, cena za milion tokenow, kontekst, podpis posrednika",
+            len(_cn) == 1 and "$3.00" in _cn[0]["text"] and "$15.00" in _cn[0]["text"] and "400000" in _cn[0]["text"]
+            and "Model Y" not in _cn[0]["text"] and "reseller" in _cn[0]["text"], _cn and _cn[0]["text"])
+
+    class _Padla:
+        def get(self, *a, **k):
+            raise OSError("brak sieci")
+    with contextlib.redirect_stdout(io.StringIO()):
+        sprawdz("KONTRDOWOD: awaria sieci = pusto, bez wyjatku",
+                sledztwo.glosy_hn("Model X", http=_Padla()) == [] and sledztwo.cennik_openrouter("Model X", http=_Padla()) == []
+                and sledztwo.glosy_hn("", http=_siec) == [])
 finally:
     llm.call = _prawdziwy_call
 
@@ -383,7 +523,14 @@ sprawdz("artykul ze sledztwa raz na tydzien: limit przed pisaniem, po kolejce ka
         and _art.index("sledztwo.dodaj_do_kolejki") < _art.index("sledztwo.ile_artykulow(6) >= sledztwo.ARTYKULOW")
         < _art.index("kod = _napisz_i_zapisz(conn, run_id, brief, card, evidence)"))
 sprawdz("artykul: pelny obraz i JEDNA nasza analiza przy co najmniej czterech katach",
-        'analiza_ok = bool(rodzaje & {"MOTYW", "ZA_DWA_LATA"}) and len(przes) >= 4' in _art)
+        'analiza_ok = bool(rodzaje & set(sledztwo.ANALIZY)) and len(przes) >= 4' in _art)
+_sl = _art[_art.index("def _przebieg_sledztwa"):]
+sprawdz("przebieg: wybor duzego tematu, pytania premiery, glosy HN i cennik w korpusie, typ do pisarza",
+        "sledztwo.wybierz_historie(historie" in _art and "pod += list(sledztwo.PYTANIA_PREMIERY)" in _art
+        and "sledztwo.glosy_hn(_zapytanie)" in _art and "sledztwo.cennik_openrouter(_zapytanie)" in _art
+        and 'card["investigation_type"]' in _art and "przeslania(conn, run_id, card, dossier, wybrana, typ=typ)" in _art
+        and _sl.index("corpus = stages.fetch(conn, run_id, zrodla)") < _sl.index("sledztwo.glosy_hn(_zapytanie)")
+        < _sl.index("evidence = stages.classify("))
 sprawdz("pisarz notki dostaje wczesniejsze katy w prompcie",
         "earlier_angles_already_published" in pathlib.Path("agent-v2/prompts/notka.md").read_text(encoding="utf-8"))
 sprawdz("pisarz artykulu dostaje wszystkie katy serii",

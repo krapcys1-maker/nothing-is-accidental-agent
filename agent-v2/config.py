@@ -437,6 +437,9 @@ MODEL_FOR = {
     # 14 dni blokowala powrot do historii. DeepSeek z rozumowaniem: A/B 27.09 —
     # ostrozny, motyw plaski, za ok. 0,003 USD.
     "przeslania_zapas": DEEPSEEK,
+    # KATEGORIA HISTORII PRZY WYBORZE SLEDZTWA (25.10.2026, `sledztwo.wybierz_historie`):
+    # jedno krotkie wywolanie na kilka-kilkanascie naglowkow, ulamek centa.
+    "kategoria_historii": DEEPSEEK,
     # NOTKA Z PRZESLANIA — tez Opus (`stages.notki_dnia` przelacza pisarza tylko
     # dla notki niosacej przeslanie). Podglad 27.09: Flash gubil hipoteze
     # (MOTYW konczyl pytaniem, ZA_DWA_LATA opowiadal sam incydent). Trzy rundy
@@ -539,6 +542,7 @@ DEEPSEEK_MYSLENIE: dict[str, dict[str, str]] = {
     "nowosc": {"type": "enabled"},
     "przeslania": {"type": "enabled"},
     "przeslania_zapas": {"type": "enabled"},
+    "kategoria_historii": {"type": "disabled"},
     # Jak `naprawa` notek: trzeba zwazyc zdanie wobec dowodow.
     "naprawa_artykulu": {"type": "enabled"},
     # Wniosek to MYSLENIE — szukanie tego, czego nie ma w naglowku.
@@ -1663,6 +1667,7 @@ MAX_TOKENS = {
     "nowosc": 12000,
     "przeslania": 16000,
     "przeslania_zapas": 16000,
+    "kategoria_historii": 3000,
     # Do szesciu zdan, kazde jedno zdanie odpowiedzi.
     "naprawa_artykulu": 6000,
     # Trzy wnioski po kilka krotkich pol.

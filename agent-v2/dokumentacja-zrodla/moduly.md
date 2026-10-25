@@ -527,7 +527,7 @@
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-4057 wierszy, 44 funkcji na poziomie modułu, 0 klas
+4062 wierszy, 44 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -708,7 +708,7 @@
 
 ### `sledztwo.py` — śledztwo — historia z radaru, bramka nowości sprawdzana kodem, seria 4–5 kątów (kuriozum, mechanizm, ustalenie, kto płaci, motyw, za dwa lata) i kolejka notek
 
-588 wierszy, 28 funkcji na poziomie modułu, 0 klas
+907 wierszy, 36 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -721,6 +721,13 @@
 | `ile_sledztw(dni)` | Ile SLEDZTW w oknie — bez wpisow `oznacz_artykul`. |
 | `ile_artykulow(dni)` | — |
 | `ocena_historii(h)` | Czy te historie warto badac: dosc niezaleznych zrodel i jeszcze nie badana. |
+| `kategorie_historii(historie, conn, run_id)` | {miejsce: {"kategoria", "zapytanie"}} dla historii — jedno tanie wywolanie. |
+| `ostatnie_kategorie(ile)` | Kategorie ostatnich `ile` sledztw (najnowsze na koncu) — do kary za powtorke. |
+| `wybierz_historie(historie, conn, run_id)` | Najwieksza historia, ktora przejdzie bramke: (wybrana albo None, ranking). |
+| `typ_sledztwa(kategoria)` | „premiera" dla premiery modelu, inaczej zwykle „sledztwo" (`ZESTAWY_KATOW`). |
+| `_bez_html(tekst)` *(wewn.)* | — |
+| `glosy_hn(zapytanie, dni, http)` | Najwieksze watki Hacker News o tej sprawie z ostatnich `dni` jako dokumenty korpusu. |
+| `cennik_openrouter(zapytanie, http, ile)` | Ceny i okno kontekstu modeli pasujacych do zapytania — jako dokument korpusu. |
 | `fakt_z_historii(h)` | Historia w ksztalcie faktu, ktory przyjmuje `artykul_z_puli.temat_z_faktu`. |
 | `_twierdzenia(card)` *(wewn.)* | — |
 | `_karta_do_promptu(card, limit)` *(wewn.)* | — |
@@ -729,7 +736,8 @@
 | `nowosc(conn, run_id, card, h, teksty_zrodel)` | Czy laczenie zrodel ustalilo cos, czego nie mowi zadne z nich. |
 | `pelny_obraz(card, min_twierdzen, min_serwisow)` | Czy karta daje czytelnikowi pelny obraz historii: dosc potwierdzonych |
 | `_hipotezy_do_promptu(dossier)` *(wewn.)* | — |
-| `przeslania(conn, run_id, card, dossier, h)` | Seria notek o jednej historii: 4-5 katow (`RODZAJE`) — albo mniej, gdy |
+| `_katy_do_promptu(zestaw)` *(wewn.)* | — |
+| `przeslania(conn, run_id, card, dossier, h, typ)` | Seria notek o jednej historii: 4-5 katow z zestawu typu (`ZESTAWY_KATOW`) — |
 | `zapisz_sledztwo(rekord)` | Jedna linia na sledztwo — pamiec dla bramki i limitow. Nigdy nie wywala. |
 | `oznacz_artykul(run_id)` | Artykul ze sledztwa z tego przebiegu wyszedl — liczy sie do limitu tygodnia. |
 | `_kolejka()` *(wewn.)* | — |
@@ -976,7 +984,7 @@
 
 ### `artykul_z_puli.py` — artykuł bierze temat z tej samej puli, co notki
 
-1765 wierszy, 15 funkcji na poziomie modułu, 0 klas
+1785 wierszy, 15 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
