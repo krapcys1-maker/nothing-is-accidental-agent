@@ -51,3 +51,60 @@ researchu ocenia każdą historię: czy plan pytał o to, co ważne, czy badanie
 odpowiedziało, jakich dokumentów brakuje i co dodałby dobry dziennikarz AI.
 
 Wyniki i decyzje: sekcja poniżej (dopisywana po próbie).
+
+## Wyniki porównania modeli (25.10, czytane ręcznie)
+
+- **Plan śledztwa**: Sonnet 5.5 planował jak Opus za 1/3 ceny; Flash bez myślenia pytał zbyt
+  technicznie. Plan idzie na Sonnecie, a zapasem jest DeepSeek Flash Z MYŚLENIEM. W próbie fali 1
+  zapas dał 11 konkretnych, ciekawych pytań (zarzut z nagłówka, sprzęt potrzebny do uruchomienia,
+  precedensy, smaczek cenowy, wielkie pytanie w obie strony), gdy Sonnetowi zabrakło soczewek NEW i BIG.
+- **Kąty serii**: haki porównywalne u trzech modeli; Opus 5.5 zostaje (najlepszy rdzeń i werdykt).
+- **Notki serii**: Opus najlepszy (60–65 słów, dowcip, werdykt), Sonnet solidny, Flash za długi
+  (70–84 słowa) i z błędami wierności, których fact-check nie złapał. Decyzja D1: wszystkie
+  notki serii pisze Opus, do czasu próby Flasha z myśleniem.
+
+## Fala 1 (25.10.2026): co weszło i co pokazała próba
+
+Specyfikacja całości: `robocze/proby_25_10/SPEC_SLEDCZY.md` (lokalnie), kontrakt wdrożenia:
+`robocze/proby_25_10/KONTRAKT_FALA1.md`. Weszło:
+
+- **Plan redaktora** (`sledztwo_plan.py`): 12 soczewek (co nowego, jak to działa, twierdzenie
+  kontra pomiar, liczby, skutki, władza, praktyka, ludzie, precedens, wielkie pytanie, smaczek,
+  termin), walidacja kodem (pytanie musi nazywać tę historię, test podmiany wobec szablonów
+  i 6 ostatnich planów, dowód i miejsce), dokumenty pierwotne do zdobycia, starszy redaktor
+  (do 3 luk i 2 rund dogrywki).
+- **Księga pytań** (`research.deepen(pytania=...)`): status każdego pytania z cytatem
+  sprawdzanym kodem, jedna runda na otwarte pytanie, pościg za dokumentem pierwotnym, długie
+  dokumenty układane według słów pytania.
+- **Karta śledcza**: do 16 twierdzeń, każde sprawdzone dosłownie w swoim źródle, klasy źródeł
+  nadawane kodem (PRIMARY tylko dla strony autora historii z jej kluczem, INDEPENDENT dla
+  ewaluatorów, LISTING, VOICE, reszta SECONDARY).
+- **Kąty**: jedna tabela `KATY`, rdzeń historii (`sedno`) z werdyktem bez asekuracji, kandydaci
+  ponad liczbę notek, skład i kolejność wybiera kod, uczciwy hak sprawdzany kodem (liczby
+  przywiązane do encji i dowodu, warunki, podpis źródła), poziom tematu decyduje o liczbie notek.
+- **Notki**: pierwsze zdanie po bramce haka, bramka notki, wierność wobec twierdzeń kąta przed
+  fact-checkiem; nieudana notka serii daje próbę kąta i zwykłą notkę w tym miejscu. MYSL idzie
+  obok serii (inne historie z rankingu), bez cyfr, bez nazw serii, w głosie „we”.
+- **Artykuł** tylko z zegara tygodniowego, najpierw z zapisanego śledztwa (≤5 dni, poziom L/XL,
+  ≥10 twierdzeń z ≥4 hostów, ≥2 rekordy pierwotne, ≥6 odpowiedzi w księdze, werdykt z dowodami),
+  potem z puli; nigdy w trybie testu.
+
+Próba na kopii danych (historia o premierze otwartego modelu, bez artykułu):
+
+| Etap | Koszt | Uwagi z ręcznego czytania |
+|---|---|---|
+| plan | 0,055 USD | Sonnet bez wymaganych soczewek → zapas DeepSeek z myśleniem, 11 dobrych pytań |
+| dokumenty | 0,015 USD | 4 nazwane, 2 zdobyte (strona autora, ewaluator) |
+| księga + krytyk | 0,084 USD | 15 pytań, 0 pełnych, 12 częściowych odpowiedzi — uczciwie; wyszukiwarka często daje strony-agregatory |
+| karta | 0,016 USD | 15 twierdzeń dosłownie w źródle; w tej próbie bez kluczy historii (naprawione) |
+| kąty | 0,47 → 0,28 USD | druga runda Opusa przy samej luce w składzie (naprawione: kandydaci + runda tylko przy za małej puli) |
+| notki serii | ok. 0,05–0,10 USD na notkę | poprawka Opusa przy każdej złamanej regule |
+
+Błędy wyłapane przez próbę i naprawione tego samego dnia: zapas z feedu przy 403 przerywał się
+na pierwszym nieczytelnym kluczu; księga odrzucała odpowiedzi z identyfikatorem w innym
+kształcie; karta nie dostawała kluczy historii (żadne źródło nie mogło być PRIMARY); sprawdzanie
+wierności zgłaszało nasze własne zdanie („puentę”) jako fakt bez pokrycia; bramka liczb czytała
+„$2.00/million” jako 2 miliony; bramka notki dostawała ubogi kontekst (nie widziała nazw modeli);
+reguła objaśnień zargonu AI odrzucała notkę z werdyktem. Do następnej fali: jakość wyszukiwania
+(strony-agregatory jako jedyne źródło liczby), cytowanie źródła pierwotnego zamiast agregatora,
+gdy fakt stoi w obu, pierwsze zdanie notki „jak to działa”, które definiuje zamiast zaskakiwać.
