@@ -1106,6 +1106,32 @@ ZDARZENIA.clear()
 kod, log, _, exc = uruchom(["--sledztwo", "--wyslij", "--z-sledztwa", str(RP)])
 sprawdz("KONTRDOWOD: drugie wznowienie nie dubluje serii w kolejce",
         kod == 0 and not zdarzenia("dodaj_do_kolejki") and len(SLEDZTWO.kolejka) == 3 and "nie dubluje" in log, log[-300:])
+# Pelny tekst pracy zamiast streszczenia: karta z samego abstraktu powtarzala blad relacji z drugiej reki.
+sprawdz("arXiv: strona streszczenia (rowniez zrodlowe hosty arXiv) -> pelny PDF; inne adresy bez zmian",
+        azp._pelny_tekst_url("https://arxiv.org/abs/2602.01450") == "https://arxiv.org/pdf/2602.01450"
+        and azp._pelny_tekst_url("http://browse-export.arxiv.org/abs/2602.01450v2?x=1") == "https://arxiv.org/pdf/2602.01450v2"
+        and azp._pelny_tekst_url("https://arxiv.org/pdf/2602.01450") == "https://arxiv.org/pdf/2602.01450"
+        and azp._pelny_tekst_url("https://notarxiv.org/abs/1") == "https://notarxiv.org/abs/1"
+        and azp._pelny_tekst_url("https://dl.acm.org/doi/abs/10.1/2") == "https://dl.acm.org/doi/abs/10.1/2"
+        and azp._pelny_tekst_url(None) is None)
+zeruj()
+SERIA_L[0] = SERIA
+DOKUMENTY_LLM[0] = [{"what": "Paper", "who": "Authors", "where": "arxiv.org"}]
+_poprz_dokument = RESEARCH.dokument
+
+
+def _dokument_arxiv(conn, run_id, co, kto, gdzie, seen=None):
+    zd("dokument", co=co)
+    return [{"url": "https://arxiv.org/abs/2602.01450", "host": "arxiv.org", "title": co, "publisher": kto,
+             "class": "PRIMARY", "note": ""}]
+
+
+RESEARCH.dokument = _dokument_arxiv
+kod, log, _, exc = uruchom(["--sledztwo", "--wyslij"])
+RESEARCH.dokument = _poprz_dokument
+_pobr = [u for f in zdarzenia("fetch") for u in f["urls"]]
+sprawdz("pościg: do pobrania idzie PDF pracy, nie streszczenie arXiv",
+        "https://arxiv.org/pdf/2602.01450" in _pobr and "https://arxiv.org/abs/2602.01450" not in _pobr, _pobr)
 config.SLEDZTWO_TRYB = "gleboko"
 del SLEDZTWO.seria_lekka
 

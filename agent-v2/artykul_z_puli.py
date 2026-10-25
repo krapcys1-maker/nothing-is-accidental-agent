@@ -1328,6 +1328,16 @@ def _plan_do_kart(plan: dict) -> dict:
                         for q in plan.get("pytania") or [] if isinstance(q, dict)]}
 
 
+_ARXIV_ABS = re.compile(r"^https?://(?:[\w-]+\.)*arxiv\.org/abs/([^?#\s]+)", re.I)
+
+
+def _pelny_tekst_url(url):
+    """Strona streszczenia arXiv niesie ok. tysiaca znakow; pelny tekst pracy to PDF, a `stages.fetch`
+    czyta PDF-y. Inne adresy zostaja bez zmian."""
+    m = _ARXIV_ABS.match(str(url or ""))
+    return "https://arxiv.org/pdf/%s" % m.group(1) if m else url
+
+
 def _poscig_dokumentow(conn, run_id, plan: dict, corpus: list[dict]) -> tuple[list[dict], list[dict]]:
     """(pobrane dokumenty pierwotne, raport: nazwane wobec zdobytych) — spec §6.
 
@@ -1360,7 +1370,7 @@ def _poscig_dokumentow(conn, run_id, plan: dict, corpus: list[dict]) -> tuple[li
             if _ADRES_EXPLOITA.search(urlsplit(str(z["url"])).path or ""):
                 print("  [dokumenty] pomijam adres z exploitem: %s" % str(z["url"])[:100], flush=True)
                 continue
-            dobre.append(z)
+            dobre.append(dict(z, url=_pelny_tekst_url(z["url"])))
         wpis["znalezione"] = [z["url"] for z in dobre]
         if dobre:
             try:
