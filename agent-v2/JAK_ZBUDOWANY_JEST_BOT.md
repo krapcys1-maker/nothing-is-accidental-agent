@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **37 plików**, 44 106 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **37 plików**, 44 157 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -114,7 +114,7 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
 się testować bez przeglądarki i bez pieniędzy**. 207 zestawów
-testów, 5390 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+testów, 5395 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -978,7 +978,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `laboratorium.py` — laboratorium — tygodniowy raport badawczy obu kont: prędkość przyrostu z przedziałami, dawka → skutek, notki tygodniami, atrybucja zapisów
 
-369 wierszy, 15 funkcji na poziomie modułu, 0 klas
+420 wierszy, 17 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -990,10 +990,12 @@ wiec nie da sie go rozjechac z kodem.
 | `_pearson(a, b)` *(wewn.)* | — |
 | `spearman(x, y, permutacji, ziarno)` | Rho Spearmana i p dwustronne z permutacji (stale ziarno — powtarzalne). |
 | `reszty(y, x)` | Reszty z regresji y na x — przyrost PO odjeciu tego, co tlumaczy zasieg. |
-| `tygodnie(dni, wczoraj, ile)` | Pelne tygodnie (pon-niedz) z przyrostem netto i sumami dzialan oraz zasiegu. |
+| `zapisy_z_listy(dane)` | Zapisy BRUTTO na dobe z najnowszej kopii listy subskrybentow i data tej kopii. |
+| `tygodnie(dni, wczoraj, ile, zapisy, data_kopii)` | Pelne tygodnie (pon-niedz) z przyrostem netto i sumami dzialan oraz zasiegu. |
 | `notki_tygodniami(dane, dzis, ile)` | Mediana wyswietlen i dlugosci notek wedlug tygodnia publikacji (notki >= 3 dni). |
 | `policz_konto(dni, dane, zrodla, wczoraj, dzis)` | — |
 | `policz(wczoraj)` | — |
+| `_liczba(x)` *(wewn.)* | Mediana bez „.0" przy liczbie calkowitej; brak = „—". |
 | `_rho(z)` *(wewn.)* | — |
 | `tekst(w)` | — |
 | `zapisz()` | — |
