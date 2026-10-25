@@ -974,20 +974,24 @@ def _wczesniejsze_katy(p: dict[str, Any]) -> list[dict[str, Any]]:
 def temat_dnia() -> dict[str, Any] | None:
     """Historia, ktorej katy wychodza teraz — kontekst dla notki MYSL w dzien serii.
 
-    Najnowsza wazna historia w kolejce: tytul, teza sledztwa i przeslania jej katow
-    (nasze juz zapisane wnioski, nie nowe fakty). Bez waznej kolejki — None.
+    Najnowsza wazna historia w kolejce: tytul, teza sledztwa i przeslania jej katow,
+    KTORE JUZ WYSZLY (nasze opublikowane wnioski, nie nowe fakty). Bez waznej kolejki
+    — None. Katy czekajace nie wchodza: proba 25.10 — MYSL wziela prognoze kata
+    ZA_DWA_LATA, ktory mial wyjsc nazajutrz, i ta sama mysl wyszlaby dwa razy.
     """
     teraz = _teraz().isoformat()
     kolejka = [p for p in _kolejka() if str(p.get("wazny_do") or "") >= teraz and p.get("historia")]
     if not kolejka:
         return None
+    wydane, _ = _wydane_przeslania()
     historia = max(kolejka, key=lambda p: str(p.get("kiedy") or ""))["historia"]
     katy = sorted((p for p in kolejka if p["historia"] == historia),
                   key=lambda p: int(p.get("kolejnosc") or 0))
     return {"story": historia,
             "thesis": next((p.get("teza_sledztwa") for p in katy if p.get("teza_sledztwa")), ""),
-            "our_angles": [(p.get("perspektywa") or {}).get("przeslanie") for p in katy
-                           if (p.get("perspektywa") or {}).get("przeslanie")]}
+            "our_published_notes": [(p.get("perspektywa") or {}).get("przeslanie") for p in katy
+                                    if (p.get("perspektywa") or {}).get("przeslanie")
+                                    and str(p.get("id")) in wydane]}
 
 
 def material_notki(p: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:

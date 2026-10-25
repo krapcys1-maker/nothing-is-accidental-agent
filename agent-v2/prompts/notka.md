@@ -88,7 +88,7 @@ attribute what readers or testers said as their opinion. Facts still come only
 from the evidence; a hypothesis never turns into one.
 
 For MYSL, the material may carry `temat_dnia`: the big story we are covering
-in a series these days, with our thesis and the messages of our notes on it.
+in a series these days, with our thesis and the messages of our notes already published on it.
 Then the note is our boldest take on what that story means beyond itself — a
 provocative position or a sharp question about where it leads, the kind a
 reader argues with in the comments. The same readers already saw our notes on

@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **37 plików**, 44 636 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **37 plików**, 44 640 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -114,7 +114,7 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
 się testować bez przeglądarki i bez pieniędzy**. 207 zestawów
-testów, 5420 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+testów, 5421 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -850,7 +850,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `sledztwo.py` — śledztwo — historia z radaru, bramka nowości sprawdzana kodem, seria 4–5 kątów (kuriozum, mechanizm, ustalenie, kto płaci, motyw, za dwa lata) i kolejka notek
 
-1007 wierszy, 39 funkcji na poziomie modułu, 0 klas
+1011 wierszy, 39 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -10335,7 +10335,7 @@ attribute what readers or testers said as their opinion. Facts still come only
 from the evidence; a hypothesis never turns into one.
 
 For MYSL, the material may carry `temat_dnia`: the big story we are covering
-in a series these days, with our thesis and the messages of our notes on it.
+in a series these days, with our thesis and the messages of our notes already published on it.
 Then the note is our boldest take on what that story means beyond itself — a
 provocative position or a sharp question about where it leads, the kind a
 reader argues with in the comments. The same readers already saw our notes on

@@ -469,9 +469,8 @@ for p in _kol:
     p["kiedy"] = (TERAZ - timedelta(days=1)).isoformat()
 (config.DATA_DIR / sledztwo.PLIK_KOLEJKI).write_text(json.dumps(_kol), encoding="utf-8")
 _td = sledztwo.temat_dnia()
-sprawdz("temat dnia dla MYSL: historia serii i przeslania jej katow w kolejnosci",
-        _td and _td["story"] == DUZA["tytul"] and _td["our_angles"][0] == pr5[0]["przeslanie"]
-        and len(_td["our_angles"]) == 5, _td)
+sprawdz("temat dnia dla MYSL: historia serii, a zanim cokolwiek wyszlo — bez naszych notek",
+        _td and _td["story"] == DUZA["tytul"] and _td["our_published_notes"] == [], _td)
 _st_kod = pathlib.Path("agent-v2/stages.py").read_text(encoding="utf-8")
 sprawdz("MYSL w dzien serii dostaje temat dnia, a prompt notki mowi, co z nim zrobic",
         'material["temat_dnia"] = _temat_dnia' in _st_kod
@@ -496,6 +495,10 @@ def _wydane(*pary):
 
 _id = [p["id"] for p in sorted(_k0, key=lambda p: p["kolejnosc"])]
 _wydane((_id[0], TERAZ))
+# Proba 25.10: MYSL wziela prognoze kata, ktory mial wyjsc nazajutrz.
+_td1 = sledztwo.temat_dnia()
+sprawdz("temat dnia niesie tylko katy, ktore juz wyszly (nie zabiera jutrzejszych)",
+        _td1["our_published_notes"] == [pr5[0]["przeslanie"]], _td1["our_published_notes"])
 p2 = sledztwo.wez_przeslanie()
 sprawdz("po jednym dzis — drugi kat jeszcze dzis (mechanizm)", (p2 or {}).get("rodzaj") == "MECHANIZM", p2)
 # Zywy test 25.10: notka ze scenariuszem otworzyla faktem, na ktorym stala notka z ustaleniem.
