@@ -248,8 +248,12 @@ class InvestigationTests(unittest.TestCase):
             self.assertEqual(research.url_key(url), "")
 
     def test_models_and_search_ceiling(self):
+        # Cele dogrywki artykulu z puli. Cele ksiegi sledztwa (`ksiega`,
+        # `investigation_document`, 25.10.2026) sprawdza tests/test_research_ksiega.py.
         self.assertEqual(config.MODEL_FOR["write"], config.FABLE)
-        for stage in research.PURPOSES:
+        self.assertTrue({"investigation", "investigation_search",
+                         "investigation_extract"} <= set(research.PURPOSES))
+        for stage in ("investigation", "investigation_search", "investigation_extract"):
             self.assertEqual(config.MODEL_FOR[stage], config.DEEPSEEK)
             self.assertLessEqual(config.MAX_TOKENS[stage], 8000)
         self.assertEqual(config.max_szukan("investigation_search"), 3)
