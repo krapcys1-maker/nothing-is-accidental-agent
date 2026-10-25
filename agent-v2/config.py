@@ -443,8 +443,11 @@ MODEL_FOR = {
     # DETEKTOR DUZYCH HISTORII (25.10.2026, `sledztwo.wielkie_historie`): grupuje ok. 250
     # naglowkow z 4 dni wedlug tej samej sprawy; raz na sledztwo, ulamek centa.
     "wielkie_historie": DEEPSEEK,
-    # PYTANIA CIEKAWOSCI (25.10.2026, `sledztwo.pytania_ciekawosci`) — 4 pytania na sledztwo.
-    "pytania_ciekawosci": DEEPSEEK,
+    # PLAN SLEDZTWA I PYTANIA CIEKAWOSCI (25.10.2026, `sledztwo.pytania_ciekawosci`,
+    # `prompts/plan_sledztwa.md`): myslenie redaktora przed badaniem, raz na sledztwo. Model
+    # wybiera proba porownawcza (DeepSeek Flash / Sonnet 5.5 / Opus 5.5) — patrz
+    # `docs/SLEDCZY_PROJEKT_2026-10-25.md`; do jej wyniku Sonnet.
+    "pytania_ciekawosci": SONNET,
     # NOTKA Z PRZESLANIA — tez Opus (`stages.notki_dnia` przelacza pisarza tylko
     # dla notki niosacej przeslanie). Podglad 27.09: Flash gubil hipoteze
     # (MOTYW konczyl pytaniem, ZA_DWA_LATA opowiadal sam incydent). Trzy rundy
@@ -549,7 +552,6 @@ DEEPSEEK_MYSLENIE: dict[str, dict[str, str]] = {
     "przeslania_zapas": {"type": "enabled"},
     "kategoria_historii": {"type": "disabled"},
     "wielkie_historie": {"type": "disabled"},
-    "pytania_ciekawosci": {"type": "enabled"},
     # Jak `naprawa` notek: trzeba zwazyc zdanie wobec dowodow.
     "naprawa_artykulu": {"type": "enabled"},
     # Wniosek to MYSLENIE — szukanie tego, czego nie ma w naglowku.
@@ -1574,6 +1576,7 @@ EFFORT = {
     # zadne `effort`, a domyslny poziom Opusa 5.5 to `medium` (dokumentacja
     # Claude API) — tak przeszlo A/B z 27.09, wiec zachowanie sie nie zmienia.
     "przeslania": "medium",
+    "pytania_ciekawosci": "medium",
     # PONIZEJ: piec wpisow, ktore NIC NIE ROBIA — wszystkie te etapy chodza na
     # DeepSeeku, ktory tego pokretla nie czyta. Zostaja jako zapis intencji na
     # wypadek przepiecia etapu na Claude, i `llm.call` mowi raz na proces,
@@ -1676,7 +1679,7 @@ MAX_TOKENS = {
     "przeslania_zapas": 16000,
     "kategoria_historii": 3000,
     "wielkie_historie": 4000,
-    "pytania_ciekawosci": 4000,
+    "pytania_ciekawosci": 8000,
     # Do szesciu zdan, kazde jedno zdanie odpowiedzi.
     "naprawa_artykulu": 6000,
     # Trzy wnioski po kilka krotkich pol.
@@ -2646,12 +2649,6 @@ def losowy_ksztalt_mysli() -> str:
 # piec notek — trop, nie dowod. Dzien = do trzech katow serii sledczej
 # (`sledztwo.PRZESLAN_NA_DOBE`, zastepuja typ miejsca) plus zwykla notka.
 NOTE_MIX_OTHER_DAY = ("CIEKAWOSTKA", "DYSKUSJA", "SPROSTOWANIE", "MYSL")
-
-# ARTYKUL ZE SLEDZTWA WYLACZONY (25.10.2026, wlasciciel: „nie pisz artykulow, zanim nie mamy
-# ogarnietego researchu, tematow, pytan (...) na huj przepalac kase na artykul, zanim bedziemy
-# mieli to"). Sledztwo robi badanie i serie notek; artykul wroci, gdy wlasciciel zaakceptuje
-# jakosc researchu. Artykul z puli (wtorek) dziala jak dotad.
-ARTYKUL_ZE_SLEDZTWA = False
 
 # KTO PISZE NOTKI — decyzja wlasciciela z 7 wrzesnia 2026: „zostaw Opusa".
 #

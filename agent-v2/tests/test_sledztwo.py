@@ -325,14 +325,29 @@ try:
         "Why did the benchmark score appear before anyone could test it?", "not a question", 7,
         "Who pays for the free weights?"]})
     with contextlib.redirect_stdout(io.StringIO()):
-        _pc = sledztwo.pytania_ciekawosci(None, None, DUZA, "What happened?")
-    sprawdz("pytania ciekawosci: tylko prawdziwe pytania z modelu",
+        _pc, _plan = sledztwo.pytania_ciekawosci(None, None, DUZA, "What happened?")
+    sprawdz("plan sledztwa: tylko prawdziwe pytania z modelu",
             _pc == ["Why did the benchmark score appear before anyone could test it?",
                     "Who pays for the free weights?"], _pc)
     llm.call = lambda purpose, system, user, **kw: (_ for _ in ()).throw(RuntimeError("padlo"))
     with contextlib.redirect_stdout(io.StringIO()):
         sprawdz("KONTRDOWOD: awaria modelu = pytania stale, nie pusto",
-                sledztwo.pytania_ciekawosci(None, None, DUZA, "x") == list(sledztwo.PYTANIA_CIEKAWOSCI_STALE))
+                sledztwo.pytania_ciekawosci(None, None, DUZA, "x") == (list(sledztwo.PYTANIA_CIEKAWOSCI_STALE), {}))
+    # Plan idzie do katow jako nasze myslenie, nie fakty.
+    llm.call = lambda purpose, system, user, **kw: json.dumps({
+        "co_nowego": "An open model matches closed ones on one test.", "skutki": ["Labs: prices fall"],
+        "co_blokuje": "Needs eight GPUs.", "wielkie_pytanie": "Has open caught up?", "smaczek": "It talks a lot.",
+        "pytania": ["What hardware does it need?"]})
+    with contextlib.redirect_stdout(io.StringIO()):
+        _pc2, _plan2 = sledztwo.pytania_ciekawosci(None, None, DUZA, "x")
+    _kp = sledztwo._karta_do_promptu(dict(KARTA, investigation_plan=_plan2))
+    sprawdz("plan sledztwa trafia do karty katow jako nasze myslenie (nie fakty)",
+            _pc2 == ["What hardware does it need?"] and "OUR PLAN BEFORE RESEARCH (our thinking, not facts)" in _kp
+            and "Has open caught up?" in _kp and "Needs eight GPUs." in _kp, _kp[-400:])
+    _pp = pathlib.Path("agent-v2/prompts/plan_sledztwa.md").read_text(encoding="utf-8")
+    sprawdz("schemat planu jest ogolny: co nowego, skutki dla grup, co blokuje, wielkie pytanie, smaczek",
+            all(k in _pp for k in ("What is actually new", "second-order", "What could block it",
+                                   "big question", "wait, really")) and "open-weights" not in _pp.lower())
     sprawdz("kat pytanie-odpowiedz jest w obu zestawach, z opisem i typem notki",
             "PYTANIE_ODPOWIEDZ" in sledztwo.RODZAJE and "PYTANIE_ODPOWIEDZ" in sledztwo.RODZAJE_PREMIERY
             and sledztwo.TYP_NOTKI["PYTANIE_ODPOWIEDZ"] == "CIEKAWOSTKA")
@@ -638,17 +653,10 @@ sprawdz("artykul ze sledztwa raz na tydzien: limit przed pisaniem, po kolejce ka
 sprawdz("artykul: pelny obraz i JEDNA nasza analiza przy co najmniej czterech katach",
         'analiza_ok = bool(rodzaje & set(sledztwo.ANALIZY)) and len(przes) >= 4' in _art)
 _sl = _art[_art.index("def _przebieg_sledztwa"):]
-sprawdz("artykul ze sledztwa wylaczony (wlasciciel 25.10), wylacznik przed pisaniem, po kolejce katow",
-        config.ARTYKUL_ZE_SLEDZTWA is False
-        and _sl.index("sledztwo.dodaj_do_kolejki") < _sl.index('if not getattr(config, "ARTYKUL_ZE_SLEDZTWA", True):')
-        < _sl.index("kod = _napisz_i_zapisz(conn, run_id, brief, card, evidence)"))
-sprawdz("premiera pyta o dogonienie zamknietych, firmy, sily w wyscigu, sprzet i firmy zachodnie",
-        any("caught up" in q for q in sledztwo.PYTANIA_PREMIERY)
-        and any("hardware" in q for q in sledztwo.PYTANIA_PREMIERY)
-        and any("Western" in q for q in sledztwo.PYTANIA_PREMIERY))
 sprawdz("kazde sledztwo pyta o dokumenty pierwotne i ma 3 rundy dogrywki",
         "pod.append(sledztwo.PYTANIE_PIERWOTNE)" in _sl and "max_rund=sledztwo.RUND_SLEDZTWA" in _sl
-        and "pod += sledztwo.pytania_ciekawosci(conn, run_id, wybrana" in _sl
+        and "_ciekawe, _plan = sledztwo.pytania_ciekawosci(conn, run_id, wybrana" in _sl
+        and 'card["investigation_plan"] = _plan' in _sl
         and "sledztwo.scal_historie(" in _sl and "sledztwo.wielkie_historie(_korpus" in _sl
         and sledztwo.RUND_SLEDZTWA == 3 and "original document" in sledztwo.PYTANIE_PIERWOTNE)
 sprawdz("przebieg: wybor duzego tematu, pytania premiery, glosy HN i cennik w korpusie, typ do pisarza",

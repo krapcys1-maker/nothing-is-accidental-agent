@@ -201,6 +201,16 @@
 {{"title": "<headline>", "subtitle": "<one line>", "body": "<article in plain text, blank lines between paragraphs>", "numbers_used": ["<each figure exactly as written>"], "limits_paragraph_present": true|false}}
 ```
 
+#### `plan_sledztwa.md` (36 wierszy)
+
+**Pola wejściowe:** `ile`, `naglowki`, `pytanie`, `tytul`
+
+**Kontrakt wyjścia:**
+
+```json
+{{"co_nowego": "<what is new>", "skutki": ["<group: what changes, then what changes after that>"], "co_blokuje": "<what it takes and what could block it>", "wielkie_pytanie": "<the question readers will argue about>", "smaczek": "<the detail to look for>", "pytania": ["<research question>"]}}
+```
+
 #### `po_ludzku.md` (4 wierszy)
 
 **Pola wejściowe:** *(brak)*

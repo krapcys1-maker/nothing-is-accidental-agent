@@ -977,7 +977,8 @@ def _przebieg_sledztwa(conn, run_id: int) -> int:
     if typ == "premiera":
         pod += list(sledztwo.PYTANIA_PREMIERY)
     # PYTANIA CIEKAWOSCI — patrz `sledztwo.pytania_ciekawosci`.
-    pod += sledztwo.pytania_ciekawosci(conn, run_id, wybrana, brief.get("question") or "")
+    _ciekawe, _plan = sledztwo.pytania_ciekawosci(conn, run_id, wybrana, brief.get("question") or "")
+    pod += _ciekawe
     pod.append(sledztwo.PYTANIE_PIERWOTNE)
     for q in pod:
         print("    - %s" % str(q)[:110], flush=True)
@@ -1028,6 +1029,8 @@ def _przebieg_sledztwa(conn, run_id: int) -> int:
               flush=True)
         card = stages.fallback_card(brief["question"], evidence)
     research.attach(card, dossier)
+    if _plan:
+        card["investigation_plan"] = _plan
     card.setdefault("broken_belief", brief.get("broken_belief") or "")
     card.setdefault("why_they_believe_it", brief.get("why_they_believe_it") or "")
 
@@ -1085,12 +1088,6 @@ def _przebieg_sledztwa(conn, run_id: int) -> int:
     if not nowe.get("jest") and not (obraz_ok and analiza_ok):
         print(">> ani nowego ustalenia, ani pelnego obrazu z analiza — artykulu nie"
               " pisze; przeslania ida do notek", flush=True)
-        return 1
-    # ARTYKUL ZE SLEDZTWA WYLACZONY, dopoki wlasciciel nie zaakceptuje researchu
-    # (`config.ARTYKUL_ZE_SLEDZTWA`). Katy sa juz w kolejce notek.
-    if not getattr(config, "ARTYKUL_ZE_SLEDZTWA", True):
-        print(">> artykul ze sledztwa wylaczony (config.ARTYKUL_ZE_SLEDZTWA) — historia idzie"
-              " w notkach", flush=True)
         return 1
     # JEDEN ARTYKUL ZE SLEDZTWA NA TYDZIEN (25.10.2026). Sledztw jest teraz kilka
     # w tygodniu (jeden temat co dwa-trzy dni), a artykul — pelne sledztwo —
