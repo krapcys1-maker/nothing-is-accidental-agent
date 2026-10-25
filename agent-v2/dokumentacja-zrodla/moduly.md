@@ -1,7 +1,7 @@
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-3770 wierszy, 40 funkcji na poziomie modułu, 2 klas
+3774 wierszy, 40 funkcji na poziomie modułu, 2 klas
 
 | funkcja | co robi |
 |---|---|
@@ -48,7 +48,7 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-12543 wierszy, 228 funkcji na poziomie modułu, 0 klas
+12585 wierszy, 229 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -137,6 +137,7 @@
 | `powtorzenie(tekst, wzorce, n)` | Jaka czesc n-slowowych ciagow tekstu stoi juz w ktoryms ze wzorcow (0-1). |
 | `z_pytaniem_na_koncu(prompt)` | Prompt notki z poleceniem zakonczenia pytaniem (E18, ramie „on"). |
 | `pierwsze_zdanie_tekstu(tekst)` | Pierwsze zdanie notki (do logu i do porownan). |
+| `_tor_produkcji(conn, run_id)` *(wewn.)* | Czy przebieg jest produkcyjny (do zapisow stanu kolejki): tryb `produkcja` i brak |
 | `zachowuje_pierwsze_zdanie(tekst, linia)` | Czy notka zaczyna sie od zdania `linia` — po normalizacji, z dowolnym |
 | `pierwsza_osoba(tekst)` | Slowa pierwszej osoby liczby pojedynczej POZA CYTATAMI (spec §5 „MYSL"). |
 | `_slowa_nazwy(klucz)` *(wewn.)* | Slowa klucza serii, ktore cos nazywaja: z wielka litera albo z cyfra, od 3 znakow. |
@@ -462,7 +463,7 @@
 
 ### `db.py` — schemat i zapis
 
-388 wierszy, 11 funkcji na poziomie modułu, 1 klas
+403 wierszy, 11 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -565,7 +566,7 @@
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-4213 wierszy, 45 funkcji na poziomie modułu, 0 klas
+4217 wierszy, 45 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -747,7 +748,7 @@
 
 ### `sledztwo.py` — śledztwo — wybór największej historii, rdzeń (sedno) i kąty serii z jednej tabeli KATY, uczciwy hak sprawdzany kodem, poziom tematu (liczba notek), bramka nowości i kolejka notek
 
-3148 wierszy, 131 funkcji na poziomie modułu, 0 klas
+3173 wierszy, 132 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -870,6 +871,7 @@
 | `_wydane_przeslania()` *(wewn.)* | (identyfikatory juz opublikowanych, ile wyszlo dzis). |
 | `_do_wydania(p, teraz_iso, wydane)` *(wewn.)* | — |
 | `czekajace_przeslania()` | Ile przeslan czeka na notke: wazne, jeszcze nie wydane i nie pominiete po probach. |
+| `_objasniona(tekst, encja)` *(wewn.)* | Czy tekst OBJASNIA encje (dopowiedzenie po nazwie: „X (a ...)", „X — a ...", „X, a/an ..."). |
 | `_ma_klucz(tekst, klucze)` *(wewn.)* | — |
 | `wez_przeslanie(promocja)` | Nastepne przeslanie do notki (jedno na przebieg pilnuje `stages.notki_dnia`), najstarsza |
 | `oznacz_probe(przeslanie_id, powod)` | Notka z kata sie nie udala (bramka notki, wiernosc, weryfikacja) — `stages` wola to po |

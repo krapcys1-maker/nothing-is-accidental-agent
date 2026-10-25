@@ -1328,6 +1328,10 @@ def _slowa(tekst: Any) -> list[str]:
     # Zakres „10-12%" i „2025-2026" to dwie liczby — inaczej slowo nie pasowalo do zadnego wzoru
     # i liczby w haku uciekaly z kontroli (25.10.2026). Znak minus pomija `_WZOR_LICZBY`.
     t = _STAWKA_UKOSNIK.sub(" per ", str(tekst or ""))
+    # „per 1M" / „per 1 million" to jednostka stawki, nie liczba 1 000 000 (recenzja 25.10.2026).
+    t = re.sub(r"\bper\s+1\s?(?:m|mn|million)\b", "per million", t, flags=re.I)
+    t = re.sub(r"\bper\s+1\s?(?:k|thousand)\b", "per thousand", t, flags=re.I)
+    t = re.sub(r"\bper\s+1\s?(?:b|bn|billion)\b", "per billion", t, flags=re.I)
     t = re.sub(r"(?<=\d)-(?=[$€£]?\d)", " ", re.sub(r"[—–/]", " ", t))
     return [s for s in t.split() if s]
 
@@ -1894,8 +1898,13 @@ def sprawdz_linie(linia: str, fakty: list[dict[str, Any]], kontekst: dict[str, A
 
 # --- bramka notki (spec §9 pkt 7) --------------------------------------------------------
 
+# LABORATORIA I PRODUKTY AI TEZ SA AKTOREM AI (recenzja 25.10.2026): `nazwy_wlasne` celowo wycina
+# je z kluczy historii (OGOLNE_KLUCZE), wiec „ChatGPT now has 900 million weekly users, OpenAI says"
+# odpadalo jako notka bez slowa o AI — przy najczestszych tematach, czyli najwiekszych laboratoriach.
 _TERMIN_AI = re.compile(r"\bAI\b|\bA\.I\.|\b(artificial intelligence|models?|chatbots?|agents?|agentic|LLMs?|"
-                        r"language models?|neural networks?|machine learning)\b", re.I)
+                        r"language models?|neural networks?|machine learning|OpenAI|Anthropic|DeepMind|"
+                        r"ChatGPT|Claude|Gemini|Copilot|Grok|xAI|Llama|Mistral|DeepSeek|Qwen|Perplexity|"
+                        r"Midjourney|Hugging Face|Nvidia)\b", re.I)
 _RZYMSKIE = {"type", "phase", "part", "class", "tier", "stage", "grade", "category", "level", "act", "chapter",
              "volume", "section", "article", "title", "schedule", "war", "annex", "appendix", "round", "series",
              "mark", "division", "league", "henry", "louis", "elizabeth", "charles", "george", "edward", "james"}
@@ -1906,7 +1915,8 @@ _NIE_X_Y = re.compile(r"\bnot\s+(?:just\s+|only\s+|merely\s+)?[^.;:!?,]{1,50},\s
 
 
 def _bez_cytatow(tekst: str) -> str:
-    return re.sub(r"\"[^\"]*\"|“[^”]*”", " ", tekst)
+    # Takze cytaty w pojedynczych cudzyslowach („'I was wrong,' he said.") — recenzja 25.10.2026.
+    return re.sub(r"\"[^\"]*\"|“[^”]*”|‘[^’]*’|(?<![\w])'[^']*'(?![\w])", " ", tekst)
 
 
 def _pierwsza_osoba(tekst: str) -> list[str]:
@@ -1919,6 +1929,9 @@ def _pierwsza_osoba(tekst: str) -> list[str]:
             if przed and _oczysc(przed[-1]).lower() in _RZYMSKIE:
                 continue
             if t[m.end():m.end() + 1] in (".", "-") and t[m.end() + 1:m.end() + 2].isalnum():
+                continue
+            # „A.I." i „Google I/O" to nie pierwsza osoba (recenzja 25.10.2026).
+            if t[max(0, m.start() - 2):m.start()] == "A." or t[m.end():m.end() + 1] == "/":
                 continue
         out.append(m.group(0))
     return out
@@ -2002,8 +2015,10 @@ def sprawdz_notke(tekst: str, fakty: list[dict[str, Any]], kontekst: dict[str, A
         if not _zglosowany(tekst, m.group(0)):
             print("  [notka] uwaga: '%s' bez objasnienia w notce (nie odrzucam)" % m.group(0), flush=True)
             break
+    # Ten sam wzor objasnienia co przy zbieraniu `gloss_juz_uzyty` (`_objasniona`): myslnik
+    # z dalszym ciagiem zdania albo nawias z cena to nie objasnienie (recenzja 25.10.2026).
     for e in k.get("gloss_juz_uzyty") or []:
-        if re.search(r"(?<![\w.])%s(?![\w])\s*(\(|—|–|,\s+(?:a|an|the|which)\b)" % re.escape(str(e)), tekst, re.I):
+        if _objasniona(tekst, e):
             bledy.append("gloss: %s was already explained earlier in this series" % e)
     seria = [str(t) for t in (k.get("teksty_serii") or []) if t]
     ostatnie = [str(t) for t in (k.get("ostatnie_notki") or []) if t][-10:]
@@ -2894,6 +2909,14 @@ def czekajace_przeslania() -> int:
     return sum(1 for p in _kolejka() if _do_wydania(p, teraz, wydane))
 
 
+def _objasniona(tekst: Any, encja: str) -> bool:
+    """Czy tekst OBJASNIA encje (dopowiedzenie po nazwie: „X (a ...)", „X — a ...", „X, a/an ...")."""
+    # Do dwoch slow z wielkiej litery po nazwie („Acme Labs, a small AI lab") — encja bywa
+    # krotsza niz nazwa w tekscie.
+    return bool(re.search(r"(?<![\w.])%s(?![\w])(?:\s+[A-Z][\w.\-]*){0,2}\s*(?:\(\s*(?:a|an|the)\b|[—–]\s*"
+                          r"(?:a|an|the)\b|,\s+(?:a|an)\b)" % re.escape(str(encja)), str(tekst or "")))
+
+
 def _ma_klucz(tekst: Any, klucze: list[str]) -> bool:
     t = str(tekst or "").lower()
     return any(re.search(r"(?<![a-z0-9])%s(?![a-z0-9])" % re.escape(k.lower()), t) for k in klucze if k)
@@ -3033,7 +3056,9 @@ def kontekst_notki(p: dict[str, Any]) -> dict[str, Any]:
     encje = list(dict.fromkeys(list(p.get("encje") or []) + nazwy_wlasne(p.get("klucze"))))
     return {"linia": p.get("linia") or "", "encje": encje, "teksty_serii": seria,
             "ostatnie_notki": [str(n.get("tekst") or "") for n in notki[-10:]], "liczby_serii": liczby,
-            "gloss_juz_uzyty": [e for e in encje if any(_ma_klucz(t, [e]) for t in seria)],
+            # TYLKO ENCJE NAPRAWDE OBJASNIONE wczesniej (ten sam wzor co w regule), nie samo
+            # wymienienie — recenzja 25.10.2026: kazda encja z notki 1 blokowala myslnik w notkach 2..n.
+            "gloss_juz_uzyty": [e for e in encje if any(_objasniona(t, e) for t in seria)],
             "pochodne": list(p.get("pochodne") or []),
             "sprawdzian": (p.get("perspektywa") or {}).get("sprawdzian")}
 

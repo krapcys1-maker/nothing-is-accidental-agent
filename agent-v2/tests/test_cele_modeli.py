@@ -133,11 +133,12 @@ KONTRAKT = {
     "investigation_document": (config.DEEPSEEK, 6000, None, "disabled"),
     "przeslania": (config.CLAUDE, 12000 + H, "medium", None),
     "przeslania_zapas": (config.DEEPSEEK, 12000 + H, None, "enabled"),
-    "naglowek_naprawa": (config.DEEPSEEK, 600, None, "disabled"),
-    "ten_sam_punkt": (config.DEEPSEEK, 1500, None, "disabled"),
+    # 6000 (recenzja 25.10.2026): z sufitu liczy sie termin wywolania, 600/1500 dawalo 29-72 s.
+    "naglowek_naprawa": (config.DEEPSEEK, 6000, None, "disabled"),
+    "ten_sam_punkt": (config.DEEPSEEK, 6000, None, "disabled"),
     "notka_przeslania": (config.CLAUDE, config.MAX_TOKENS.get("notka_przeslania"), "medium", None),
     "notka_przeslania_fakt": (config.CLAUDE, config.MAX_TOKENS.get("notka_przeslania"), "medium", None),
-    "wiernosc_notki": (config.DEEPSEEK, 1500, None, "disabled"),
+    "wiernosc_notki": (config.DEEPSEEK, 6000, None, "disabled"),
 }
 for cel, (model, sufit, wysilek, myslenie) in KONTRAKT.items():
     sprawdz("%-26s model %s" % (cel, model), config.MODEL_FOR.get(cel) == model,

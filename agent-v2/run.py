@@ -1768,6 +1768,10 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
                                                  # przeslanie ze sledztwa
                                                  "przeslanie_id":
                                                      n.get("przeslanie_id"),
+                                                 # kat serii (fala 1, 25.10.2026): rodzaj,
+                                                 # lead, kierunek, os, wariant gated/W, k/n,
+                                                 # poziom, pisarz — pomiar serii (spec §7)
+                                                 "kat_serii": n.get("kat_serii"),
                                                  # rodzaj niesztandarowego wniosku
                                                  "wniosek": n.get("wniosek") or "",
                                                  # wersja kodu i ramiona

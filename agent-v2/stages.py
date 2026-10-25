@@ -4016,6 +4016,21 @@ def pierwsze_zdanie_tekstu(tekst: Any) -> str:
     return (m.group(1) if m else t).strip()
 
 
+def _tor_produkcji(conn: sqlite3.Connection | None, run_id: int | None) -> bool:
+    """Czy przebieg jest produkcyjny (do zapisow stanu kolejki): tryb `produkcja` i brak
+    znacznika kopii testowej. Nieznany tryb = nie produkcja (zapis stanu wstrzymany)."""
+    try:
+        import run as _run
+        if _run.ZNACZNIK_KOPII_TESTOWEJ.exists():
+            return False
+    except Exception:  # noqa: BLE001 — bez modulu run (testy) zostaje tryb przebiegu
+        pass
+    try:
+        return db.tryb_przebiegu(conn, run_id) == "produkcja"
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def zachowuje_pierwsze_zdanie(tekst: Any, linia: Any) -> bool:
     """Czy notka zaczyna sie od zdania `linia` — po normalizacji, z dowolnym
     znakiem na jego koncu (wolno dokleic nastepne zdanie myslnikiem albo przecinkiem).
@@ -4024,7 +4039,11 @@ def zachowuje_pierwsze_zdanie(tekst: Any, linia: Any) -> bool:
     myslniki) plus zdjete wyroznienia Markdown na poczatku. Wielkosc liter
     i slowa musza sie zgadzac — to jest zdanie po bramce, nie inspiracja.
     """
-    l = _do_porownania(str(linia or "")).strip().rstrip(".!?:;,—-– ").strip()
+    # OBIE STRONY TAK SAMO (recenzja 25.10.2026): z tekstu zdejmowalismy cudzyslow na poczatku,
+    # z linii nie — hak otwierany cytatem albo konczacy sie „.\"" nie przechodzil nigdy, nawet
+    # przepisany co do znaku, i kat przepadal po czterech wywolaniach Opusa.
+    l = _do_porownania(str(linia or "")).strip().lstrip("*_\"'> ").strip()
+    l = l.rstrip("\"'”’)").rstrip(".!?:;,—-– ").rstrip("\"'”’)").strip()
     if not l:
         return True
     t = _do_porownania(str(tekst or "")).strip().lstrip("*_\"'> ").strip()
@@ -4157,8 +4176,15 @@ def _zdanie_wnosi_fakt(zdanie: str, twierdzenia: list[dict[str, Any]]) -> bool:
     slowa = re.findall(r"[A-Za-z][\w.'’-]*", zdanie)
     for i, sl in enumerate(slowa):
         czyste = sl.strip(".'’-")
-        if i == 0 or not czyste or not czyste[0].isupper():
+        if not czyste or not czyste[0].isupper():
             continue
+        if i == 0:
+            # Pierwsze slowo zdania: nazwa tylko z cyfra/wielka litera w srodku albo gdy w tym samym
+            # zdaniu stoi juz z wielkiej litery dalej (recenzja: „Sonnet, not Opus, was its real
+            # comparison." przechodzilo po przestawieniu szyku).
+            if not (any(ch.isdigit() for ch in czyste) or any(ch.isupper() for ch in czyste[1:])
+                    or re.search(r"\b(?:not|than|or|and|vs\.?|versus)\s+[A-Z]", zdanie)):
+                continue
         rdzen = re.sub(r"['’]s$", "", czyste).lower()
         if rdzen in _NIE_NAZWY or len(rdzen) < 2:
             continue
@@ -6557,7 +6583,11 @@ def notki_dnia(
         if _przes and not _napisana:
             _powod = (("reguly: " + "; ".join(wynik.get("bramka_odrzucila") or []))
                       if wynik.get("bramka_odrzucila") else "zaden pisarz nie oddal tekstu")
-            _z_sledztwa("oznacz_probe", _przes.get("id"), _powod[:400])
+            # PROBA TYLKO ZA WADE KATA I TYLKO W PRODUKCJI (recenzja 25.10.2026): przebieg
+            # sprawdzajacy (run.py bez --wyslij) zapisywal proby do produkcyjnej kolejki — dwa takie
+            # przebiegi kasowaly oplacony kat; awaria dostawcy (pusty wynik bez bramki) to nie wada kata.
+            if wynik.get("bramka_odrzucila") and _tor_produkcji(conn, run_id):
+                _z_sledztwa("oznacz_probe", _przes.get("id"), _powod[:400])
             print("  [przeslanie] %s nie wyszlo (%s) — w tym miejscu zwykla notka"
                   % (_przes.get("id"), _powod[:160]), flush=True)
             typy.insert(nr + 1, typ_miejsca)
@@ -7288,10 +7318,22 @@ def _json_weryfikacji(raw: Any) -> dict[str, Any] | None:
     Obiekt bez zadnego z pol werdyktu (`claims`, `safe_to_post`, `verdict`) to
     tez brak odpowiedzi — model potrafi oddac pusty `{}` albo fragment przykladu.
     """
+    # KAZDY OBIEKT ODPOWIEDZI (recenzja 25.10.2026): maly JSON przed werdyktem („Searching
+    # {"query": ...} now.") dawal „brak JSON-u" i pelna platna ponowke z szukaniem.
+    dane = None
     try:
-        dane = llm.parse_json(str(raw or ""))
-    except ValueError:
-        return None
+        obiekty = list(llm._obiekty_json(str(raw or "")))
+    except Exception:  # noqa: BLE001
+        obiekty = []
+    for o in obiekty:
+        if isinstance(o, dict) and any(k in o for k in ("claims", "safe_to_post", "verdict")):
+            dane = o
+            break
+    if dane is None:
+        try:
+            dane = llm.parse_json(str(raw or ""))
+        except ValueError:
+            return None
     if not isinstance(dane, dict) or not any(k in dane for k in ("claims", "safe_to_post", "verdict")):
         return None
     if not isinstance(dane.get("claims"), list):

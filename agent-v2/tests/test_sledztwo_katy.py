@@ -855,5 +855,20 @@ sprawdz("KONTRDOWOD: kwota bez ukosnika dalej mnozona przez skale",
         sledztwo._liczby("a $1.5 billion deal") == {"1500000000"})
 
 print()
+print("=== RECENZJA K/N 25.10.2026 ===")
+sprawdz("laboratoria i produkty AI to aktor AI w regule 'AI term'",
+        not any(b.startswith("AI term") for b in sledztwo.sprawdz_notke(
+            "ChatGPT now has many weekly users, OpenAI says. Claude answered with a memory feature.", [], {})))
+sprawdz("A.I., Google I/O i cytat w pojedynczym cudzyslowie to nie pierwsza osoba",
+        sledztwo._pierwsza_osoba("A.I. is changing how hospitals bill. At Google I/O, a new mode shipped. "
+                                 "'I was wrong,' he said.") == []
+        and sledztwo._pierwsza_osoba("I think so.") == ["I"])
+sprawdz("'per 1M' to jednostka stawki, nie liczba 1 000 000",
+        sledztwo._liczby("costs $0.14 per 1M input tokens") == {"0.14"})
+sprawdz("objasnienie juz uzyte: tylko prawdziwe dopowiedzenie, nie myslnik z dalszym ciagiem",
+        sledztwo._objasniona("Acme Labs, a small AI lab, built it.", "Acme")
+        and not sledztwo._objasniona("Then came Acme — and the price war got real.", "Acme")
+        and not sledztwo._objasniona("Acme ($2 per million tokens) is cheap.", "Acme"))
+print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))
 sys.exit(1 if oblane else 0)

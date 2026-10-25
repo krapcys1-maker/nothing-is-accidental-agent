@@ -3605,9 +3605,13 @@ MAX_TOKENS.update({"investigation": 6000, "investigation_search": 6000,
 # (`timeout_for`). Ksiega: paczka pieciu pytan ze statusami i cytatami;
 # naprawa naglowka: jedno zdanie; porownanie wnioskow i wiernosc notki: krotka
 # lista par albo zdan.
+# RECENZJA 25.10.2026: termin wywolania liczy sie z sufitu (`timeout_for`) — przy 600/1500 tokenach
+# wychodzilo 29-72 s, a bezpiecznik dwoch zawieszen (`ZAWIESZEN_DO_WYLACZENIA`) wylaczylby wolnego
+# DeepSeeka na caly przebieg dzienny (factcheck, notki z banku, komentarze). Przy wylaczonym
+# rozumowaniu nieuzyty sufit nic nie kosztuje.
 MAX_TOKENS.update({"ksiega": 6000, "investigation_document": 6000,
-                   "naglowek_naprawa": 600, "ten_sam_punkt": 1500,
-                   "wiernosc_notki": 1500})
+                   "naglowek_naprawa": 6000, "ten_sam_punkt": 6000,
+                   "wiernosc_notki": 6000})
 
 # --- terminy -----------------------------------------------------------------
 # Termin musi pokryć własny sufit tokenów. Zmierzone: mediana 16,08 ms na token

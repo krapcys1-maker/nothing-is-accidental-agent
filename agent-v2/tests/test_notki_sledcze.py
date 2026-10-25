@@ -661,9 +661,12 @@ with podmiana(sledztwo, sprawdz_notke=lambda *a, **k: (_ for _ in ()).throw(Runt
 sprawdz("KONTRDOWOD: zepsute `sprawdz_notke` nie wywraca bramki, log to mowi, zdanie dalej pilnowane",
         len(_wynik_bramki) == 1 and "sprawdz_notke niedostepne" in _log, (_wynik_bramki, _log))
 
+# Proba kata liczy sie tylko w produkcji (recenzja 25.10.2026: przebieg sprawdzajacy kasowal katy).
+_tor = stages._tor_produkcji
+stages._tor_produkcji = lambda conn, run_id: True
 wyn, log = dzien([{"candidates": [], "bramka_odrzucila": ["numbers outside cited claims"]}], od=0,
                  przeslanie=PRZES, material=MATERIAL, fakty_banku=[FAKT_BANKU])
-sprawdz("notka serii lamiaca reguly: proba kata z powodem",
+sprawdz("notka serii lamiaca reguly: proba kata z powodem (produkcja)",
         PROBY == [(PRZES["id"], "reguly: numbers outside cited claims")], PROBY)
 sprawdz("...bez drugiego pisarza na tych samych twierdzeniach, a w tym miejscu zwykla notka",
         [w["etap"] for w in WOLANE_NOTE] == ["notka_przeslania_fakt", "note"]
@@ -677,9 +680,15 @@ wyn, log = dzien([{"candidates": []}, {"candidates": []}], od=0, przeslanie=PRZE
 sprawdz("odmowa Opusa: zwykly pisarz z TYMI SAMYMI bramkami",
         [w["etap"] for w in WOLANE_NOTE][:2] == ["notka_przeslania_fakt", "note"]
         and WOLANE_NOTE[1].get("bez_rozbioru") is True and WOLANE_NOTE[1].get("pierwsze_zdanie") == LINIA2)
-sprawdz("obaj bez tekstu: proba kata i zwykla notka w tym miejscu",
-        PROBY == [(PRZES["id"], "zaden pisarz nie oddal tekstu")] and len(WOLANE_NOTE) == 3
+# Awaria dostawcy (zaden pisarz bez tekstu, bez bramki) to nie wada kata — bez proby (recenzja 25.10.2026).
+sprawdz("obaj bez tekstu: BEZ proby kata, zwykla notka w tym miejscu",
+        PROBY == [] and len(WOLANE_NOTE) == 3
         and WOLANE_NOTE[2]["typ"] == "CIEKAWOSTKA", (PROBY, [w["etap"] for w in WOLANE_NOTE]))
+stages._tor_produkcji = lambda conn, run_id: False
+_wyn_t, _log_t = dzien([{"candidates": [], "bramka_odrzucila": ["numbers outside cited claims"]}], od=0,
+                 przeslanie=PRZES, material=MATERIAL, fakty_banku=[FAKT_BANKU])
+sprawdz("KONTRDOWOD: przebieg sprawdzajacy (nie produkcja) nie zapisuje proby kata", PROBY == [], PROBY)
+stages._tor_produkcji = _tor
 sprawdz("log mowi, ze Opus nie napisal", "Opus nie napisal notki" in log)
 
 with podmiana(sledztwo, klucze_serii=lambda: (_ for _ in ()).throw(RuntimeError("zepsute"))):
@@ -722,6 +731,24 @@ sprawdz("KONTRDOWOD: nowa liczba albo nowa nazwa dalej blokuje",
         stages._zdanie_wnosi_fakt("It scored 71 on the index.", _tw)
         and stages._zdanie_wnosi_fakt("Its comparison was Sonnet, not Opus.", _tw)
         and stages._zdanie_wnosi_fakt("The best open model trails the front by 12 points.", _tw))
+print()
+print("=== RECENZJA K/N 25.10.2026 ===")
+_cyt = '"Nobody checked the model before release," auditors wrote of Gizmo 2.5.'
+sprawdz("pierwsze zdanie otwierane cytatem przechodzi, gdy pisarz je zachowal",
+        stages.zachowuje_pierwsze_zdanie(_cyt + " That matters.", _cyt))
+sprawdz("linia konczaca sie cytatem po kropce, polaczona myslnikiem, przechodzi",
+        stages.zachowuje_pierwsze_zdanie('It calls the model "unreviewed" — and that matters.',
+                                         'It calls the model "unreviewed."'))
+sprawdz("KONTRDOWOD: inne pierwsze zdanie dalej odpada",
+        not stages.zachowuje_pierwsze_zdanie("Auditors checked nothing. " + _cyt, _cyt))
+import sqlite3 as _sq  # noqa: E402
+import db  # noqa: E402
+_c = _sq.connect(":memory:")
+_c.execute("CREATE TABLE calls (id INTEGER PRIMARY KEY, at TEXT, run_id INTEGER, model TEXT, purpose TEXT,"
+           " cost_usd REAL, akcja TEXT)")
+db.record_call(_c, run_id=1, model="m", purpose="note", cost_usd=0.01, model_served="m-served")
+sprawdz("zapis kosztu bez kolumny model_served (migracja przegrana z blokada) nie pada",
+        _c.execute("SELECT count(*), sum(cost_usd) FROM calls").fetchone() == (1, 0.01))
 print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))
 sys.exit(1 if oblane else 0)

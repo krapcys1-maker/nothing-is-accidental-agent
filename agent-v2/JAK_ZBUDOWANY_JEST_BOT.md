@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **38 plików**, 52 085 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **38 plików**, 52 175 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -114,7 +114,7 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
 się testować bez przeglądarki i bez pieniędzy**. 213 zestawów
-testów, 5970 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+testów, 5979 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -143,7 +143,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-3770 wierszy, 40 funkcji na poziomie modułu, 2 klas
+3774 wierszy, 40 funkcji na poziomie modułu, 2 klas
 
 | funkcja | co robi |
 |---|---|
@@ -190,7 +190,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-12543 wierszy, 228 funkcji na poziomie modułu, 0 klas
+12585 wierszy, 229 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -279,6 +279,7 @@ wiec nie da sie go rozjechac z kodem.
 | `powtorzenie(tekst, wzorce, n)` | Jaka czesc n-slowowych ciagow tekstu stoi juz w ktoryms ze wzorcow (0-1). |
 | `z_pytaniem_na_koncu(prompt)` | Prompt notki z poleceniem zakonczenia pytaniem (E18, ramie „on"). |
 | `pierwsze_zdanie_tekstu(tekst)` | Pierwsze zdanie notki (do logu i do porownan). |
+| `_tor_produkcji(conn, run_id)` *(wewn.)* | Czy przebieg jest produkcyjny (do zapisow stanu kolejki): tryb `produkcja` i brak |
 | `zachowuje_pierwsze_zdanie(tekst, linia)` | Czy notka zaczyna sie od zdania `linia` — po normalizacji, z dowolnym |
 | `pierwsza_osoba(tekst)` | Slowa pierwszej osoby liczby pojedynczej POZA CYTATAMI (spec §5 „MYSL"). |
 | `_slowa_nazwy(klucz)` *(wewn.)* | Slowa klucza serii, ktore cos nazywaja: z wielka litera albo z cyfra, od 3 znakow. |
@@ -604,7 +605,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `db.py` — schemat i zapis
 
-388 wierszy, 11 funkcji na poziomie modułu, 1 klas
+403 wierszy, 11 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -707,7 +708,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-4213 wierszy, 45 funkcji na poziomie modułu, 0 klas
+4217 wierszy, 45 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -889,7 +890,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `sledztwo.py` — śledztwo — wybór największej historii, rdzeń (sedno) i kąty serii z jednej tabeli KATY, uczciwy hak sprawdzany kodem, poziom tematu (liczba notek), bramka nowości i kolejka notek
 
-3148 wierszy, 131 funkcji na poziomie modułu, 0 klas
+3173 wierszy, 132 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -1012,6 +1013,7 @@ wiec nie da sie go rozjechac z kodem.
 | `_wydane_przeslania()` *(wewn.)* | (identyfikatory juz opublikowanych, ile wyszlo dzis). |
 | `_do_wydania(p, teraz_iso, wydane)` *(wewn.)* | — |
 | `czekajace_przeslania()` | Ile przeslan czeka na notke: wazne, jeszcze nie wydane i nie pominiete po probach. |
+| `_objasniona(tekst, encja)` *(wewn.)* | Czy tekst OBJASNIA encje (dopowiedzenie po nazwie: „X (a ...)", „X — a ...", „X, a/an ..."). |
 | `_ma_klucz(tekst, klucze)` *(wewn.)* | — |
 | `wez_przeslanie(promocja)` | Nastepne przeslanie do notki (jedno na przebieg pilnuje `stages.notki_dnia`), najstarsza |
 | `oznacz_probe(przeslanie_id, powod)` | Notka z kata sie nie udala (bramka notki, wiernosc, weryfikacja) — `stages` wola to po |
@@ -7083,11 +7085,23 @@ def record_call(conn: sqlite3.Connection, **fields: Any) -> None:
         "cache_hit", "web_searches", "cost_usd", "price_verified", "ok", "note",
         "akcja", "model_served",
     ) if k in fields]
-    conn.execute(
-        f"INSERT INTO calls (at, {', '.join(keys)})"
-        f" VALUES (?, {', '.join('?' * len(keys))})",
-        [now(), *(fields[k] for k in keys)],
-    )
+    try:
+        conn.execute(
+            f"INSERT INTO calls (at, {', '.join(keys)})"
+            f" VALUES (?, {', '.join('?' * len(keys))})",
+            [now(), *(fields[k] for k in keys)],
+        )
+    except sqlite3.OperationalError as exc:
+        # Kolumna `model_served` (fala 1) moze jeszcze nie istniec, gdy migracja przegrala z blokada:
+        # zapis kosztu jest wazniejszy niz zapis modelu z odpowiedzi.
+        if "model_served" not in str(exc) or "model_served" not in keys:
+            raise
+        keys = [k for k in keys if k != "model_served"]
+        conn.execute(
+            f"INSERT INTO calls (at, {', '.join(keys)})"
+            f" VALUES (?, {', '.join('?' * len(keys))})",
+            [now(), *(fields[k] for k in keys)],
+        )
     conn.commit()
 ```
 
@@ -7098,7 +7112,10 @@ def connect(path: Path | None = None) -> sqlite3.Connection:
     db_path = Path(path) if path is not None else Path(config.DB_PATH)
     _odmow_produkcji(db_path)
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(db_path)
+    # 30 s na blokade, nie domyslne 5 (recenzja 25.10.2026): migracja kolumny `calls.model_served`
+    # przegrana z innym procesem zostawiala baze bez kolumny, a kazdy udany `llm.call` padal potem
+    # w `record_call` — po oplaconej odpowiedzi.
+    conn = sqlite3.connect(db_path, timeout=30)
     conn.row_factory = sqlite3.Row
     conn.executescript(SCHEMA)
     _dopisz_brakujace_kolumny(conn)

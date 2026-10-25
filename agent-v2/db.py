@@ -172,7 +172,10 @@ def connect(path: Path | None = None) -> sqlite3.Connection:
     db_path = Path(path) if path is not None else Path(config.DB_PATH)
     _odmow_produkcji(db_path)
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(db_path)
+    # 30 s na blokade, nie domyslne 5 (recenzja 25.10.2026): migracja kolumny `calls.model_served`
+    # przegrana z innym procesem zostawiala baze bez kolumny, a kazdy udany `llm.call` padal potem
+    # w `record_call` — po oplaconej odpowiedzi.
+    conn = sqlite3.connect(db_path, timeout=30)
     conn.row_factory = sqlite3.Row
     conn.executescript(SCHEMA)
     _dopisz_brakujace_kolumny(conn)
@@ -344,11 +347,23 @@ def record_call(conn: sqlite3.Connection, **fields: Any) -> None:
         "cache_hit", "web_searches", "cost_usd", "price_verified", "ok", "note",
         "akcja", "model_served",
     ) if k in fields]
-    conn.execute(
-        f"INSERT INTO calls (at, {', '.join(keys)})"
-        f" VALUES (?, {', '.join('?' * len(keys))})",
-        [now(), *(fields[k] for k in keys)],
-    )
+    try:
+        conn.execute(
+            f"INSERT INTO calls (at, {', '.join(keys)})"
+            f" VALUES (?, {', '.join('?' * len(keys))})",
+            [now(), *(fields[k] for k in keys)],
+        )
+    except sqlite3.OperationalError as exc:
+        # Kolumna `model_served` (fala 1) moze jeszcze nie istniec, gdy migracja przegrala z blokada:
+        # zapis kosztu jest wazniejszy niz zapis modelu z odpowiedzi.
+        if "model_served" not in str(exc) or "model_served" not in keys:
+            raise
+        keys = [k for k in keys if k != "model_served"]
+        conn.execute(
+            f"INSERT INTO calls (at, {', '.join(keys)})"
+            f" VALUES (?, {', '.join('?' * len(keys))})",
+            [now(), *(fields[k] for k in keys)],
+        )
     conn.commit()
 
 
