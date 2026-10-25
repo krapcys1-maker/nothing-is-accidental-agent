@@ -371,8 +371,17 @@ def przeslania(conn, run_id, card: dict[str, Any], dossier: dict[str, Any] | Non
         import stages
         prompt = stages._prompt("przeslania.md", karta=_karta_do_promptu(card),
                                 hipotezy=_hipotezy_do_promptu(dossier))
-        dane = llm.parse_json(llm.call("przeslania", PRZESLANIA_SYSTEM, prompt,
-                                       conn=conn, run_id=run_id))
+        try:
+            dane = llm.parse_json(llm.call("przeslania", PRZESLANIA_SYSTEM, prompt,
+                                           conn=conn, run_id=run_id))
+        except llm.OdmowaDostawcy as exc:
+            # Odmowa (klasyfikator „cyber" przy historii o lukach) to nie koniec
+            # sledztwa: te same katy pisze zapasowy model (`config.MODEL_FOR`).
+            print("  [sledztwo] %s odmowil katow (%s) — pisze %s" % (
+                config.MODEL_FOR.get("przeslania"), str(exc)[:120],
+                config.MODEL_FOR.get("przeslania_zapas")), flush=True)
+            dane = llm.parse_json(llm.call("przeslania_zapas", PRZESLANIA_SYSTEM, prompt,
+                                           conn=conn, run_id=run_id))
     except Exception as exc:
         print("  [sledztwo] przeslania padly (%s)" % type(exc).__name__, flush=True)
         return []

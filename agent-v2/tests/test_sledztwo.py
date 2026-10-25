@@ -241,6 +241,29 @@ try:
     sprawdz("szesc katow -> piec; odpada KTO_PLACI (remis z MECHANIZM, pozniejszy), kuriozum pierwsze",
             [p["rodzaj"] for p in pr5] == ["KURIOZUM", "MECHANIZM", "USTALENIE", "MOTYW", "ZA_DWA_LATA"]
             and "KTO_PLACI: ponad 5 katow" in _log.getvalue(), ([p["rodzaj"] for p in pr5], _log.getvalue()))
+    # ODMOWA OPUSA (klasyfikator „cyber", 25.10: pierwsza seria to luka PHP2Shell) —
+    # te same katy pisze zapas; bez niego sledztwo zapisalo by sie bez katow.
+    _odp_katow = dict(ODP["przeslania"])
+
+    def _odmowa(purpose, system, user, **kw):
+        if purpose == "przeslania":
+            raise llm.OdmowaDostawcy("dostawca odmówił: cyber")
+        return json.dumps(_odp_katow)
+    llm.call = _odmowa
+    with contextlib.redirect_stdout(io.StringIO()) as _log:
+        _zap = sledztwo.przeslania(sqlite3.connect(":memory:"), None, KARTA, {}, DUZA)
+    sprawdz("odmowa Opusa: katy pisze zapas (DeepSeek), log to mowi",
+            len(_zap) == 5 and "odmowil katow" in _log.getvalue()
+            and config.MODEL_FOR.get("przeslania_zapas") == config.DEEPSEEK
+            and config.MAX_TOKENS.get("przeslania_zapas"), _log.getvalue()[-300:])
+
+    def _odmowa_obu(purpose, system, user, **kw):
+        raise llm.OdmowaDostawcy("dostawca odmówił: cyber")
+    llm.call = _odmowa_obu
+    with contextlib.redirect_stdout(io.StringIO()):
+        sprawdz("KONTRDOWOD: gdy odmowi tez zapas — pusto, bez wyjatku",
+                sledztwo.przeslania(sqlite3.connect(":memory:"), None, KARTA, {}, DUZA) == [])
+    llm.call = lambda purpose, system, user, **kw: json.dumps(ODP[purpose])
     sprawdz("kazdy rodzaj ma typ notki, a kolejnosc zaczyna od kuriozum",
             set(sledztwo.TYP_NOTKI) == set(sledztwo.RODZAJE) and sledztwo.RODZAJE[0] == "KURIOZUM"
             and sledztwo.RODZAJE[-2:] == ("MOTYW", "ZA_DWA_LATA"))

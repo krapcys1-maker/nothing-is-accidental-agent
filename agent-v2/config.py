@@ -431,6 +431,12 @@ MODEL_FOR = {
     # samoregulacji ryzyko ponosza inni — z uczciwym „przeciw" (0,080 USD).
     # Dwa sledztwa na tydzien: ok. 0,7 USD miesiecznie.
     "przeslania": CLAUDE,
+    # ZAPAS, GDY OPUS ODMOWI KATOW (25.10.2026). Opus 5.5 ma klasyfikatory „cyber",
+    # a sledztwa bywaja o lukach i atakach (pierwsza seria: luka PHP2Shell); 27.09
+    # odmowil tak artykulu. Bez zapasu sledztwo zapisywalo sie bez katow, a pamiec
+    # 14 dni blokowala powrot do historii. DeepSeek z rozumowaniem: A/B 27.09 —
+    # ostrozny, motyw plaski, za ok. 0,003 USD.
+    "przeslania_zapas": DEEPSEEK,
     # NOTKA Z PRZESLANIA — tez Opus (`stages.notki_dnia` przelacza pisarza tylko
     # dla notki niosacej przeslanie). Podglad 27.09: Flash gubil hipoteze
     # (MOTYW konczyl pytaniem, ZA_DWA_LATA opowiadal sam incydent). Trzy rundy
@@ -532,6 +538,7 @@ DEEPSEEK_MYSLENIE: dict[str, dict[str, str]] = {
     # A/B z 27.09 (patrz `docs/SLEDZTWO_2026-09-27.md`).
     "nowosc": {"type": "enabled"},
     "przeslania": {"type": "enabled"},
+    "przeslania_zapas": {"type": "enabled"},
     # Jak `naprawa` notek: trzeba zwazyc zdanie wobec dowodow.
     "naprawa_artykulu": {"type": "enabled"},
     # Wniosek to MYSLENIE — szukanie tego, czego nie ma w naglowku.
@@ -1655,6 +1662,7 @@ MAX_TOKENS = {
     # kilka zdan. Rozumowanie wlaczone, stad zapas.
     "nowosc": 12000,
     "przeslania": 16000,
+    "przeslania_zapas": 16000,
     # Do szesciu zdan, kazde jedno zdanie odpowiedzi.
     "naprawa_artykulu": 6000,
     # Trzy wnioski po kilka krotkich pol.
