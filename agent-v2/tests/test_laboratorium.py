@@ -188,6 +188,30 @@ sprawdz("mediana z najwyzszego odczytu, mediana slow, seria osobno",
 sprawdz("KONTRDOWOD: nieudana notka nie liczy sie", nt[0]["notek"] == 3, nt[0])
 
 print()
+print("=== 4b. SERIE: CO SIE KLIKA (KATY I KATEGORIE) ===")
+SER = _tmp / "konto_serii"
+SER.mkdir()
+_dz, _st = [], []
+for i, (pid, wysw) in enumerate([("202610200900-501-kuriozum", 40), ("202610201500-501-mechanizm", 10),
+                                 ("202610210900-502-kuriozum", 20), (None, 7)]):
+    _dz.append({"rodzaj": "notka", "udane": True, "id": "s%d" % i, "kiedy": "2026-10-20T10:00:00+00:00",
+                "przeslanie_id": pid})
+    _st.append({"rodzaj": "notka", "id": "s%d" % i, "wyswietlenia": wysw})
+(SER / "dziennik.jsonl").write_text("".join(json.dumps(x) + "\n" for x in _dz), encoding="utf-8")
+(SER / "statystyki.jsonl").write_text("".join(json.dumps(x) + "\n" for x in _st), encoding="utf-8")
+(SER / "sledztwa.jsonl").write_text(json.dumps({"run_id": 501, "kategoria": "PREMIERA_MODELU"}) + "\n"
+                                    + json.dumps({"run_id": 502, "kategoria": "PRACA_EKONOMIA"}) + "\n",
+                                    encoding="utf-8")
+_ser = lab.katy_serii(SER, "2026-10-25")
+sprawdz("katy serii: mediana wedlug rodzaju kata (kuriozum 30 z 2 notek, mechanizm 10)",
+        _ser["katy"] == [{"nazwa": "KURIOZUM", "notek": 2, "mediana_wysw": 30.0},
+                         {"nazwa": "MECHANIZM", "notek": 1, "mediana_wysw": 10}], _ser["katy"])
+sprawdz("i wedlug kategorii historii z numeru przebiegu sledztwa",
+        {w["nazwa"]: w["notek"] for w in _ser["kategorie"]} == {"PREMIERA_MODELU": 2, "PRACA_EKONOMIA": 1},
+        _ser["kategorie"])
+sprawdz("KONTRDOWOD: zwykla notka sprzed 26.10 nie miesza sie z seriami", _ser["zwykle_od_26_10"] == [])
+
+print()
 print("=== 5. ZAPIS I PODPIECIE ===")
 obs.katalog().mkdir(parents=True, exist_ok=True)
 (obs.katalog() / "dni_NIE.json").write_text(json.dumps(dni), encoding="utf-8")

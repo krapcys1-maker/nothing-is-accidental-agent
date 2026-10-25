@@ -320,6 +320,23 @@ try:
     sprawdz("prompt premiery opisuje jej katy, nie katy sledztwa",
             PROMPTY_KATOW and "LICZBY" in PROMPTY_KATOW[-1] and "claimed versus measured" in PROMPTY_KATOW[-1]
             and "KURIOZUM —" not in PROMPTY_KATOW[-1] and '"SMACZEK"|"LICZBY"' in PROMPTY_KATOW[-1])
+    # PYTANIA CIEKAWOSCI (wlasciciel 25.10: „pytania zadawac i odpowiadac ciekawe pytania").
+    llm.call = lambda purpose, system, user, **kw: json.dumps({"pytania": [
+        "Why did the benchmark score appear before anyone could test it?", "not a question", 7,
+        "Who pays for the free weights?"]})
+    with contextlib.redirect_stdout(io.StringIO()):
+        _pc = sledztwo.pytania_ciekawosci(None, None, DUZA, "What happened?")
+    sprawdz("pytania ciekawosci: tylko prawdziwe pytania z modelu",
+            _pc == ["Why did the benchmark score appear before anyone could test it?",
+                    "Who pays for the free weights?"], _pc)
+    llm.call = lambda purpose, system, user, **kw: (_ for _ in ()).throw(RuntimeError("padlo"))
+    with contextlib.redirect_stdout(io.StringIO()):
+        sprawdz("KONTRDOWOD: awaria modelu = pytania stale, nie pusto",
+                sledztwo.pytania_ciekawosci(None, None, DUZA, "x") == list(sledztwo.PYTANIA_CIEKAWOSCI_STALE))
+    sprawdz("kat pytanie-odpowiedz jest w obu zestawach, z opisem i typem notki",
+            "PYTANIE_ODPOWIEDZ" in sledztwo.RODZAJE and "PYTANIE_ODPOWIEDZ" in sledztwo.RODZAJE_PREMIERY
+            and sledztwo.TYP_NOTKI["PYTANIE_ODPOWIEDZ"] == "CIEKAWOSTKA")
+    llm.call = _premiera
     sprawdz("typ sledztwa z kategorii", sledztwo.typ_sledztwa("PREMIERA_MODELU") == "premiera"
             and sledztwo.typ_sledztwa("PRACA_EKONOMIA") == "sledztwo" and sledztwo.typ_sledztwa(None) == "sledztwo")
 
@@ -623,6 +640,8 @@ sprawdz("artykul: pelny obraz i JEDNA nasza analiza przy co najmniej czterech ka
 _sl = _art[_art.index("def _przebieg_sledztwa"):]
 sprawdz("kazde sledztwo pyta o dokumenty pierwotne i ma 3 rundy dogrywki",
         "pod.append(sledztwo.PYTANIE_PIERWOTNE)" in _sl and "max_rund=sledztwo.RUND_SLEDZTWA" in _sl
+        and "pod += sledztwo.pytania_ciekawosci(conn, run_id, wybrana" in _sl
+        and "sledztwo.scal_historie(" in _sl and "sledztwo.wielkie_historie(_korpus" in _sl
         and sledztwo.RUND_SLEDZTWA == 3 and "original document" in sledztwo.PYTANIE_PIERWOTNE)
 sprawdz("przebieg: wybor duzego tematu, pytania premiery, glosy HN i cennik w korpusie, typ do pisarza",
         "sledztwo.wybierz_historie(historie" in _art and "pod += list(sledztwo.PYTANIA_PREMIERY)" in _art

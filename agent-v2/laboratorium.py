@@ -247,6 +247,49 @@ def notki_tygodniami(dane: Path, dzis: str, ile: int = TYGODNI) -> list[dict[str
     return out
 
 
+def katy_serii(dane: Path, dzis: str) -> dict[str, list[dict[str, Any]]]:
+    """Co sie klika w seriach sledczych: mediana wyswietlen notek wedlug rodzaju kata
+    i wedlug kategorii historii (notki co najmniej 3-dniowe).
+
+    Rodzaj kata = koncowka `przeslanie_id` („202610251313-512-kuriozum"), kategoria = wpis
+    sledztwa z tym samym numerem przebiegu (`sledztwa.jsonl`, pole `kategoria` od 25.10.2026).
+    To petla uczenia: wagi kategorii (`sledztwo.WAGI_KATEGORII`) i kolejnosc katow maja sie
+    z czasem opierac na tym, a nie na badaniu cudzych publikacji.
+    """
+    naj: dict[str, int] = {}
+    for s in obs._jsonl(dane / "statystyki.jsonl"):
+        if s.get("rodzaj") == "notka" and s.get("id") and isinstance(s.get("wyswietlenia"), int):
+            naj[str(s["id"])] = max(naj.get(str(s["id"]), 0), s["wyswietlenia"])
+    kategoria_przebiegu = {str(r.get("run_id")): str(r.get("kategoria"))
+                           for r in obs._jsonl(dane / "sledztwa.jsonl") if r.get("kategoria")}
+    granica = (obs._d(dzis) - timedelta(days=DOJRZALOSC_NOTKI_DNI)).isoformat()
+    wg_kata: dict[str, list[int]] = {}
+    wg_kategorii: dict[str, list[int]] = {}
+    zwykle: list[int] = []
+    for w in obs._jsonl(dane / "dziennik.jsonl"):
+        if (w.get("rodzaj") != "notka" or not w.get("udane") or str(w.get("id") or "") not in naj
+                or str(w.get("kiedy") or "")[:10] > granica):
+            continue
+        wysw = naj[str(w["id"])]
+        pid = str(w.get("przeslanie_id") or "")
+        if not pid:
+            if str(w.get("kiedy") or "")[:10] >= "2026-10-26":
+                zwykle.append(wysw)
+            continue
+        czesci = pid.split("-")
+        if len(czesci) >= 3:
+            wg_kata.setdefault(czesci[-1].upper(), []).append(wysw)
+            kat = kategoria_przebiegu.get(czesci[1])
+            if kat:
+                wg_kategorii.setdefault(kat, []).append(wysw)
+
+    def _wiersze(grupy):
+        return sorted(({"nazwa": k, "notek": len(v), "mediana_wysw": statistics.median(v)}
+                       for k, v in grupy.items()), key=lambda x: -x["mediana_wysw"])
+    return {"katy": _wiersze(wg_kata), "kategorie": _wiersze(wg_kategorii),
+            "zwykle_od_26_10": _wiersze({"zwykle notki": zwykle}) if zwykle else []}
+
+
 # --- rachunek konta ---------------------------------------------------------------
 
 def policz_konto(dni: dict[str, dict], dane: Path, zrodla: dict | None, wczoraj: str,
@@ -292,6 +335,7 @@ def policz_konto(dni: dict[str, dict], dane: Path, zrodla: dict | None, wczoraj:
     wynik["na_1000_wyswietlen"] = round(1000 * sum(y) / sw, 2) if sw else None
     # 3. notki
     wynik["notki"] = notki_tygodniami(dane, dzis)
+    wynik["serie"] = katy_serii(dane, dzis)
     # 4. atrybucja Substacka (okno 30 dni z panelu zrodel)
     prz = (zrodla or {}).get("przypisane") or {}
     wynik["atrybucja"] = {"okno": (zrodla or {}).get("okno"), "wg_rodzaju": prz.get("wg_rodzaju"),
@@ -386,6 +430,12 @@ def tekst(w: dict[str, Any]) -> str:
                 L.append("| %s | %d | %s | %s | %d | %s |" % (
                     n["tydzien"], n["notek"], _liczba(n["mediana_wysw"]), _liczba(n["mediana_slow"]),
                     n["seria_notek"], _liczba(n["seria_mediana_wysw"])))
+        serie = k.get("serie") or {}
+        if serie.get("katy"):
+            L += ["", "**3b. Serie sledcze: co sie klika** (notki co najmniej 3-dniowe; male n to trop, nie dowod)", "",
+                  "| kat albo kategoria | notek | mediana wysw. |", "|---|---|---|"]
+            for w in serie["katy"] + serie.get("kategorie", []) + serie.get("zwykle_od_26_10", []):
+                L.append("| %s | %d | %s |" % (w["nazwa"], w["notek"], _liczba(w["mediana_wysw"])))
         a = k.get("atrybucja") or {}
         if a.get("wg_rodzaju"):
             L += ["", "**4. Zapisy przypisane przez Substack** (okno %s do %s): %s; razem %s, panel %s" % (

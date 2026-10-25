@@ -51,8 +51,8 @@ wrong. A hypothesis never becomes a fact in the text.
 It may also carry `investigation_angles`: the angles our investigation found in
 this story, each with the checked detail (`hak`) it rests on: the telling
 detail (KURIOZUM), how it works (MECHANIZM), what the sources show side by side
-(USTALENIE), who bears the cost (KTO_PLACI), the motive and the two-year
-scenario. Then this is the full investigation, not a news summary; the reader
+(USTALENIE), a curious reader's question and its answer (PYTANIE_ODPOWIEDZ), who
+bears the cost (KTO_PLACI), the motive and the two-year scenario. Then this is the full investigation, not a news summary; the reader
 may already know the headline. Open with the most telling checked detail
 rather than background, and make the question the piece answers clear early.
 Show the sequence of events where the order matters, explain the mechanism in

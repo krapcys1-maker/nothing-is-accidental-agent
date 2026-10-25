@@ -976,6 +976,8 @@ def _przebieg_sledztwa(conn, run_id: int) -> int:
     # pytanie, smaczki z karty modelu — badanie szuka odpowiedzi na kazde z nich.
     if typ == "premiera":
         pod += list(sledztwo.PYTANIA_PREMIERY)
+    # PYTANIA CIEKAWOSCI — patrz `sledztwo.pytania_ciekawosci`.
+    pod += sledztwo.pytania_ciekawosci(conn, run_id, wybrana, brief.get("question") or "")
     pod.append(sledztwo.PYTANIE_PIERWOTNE)
     for q in pod:
         print("    - %s" % str(q)[:110], flush=True)

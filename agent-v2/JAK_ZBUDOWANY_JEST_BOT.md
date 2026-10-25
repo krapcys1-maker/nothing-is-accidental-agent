@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **37 plików**, 44 828 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **37 plików**, 44 928 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -114,7 +114,7 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
 się testować bez przeglądarki i bez pieniędzy**. 207 zestawów
-testów, 5428 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+testów, 5434 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -669,7 +669,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-4067 wierszy, 44 funkcji na poziomie modułu, 0 klas
+4071 wierszy, 44 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -850,10 +850,11 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `sledztwo.py` — śledztwo — historia z radaru, bramka nowości sprawdzana kodem, seria 4–5 kątów (kuriozum, mechanizm, ustalenie, kto płaci, motyw, za dwa lata) i kolejka notek
 
-1163 wierszy, 44 funkcji na poziomie modułu, 0 klas
+1207 wierszy, 45 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
+| `pytania_ciekawosci(conn, run_id, h, pytanie, ile)` | Pytania, ktore zadalby bystry, ciekawy czytelnik tej historii — do badania. |
 | `_teraz()` *(wewn.)* | — |
 | `_host(url)` *(wewn.)* | — |
 | `_klucz(url)` *(wewn.)* | — |
@@ -994,7 +995,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `laboratorium.py` — laboratorium — tygodniowy raport badawczy obu kont: prędkość przyrostu z przedziałami, dawka → skutek, notki tygodniami, atrybucja zapisów
 
-420 wierszy, 17 funkcji na poziomie modułu, 0 klas
+470 wierszy, 18 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -1009,6 +1010,7 @@ wiec nie da sie go rozjechac z kodem.
 | `zapisy_z_listy(dane)` | Zapisy BRUTTO na dobe z najnowszej kopii listy subskrybentow i data tej kopii. |
 | `tygodnie(dni, wczoraj, ile, zapisy, data_kopii)` | Pelne tygodnie (pon-niedz) z przyrostem netto i sumami dzialan oraz zasiegu. |
 | `notki_tygodniami(dane, dzis, ile)` | Mediana wyswietlen i dlugosci notek wedlug tygodnia publikacji (notki >= 3 dni). |
+| `katy_serii(dane, dzis)` | Co sie klika w seriach sledczych: mediana wyswietlen notek wedlug rodzaju kata |
 | `policz_konto(dni, dane, zrodla, wczoraj, dzis)` | — |
 | `policz(wczoraj)` | — |
 | `_liczba(x)` *(wewn.)* | Mediana bez „.0" przy liczbie calkowitej; brak = „—". |
@@ -1134,7 +1136,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `artykul_z_puli.py` — artykuł bierze temat z tej samej puli, co notki
 
-1789 wierszy, 15 funkcji na poziomie modułu, 0 klas
+1791 wierszy, 15 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -10637,8 +10639,8 @@ wrong. A hypothesis never becomes a fact in the text.
 It may also carry `investigation_angles`: the angles our investigation found in
 this story, each with the checked detail (`hak`) it rests on: the telling
 detail (KURIOZUM), how it works (MECHANIZM), what the sources show side by side
-(USTALENIE), who bears the cost (KTO_PLACI), the motive and the two-year
-scenario. Then this is the full investigation, not a news summary; the reader
+(USTALENIE), a curious reader's question and its answer (PYTANIE_ODPOWIEDZ), who
+bears the cost (KTO_PLACI), the motive and the two-year scenario. Then this is the full investigation, not a news summary; the reader
 may already know the headline. Open with the most telling checked detail
 rather than background, and make the question the piece answers clear early.
 Show the sequence of events where the order matters, explain the mechanism in

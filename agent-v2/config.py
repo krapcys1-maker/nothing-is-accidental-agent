@@ -443,6 +443,8 @@ MODEL_FOR = {
     # DETEKTOR DUZYCH HISTORII (25.10.2026, `sledztwo.wielkie_historie`): grupuje ok. 250
     # naglowkow z 4 dni wedlug tej samej sprawy; raz na sledztwo, ulamek centa.
     "wielkie_historie": DEEPSEEK,
+    # PYTANIA CIEKAWOSCI (25.10.2026, `sledztwo.pytania_ciekawosci`) — 4 pytania na sledztwo.
+    "pytania_ciekawosci": DEEPSEEK,
     # NOTKA Z PRZESLANIA — tez Opus (`stages.notki_dnia` przelacza pisarza tylko
     # dla notki niosacej przeslanie). Podglad 27.09: Flash gubil hipoteze
     # (MOTYW konczyl pytaniem, ZA_DWA_LATA opowiadal sam incydent). Trzy rundy
@@ -547,6 +549,7 @@ DEEPSEEK_MYSLENIE: dict[str, dict[str, str]] = {
     "przeslania_zapas": {"type": "enabled"},
     "kategoria_historii": {"type": "disabled"},
     "wielkie_historie": {"type": "disabled"},
+    "pytania_ciekawosci": {"type": "enabled"},
     # Jak `naprawa` notek: trzeba zwazyc zdanie wobec dowodow.
     "naprawa_artykulu": {"type": "enabled"},
     # Wniosek to MYSLENIE — szukanie tego, czego nie ma w naglowku.
@@ -1673,6 +1676,7 @@ MAX_TOKENS = {
     "przeslania_zapas": 16000,
     "kategoria_historii": 3000,
     "wielkie_historie": 4000,
+    "pytania_ciekawosci": 4000,
     # Do szesciu zdan, kazde jedno zdanie odpowiedzi.
     "naprawa_artykulu": 6000,
     # Trzy wnioski po kilka krotkich pol.
