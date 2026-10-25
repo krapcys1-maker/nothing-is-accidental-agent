@@ -46,9 +46,13 @@ class VoiceRoutingTest(unittest.TestCase):
         # `restack_opus` — zdanie restacka w ramieniu „on" eksperymentu E13
         # (decyzja wlasciciela 28.09.2026: lepszy pisarz restackow, 50/50).
         self.assertEqual(config.MODEL_FOR["restack_opus"], config.CLAUDE)
+        # `pytania_ciekawosci` — plan sledztwa na Sonnecie (25.10.2026): porownanie
+        # trzech modeli na tych samych historiach, Sonnet planowal jak Opus za 1/3 ceny,
+        # Flash pytal zbyt technicznie.
+        self.assertEqual(config.MODEL_FOR["pytania_ciekawosci"], config.SONNET)
         for purpose, model in config.MODEL_FOR.items():
             if purpose not in {"write", "obraz", "przeslania", "notka_przeslania", "note_mimo",
-                               "restack_opus"}:
+                               "restack_opus", "pytania_ciekawosci"}:
                 with self.subTest(purpose=purpose):
                     self.assertEqual(model, config.DEEPSEEK)
 
