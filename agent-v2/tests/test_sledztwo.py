@@ -473,6 +473,19 @@ try:
     with contextlib.redirect_stdout(io.StringIO()):
         _gl2 = sledztwo.glosy_hn("Model X launch", http=_siec, klucze=["ModelX", "safety"])
     _pytania_hn = [q[1]["query"] for q in _siec.zapytania if q[0] == sledztwo.HN_SZUKAJ]
+    class _SiecKiki(_Siec):
+        def get(self, url, params=None, timeout=None):
+            if url == sledztwo.HN_SZUKAJ:
+                return _Odp({"hits": [
+                    {"objectID": "9", "title": "Dogs agree that 'bouba' is round and 'kiki' is spiky",
+                     "points": 348, "num_comments": 219},
+                    {"objectID": "1", "title": "Kimi K3.1 Pro and K3.1 Pro Highspeed", "points": 1065,
+                     "num_comments": 654}]})
+            return super().get(url, params, timeout)
+    with contextlib.redirect_stdout(io.StringIO()):
+        _gk = sledztwo.glosy_hn("Kimi K3.1 Pro", http=_SiecKiki(), klucze=["Kimi"])
+    sprawdz("KONTRDOWOD: watek bez szukanej nazwy w tytule (literowka „kiki”) odpada",
+            [d["url"] for d in _gk] == ["https://news.ycombinator.com/item?id=1"], [d["title"] for d in _gk])
     sprawdz("Hacker News szuka po zapytaniu i nazwach wlasnych, watki bez powtorek",
             _pytania_hn == ["Model X launch", "ModelX"] and len(_gl2) == 2, (_pytania_hn, len(_gl2)))
     with contextlib.redirect_stdout(io.StringIO()):

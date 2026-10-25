@@ -708,7 +708,7 @@
 
 ### `sledztwo.py` — śledztwo — historia z radaru, bramka nowości sprawdzana kodem, seria 4–5 kątów (kuriozum, mechanizm, ustalenie, kto płaci, motyw, za dwa lata) i kolejka notek
 
-1158 wierszy, 44 funkcji na poziomie modułu, 0 klas
+1163 wierszy, 44 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|

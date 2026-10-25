@@ -652,12 +652,17 @@ def glosy_hn(zapytanie: str, dni: int = 10, http=None, klucze: list[str] | None 
         http = http or httpx
         od = int((_teraz() - timedelta(days=dni)).timestamp())
         trafienia, widziane = [], set()
+        # TYTUL WATKU MUSI ZAWIERAC SZUKANA NAZWE: wyszukiwarka poprawia literowki i do
+        # „Kimi" dobrala 25.10 watek o psach i slowach „bouba/kiki".
+        nazwy = {t.lower() for z in zapytania for t in re.findall(r"[\w.\-]+", z) if len(t) >= 3}
         for z in zapytania:
             r = http.get(HN_SZUKAJ, params={"query": z, "tags": "story",
                                            "numericFilters": "created_at_i>%d" % od}, timeout=20)
             for h in r.json().get("hits") or []:
+                tytul = str(h.get("title") or "").lower()
                 if (int(h.get("num_comments") or 0) >= HN_MIN_KOMENTARZY
-                        and h.get("objectID") not in widziane):
+                        and h.get("objectID") not in widziane
+                        and any(re.search(r"(?<![a-z0-9])%s(?![a-z0-9])" % re.escape(n), tytul) for n in nazwy)):
                     widziane.add(h.get("objectID"))
                     trafienia.append(h)
     except Exception as exc:
