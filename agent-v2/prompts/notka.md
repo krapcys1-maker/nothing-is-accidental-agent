@@ -77,7 +77,7 @@ number it, mention a series or promise more. Open with the concrete detail in
 what it means for someone. Skip the background a headline already gave. A
 finding is stated plainly, with its sources. A motive, a two-year call or a
 verdict on the big question is OUR view: say it with conviction, the way a
-writer with an opinion would ("My bet:", "This is what AGI at maths looks
+writer with an opinion would ("Our bet:", "This is what AGI at maths looks
 like, and here's why"), with the reason and, if it rests on one, the assumption
 in `perspective.zalozenie`. Mention an objection only if it would really change
 a reader's mind; don't end on a hedge. If
@@ -86,6 +86,13 @@ saw them: don't restate their message or open with their detail. For a model
 release, keep a developer's own score apart from an independent one, and
 attribute what readers or testers said as their opinion. Facts still come only
 from the evidence; a hypothesis never turns into one.
+
+For MYSL, the material may carry `temat_dnia`: the big story we are covering
+in a series these days, with our thesis and the messages of our notes on it.
+Then the note is our boldest take on what that story means beyond itself — a
+provocative position or a sharp question about where it leads, the kind a
+reader argues with in the comments. You may name the story; add no new numbers
+or facts beyond what `temat_dnia` already says.
 
 For MYSL without factual material, write a clearly hypothetical question or
 editorial view. Don't invent an event or personal experience. If earlier notes

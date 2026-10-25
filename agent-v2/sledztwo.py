@@ -895,6 +895,25 @@ def _wczesniejsze_katy(p: dict[str, Any]) -> list[dict[str, Any]]:
             and q.get("id") != p.get("id")]
 
 
+def temat_dnia() -> dict[str, Any] | None:
+    """Historia, ktorej katy wychodza teraz — kontekst dla notki MYSL w dzien serii.
+
+    Najnowsza wazna historia w kolejce: tytul, teza sledztwa i przeslania jej katow
+    (nasze juz zapisane wnioski, nie nowe fakty). Bez waznej kolejki — None.
+    """
+    teraz = _teraz().isoformat()
+    kolejka = [p for p in _kolejka() if str(p.get("wazny_do") or "") >= teraz and p.get("historia")]
+    if not kolejka:
+        return None
+    historia = max(kolejka, key=lambda p: str(p.get("kiedy") or ""))["historia"]
+    katy = sorted((p for p in kolejka if p["historia"] == historia),
+                  key=lambda p: int(p.get("kolejnosc") or 0))
+    return {"story": historia,
+            "thesis": next((p.get("teza_sledztwa") for p in katy if p.get("teza_sledztwa")), ""),
+            "our_angles": [(p.get("perspektywa") or {}).get("przeslanie") for p in katy
+                           if (p.get("perspektywa") or {}).get("przeslanie")]}
+
+
 def material_notki(p: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     """(fakt do dziennika i straznikow, material dla pisarza) z przeslania."""
     kotwica = (p.get("fakty") or [{}])[0]

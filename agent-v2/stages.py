@@ -5802,6 +5802,17 @@ def notki_dnia(
                 "checkable claims. Use them only so your thought is about "
                 "something current."),
                 "o_czym_sie_mowi": zaczyn_z_kanalow(14)}
+            # TEMAT DNIA (25.10.2026): w dzien serii sledczej MYSL jest nasza wyrazista
+            # opinia o duzej historii, a nie przypadkowa mysl obok niej (proba na kopii:
+            # „Does it count as a catastrophe if nobody can agree on what broke?" przy
+            # serii o NextDC). Patrz `sledztwo.temat_dnia` i `prompts/notka.md`.
+            try:
+                import sledztwo as _sledztwo_md
+                _temat_dnia = _sledztwo_md.temat_dnia()
+            except Exception:
+                _temat_dnia = None
+            if _temat_dnia:
+                material["temat_dnia"] = _temat_dnia
         elif typ == "ARTYKUL" and karta:
             material = karta
         else:

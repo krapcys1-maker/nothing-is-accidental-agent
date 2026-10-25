@@ -141,17 +141,17 @@
 {{"text": "the full corrected text", "co_zmienione": "one line: what you changed and what evidence you changed it to"}}
 ```
 
-#### `naprawa_artykulu.md` (23 wierszy)
+#### `naprawa_artykulu.md` (31 wierszy)
 
 **Pola wejściowe:** `dowody`, `zdania`
 
 **Kontrakt wyjścia:**
 
 ```json
-{{"poprawki": [{{"nr": <sentence number>, "nowe": "<replacement sentence, or empty to delete>"}}]}}
+{{"poprawki": [{{"nr": <sentence number>, "nowe": "<replacement sentence, unchanged if it is our opinion, or empty to delete>"}}]}}
 ```
 
-#### `notka.md` (134 wierszy)
+#### `notka.md` (141 wierszy)
 
 **Pola wejściowe:** `evidence`, `form_brief`, `language`, `marka`, `max_words`, `min_words`, `note_form`, `note_type`, `ostatnie_otwarcia_json`, `ostatnie_zakonczenia_json`, `rozbior`, `type_brief`
 
@@ -191,7 +191,7 @@
 {{"grupy": [{{"zostaje": <id>, "scalone": [<id>, ...], "dlaczego": "<one clause: what makes these the same story>"}}]}}
 ```
 
-#### `pisarz.md` (171 wierszy)
+#### `pisarz.md` (176 wierszy)
 
 **Pola wejściowe:** `card_json`, `language`, `marka`, `max_words`, `min_words`, `poprzednie_uwagi`, `style_examples`, `style_negative`, `style_positive`, `target_words`
 

@@ -75,7 +75,12 @@ it, using the human baseline and test conditions from the card as evidence.
 Write it like the best AI writers: with a point of view. Take a side, make the
 call, reason from a named assumption where the evidence stops short. Not
 everything has to be proven; the reader must only be able to tell which part
-is fact and which is our view.
+is fact and which is our view. Speak as the publication: "we", "our view",
+"our bet" — never "I" or "my". Say a view once and confidently; don't wrap
+every sentence in "our reading is that".
+
+The two closing parts below count toward the planned length; trim the body to
+make room for them rather than running long.
 
 End an investigation article with two short parts under plain-text
 subheadings, after the body:

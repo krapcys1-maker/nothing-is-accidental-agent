@@ -439,6 +439,15 @@ _kol = json.loads((config.DATA_DIR / sledztwo.PLIK_KOLEJKI).read_text(encoding="
 for p in _kol:
     p["kiedy"] = (TERAZ - timedelta(days=1)).isoformat()
 (config.DATA_DIR / sledztwo.PLIK_KOLEJKI).write_text(json.dumps(_kol), encoding="utf-8")
+_td = sledztwo.temat_dnia()
+sprawdz("temat dnia dla MYSL: historia serii i przeslania jej katow w kolejnosci",
+        _td and _td["story"] == DUZA["tytul"] and _td["our_angles"][0] == pr5[0]["przeslanie"]
+        and len(_td["our_angles"]) == 5, _td)
+_st_kod = pathlib.Path("agent-v2/stages.py").read_text(encoding="utf-8")
+sprawdz("MYSL w dzien serii dostaje temat dnia, a prompt notki mowi, co z nim zrobic",
+        'material["temat_dnia"] = _temat_dnia' in _st_kod
+        and _st_kod.index('elif typ == "MYSL":') < _st_kod.index('material["temat_dnia"] = _temat_dnia')
+        and "`temat_dnia`" in pathlib.Path("agent-v2/prompts/notka.md").read_text(encoding="utf-8"))
 p1 = sledztwo.wez_przeslanie()
 sprawdz("pierwsze idzie kuriozum", (p1 or {}).get("rodzaj") == "KURIOZUM", p1)
 fakt, material = sledztwo.material_notki(p1)
