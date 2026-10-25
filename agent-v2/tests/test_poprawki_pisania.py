@@ -317,6 +317,27 @@ try:
                                                 [{"text": "That 17% is the base for the £958 million."}])
         sprawdz("KONTRDOWOD: zwykla poprawka wchodzi w miejsce zdania",
                 "Deloitte puts the resulting annual figure at £958 million." in cialo, cialo)
+        # Artykul 0496 (25.10.2026): obie poprawki wrocily jako DRUGIE wystapienie zdania z innego miejsca.
+        CIALO2 = ("Kimi cost $0.35 to $0.46 per task. Opus cost $0.37. When the site ran both models on the same tasks, "
+                  "Kimi cost $0.35 to $0.46 per task at default max effort. There is no hidden fee. "
+                  "Moonshot describes K3.1 Pro as a post-trained version of its earlier Kimi K3, with substantially "
+                  "larger post-training compute. Later text. It was trained to keep going. End.")
+        KARTA2 = {"confirmed_claims": [{"claim": "Kimi cost $0.35 to $0.46 per task", "evidence": "Kimi cost $0.35 to $0.46 per task",
+                                        "url": "https://x"}]}
+        llm.call = naprawa("K3.1 Pro cost $0.35 to $0.46 per task at default max effort.")
+        cialo, log = stages.popraw_bez_pokrycia(None, 0, CIALO2, KARTA2, [{"text": "There is no hidden fee."}])
+        sprawdz("SEDNO: poprawka dublujaca zdanie z innego akapitu -> zdanie znika, tresc zostaje raz",
+                "no hidden fee" not in cialo and cialo.count("per task at default max effort") == 1
+                and any("powtarzala" in x for x in log), (cialo, log))
+        llm.call = naprawa("Moonshot says it is a post-trained version of K3 with substantially larger post-training compute.")
+        cialo, log = stages.popraw_bez_pokrycia(None, 0, CIALO2, KARTA2, [{"text": "It was trained to keep going."}])
+        sprawdz("SEDNO: druga powtorka z sekcji o budowie modelu tez znika",
+                "trained to keep going" not in cialo and cialo.count("substantially larger post-training compute") == 1
+                and any("powtarzala" in x for x in log), (cialo, log))
+        llm.call = naprawa("Anthropic priced the comparison model at one flat rate for the whole test.")
+        cialo, log = stages.popraw_bez_pokrycia(None, 0, CIALO2, KARTA2, [{"text": "There is no hidden fee."}])
+        sprawdz("KONTRDOWOD: poprawka o czyms nowym nadal wchodzi w miejsce zdania",
+                "Anthropic priced the comparison model at one flat rate" in cialo and "no hidden fee" not in cialo, (cialo, log))
     finally:
         llm.call = _oryg_call
         for n, f in _oryg.items():

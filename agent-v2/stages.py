@@ -7272,6 +7272,11 @@ def zdania_o_warsztacie(body: str) -> list[dict[str, str]]:
             for z in zdania if O_WARSZTACIE.search(z)]
 
 
+# Poprawka zdania bez pokrycia, ktorej 4-slowne ciagi w tylu procentach stoja juz w innym zdaniu artykulu,
+# jest powtorka (zmierzone na artykule 0496: 0,4-0,5 dla dwoch powtorzonych zdan).
+PROG_POWTORZENIA_POPRAWKI = 0.4
+
+
 def popraw_bez_pokrycia(conn: sqlite3.Connection, run_id: int, body: str,
                         card: dict[str, Any], bez_pokrycia: list[dict[str, Any]]
                         ) -> tuple[str, list[str]]:
@@ -7333,6 +7338,15 @@ def popraw_bez_pokrycia(conn: sqlite3.Connection, run_id: int, body: str,
         if nowe and przed.get(stare) and powtorzenie(nowe, [przed[stare]]) >= 0.5:
             log.append("poprawka powtarzala poprzednie zdanie — usuniete: %s" % stare[:60])
             nowe = ""
+        # TO SAMO Z DOWOLNYM INNYM MIEJSCEM TEKSTU (25.10.2026, artykul 0496): poprawka „There is no hidden
+        # fee” -> zdanie o kosztach 1:1 z akapitu wyzej, a „It was trained to keep going” -> zdanie z sekcji
+        # o budowie modelu; obie weszly do tekstu drugi raz. Zdanie, ktorego tresc juz stoi gdzie indziej,
+        # znika zamiast wracac jako powtorka.
+        if nowe:
+            inne = [x for x in re.split(r"(?<=[.!?])\s+", plaski) if x and x != stare]
+            if nowe in plaski or (inne and powtorzenie(nowe, inne) >= PROG_POWTORZENIA_POPRAWKI):
+                log.append("poprawka powtarzala tresc z innego miejsca tekstu — usuniete: %s" % stare[:60])
+                nowe = ""
         obce = _liczby(nowe) - _liczby(stare) - wolne_liczby
         if obce:
             log.append("odrzucona poprawka z liczba spoza dowodow (%s): %s"
