@@ -1774,7 +1774,12 @@ def _badanie_sledztwa(conn, run_id, stan: dict, zegar: _Zegar, sledztwo, na_seri
             card = {"working_thesis": brief.get("question") or "", "confirmed_claims": [],
                     "not_established": [], "_fallback": True}
     try:
-        sprawdzona = stages.sprawdz_karte(card, evidence)
+        # KLUCZE HISTORII DO KLAS ZRODEL (proba 25.10.2026): bez nich `klasa_zrodla` nie mogla
+        # nadac PRIMARY nawet stronie samego autora (platform.kimi.ai przy historii o Kimi) —
+        # karta wyszla „INDEPENDENT 2, SECONDARY 13", a kandydat na artykul padl na Pr < 2.
+        sprawdzona = stages.sprawdz_karte(card, evidence,
+                                          klucze=sledztwo.nazwy_wlasne(wybrana.get("klucze")) or None,
+                                          rekord=wybrana.get("rekord") or None)
         if isinstance(sprawdzona, dict) and "confirmed_claims" in sprawdzona:
             card = sprawdzona
     except PRZERYWAJA:

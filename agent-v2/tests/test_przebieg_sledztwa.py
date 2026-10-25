@@ -397,8 +397,9 @@ class AtrapaStages:
             raise self.pada["synthesis"]
         return copy.deepcopy(self.karta)
 
-    def sprawdz_karte(self, card, evidence):
-        zd("sprawdz_karte", evidence=len(evidence))
+    def sprawdz_karte(self, card, evidence, klucze=None, rekord=None):
+        # Przebieg podaje klucze historii (proba 25.10.2026: bez nich PRIMARY bylo niemozliwe).
+        zd("sprawdz_karte", evidence=len(evidence), klucze=klucze)
         if "sprawdz_karte" in self.pada:
             raise self.pada["sprawdz_karte"]
         out = dict(card)

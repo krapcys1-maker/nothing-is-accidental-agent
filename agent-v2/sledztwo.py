@@ -2615,7 +2615,10 @@ def przeslania(conn, run_id, card: dict[str, Any], dossier: dict[str, Any] | Non
         opublikowane = opublikowane_katy(DNI_PAMIECI)
         import stages
         prompt = stages._prompt(
-            "przeslania.md", n_max=ile,
+            # KANDYDACI PONAD `ile` (proba 25.10.2026): przy samym `ile` braki skladu (brak kata
+            # HOW_IT_WORKS, glosow ludzi, analizy) wymuszaly druga runde Opusa — 0,21 USD za
+            # przepisanie calej serii. Z 2 kandydatami wiecej sklad wybiera kod z jednej odpowiedzi.
+            "przeslania.md", n_max=ile, n_kand=min(8, ile + 2),
             typ_historii=("a model release: judge it like an expert reviewer (claimed versus measured, price "
                           "and access, what people found, the big question)" if typ == "premiera"
                           else "an investigated AI story"),
@@ -2639,7 +2642,9 @@ def przeslania(conn, run_id, card: dict[str, Any], dossier: dict[str, Any] | Non
         cel_n = min(ile, len(twierdzenia) // 2)
         # RUNDA ZWROTNA (spec §2 etap 16): powody odrzucen i braki skladu wracaja do planisty raz,
         # zanim katy odpadna — wiecej bramek na wyjsciu Opusa nie moze po cichu zjadac serii.
-        if wynik["braki"] or (wynik["odrzucone"] and len(wynik["pula"]) < cel_n):
+        # Runda zwrotna TYLKO gdy uzytecznych katow jest mniej niz cel (proba 25.10.2026: sama luka
+        # w skladzie przy pelnej puli kosztowala druga odpowiedz Opusa, a seria i tak wyszla 4/4).
+        if len(wynik["pula"]) < cel_n:
             print("  [katy] runda zwrotna: %d odrzuconych, braki: %s" % (
                 len(wynik["odrzucone"]), "; ".join(wynik["braki"]) or "zadne"), flush=True)
             for kat, powod in wynik["odrzucone"]:

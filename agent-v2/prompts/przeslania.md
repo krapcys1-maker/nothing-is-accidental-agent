@@ -23,7 +23,10 @@ Then list the story's 3–8 strongest findings in `ustalenia`: verified things a
 curious non-expert would repeat, each with the claim numbers it stands on and one
 line on why a reader cares. {artykulowy}
 
-Build up to {n_max} notes from those findings, one finding per note; fewer is right
+Propose up to {n_kand} candidate notes from those findings, one finding per note;
+our code keeps the best {n_max} by its own composition rules (lead, how it works,
+people's voices, one verdict), so give it real choices — including a note on what
+people who tried or tested it found, when the card has their voices. Fewer is right
 when the card has fewer strong findings. Never pad. Each note is about 40–65 words
 and stands on its own. For each note give:
 - `rodzaj`: one angle tag from the list below.
@@ -39,7 +42,8 @@ and stands on its own. For each note give:
   for AI, write code, work in a named field, have savings or a pension, live near a
   data centre, or are online. Not only companies or investors.
 - `naglowek`: the first sentence: the most surprising TRUE thing in this note, at
-  most 18 words, starting with the thing itself. Not a question, no date or
+  most 18 words, starting with the thing itself. For a verdict, a motive or a
+  forecast it is the verdict itself, said plainly. Not a question, no date or
   "According to" opener, no teaser. Every number, superlative ("highest", "only",
   "first") and comparison in it must appear in the evidence of the claims you cite,
   about the same entity the sentence names; if that evidence says "if", "once",
