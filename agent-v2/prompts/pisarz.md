@@ -48,6 +48,20 @@ labelled analysis ("our reading", "one plausible explanation"), each with the
 evidence for it, the strongest evidence against it and what would prove it
 wrong. A hypothesis never becomes a fact in the text.
 
+It may also carry `investigation_angles`: the angles our investigation found in
+this story, each with the checked detail (`hak`) it rests on: the telling
+detail (KURIOZUM), how it works (MECHANIZM), what the sources show side by side
+(USTALENIE), who bears the cost (KTO_PLACI), the motive and the two-year
+scenario. Then this is the full investigation, not a news summary; the reader
+may already know the headline. Open with the most telling checked detail
+rather than background, and make the question the piece answers clear early.
+Show the sequence of events where the order matters, explain the mechanism in
+plain words, make the stakes concrete (who pays, how much, where the card says),
+and set what the actors said beside what they did. Give the motive and the
+scenario as labelled analysis. Close with what is still unknown and what would
+settle it (`not_established`). These are materials, not a required outline:
+merge, reorder or drop an angle that does not earn its place.
+
 One claim may carry `"not_fetched": true`. That is the fact this article was
 commissioned from, and its `evidence` is not a passage lifted from a document we
 retrieved — nobody on this run opened that page. You may state it, and you must

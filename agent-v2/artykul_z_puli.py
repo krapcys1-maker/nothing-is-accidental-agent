@@ -912,7 +912,8 @@ def _przebieg(conn, run_id: int) -> int:
 # czlowieka zamiast wchodzic do obiegu sam.
 def _przebieg_sledztwa(conn, run_id: int) -> int:
     """Sledztwo: historia z radaru -> pytania -> zrodla -> badanie -> karta ->
-    bramka nowosci -> artykul (tylko z ustaleniem) i trzy przeslania do notek.
+    bramka nowosci -> katy serii do notek (4-5, `sledztwo.RODZAJE`) i artykul
+    (z ustaleniem albo pelnym obrazem z analiza, raz na tydzien).
 
     Bez `--wyslij` nic nie trafia do produkcji: ani artykul (zostaje na dysku),
     ani przeslania (kolejka notek), ani zapis sledztwa (limity i pamiec).
@@ -927,15 +928,17 @@ def _przebieg_sledztwa(conn, run_id: int) -> int:
         print("  limit tygodnia: %d sledztw w 7 dni — nie badam"
               % sledztwo.ile_sledztw(7), flush=True)
         return 1
-    # NOWE SLEDZTWO DOPIERO, GDY KOLEJKA ZEJDZIE. Zegar budzi sledztwo co dobe,
-    # a jedno daje trzy przeslania wydawane po jednym na dobe i wazne trzy dni.
-    # Drugie sledztwo dzien po pierwszym stanelo by w kolejce za nim i dwa z
-    # trzech jego przeslan (oplaconych Opusem) wygasly by, zanim przyjdzie ich
-    # kolej. Pusta kolejka = poprzednia historia opowiedziana do konca.
+    # NOWE SLEDZTWO, GDY KOLEJKA PRAWIE ZESZLA. Zegar budzi sledztwo co dobe, a
+    # katy (oplacone Opusem) wychodza od jutra po `PRZESLAN_NA_DOBE` dziennie.
+    # Do 25.10.2026 czekalismy na pusta kolejke przy jednym przeslaniu na dobe;
+    # teraz wystarczy, ze reszta poprzedniej historii zmiesci sie jutro obok
+    # nowej (najstarsza historia idzie pierwsza), wiec temat zmienia sie co dwa-
+    # trzy dni bez dziury i bez katow, ktore wygasna w kolejce.
     czeka = sledztwo.czekajace_przeslania()
-    if czeka and "--mimo-limitu" not in sys.argv:
-        print("  kolejka: %d przeslan z poprzedniego sledztwa jeszcze czeka"
-              " — nowe sledztwo, gdy zejda" % czeka, flush=True)
+    if czeka >= sledztwo.PRZESLAN_NA_DOBE and "--mimo-limitu" not in sys.argv:
+        print("  kolejka: %d katow z poprzedniego sledztwa jeszcze czeka"
+              " — nowe sledztwo, gdy zostanie mniej niz %d"
+              % (czeka, sledztwo.PRZESLAN_NA_DOBE), flush=True)
         return 1
     historie = sledztwo.historie(korpus_kanalow.korpus_kanalow(400),
                                  conn=conn, run_id=run_id)
@@ -1020,7 +1023,7 @@ def _przebieg_sledztwa(conn, run_id: int) -> int:
     print("  %s: %s" % ("USTALENIE" if nowe.get("jest") else "BRAK USTALENIA",
                         nowe.get("ustalenie") or nowe.get("powod")), flush=True)
     print()
-    print("-- trzy przeslania --", flush=True)
+    print("-- katy serii --", flush=True)
     przes = sledztwo.przeslania(conn, run_id, card, dossier, wybrana)
     for p in przes:
         print("  [%s] %s" % (p["rodzaj"], p["przeslanie"]), flush=True)
@@ -1052,6 +1055,14 @@ def _przebieg_sledztwa(conn, run_id: int) -> int:
         print(">> ani nowego ustalenia, ani pelnego obrazu z analiza — artykulu nie"
               " pisze; przeslania ida do notek", flush=True)
         return 1
+    # JEDEN ARTYKUL ZE SLEDZTWA NA TYDZIEN (25.10.2026). Sledztw jest teraz kilka
+    # w tygodniu (jeden temat co dwa-trzy dni), a artykul — pelne sledztwo —
+    # wychodzi raz; reszta historii zostaje w notkach.
+    if (sledztwo.ile_artykulow(6) >= sledztwo.ARTYKULOW_NA_TYDZIEN
+            and "--mimo-limitu" not in sys.argv):
+        print(">> w ostatnich 6 dniach wyszedl artykul ze sledztwa — ta historia"
+              " idzie tylko w notkach", flush=True)
+        return 1
     twierdzenia = sledztwo._twierdzenia(card)
     if nowe.get("jest"):
         card["investigation_finding"] = {
@@ -1062,6 +1073,10 @@ def _przebieg_sledztwa(conn, run_id: int) -> int:
     card["editorial_hypotheses"] = [
         {k: p.get(k) for k in ("rodzaj", "przeslanie", "tresc", "za", "przeciw", "co_obali")}
         for p in przes if p["rodzaj"] in ("MOTYW", "ZA_DWA_LATA")]
+    # WSZYSTKIE KATY SERII DO ARTYKULU — artykul ma byc pelnym sledztwem
+    # (`prompts/pisarz.md`, „investigation_angles"), nie streszczeniem karty.
+    card["investigation_angles"] = [
+        {k: p.get(k) for k in ("rodzaj", "przeslanie", "hak", "tresc")} for p in przes]
     # ODMOWA DOSTAWCY NIE KONCZY SLEDZTWA TRACEBACKIEM. 27.09.2026, pierwsze
     # sledztwo na produkcji: historia o agentach OpenAI na stronach rzadow USA,
     # ustalenie i trzy przeslania gotowe, a pisarz artykulu (Fable, potem Opus)

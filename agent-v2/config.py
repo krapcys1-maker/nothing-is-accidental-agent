@@ -188,6 +188,10 @@ KWOTA_SPOZA_BRANZY = True
 #   dostaja tyle samo krotkich notek. Zapis: `docs/POMIAR_I_EKSPERYMENTY_2026-09-27.md`.
 # E18 — PYTANIE NA KONIEC: „on" = notka konczy sie jednym prawdziwym pytaniem.
 # E16 i E18 startuja po E10 i E11 (26.10), bo notek jest ok. trzech dziennie.
+# 25.10.2026: E17 zakonczony (krotka notka jest zasada, `NOTE_MAX_WORDS`), a E16
+# i E18 przesuniete o dwa tygodnie: od 26.10 rusza seria sledcza i cztery notki
+# dziennie, ktore po dwoch tygodniach porownujemy z drugim kontem jako tlem.
+# Przeplatane ramiona w tym czasie zmienialyby polowe notek, ktore oceniamy.
 # E21 — PAMIEC ROZMOWCY (wlasciciel 29.09: „wprowadz jako eksperyment plus
 #   monitoring"): przy rozmowie z kims, z kim byl juz kontakt (45% komentarzy),
 #   „on" = prompt komentarza/odpowiedzi dostaje ostatnie wymiany z ta osoba
@@ -202,9 +206,9 @@ EKSPERYMENTY: dict = {
     "cel_komentarza": {"udzial": 0.5, "od": "2026-09-29", "do": "2026-10-19"},
     "swiezosc_celu": {"udzial": 0.5, "od": "2026-10-20", "do": "2026-11-09"},
     "pora_notki": {"plan": ["on", "off"], "okres_dni": 1,
-                   "od": "2026-10-26", "do": "2026-11-22"},
-    "krotka_notka": {"udzial": 0.5, "od": "2026-10-20", "do": "2026-11-22"},
-    "pytanie_na_koncu": {"udzial": 0.5, "od": "2026-10-26", "do": "2026-11-22"},
+                   "od": "2026-11-09", "do": "2026-12-06"},
+    "krotka_notka": {"udzial": 0.5, "od": "2026-10-20", "do": "2026-10-25"},
+    "pytanie_na_koncu": {"udzial": 0.5, "od": "2026-11-09", "do": "2026-12-06"},
     "pamiec_rozmowcy": {"udzial": 0.5, "od": "2026-09-29", "do": "2026-10-27"},
 }
 
@@ -1677,8 +1681,17 @@ MAX_TOKENS = {
 # 120 nie jest nowym celem, tylko miejscem, w ktorym notka przestaje byc notka.
 # Prompt mowi wprost: krotka notka nie jest lepsza, jest tylko krotsza — pisz
 # tyle, ile potrzebuje mysl, i ani slowa wiecej.
-NOTE_MIN_WORDS = 33
-NOTE_MAX_WORDS = 120
+#
+# 25.10.2026 — 40-65 SLOW JAKO ZASADA (decyzja wlasciciela po porownaniu calej
+# historii obu kont). Mediana dlugosci notek NIE rosla 62 -> 96 -> 109 -> 113 slow,
+# a mediana wyswietlen na notke spadala 22 -> 13 -> 10 -> 9; drugie konto pisze
+# krotsze notki i jego zasieg sie nie zawalil (liczby w rejestrze lokalnym).
+# Najlepsze notki NIE w historii mialy
+# 52-64 slowa. Sens z 4.09 („notki maja miec sens") zostaje: notka niesie jedna
+# mysl, a glebie daja seria katow sledztwa (`sledztwo.RODZAJE`) i artykul.
+# Zakonczylo to E17 (polowa notek krotka) przed terminem.
+NOTE_MIN_WORDS = 40
+NOTE_MAX_WORDS = 65
 
 # DLUGA NOTKA — OKNO OSOBNE, BO SUFIT 64 SLOW MA ZMIERZONY KOSZT.
 #
@@ -1708,7 +1721,9 @@ NOTE_MAX_WORDS_DLUGA = 200          # sufit ustawiony przez wlasciciela
 
 # Formy pisane w dlugim oknie. Zbior, nie pojedyncza nazwa, zeby dolozenie
 # drugiej dlugiej formy nie wymagalo dotykania `zakres_slow`.
-FORMY_DLUGIE = {"WYJASNIENIE"}
+# PUSTY OD 25.10.2026 — wszystkie notki w oknie 40-65 (patrz `NOTE_MAX_WORDS`);
+# WYJASNIENIE zostaje w rotacji jako krotkie wyjasnienie krok po kroku.
+FORMY_DLUGIE: set[str] = set()
 
 
 def zakres_slow(forma: str | None) -> tuple[int, int]:
@@ -2219,7 +2234,7 @@ NOTE_FORMS = {
     'PYTANIE': 'Ask a genuine unanswered question after enough context to understand it. Do not pretend the material has no answer when it does.',
     'ODWROCENIE': 'Explain a supported surprising difference. Name a mistaken belief only if the supplied material establishes it.',
     'ZACZEP_I_KONKRET': 'Lead with the detail that makes the subject worth understanding, then explain it. A punchline or reader assignment is optional.',
-    'WYJASNIENIE': 'Use the extra space to explain a difficult idea step by step for a newcomer. Add a concrete example if helpful. No required number of steps or terms.',
+    'WYJASNIENIE': 'Explain one difficult idea step by step for a newcomer, in plain words and within the same short length. A concrete example if it helps. No required number of steps or terms.',
 }
 
 # FORMY, KTORYCH DANY TYP NIE MOZE WYKONAC — bo zadaja tego, czego typ zabrania.
@@ -2528,7 +2543,7 @@ WNIOSEK_WLACZONY = True
 # na „ARTYKUL". Zostawienie tu pieciu pozycji byloby wiec minA: pierwsze
 # wlaczenie tej galezi wskrzesiloby stary wolumen i nikt by nie skojarzyl
 # dlaczego. Dlugosc trzyma sie tamtej, a MYSL wypada z tego samego powodu.
-NOTE_MIX_ARTICLE_DAY = ("ARTYKUL", "CIEKAWOSTKA", "SPROSTOWANIE")
+NOTE_MIX_ARTICLE_DAY = ("ARTYKUL", "CIEKAWOSTKA", "SPROSTOWANIE", "MYSL")
 
 # KSZTALTY NOTKI TYPU MYSL. Losowane w kodzie i podawane jako PRZYDZIAL.
 #
@@ -2601,7 +2616,14 @@ def losowy_ksztalt_mysli() -> str:
 #     przy planie 3 wykrzykniki jeszcze dzialaja. SKROCENIE TEJ KROTKI DO
 #     DWOCH WYCISZYLOBY JE PO CICHU — jest to napisane wprost w `norma.py`
 #     i pilnowane przez `tests/test_dzien_awarii.py`.
-NOTE_MIX_OTHER_DAY = ("CIEKAWOSTKA", "DYSKUSJA", "SPROSTOWANIE")
+#
+# 25.10.2026 — CZTERY NOTKI, MYSL WRACA (decyzja wlasciciela, plan naprawczy po
+# porownaniu calej historii obu kont). Przy trzech notkach dziennie od 7.09 i
+# rosnacej dlugosci zasieg NIE spadl trzykrotnie, a drugie konto zbiera go
+# krotkimi myslami i dyskusjami. Zero odwiedzin profilu przy MYSL z wrzesnia to
+# piec notek — trop, nie dowod. Dzien = do trzech katow serii sledczej
+# (`sledztwo.PRZESLAN_NA_DOBE`, zastepuja typ miejsca) plus zwykla notka.
+NOTE_MIX_OTHER_DAY = ("CIEKAWOSTKA", "DYSKUSJA", "SPROSTOWANIE", "MYSL")
 
 # KTO PISZE NOTKI — decyzja wlasciciela z 7 wrzesnia 2026: „zostaw Opusa".
 #
@@ -2819,7 +2841,10 @@ SUBSKRYPCJE_MIESIECZNIE = (12, 20)  # 15,4/mies realnie; 3,4x lepsza konwersja
 # DZIENNE NADPISANIE MIESIECZNYCH WIDELEK. `None` = jak dotad (widelki
 # miesieczne). Ustawione, idzie do `stages.budzet_dnia` jako STALA dobowa.
 FOLLOW_DZIENNIE = 5
-SUBSKRYPCJE_DZIENNIE = 4
+# 25.10.2026: 4 -> 1 (decyzja wlasciciela). Na obu kontach przyrost subskrybentow
+# idzie za wyswietleniami, a nie za liczba naszych subskrypcji; subskrypcja zapycha
+# skrzynke wlasciciela mailami cudzych publikacji. Obserwacje i komentarze zostaja.
+SUBSKRYPCJE_DZIENNIE = 1
 
 # SUFIT ODBIORCOW PRZY SUBSKRYPCJI. Subskrybujemy tylko publikacje, ktorych
 # publicznosc (subskrybenci albo obserwujacy z publicznego profilu) nie
@@ -2865,6 +2890,7 @@ RAMPA_AKTYWNOSCI = (
     ("2026-10-04", 3, 2, (10, 13)),
     ("2026-10-07", 4, 3, (12, 16)),
     ("2026-10-10", 5, 4, (14, 20)),
+    ("2026-10-25", 5, 1, (14, 20)),   # subskrypcje 4 -> 1 (decyzja wlasciciela 25.10.2026)
 )
 
 

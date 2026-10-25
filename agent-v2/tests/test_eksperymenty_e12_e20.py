@@ -71,9 +71,14 @@ sprawdz("E12-E18 zapisane w konfiguracji z oknami dat",
         and E.get("pisarz_restackow") == {"udzial": 0.5, "od": "2026-09-29", "do": "2026-10-26"}
         and E.get("cel_komentarza") == {"udzial": 0.5, "od": "2026-09-29", "do": "2026-10-19"}
         and E.get("swiezosc_celu") == {"udzial": 0.5, "od": "2026-10-20", "do": "2026-11-09"}
-        and E.get("pora_notki") == {"plan": ["on", "off"], "okres_dni": 1, "od": "2026-10-26", "do": "2026-11-22"}
-        and E.get("krotka_notka") == {"udzial": 0.5, "od": "2026-10-20", "do": "2026-11-22"}
-        and E.get("pytanie_na_koncu") == {"udzial": 0.5, "od": "2026-10-26", "do": "2026-11-22"}, E)
+        # 25.10.2026: E17 konczy sie, krotka notka jest zasada; E16 i E18 o dwa tygodnie
+        # pozniej, po porownaniu serii sledczej z drugim kontem (`config.EKSPERYMENTY`).
+        and E.get("pora_notki") == {"plan": ["on", "off"], "okres_dni": 1, "od": "2026-11-09", "do": "2026-12-06"}
+        and E.get("krotka_notka") == {"udzial": 0.5, "od": "2026-10-20", "do": "2026-10-25"}
+        and E.get("pytanie_na_koncu") == {"udzial": 0.5, "od": "2026-11-09", "do": "2026-12-06"}, E)
+sprawdz("E17 nie trwa od 26.10 (krotka notka to zasada, `config.NOTE_MAX_WORDS`)",
+        stages.ramie("krotka_notka", 0, "2026-10-26") == ""
+        and config.NOTE_MAX_WORDS <= config.KROTKA_NOTKA_SLOW[1] + 5)
 sprawdz("E15 startuje po E14, E16 i E18 po E10 i E11",
         E["swiezosc_celu"]["od"] > E["cel_komentarza"]["do"]
         and all(E[n]["od"] > E["wniosek"]["do"] and E[n]["od"] > E["pisarz"]["do"]
@@ -264,15 +269,15 @@ sprawdz("oba bloki ukladaja cele przed petla komentarzy",
 
 print()
 print("=== 5. E16 — PORA NOTKI ===")
-sprawdz("dzien on (26.10): przebiegi 1 i 2 bez notek, od trzeciego jak zwykle",
-        [run.notki_w_porze(1, z, "2026-10-26") for z in (5, 4, 3, 2, 1)] == [0, 0, 1, 1, 1])
-sprawdz("dzien off (27.10) i przed oknem (25.10): bez zmian",
-        [run.notki_w_porze(1, z, "2026-10-27") for z in (5, 4, 3)] == [1, 1, 1]
-        and [run.notki_w_porze(2, z, "2026-10-25") for z in (5, 4)] == [2, 2])
+sprawdz("dzien on (9.11): przebiegi 1 i 2 bez notek, od trzeciego jak zwykle",
+        [run.notki_w_porze(1, z, "2026-11-09") for z in (5, 4, 3, 2, 1)] == [0, 0, 1, 1, 1])
+sprawdz("dzien off (10.11) i przed oknem (26.10): bez zmian",
+        [run.notki_w_porze(1, z, "2026-11-10") for z in (5, 4, 3)] == [1, 1, 1]
+        and [run.notki_w_porze(2, z, "2026-10-26") for z in (5, 4)] == [2, 2])
 from datetime import date  # noqa: E402
 _poz = {}
 for i in range(28):
-    d = date(2026, 10, 26) + timedelta(days=i)
+    d = date(2026, 11, 9) + timedelta(days=i)
     _poz.setdefault(d.weekday(), []).append(stages.ramie("pora_notki", 0, d.isoformat()))
 sprawdz("kazdy dzien tygodnia po rowno: 2 dni on i 2 off w czterech tygodniach",
         all(sorted(v) == ["off", "off", "on", "on"] for v in _poz.values()), _poz)
@@ -313,8 +318,15 @@ try:
         _z_wariantem = [u for e, u in PROMPTY if e == "note"][-1]
         stages.note(None, 0, "CIEKAWOSTKA", {"fact": dict(FAKT)}, etap="note")
         _bez_wariantu = [u for e, u in PROMPTY if e == "note"][-1]
-        stages.note(None, 0, "CIEKAWOSTKA", {"fact": dict(FAKT)}, etap="note",
-                    note_form=sorted(config.FORMY_DLUGIE)[0], wariant={"krotka": True})
+        # Od 25.10.2026 `FORMY_DLUGIE` jest puste (wszystkie notki 40-65 slow); sam
+        # mechanizm dlugiego okna zostaje, wiec sprawdzamy go na formie wstawionej tu.
+        _oryg_dlugie = config.FORMY_DLUGIE
+        config.FORMY_DLUGIE = {"WYJASNIENIE"}
+        try:
+            stages.note(None, 0, "CIEKAWOSTKA", {"fact": dict(FAKT)}, etap="note",
+                        note_form="WYJASNIENIE", wariant={"krotka": True})
+        finally:
+            config.FORMY_DLUGIE = _oryg_dlugie
         _dluga = [u for e, u in PROMPTY if e == "note"][-1]
 finally:
     llm.call = _oryg_call

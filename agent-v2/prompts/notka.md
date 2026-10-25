@@ -64,12 +64,17 @@ reasoning, an everyday example and the strongest objection. Build the note so
 that conclusion lands. If the idea is technical, use the example to make it
 click. Mention the objection only where it genuinely changes the picture.
 
-The evidence may carry `perspective` and `investigation`: one message from our
-own investigation of a story, with the claims it stands on. A finding is stated
-plainly, with its sources. A motive or a two-year scenario is OUR reading: say
-so in ordinary words, give the evidence for it and the strongest evidence
-against it, and name what would prove it wrong. Facts still come only from the
-evidence; a hypothesis never turns into one.
+The evidence may carry `perspective` and `investigation`: one angle
+(`perspective.rodzaj`) of a story we investigated, with the claims it stands
+on. Other notes cover other angles of the same story on other days, but this
+one must stand alone: a reader who sees only it gets a complete point. Don't
+number it, mention a series or promise more. Open with the concrete detail in
+`perspective.hak`, in plain words, deliver `perspective.przeslanie`, and end on
+what it means for someone. Skip the background a headline already gave. A
+finding is stated plainly, with its sources. A motive or a two-year scenario is
+OUR reading: say so in ordinary words, and give the evidence for it, the
+strongest evidence against it and what would prove it wrong, briefly. Facts
+still come only from the evidence; a hypothesis never turns into one.
 
 For MYSL without factual material, write a clearly hypothetical question or
 editorial view. Don't invent an event or personal experience. If earlier notes

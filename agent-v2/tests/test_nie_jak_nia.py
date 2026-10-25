@@ -76,10 +76,15 @@ def temu(**k):
 
 print("=== 1. RAMPA I BUDZET DNIA ===")
 _r = config.RAMPA_AKTYWNOSCI
-sprawdz("rampa ma trzy stopnie, rosnace co do dnia", len(_r) == 3 and [s[0] for s in _r] == sorted(s[0] for s in _r))
-sprawdz("stopnie rosna: obserwacje, subskrypcje i dolna granica komentarzy",
+# 25.10.2026: czwarty stopien obniza subskrypcje 4 -> 1 (decyzja wlasciciela: przyrost
+# subskrybentow idzie za wyswietleniami, nie za naszymi subskrypcjami).
+sprawdz("rampa: trzy stopnie wzrostu i czwarty z 25.10, daty rosnace",
+        len(_r) == 4 and [s[0] for s in _r] == sorted(s[0] for s in _r) and _r[3][0] == "2026-10-25")
+sprawdz("stopnie wzrostu rosna: obserwacje, subskrypcje i dolna granica komentarzy",
         all(_r[i][1] <= _r[i + 1][1] and _r[i][2] <= _r[i + 1][2] and _r[i][3][0] <= _r[i + 1][3][0]
             for i in range(2)), _r)
+sprawdz("stopien z 25.10: subskrypcje 1 dziennie, obserwacje i komentarze bez zmian",
+        _r[3][2] == 1 and _r[3][1] == _r[2][1] and tuple(_r[3][3]) == tuple(_r[2][3]), _r[3])
 sprawdz("dzien PRZED rampa idzie na pierwszym stopniu, nie na docelowym",
         config.rampa_aktywnosci("2000-01-01") == (_r[0][1], _r[0][2], _r[0][3]))
 sprawdz("po ostatnim stopniu zostaje ostatni (poziom docelowy)",
@@ -87,9 +92,9 @@ sprawdz("po ostatnim stopniu zostaje ostatni (poziom docelowy)",
 sprawdz("ostatni stopien = stale docelowe z konfiguracji",
         (_r[-1][1], _r[-1][2], tuple(_r[-1][3])) == (config.FOLLOW_DZIENNIE, config.SUBSKRYPCJE_DZIENNIE,
                                                       tuple(config.KOMENTARZE_DZIENNIE)))
-sprawdz("polubien zero, ciche dni ZOSTAJA (swiadomy wyjatek), 3 notki dziennie",
+sprawdz("polubien zero, ciche dni ZOSTAJA (swiadomy wyjatek), 4 notki dziennie (od 25.10)",
         config.LAJKI_DZIENNIE == (0, 0) and config.CICHE_DNI_WLACZONE is True
-        and len(config.NOTE_MIX_OTHER_DAY) == 3)
+        and len(config.NOTE_MIX_OTHER_DAY) == 4)
 
 _stare = (stages._wiek_konta_w_dniach, stages._zapisz_budzet_dnia, config.RAMPA_AKTYWNOSCI,
           config.FOLLOW_DZIENNIE, config.SUBSKRYPCJE_DZIENNIE)

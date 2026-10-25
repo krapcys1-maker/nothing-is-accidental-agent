@@ -5736,7 +5736,7 @@ def notki_dnia(
     # flaga się zapala.
     seria_wzieta: bool = False
     # PRZESLANIE ZE SLEDZTWA (27.09.2026) — jedno na przebieg, a `sledztwo.
-    # wez_przeslanie` pilnuje jednego na dobe. Patrz `sledztwo.py`.
+    # wez_przeslanie` pilnuje `PRZESLAN_NA_DOBE` na dobe. Patrz `sledztwo.py`.
     przeslanie_wziete: bool = False
     if karta:
         juz_o_tym.append("%s %s" % (karta.get("article_title") or "",

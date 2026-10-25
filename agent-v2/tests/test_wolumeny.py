@@ -130,18 +130,20 @@ sprawdz("KONTRDOWOD: stary uklad (30,44)+(6,12) mial to dokladnie odwrotnie",
 # Decyzja wlasciciela: „lepiej zrobic 3 ale mocne i dobre niz 10 rozmytych".
 # Ta asercja pilnuje TRZECH rzeczy naraz, bo kazda z nich cicho psuje cos
 # innego, gdy ktos ruszy te krotke bez czytania:
-sprawdz("notki zeszly do trzech — mocne zamiast rozmytych",
-        len(config.NOTE_MIX_OTHER_DAY) == 3, len(config.NOTE_MIX_OTHER_DAY))
+# CZTERY OD 25.10.2026 (plan naprawczy wlasciciela po porownaniu obu kont): krotkie
+# notki 40-65 slow, do trzech katow serii sledczej dziennie plus zwykla.
+sprawdz("cztery notki dziennie — seria sledcza plus zwykla",
+        len(config.NOTE_MIX_OTHER_DAY) == 4, len(config.NOTE_MIX_OTHER_DAY))
 # 1. Ponizej progu licznika wykrzykniki przy notkach GASNA (`norma._znak`).
 import norma as _n   # noqa: E402
 sprawdz("i nie zeszly ponizej progu licznika (%d)" % _n.MIN_PLAN_DZIENNY_DO_ZNAKU,
         len(config.NOTE_MIX_OTHER_DAY) >= _n.MIN_PLAN_DZIENNY_DO_ZNAKU,
         (len(config.NOTE_MIX_OTHER_DAY), _n.MIN_PLAN_DZIENNY_DO_ZNAKU))
-# 2. MYSL wypadla, bo jako jedyna nie stoi na fakcie i miala ZERO odwiedzin
-#    profilu na piec notek. Zostawienie jej przy trzech notkach awansowaloby
-#    ja z 20% doby na 33%.
-sprawdz("MYSL nie wrocila do miksu", "MYSL" not in config.NOTE_MIX_OTHER_DAY,
-        config.NOTE_MIX_OTHER_DAY)
+# 2. MYSL wypadla 7.09 (zero odwiedzin profilu na piec notek) i WRACA 25.10: drugie
+#    konto zbiera zasieg krotkimi myslami, a piec notek bylo tropem, nie dowodem.
+#    Jedna na dobe, nie wiecej, i nigdy na poczatku (pierwsza idzie notka z faktem).
+sprawdz("MYSL wrocila raz, na ostatnim miejscu", config.NOTE_MIX_OTHER_DAY.count("MYSL") == 1
+        and config.NOTE_MIX_OTHER_DAY[-1] == "MYSL", config.NOTE_MIX_OTHER_DAY)
 # 3. Kazdy typ raz — inaczej przy trzech notkach jeden zajmuje dwie trzecie dnia.
 sprawdz("kazdy typ dokladnie raz",
         len(set(config.NOTE_MIX_OTHER_DAY)) == len(config.NOTE_MIX_OTHER_DAY),

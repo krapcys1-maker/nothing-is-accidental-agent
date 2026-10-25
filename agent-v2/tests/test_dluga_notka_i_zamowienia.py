@@ -53,10 +53,20 @@ def sprawdz(nazwa, warunek, szczegol=""):
 
 
 print("=== 1. OKNO DLUGOSCI ZALEZY OD FORMY ===")
-sprawdz("WYJASNIENIE dostaje dlugie okno",
+# 25.10.2026: wszystkie notki 40-65 slow (decyzja wlasciciela, `config.NOTE_MAX_WORDS`),
+# `FORMY_DLUGIE` jest puste. Mechanizm dlugiego okna zostaje i dziala, gdy forma do
+# niego wroci — sprawdzany na formie wstawionej na chwile.
+sprawdz("od 25.10 WYJASNIENIE tez w krotkim oknie (FORMY_DLUGIE puste)",
+        not config.FORMY_DLUGIE
+        and config.zakres_slow("WYJASNIENIE") == (config.NOTE_MIN_WORDS, config.NOTE_MAX_WORDS) == (40, 65),
+        config.zakres_slow("WYJASNIENIE"))
+_oryg_dlugie = config.FORMY_DLUGIE
+config.FORMY_DLUGIE = {"WYJASNIENIE"}
+sprawdz("mechanizm: forma w FORMY_DLUGIE dostaje dlugie okno",
         config.zakres_slow("WYJASNIENIE")
         == (config.NOTE_MIN_WORDS_DLUGA, config.NOTE_MAX_WORDS_DLUGA),
         config.zakres_slow("WYJASNIENIE"))
+config.FORMY_DLUGIE = _oryg_dlugie
 sprawdz("sufit dlugiej formy to 200 slow, jak ustawil wlasciciel",
         config.NOTE_MAX_WORDS_DLUGA == 200, config.NOTE_MAX_WORDS_DLUGA)
 sprawdz("wersja wlasciciela (158 slow) MIESCI SIE w dlugim oknie",
@@ -87,9 +97,9 @@ sprawdz("opis zada DEFINICJI terminu, bo to jej powod istnienia",
         "define" in _opis.lower(), _opis[:60])
 sprawdz("opis ZAKAZUJE otwierania sporem, ktorego czytelnik nie slyszal",
         "I keep hearing" in _opis, _opis[:60])
-sprawdz("jedna dluga forma na dziewiec — czyli okolo jednej notki na dobe",
+sprawdz("od 25.10 zadna z dziewieciu form nie jest dluga",
         len(config.NOTE_FORM_MIX) == 9
-        and sum(1 for f in config.NOTE_FORM_MIX if f in config.FORMY_DLUGIE) == 1,
+        and sum(1 for f in config.NOTE_FORM_MIX if f in config.FORMY_DLUGIE) == 0,
         len(config.NOTE_FORM_MIX))
 
 print()

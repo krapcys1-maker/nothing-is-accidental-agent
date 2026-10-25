@@ -619,18 +619,21 @@ try:
     # Przy planie 3 to zadanie jest niespelnialne, wiec zastapil je kontrdowod:
     # jeden element mniej I WYKRZYKNIK GASNIE. To jest cala tresc ostrzezenia
     # przy `MIN_PLAN_DZIENNY_DO_ZNAKU`.
-    sprawdz("KONTRDOWOD: jeden element mniej i wykrzyknik przy notkach GASNIE",
-            norma._znak(0, ile_notek - 1) == "", ile_notek - 1)
+    # 25.10.2026: plan wrocil do CZTERECH, wiec „jeden mniej" to juz nie prog, tylko
+    # trzy. Kontrdowod liczy od progu, nie od planu: ponizej niego wykrzyknik gasnie.
+    _pod_progiem = norma.MIN_PLAN_DZIENNY_DO_ZNAKU - 1
+    sprawdz("KONTRDOWOD: plan ponizej progu i wykrzyknik przy notkach GASNIE",
+            norma._znak(0, _pod_progiem) == "", _pod_progiem)
     # A PRZY DZISIEJSZYM PLANIE KRZYCZY — takze w polowie doby, kiedy plan jest
     # PRZYCIETY do naleznych przebiegow. To druga polowa poprawki z 7 wrzesnia:
     # `prog_z` sadzi prog po planie CALODOBOWYM, a procent po przycietym.
     sprawdz("przy dzisiejszym planie krzyczy", norma._znak(0, ile_notek) == "!!")
     sprawdz("i krzyczy TAKZE przy planie przycietym w polowie doby",
-            norma._znak(0, max(1, ile_notek - 1), ile_notek) == "!!",
-            norma._znak(0, max(1, ile_notek - 1), ile_notek))
+            norma._znak(0, max(1, _pod_progiem), ile_notek) == "!!",
+            norma._znak(0, max(1, _pod_progiem), ile_notek))
     # KONTRDOWOD DO TAMTEJ POPRAWKI: bez `prog_z` przyciety plan milczy.
     sprawdz("KONTRDOWOD: bez pelnego planu przyciecie by go uciszylo",
-            norma._znak(0, ile_notek - 1) == "")
+            norma._znak(0, max(1, _pod_progiem)) == "")
     # KONTRDOWOD ODTWARZANY, NIE OPISANY: podstawiamy STARY prog (5) i pytamy
     # te sama funkcje o plan, jaki zostawal po skroceniu OWCZESNEJ, PIECIO-
     # ELEMENTOWEJ krotki — czyli o cztery. Piatka i czworka sa wpisane na
