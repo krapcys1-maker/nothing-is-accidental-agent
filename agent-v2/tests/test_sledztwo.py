@@ -287,6 +287,14 @@ _id = [p["id"] for p in sorted(_k0, key=lambda p: p["kolejnosc"])]
 _wydane((_id[0], TERAZ))
 p2 = sledztwo.wez_przeslanie()
 sprawdz("po jednym dzis — drugi kat jeszcze dzis (mechanizm)", (p2 or {}).get("rodzaj") == "MECHANIZM", p2)
+# Zywy test 25.10: notka ze scenariuszem otworzyla faktem, na ktorym stala notka z ustaleniem.
+_wcz = sledztwo.material_notki(p2)[1]["investigation"]["earlier_angles_already_published"]
+sprawdz("notka wie, jakie katy tej historii juz wyszly (przeslanie i hak), bez siebie samej",
+        [k["angle"] for k in _wcz] == ["KURIOZUM"] and _wcz[0]["opening_detail"] == "detail KURIOZUM"
+        and _wcz[0]["message"] == pr5[0]["przeslanie"], _wcz)
+sprawdz("KONTRDOWOD: katy innej historii i niewydane sie nie licza",
+        sledztwo._wczesniejsze_katy({"historia": "Inna historia", "id": "x"}) == []
+        and all(k["angle"] != "USTALENIE" for k in _wcz))
 _wydane((_id[0], TERAZ), (_id[1], TERAZ), (_id[2], TERAZ))
 sprawdz("KONTRDOWOD: po trzech dzis — czwarty dopiero jutro", sledztwo.wez_przeslanie() is None)
 _wydane((_id[0], TERAZ), (_id[0], TERAZ), (_id[1], TERAZ))
@@ -341,6 +349,10 @@ sprawdz("artykul ze sledztwa raz na tydzien: limit przed pisaniem, po kolejce ka
         "sledztwo.ile_artykulow(6) >= sledztwo.ARTYKULOW_NA_TYDZIEN" in _art
         and _art.index("sledztwo.dodaj_do_kolejki") < _art.index("sledztwo.ile_artykulow(6) >= sledztwo.ARTYKULOW")
         < _art.index("kod = _napisz_i_zapisz(conn, run_id, brief, card, evidence)"))
+sprawdz("artykul: pelny obraz i JEDNA nasza analiza przy co najmniej czterech katach",
+        'analiza_ok = bool(rodzaje & {"MOTYW", "ZA_DWA_LATA"}) and len(przes) >= 4' in _art)
+sprawdz("pisarz notki dostaje wczesniejsze katy w prompcie",
+        "earlier_angles_already_published" in pathlib.Path("agent-v2/prompts/notka.md").read_text(encoding="utf-8"))
 sprawdz("pisarz artykulu dostaje wszystkie katy serii",
         'card["investigation_angles"]' in _art and "investigation_angles" in
         pathlib.Path("agent-v2/prompts/pisarz.md").read_text(encoding="utf-8"))

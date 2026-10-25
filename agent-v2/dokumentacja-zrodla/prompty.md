@@ -151,7 +151,7 @@
 {{"poprawki": [{{"nr": <sentence number>, "nowe": "<replacement sentence, or empty to delete>"}}]}}
 ```
 
-#### `notka.md` (123 wierszy)
+#### `notka.md` (126 wierszy)
 
 **Pola wejściowe:** `evidence`, `form_brief`, `language`, `marka`, `max_words`, `min_words`, `note_form`, `note_type`, `ostatnie_otwarcia_json`, `ostatnie_zakonczenia_json`, `rozbior`, `type_brief`
 

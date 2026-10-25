@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **37 plików**, 44 084 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **37 plików**, 44 106 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -114,7 +114,7 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
 się testować bez przeglądarki i bez pieniędzy**. 207 zestawów
-testów, 5386 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+testów, 5390 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -850,7 +850,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `sledztwo.py` — śledztwo — historia z radaru, bramka nowości sprawdzana kodem, seria 4–5 kątów (kuriozum, mechanizm, ustalenie, kto płaci, motyw, za dwa lata) i kolejka notek
 
-556 wierszy, 27 funkcji na poziomie modułu, 0 klas
+572 wierszy, 28 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -880,6 +880,7 @@ wiec nie da sie go rozjechac z kodem.
 | `_wydane_przeslania()` *(wewn.)* | (identyfikatory juz opublikowanych, ile wyszlo dzis). |
 | `czekajace_przeslania()` | Ile przeslan czeka na notke: wazne i jeszcze nie wydane. |
 | `wez_przeslanie()` | Nastepne przeslanie do notki — do `PRZESLAN_NA_DOBE` na dobe (jedno na |
+| `_wczesniejsze_katy(p)` *(wewn.)* | Katy TEJ SAMEJ historii, ktore juz wyszly — przeslanie i hak kazdego. |
 | `material_notki(p)` | (fakt do dziennika i straznikow, material dla pisarza) z przeslania. |
 
 ### `eksperymenty.py` — pomiar zmian — odbiór notek w grupach względem tła tygodnia, 95% przedział i werdykt (lepiej / gorzej / brak dowodu / za mało danych)
@@ -1115,7 +1116,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `artykul_z_puli.py` — artykuł bierze temat z tej samej puli, co notki
 
-1759 wierszy, 15 funkcji na poziomie modułu, 0 klas
+1765 wierszy, 15 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -10220,7 +10221,7 @@ Return only valid JSON:
 
 #### `prompts/notka.md`
 
-**123 wierszy.** Pola wejsciowe: `evidence`, `form_brief`, `language`, `marka`, `max_words`, `min_words`, `note_form`, `note_type`, `ostatnie_otwarcia_json`, `ostatnie_zakonczenia_json`, `rozbior`, `type_brief`
+**126 wierszy.** Pola wejsciowe: `evidence`, `form_brief`, `language`, `marka`, `max_words`, `min_words`, `note_form`, `note_type`, `ostatnie_otwarcia_json`, `ostatnie_zakonczenia_json`, `rozbior`, `type_brief`
 
 ````markdown
 Write a standalone Substack note in {language} for {marka}.
@@ -10298,8 +10299,11 @@ number it, mention a series or promise more. Open with the concrete detail in
 what it means for someone. Skip the background a headline already gave. A
 finding is stated plainly, with its sources. A motive or a two-year scenario is
 OUR reading: say so in ordinary words, and give the evidence for it, the
-strongest evidence against it and what would prove it wrong, briefly. Facts
-still come only from the evidence; a hypothesis never turns into one.
+strongest evidence against it and what would prove it wrong, in one short
+clause each; the length limit holds for these too. If
+`investigation.earlier_angles_already_published` lists angles, the same readers
+saw them: don't restate their message or open with their detail. Facts still
+come only from the evidence; a hypothesis never turns into one.
 
 For MYSL without factual material, write a clearly hypothetical question or
 editorial view. Don't invent an event or personal experience. If earlier notes

@@ -73,8 +73,11 @@ number it, mention a series or promise more. Open with the concrete detail in
 what it means for someone. Skip the background a headline already gave. A
 finding is stated plainly, with its sources. A motive or a two-year scenario is
 OUR reading: say so in ordinary words, and give the evidence for it, the
-strongest evidence against it and what would prove it wrong, briefly. Facts
-still come only from the evidence; a hypothesis never turns into one.
+strongest evidence against it and what would prove it wrong, in one short
+clause each; the length limit holds for these too. If
+`investigation.earlier_angles_already_published` lists angles, the same readers
+saw them: don't restate their message or open with their detail. Facts still
+come only from the evidence; a hypothesis never turns into one.
 
 For MYSL without factual material, write a clearly hypothetical question or
 editorial view. Don't invent an event or personal experience. If earlier notes

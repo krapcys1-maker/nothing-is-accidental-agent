@@ -540,6 +540,21 @@ def wez_przeslanie() -> dict[str, Any] | None:
     return czekaja[0]
 
 
+def _wczesniejsze_katy(p: dict[str, Any]) -> list[dict[str, Any]]:
+    """Katy TEJ SAMEJ historii, ktore juz wyszly — przeslanie i hak kazdego.
+
+    Zywy test 25.10.2026: notka ze scenariuszem otworzyla tym samym faktem (notatka
+    opiekunow PHP z 2024), na ktorym stala notka z ustaleniem. Pisarz nie wiedzial,
+    co ta sama publicznosc juz przeczytala o tej historii.
+    """
+    wydane, _ = _wydane_przeslania()
+    return [{"angle": q.get("rodzaj"), "message": (q.get("perspektywa") or {}).get("przeslanie"),
+             "opening_detail": (q.get("perspektywa") or {}).get("hak")}
+            for q in sorted(_kolejka(), key=lambda q: int(q.get("kolejnosc") or 0))
+            if q.get("historia") == p.get("historia") and str(q.get("id")) in wydane
+            and q.get("id") != p.get("id")]
+
+
 def material_notki(p: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     """(fakt do dziennika i straznikow, material dla pisarza) z przeslania."""
     kotwica = (p.get("fakty") or [{}])[0]
@@ -552,5 +567,6 @@ def material_notki(p: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
                 "perspective": p.get("perspektywa") or {},
                 "investigation": {"story": p.get("historia") or "",
                                   "thesis": p.get("teza_sledztwa") or "",
-                                  "supporting_claims": p.get("fakty") or []}}
+                                  "supporting_claims": p.get("fakty") or [],
+                                  "earlier_angles_already_published": _wczesniejsze_katy(p)}}
     return fakt, material

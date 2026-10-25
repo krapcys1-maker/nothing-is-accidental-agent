@@ -1044,9 +1044,15 @@ def _przebieg_sledztwa(conn, run_id: int) -> int:
     # artykul z pelnym obrazem historii i NASZA analiza (motyw, za dwa lata)
     # jest tym, czego nie da zaden pojedynczy serwis. Bez pelnego obrazu albo
     # bez analiz — tylko notki.
+    #
+    # 25.10.2026: wystarczy JEDNA nasza analiza (motyw albo scenariusz) przy co
+    # najmniej czterech katach serii. Zywy test na historii o luce PHP2Shell dal
+    # pelny obraz (8 twierdzen z 5 serwisow) i piec katow, w tym ustalenie, ze AI
+    # nie znalazlo nowego bledu, tylko domknelo teorie z 2024 — a motywu karta nie
+    # niosla, wiec stary warunek (motyw I scenariusz) nie wpuscilby artykulu.
     obraz_ok, obraz_opis = sledztwo.pelny_obraz(card)
     rodzaje = {p["rodzaj"] for p in przes}
-    analiza_ok = {"MOTYW", "ZA_DWA_LATA"} <= rodzaje
+    analiza_ok = bool(rodzaje & {"MOTYW", "ZA_DWA_LATA"}) and len(przes) >= 4
     print("  pelny obraz: %s (%s); nasze analizy: %s"
           % ("TAK" if obraz_ok else "NIE", obraz_opis,
              "TAK" if analiza_ok else "NIE (%s)" % ", ".join(sorted(rodzaje)) or "brak"),
