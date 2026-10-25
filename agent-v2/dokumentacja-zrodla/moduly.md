@@ -754,7 +754,7 @@
 
 ### `sledztwo.py` — śledztwo — wybór największej historii, rdzeń (sedno) i kąty serii z jednej tabeli KATY, uczciwy hak sprawdzany kodem, poziom tematu (liczba notek), bramka nowości i kolejka notek
 
-3320 wierszy, 137 funkcji na poziomie modułu, 0 klas
+3321 wierszy, 137 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -1232,7 +1232,7 @@
 
 ### `artykul_z_puli.py` — artykuł bierze temat z tej samej puli, co notki
 
-3457 wierszy, 65 funkcji na poziomie modułu, 1 klas
+3467 wierszy, 66 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -1262,6 +1262,7 @@
 | `_plan(conn, run_id, wybrana, pytanie, ledes, typ)` *(wewn.)* | Plan redaktora (`sledztwo_plan.plan_sledztwa`) z zewnetrznym zapasem. |
 | `_pytania_tekstem(pytania)` *(wewn.)* | Lista pytan do klasyfikacji i syntezy — z modulu planu, a gdy ten nie |
 | `_plan_do_kart(plan)` *(wewn.)* | — |
+| `_pelny_tekst_url(url)` *(wewn.)* | Strona streszczenia arXiv niesie ok. tysiaca znakow; pelny tekst pracy to PDF, a `stages.fetch` |
 | `_poscig_dokumentow(conn, run_id, plan, corpus)` *(wewn.)* | (pobrane dokumenty pierwotne, raport: nazwane wobec zdobytych) — spec §6. |
 | `_nazwany_model(wybrana)` *(wewn.)* | Czy klucze historii wygladaja na nazwe modelu (litery i cyfry: „X-5", „K3.1") |
 | `_glosy_i_cennik(sledztwo, wybrana, typ)` *(wewn.)* | Glosy ludzi z Hacker News i cennik OpenRouter (darmowe, bez klucza). |

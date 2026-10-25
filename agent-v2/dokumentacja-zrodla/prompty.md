@@ -349,14 +349,14 @@
 {{"w_prostych_slowach": "<plain explanation>", "skala": "<comparison in the material, or empty>", "pytania": [{{"pytanie": "<question>", "odpowiedz": "<answer, inference or unknown>", "z_dowodu": true|false}}], "jesli_sie_utrzyma": "<supported or conditional implications, with the steps explained>", "gdzie_by_peklo": "<specific limitation, or empty>", "co_o_tym_sadze": "<judgment and reason, or what prevents one>", "czego_nie_wiadomo": ["<unanswered question>"]}}
 ```
 
-#### `seria_lekka.md` (43 wierszy)
+#### `seria_lekka.md` (47 wierszy)
 
 **Pola wejściowe:** `fakty`, `katy`, `marka`, `n_max`, `nieustalone`, `ostatnie`, `typ_historii`, `tytul`
 
 **Kontrakt wyjścia:**
 
 ```json
-{{"notki": [{{"rodzaj": "<one angle tag from the list>", "tekst": "<the finished note>", "fakty": [<numbers of the facts it uses>], "wiedza": ["<each background claim from your own knowledge that the note relies on>"]}}]}}
+{{"plan": [{{"surprising_fact": <fact number>, "point": "<the one point of this note, one sentence>"}}], "notki": [{{"rodzaj": "<one angle tag from the list>", "openings": ["<candidate 1>", "<candidate 2>", "<candidate 3>"], "tekst": "<the finished note>", "fakty": [<numbers of the facts it uses>], "wiedza": ["<each background claim from your own knowledge that the note relies on>"]}}]}}
 ```
 
 #### `seria_redakcja.md` (13 wierszy)

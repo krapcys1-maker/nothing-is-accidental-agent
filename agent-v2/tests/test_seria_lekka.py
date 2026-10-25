@@ -120,8 +120,23 @@ sprawdz("prompt: polskie pole `sprawdzian` nie wycieka do opisu katow; notka po 
         [w for w in p.split() if "sprawdz" in w.lower()])
 sprawdz("prompt: osoby przez role, bez wymyslonych szczegolow sceny",
         "Introduce every person or organisation by role" in p and "add no scene details" in p)
+sprawdz("prompt: najpierw plan (zaskakujacy fakt i teza kazdej notki), trzy otwarcia, strona, ktorej nikt nie wzial",
+        '"plan"' in p and "surprising_fact" in p and '"openings"' in p and "TAKE THE SIDE NOBODY ELSE TOOK" in p
+        and "dated, falsifiable bet" in p, p[-1400:])
+sprawdz("prompt: wiedza modelu NIE do biezacego stanu swiata; dokladne przypisania",
+        "YOUR KNOWLEDGE IS DATED" in p and "Attribute exactly" in p)
 sprawdz("prompt: dlugosc to widelki i wskazowka, nie sufit",
         "usually 40–85 words" in p and "a guide, not a cap" in p)
+
+print()
+print("=== 1b. PLAN I OTWARCIA W ODPOWIEDZI NIE PSUJA PARSOWANIA ===")
+ODPOWIEDZI[:] = [{"plan": [{"surprising_fact": 2, "point": "a"}, {"surprising_fact": 5, "point": "b"}],
+                  "notki": [dict(nota("REVEAL", "Plan-first opening about the licence. " + SLOWA), openings=["x", "y", "z"]),
+                            dict(nota("VERDICT", "Plan-first opening about the price. " + SLOWA), openings=["x", "y", "z"])]}]
+wynik, _ = cicho(sledztwo.seria_lekka, CONN, 1, karta(12), H)
+sprawdz("odpowiedz z `plan` i `openings`: notki czytane jak zwykle, pola planu nie trafiaja do tekstu",
+        [w["rodzaj"] for w in wynik] == ["REVEAL", "VERDICT"] and all("openings" not in w and "plan" not in w for w in wynik)
+        and not any(t in wynik[0]["tekst"] for t in (" x ", "surprising")), wynik)
 
 print()
 print("=== 2. CZYSZCZENIE ODPOWIEDZI ===")
