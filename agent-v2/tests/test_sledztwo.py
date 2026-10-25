@@ -526,6 +526,28 @@ try:
             len(_cn) == 1 and "$3.00" in _cn[0]["text"] and "$15.00" in _cn[0]["text"] and "400000" in _cn[0]["text"]
             and "Model Y" not in _cn[0]["text"] and "reseller" in _cn[0]["text"], _cn and _cn[0]["text"])
 
+    # POPULARNE WATKI AI Z HN jako korpus + premia za zainteresowanie (25.10.2026).
+    class _SiecPop(_Siec):
+        def get(self, url, params=None, timeout=None):
+            if url == sledztwo.HN_SZUKAJ and "points>" in str((params or {}).get("numericFilters")):
+                return _Odp({"hits": [
+                    {"objectID": "7", "title": "Ask HN: If the models are so good, why doesn't OpenAI start 100 companies?",
+                     "points": 651, "num_comments": 736, "created_at": "2026-10-24T10:00:00Z", "url": None},
+                    {"objectID": "8", "title": "Local Wikipedia for things a half hour walk from you", "points": 1580,
+                     "num_comments": 246, "created_at": "2026-10-24T10:00:00Z", "url": "https://x.example/w"}]})
+            return super().get(url, params, timeout)
+    with contextlib.redirect_stdout(io.StringIO()):
+        _pop = sledztwo.popularne_hn(http=_SiecPop())
+    sprawdz("popularne watki HN: tylko o AI, z punktami, adres watku gdy brak oryginalu",
+            len(_pop) == 1 and _pop[0]["punkty"] == 651 and _pop[0]["url"].endswith("item?id=7")
+            and _pop[0]["kanal"] == "Hacker News", _pop)
+    import xml.etree.ElementTree as _ET
+    _tm = _ET.fromstring('<item><title>Kimi K3.1 Pro draws scrutiny (VentureBeat)</title>'
+                         '<link>https://www.techmeme.com/261025/p2#a261025p2</link><description>'
+                         '&lt;A HREF="https://venturebeat.com/technology/kimi"&gt;x&lt;/A&gt;</description></item>')
+    sprawdz("Techmeme: adres oryginalu z opisu zamiast strony Techmeme",
+            kk._link_wpisu(_tm) == "https://venturebeat.com/technology/kimi", kk._link_wpisu(_tm))
+
     class _Padla:
         def get(self, *a, **k):
             raise OSError("brak sieci")

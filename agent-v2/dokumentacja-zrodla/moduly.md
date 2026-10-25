@@ -633,7 +633,7 @@
 
 ### `korpus_kanalow.py` — o czym mówi się w tym tygodniu — zaczyn tematów, nigdy źródło
 
-1138 wierszy, 25 funkcji na poziomie modułu, 1 klas
+1149 wierszy, 25 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -708,7 +708,7 @@
 
 ### `sledztwo.py` — śledztwo — historia z radaru, bramka nowości sprawdzana kodem, seria 4–5 kątów (kuriozum, mechanizm, ustalenie, kto płaci, motyw, za dwa lata) i kolejka notek
 
-1262 wierszy, 47 funkcji na poziomie modułu, 0 klas
+1311 wierszy, 48 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -718,6 +718,7 @@
 | `_klucz(url)` *(wewn.)* | — |
 | `historie(korpus, conn, run_id, ile)` | Grupy naglowkow z radaru: najlepszy naglowek na poczatku, potem warianty. |
 | `wielkie_historie(korpus, conn, run_id, ile)` | Najwieksze historie z korpusu ostatnich `DNI_WIELKICH` dni — niezaleznie od radaru. |
+| `popularne_hn(dni, min_punktow, http)` | Najpopularniejsze watki AI z Hacker News z ostatnich dni — jako pozycje korpusu. |
 | `scal_historie(radarowe, wielkie)` | Radar + detektor duzych historii bez dubli: historia detektora, ktora dzieli adres |
 | `zrodla_historii(h)` | Adresy historii do pobrania, w ksztalcie `stages.fetch` — bez powtorek. |
 | `_rekordy(dni)` *(wewn.)* | — |
@@ -996,7 +997,7 @@
 
 ### `artykul_z_puli.py` — artykuł bierze temat z tej samej puli, co notki
 
-1798 wierszy, 15 funkcji na poziomie modułu, 0 klas
+1800 wierszy, 15 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|

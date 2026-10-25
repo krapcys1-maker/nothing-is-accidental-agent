@@ -163,6 +163,11 @@ ZRODLA = {
     # („o czym mowi sie teraz"), oba odpowiadaja niezawodnie.
     "Latent Space":    "https://www.latent.space/feed",
     "Interconnects":   "https://www.interconnects.ai/feed",
+    # TECHMEME (25.10.2026): redakcyjnie wybierane najwazniejsze historie dnia; wpis
+    # prowadzi do oryginalu (`_link_wpisu`), wiec zasieg liczy prawdziwa redakcje. Dal
+    # tego dnia historie, ktorych nasz korpus nie mial: zarzut o placonych influencerach
+    # przy premierze Kimi K3.1 Pro (VentureBeat), kredyty pod zastaw chipow (Bloomberg).
+    "Techmeme":        "https://www.techmeme.com/feed.xml",
 }
 
 # ZRODLA O LUDZIACH — silnik tematow, 26 wrzesnia 2026 (eksperyment E6).
@@ -307,7 +312,7 @@ def styk_wpisu(kanal: str, tytul: str = "") -> str:
 # CourtListener nie jest filtrowany: zapytanie juz jest o AI, a tytul orzeczenia
 # to same nazwiska stron. `A.I.` z kropkami stoi osobno: w grupie zamknietej
 # przez `\b` nie trafialo nigdy, bo po kropce nie ma granicy slowa.
-FILTR_O_AI = set(ZRODLA_LUDZIE) - {"CourtListener"}
+FILTR_O_AI = (set(ZRODLA_LUDZIE) - {"CourtListener"}) | {"Techmeme"}
 O_AI = re.compile(
     r"\bA\.I\.|\b(AI|artificial intelligence|machine learning|chatbots?|"
     r"ChatGPT|OpenAI|Anthropic|Claude|Gemini|Copilot|LLMs?|"
@@ -419,7 +424,13 @@ def _link_wpisu(e: Any) -> str:
     w = e.find("link")
     if w is None:
         return ""
-    return w.get("href") or (w.text or "").strip()
+    adres = w.get("href") or (w.text or "").strip()
+    # TECHMEME: link to strona Techmeme, a oryginal stoi jako pierwszy odnosnik opisu.
+    if "techmeme.com" in adres:
+        for oryginal in re.findall(r'HREF="(https?://[^"]+)"', _pole(e, "description"), re.I):
+            if "techmeme.com" not in oryginal:
+                return oryginal
+    return adres
 
 
 def przetworz(wpisy: list[tuple[str, Any]]) -> list[dict[str, Any]]:

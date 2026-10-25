@@ -940,7 +940,9 @@ def _przebieg_sledztwa(conn, run_id: int) -> int:
               " — nowe sledztwo, gdy zostanie mniej niz %d"
               % (czeka, sledztwo.PRZESLAN_NA_DOBE), flush=True)
         return 1
-    _korpus = korpus_kanalow.korpus_kanalow(400)
+    # KORPUS + NAJPOPULARNIEJSZE WATKI AI Z HACKER NEWS (`sledztwo.popularne_hn`): to, co
+    # naprawde porusza ludzi, nie tylko to, co maja nasze kanaly RSS.
+    _korpus = korpus_kanalow.korpus_kanalow(400) + sledztwo.popularne_hn()
     # RADAR (ciekawosc) + DETEKTOR DUZYCH HISTORII (zasieg) — patrz `sledztwo.wielkie_historie`.
     historie = sledztwo.scal_historie(sledztwo.historie(_korpus, conn=conn, run_id=run_id),
                                       sledztwo.wielkie_historie(_korpus, conn=conn, run_id=run_id))
