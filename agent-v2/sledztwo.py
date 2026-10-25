@@ -1316,10 +1316,19 @@ def _oczysc(slowo: str) -> str:
     return s
 
 
+# STAWKA „ZA" (proba 25.10.2026): „$2.00/million input" w dowodzie dawalo 2 000 000 (ukosnik
+# zamieniany na spacje, a „million" mnozylo), a „$2 per million" w notce — 2; bramka uznala
+# prawdziwa cene za liczbe spoza twierdzen, a naprawa wyciela ja z notki. Ukosnik przed
+# jednostka liczenia to „per", nie mnozenie.
+_STAWKA_UKOSNIK = re.compile(r"(?<=\d)\s*/\s*(?=(?:1\s?)?(?:million|billion|thousand|trillion|mtok|m|k|1m|"
+                             r"month|year|hour|token|tokens|user|seat)\b)", re.I)
+
+
 def _slowa(tekst: Any) -> list[str]:
     # Zakres „10-12%" i „2025-2026" to dwie liczby — inaczej slowo nie pasowalo do zadnego wzoru
     # i liczby w haku uciekaly z kontroli (25.10.2026). Znak minus pomija `_WZOR_LICZBY`.
-    t = re.sub(r"(?<=\d)-(?=[$€£]?\d)", " ", re.sub(r"[—–/]", " ", str(tekst or "")))
+    t = _STAWKA_UKOSNIK.sub(" per ", str(tekst or ""))
+    t = re.sub(r"(?<=\d)-(?=[$€£]?\d)", " ", re.sub(r"[—–/]", " ", t))
     return [s for s in t.split() if s]
 
 

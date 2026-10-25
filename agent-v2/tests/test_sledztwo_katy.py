@@ -836,5 +836,19 @@ sprawdz("karta w prompcie: 16 twierdzen z numerami nawet przy ciasnym limicie, b
         and len(_kp) <= 6000, len(_kp))
 
 print()
+print("=== PO PROBIE NA KOPII 25.10.2026 ===")
+# „$2.00/million" w dowodzie i „$2 per million" w notce to ta sama cena — bramka wycinala ja z notki.
+_cena = [{"claim": "A reviewer reports the model priced at $2.00/million input and $10/million output.",
+          "evidence": "The model is priced at $2.00/million input and $10/million output.",
+          "url": "https://example.org/a"}]
+sprawdz("stawka za milion z ukosnikiem w dowodzie = ta sama liczba co 'per million' w notce",
+        sledztwo._liczby("$2.00/million input and $10/million output") == {"2", "10"}
+        and not any(b.startswith("numbers") for b in sledztwo.sprawdz_notke(
+            "The AI model costs $2 per million input tokens and $10 per million output, a reviewer reports.",
+            _cena, {})))
+sprawdz("KONTRDOWOD: kwota bez ukosnika dalej mnozona przez skale",
+        sledztwo._liczby("a $1.5 billion deal") == {"1500000000"})
+
+print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))
 sys.exit(1 if oblane else 0)
