@@ -239,9 +239,9 @@
 {{"powtorka_nr": <number of the bank fact it repeats, or 0 if none>, "powod": "<one short sentence>"}}
 ```
 
-#### `przeslania.md` (98 wierszy)
+#### `przeslania.md` (102 wierszy)
 
-**Pola wejściowe:** `artykulowy`, `glosy`, `hipotezy`, `karta`, `katy`, `ksiega`, `marka`, `n_max`, `odbior`, `ramy`, `typ_historii`
+**Pola wejściowe:** `artykulowy`, `glosy`, `hipotezy`, `karta`, `katy`, `ksiega`, `marka`, `n_kand`, `n_max`, `odbior`, `ramy`, `typ_historii`
 
 **Kontrakt wyjścia:**
 
@@ -389,7 +389,7 @@
 {{"claims": [{{"claim": "<what the text asserts>", "status": "confirmed"|"refuted"|"outdated"|"unverified", "url": "<source, or empty>", "source_date": "<when that source was published, YYYY-MM-DD, or empty>", "what_the_source_says": "<one sentence, required for refuted and outdated>"}}], "safe_to_post": true|false, "verdict": "<one sentence>"}}
 ```
 
-#### `wiernosc_notki.md` (42 wierszy)
+#### `wiernosc_notki.md` (47 wierszy)
 
 **Pola wejściowe:** `marka`, `tekst`, `twierdzenia`
 

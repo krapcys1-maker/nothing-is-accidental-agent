@@ -746,7 +746,7 @@
 
 ### `sledztwo.py` — śledztwo — wybór największej historii, rdzeń (sedno) i kąty serii z jednej tabeli KATY, uczciwy hak sprawdzany kodem, poziom tematu (liczba notek), bramka nowości i kolejka notek
 
-3129 wierszy, 131 funkcji na poziomie modułu, 0 klas
+3143 wierszy, 131 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -884,7 +884,7 @@
 
 ### `sledztwo_plan.py` — plan redaktora śledztwa — 12 soczewek, pytania sprawdzane kodem (test podmiany), dokumenty pierwotne do znalezienia i starszy redaktor wskazujący luki
 
-1249 wierszy, 60 funkcji na poziomie modułu, 0 klas
+1284 wierszy, 61 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -912,6 +912,7 @@
 | `_poprzednie_plany(run_id, ile)` *(wewn.)* | Szesc ostatnich planow z `sledztwa.jsonl` (pole `plan_pytania` rekordu sledztwa). |
 | `_klucze_tokeny(klucze)` *(wewn.)* | — |
 | `_kontekst(h, pytanie, ledes, run_id, dodatkowe, poprzednie)` *(wewn.)* | Wszystko, co walidacja wie o historii: jej nazwy, liczby, szablony i poprzednie plany. |
+| `_liczba_wyrozniajaca(tok)` *(wewn.)* | Liczba, ktora cos mowi o tej historii: z ulamkiem, procentem, waluta albo co najmniej |
 | `_nazywa_historie(q, kont)` *(wewn.)* | Czy pytanie nazywa aktora, produkt albo liczbe TEJ historii (spec §3 regula 2). |
 | `_ma_wyrozniajace(q, kont)` *(wewn.)* | — |
 | `_zapytanie(tekst, q, kont)` *(wewn.)* | 3-8 slow do wyszukiwarki; bez nazwy historii dostaje ja na poczatek — zapytanie |
@@ -1113,7 +1114,7 @@
 
 ### `research.py` — dogrywka researchu: księga pytań śledztwa (status każdego pytania z cytatem), pościg za dokumentem pierwotnym, konkurencyjne wyjaśnienia artykułu z puli, twardy sufit kosztu
 
-1451 wierszy, 49 funkcji na poziomie modułu, 1 klas
+1516 wierszy, 51 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -1152,6 +1153,8 @@
 | `_sprawdz_zasiane(wpisy, evidence)` *(wewn.)* | Wpis z poprzedniej ksiegi zachowuje odpowiedz tylko wtedy, gdy jej fragment stoi |
 | `_cytaty_ksiegi(cites, widok_po_id, teksty)` *(wewn.)* | Cytat ksiegi = fragment wskazany para {source_id, excerpt_index}. Kod sprawdza, ze |
 | `_wywolaj_ksiege(conn, run_id, question, paczka, widok, stop_usd, dzis)` *(wewn.)* | Jedna paczka statusow, z pamiecia podrecza jak `_assess` (ten sam prompt w ciagu |
+| `_pozycje_ksiegi(raw)` *(wewn.)* | Lista pozycji odpowiedzi ksiegi. Proba 25.10.2026: czesc paczek wracala bez zadnego |
+| `_id_pozycji(item, po_id)` *(wewn.)* | Id pozycji odpowiedzi w paczce: „Q3", „q3", 3, „Q3:" albo dokladny tekst pytania. |
 | `_scal_statusy(paczka, raw, widok, teksty, dzis)` *(wewn.)* | Wynik paczki do ksiegi. Zasady kodu, nie prosby w prompcie: |
 | `_ocen_ksiege(conn, run_id, question, wpisy, widok, evidence, stop_usd, dzis)` *(wewn.)* | Jedno przejscie statusow w paczkach po `PACZKA_KSIEGI`. Ucieta odpowiedz albo zly |
 | `_nastepne_pytanie(wpisy)` *(wewn.)* | Ktore pytanie dostaje runde i jakim zapytaniem — albo None. |
@@ -1215,7 +1218,7 @@
 
 ### `artykul_z_puli.py` — artykuł bierze temat z tej samej puli, co notki
 
-3210 wierszy, 60 funkcji na poziomie modułu, 1 klas
+3248 wierszy, 61 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -1264,6 +1267,7 @@
 | `_wznow_sledztwo(conn, run_id, rid_tekst)` *(wewn.)* | `--z-sledztwa <run_id>`: zapisany stan -> etapy 15-17 (poziom, katy, rekord, |
 | `_kat_analizy(sledztwo, rodzaj)` *(wewn.)* | — |
 | `_rekordy_pierwotne(card)` *(wewn.)* | Ile roznych zrodel PRIMARY albo INDEPENDENT stoi za potwierdzonymi |
+| `_wpis_ksiegi_kata(q, ksiega)` *(wewn.)* | Wpis ksiegi, na ktorym stoi kat. Model oddaje `q` jako id („Q3"), liste id, |
 | `_werdykt_z_dowodami(stan)` *(wewn.)* | Kat-werdykt, ktorego dowody za i przeciw stoja w ksiedze (spec §5). |
 | `_ocena_kandydata(stan, teraz, w_tescie, uzyte)` *(wewn.)* | (nadaje sie, czego brakuje, miary) — regula artykulu ze sledztwa (spec §5), |
 | `_uzyte_twierdzenia(sledztwo, stan)` *(wewn.)* | Twierdzenia, na ktorych staly WYDANE notki serii tej historii. None, gdy |

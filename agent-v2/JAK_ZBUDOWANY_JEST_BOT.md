@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **38 plików**, 51 876 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **38 plików**, 52 028 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -114,7 +114,7 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
 się testować bez przeglądarki i bez pieniędzy**. 213 zestawów
-testów, 5951 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+testów, 5965 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -888,7 +888,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `sledztwo.py` — śledztwo — wybór największej historii, rdzeń (sedno) i kąty serii z jednej tabeli KATY, uczciwy hak sprawdzany kodem, poziom tematu (liczba notek), bramka nowości i kolejka notek
 
-3129 wierszy, 131 funkcji na poziomie modułu, 0 klas
+3143 wierszy, 131 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -1026,7 +1026,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `sledztwo_plan.py` — plan redaktora śledztwa — 12 soczewek, pytania sprawdzane kodem (test podmiany), dokumenty pierwotne do znalezienia i starszy redaktor wskazujący luki
 
-1249 wierszy, 60 funkcji na poziomie modułu, 0 klas
+1284 wierszy, 61 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -1054,6 +1054,7 @@ wiec nie da sie go rozjechac z kodem.
 | `_poprzednie_plany(run_id, ile)` *(wewn.)* | Szesc ostatnich planow z `sledztwa.jsonl` (pole `plan_pytania` rekordu sledztwa). |
 | `_klucze_tokeny(klucze)` *(wewn.)* | — |
 | `_kontekst(h, pytanie, ledes, run_id, dodatkowe, poprzednie)` *(wewn.)* | Wszystko, co walidacja wie o historii: jej nazwy, liczby, szablony i poprzednie plany. |
+| `_liczba_wyrozniajaca(tok)` *(wewn.)* | Liczba, ktora cos mowi o tej historii: z ulamkiem, procentem, waluta albo co najmniej |
 | `_nazywa_historie(q, kont)` *(wewn.)* | Czy pytanie nazywa aktora, produkt albo liczbe TEJ historii (spec §3 regula 2). |
 | `_ma_wyrozniajace(q, kont)` *(wewn.)* | — |
 | `_zapytanie(tekst, q, kont)` *(wewn.)* | 3-8 slow do wyszukiwarki; bez nazwy historii dostaje ja na poczatek — zapytanie |
@@ -1255,7 +1256,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `research.py` — dogrywka researchu: księga pytań śledztwa (status każdego pytania z cytatem), pościg za dokumentem pierwotnym, konkurencyjne wyjaśnienia artykułu z puli, twardy sufit kosztu
 
-1451 wierszy, 49 funkcji na poziomie modułu, 1 klas
+1516 wierszy, 51 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -1294,6 +1295,8 @@ wiec nie da sie go rozjechac z kodem.
 | `_sprawdz_zasiane(wpisy, evidence)` *(wewn.)* | Wpis z poprzedniej ksiegi zachowuje odpowiedz tylko wtedy, gdy jej fragment stoi |
 | `_cytaty_ksiegi(cites, widok_po_id, teksty)` *(wewn.)* | Cytat ksiegi = fragment wskazany para {source_id, excerpt_index}. Kod sprawdza, ze |
 | `_wywolaj_ksiege(conn, run_id, question, paczka, widok, stop_usd, dzis)` *(wewn.)* | Jedna paczka statusow, z pamiecia podrecza jak `_assess` (ten sam prompt w ciagu |
+| `_pozycje_ksiegi(raw)` *(wewn.)* | Lista pozycji odpowiedzi ksiegi. Proba 25.10.2026: czesc paczek wracala bez zadnego |
+| `_id_pozycji(item, po_id)` *(wewn.)* | Id pozycji odpowiedzi w paczce: „Q3", „q3", 3, „Q3:" albo dokladny tekst pytania. |
 | `_scal_statusy(paczka, raw, widok, teksty, dzis)` *(wewn.)* | Wynik paczki do ksiegi. Zasady kodu, nie prosby w prompcie: |
 | `_ocen_ksiege(conn, run_id, question, wpisy, widok, evidence, stop_usd, dzis)` *(wewn.)* | Jedno przejscie statusow w paczkach po `PACZKA_KSIEGI`. Ucieta odpowiedz albo zly |
 | `_nastepne_pytanie(wpisy)` *(wewn.)* | Ktore pytanie dostaje runde i jakim zapytaniem — albo None. |
@@ -1357,7 +1360,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `artykul_z_puli.py` — artykuł bierze temat z tej samej puli, co notki
 
-3210 wierszy, 60 funkcji na poziomie modułu, 1 klas
+3248 wierszy, 61 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -1406,6 +1409,7 @@ wiec nie da sie go rozjechac z kodem.
 | `_wznow_sledztwo(conn, run_id, rid_tekst)` *(wewn.)* | `--z-sledztwa <run_id>`: zapisany stan -> etapy 15-17 (poziom, katy, rekord, |
 | `_kat_analizy(sledztwo, rodzaj)` *(wewn.)* | — |
 | `_rekordy_pierwotne(card)` *(wewn.)* | Ile roznych zrodel PRIMARY albo INDEPENDENT stoi za potwierdzonymi |
+| `_wpis_ksiegi_kata(q, ksiega)` *(wewn.)* | Wpis ksiegi, na ktorym stoi kat. Model oddaje `q` jako id („Q3"), liste id, |
 | `_werdykt_z_dowodami(stan)` *(wewn.)* | Kat-werdykt, ktorego dowody za i przeciw stoja w ksiedze (spec §5). |
 | `_ocena_kandydata(stan, teraz, w_tescie, uzyte)` *(wewn.)* | (nadaje sie, czego brakuje, miary) — regula artykulu ze sledztwa (spec §5), |
 | `_uzyte_twierdzenia(sledztwo, stan)` *(wewn.)* | Twierdzenia, na ktorych staly WYDANE notki serii tej historii. None, gdy |
@@ -11280,7 +11284,7 @@ Answer with JSON only, no other text:
 
 #### `prompts/przeslania.md`
 
-**98 wierszy.** Pola wejsciowe: `artykulowy`, `glosy`, `hipotezy`, `karta`, `katy`, `ksiega`, `marka`, `n_max`, `odbior`, `ramy`, `typ_historii`
+**102 wierszy.** Pola wejsciowe: `artykulowy`, `glosy`, `hipotezy`, `karta`, `katy`, `ksiega`, `marka`, `n_kand`, `n_max`, `odbior`, `ramy`, `typ_historii`
 
 ````markdown
 We investigated one AI story for {marka}, an account that explains AI to curious
@@ -11308,7 +11312,10 @@ Then list the story's 3–8 strongest findings in `ustalenia`: verified things a
 curious non-expert would repeat, each with the claim numbers it stands on and one
 line on why a reader cares. {artykulowy}
 
-Build up to {n_max} notes from those findings, one finding per note; fewer is right
+Propose up to {n_kand} candidate notes from those findings, one finding per note;
+our code keeps the best {n_max} by its own composition rules (lead, how it works,
+people's voices, one verdict), so give it real choices — including a note on what
+people who tried or tested it found, when the card has their voices. Fewer is right
 when the card has fewer strong findings. Never pad. Each note is about 40–65 words
 and stands on its own. For each note give:
 - `rodzaj`: one angle tag from the list below.
@@ -11324,7 +11331,8 @@ and stands on its own. For each note give:
   for AI, write code, work in a named field, have savings or a pension, live near a
   data centre, or are online. Not only companies or investors.
 - `naglowek`: the first sentence: the most surprising TRUE thing in this note, at
-  most 18 words, starting with the thing itself. Not a question, no date or
+  most 18 words, starting with the thing itself. For a verdict, a motive or a
+  forecast it is the verdict itself, said plainly. Not a question, no date or
   "According to" opener, no teaser. Every number, superlative ("highest", "only",
   "first") and comparison in it must appear in the evidence of the claims you cite,
   about the same entity the sentence names; if that evidence says "if", "once",
@@ -12276,7 +12284,7 @@ below is a claim about this date, not about the date its source was written.
 
 #### `prompts/wiernosc_notki.md`
 
-**42 wierszy.** Pola wejsciowe: `marka`, `tekst`, `twierdzenia`
+**47 wierszy.** Pola wejsciowe: `marka`, `tekst`, `twierdzenia`
 
 ````markdown
 You check one short note before {marka} publishes it. The note was written from
@@ -12300,8 +12308,13 @@ Do not report:
 
 - a plain-language explanation of what a common term means ("a token is a
   word-piece");
-- the publication's own clearly marked view, verdict or forecast ("our bet",
-  "we think", "this looks like");
+- the publication's own view, verdict, forecast or judgment, marked or not
+  ("our bet", "this looks like", "the product works; the marketing doesn't",
+  "price now decides"): a judgment, metaphor, analogy or punchline built on the
+  claims is our opinion, not a fact, as long as it adds no new number, name,
+  date or event;
+- a company and the product, brand or website it owns named interchangeably —
+  they are the same party;
 - wording, tone, length or style.
 
 Use only the claims below. Do not use your own knowledge of the subject and do
