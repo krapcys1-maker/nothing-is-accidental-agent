@@ -235,6 +235,12 @@ sprawdz("KONTRDOWOD: nigdy mniej niz dwie notki (redaktor chce wyrzucic wszystki
         len(wynik) == 2 and wynik[0]["rodzaj"] == "REVEAL", [w["rodzaj"] for w in wynik])
 wynik, log = seria_pieciu(RuntimeError("redaktor padl"))
 sprawdz("awaria redaktora: seria idzie w calosci, log to mowi", len(wynik) == 5 and "redaktor nie odpowiedzial" in log, log)
+wynik, log = seria_pieciu({"drop": [{"n": 2, "repeats": 3, "why": "a"}, {"n": 3, "repeats": 2, "why": "b"}]})
+sprawdz("KONTRDOWOD: wzajemne powtorki (2<->3) nie wyrzucaja obu — teza zostaje raz",
+        [w["rodzaj"] for w in wynik] == ["REVEAL", "HOW_IT_WORKS", "PEOPLE", "WHERE_IT_LEADS"], [w["rodzaj"] for w in wynik])
+wynik, log = seria_pieciu({"drop": [{"n": 3, "repeats": 2, "why": "a"}, {"n": 2, "repeats": 4, "why": "chain"}]})
+sprawdz("KONTRDOWOD: lancuch (3->2, 2->4) nie gubi tezy — notka 2 niesie ja dalej, wiec zostaje",
+        [w["rodzaj"] for w in wynik] == ["REVEAL", "VERDICT", "PEOPLE", "WHERE_IT_LEADS"], [w["rodzaj"] for w in wynik])
 wynik, log = seria_pieciu("to nie jest json")
 sprawdz("smieci od redaktora: seria idzie w calosci", len(wynik) == 5)
 WYWOLANIA.clear()

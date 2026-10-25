@@ -754,7 +754,7 @@
 
 ### `sledztwo.py` — śledztwo — wybór największej historii, rdzeń (sedno) i kąty serii z jednej tabeli KATY, uczciwy hak sprawdzany kodem, poziom tematu (liczba notek), bramka nowości i kolejka notek
 
-3321 wierszy, 137 funkcji na poziomie modułu, 0 klas
+3327 wierszy, 137 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|

@@ -2813,6 +2813,7 @@ def _bez_powtorek(conn, run_id, notki: list[dict[str, Any]]) -> list[dict[str, A
         print("  [seria] redaktor nie odpowiedzial (%s) — seria idzie w calosci" % type(exc).__name__, flush=True)
         return notki
     odpadaja: dict[int, str] = {}
+    zostaja: set[int] = set()     # notki, do ktorych odsyla jakis wyrzucony wpis — one niosa teze dalej
     for d in (dane.get("drop") if isinstance(dane, dict) else None) or []:
         try:
             n, pow_ = int(d["n"]), int(d["repeats"])
@@ -2820,9 +2821,14 @@ def _bez_powtorek(conn, run_id, notki: list[dict[str, Any]]) -> list[dict[str, A
             continue
         if not (2 <= n <= len(notki)) or not (1 <= pow_ <= len(notki)) or pow_ == n or n in odpadaja:
             continue
+        # Wzajemne powtorki (2 powtarza 3, 3 powtarza 2) albo lancuch zgubilyby teze calkiem: wyrzucona
+        # notka musi odsylac do takiej, ktora zostaje.
+        if pow_ in odpadaja or n in zostaja:
+            continue
         if len(notki) - len(odpadaja) <= 2:
             break
         odpadaja[n] = _przytnij(d.get("why"), 120)
+        zostaja.add(pow_)
     if not odpadaja:
         return notki
     for n, powod in sorted(odpadaja.items()):

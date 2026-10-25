@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **38 plików**, 52 640 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **38 plików**, 52 646 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -114,7 +114,7 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
 się testować bez przeglądarki i bez pieniędzy**. 214 zestawów
-testów, 6044 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+testów, 6046 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -896,7 +896,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `sledztwo.py` — śledztwo — wybór największej historii, rdzeń (sedno) i kąty serii z jednej tabeli KATY, uczciwy hak sprawdzany kodem, poziom tematu (liczba notek), bramka nowości i kolejka notek
 
-3321 wierszy, 137 funkcji na poziomie modułu, 0 klas
+3327 wierszy, 137 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -11890,7 +11890,7 @@ How this works — read it twice:
 
 5. EACH NOTE stands alone for someone who has not seen the others, makes ONE point, and takes a different angle from the others. Its first sentence must stop a scrolling reader: the most surprising TRUE thing in it, stated as a concrete event or detail with who and what spelled out, in plain words — not a rule, a definition, background about the world, a question, a date or a teaser ("you won't believe"). Say plainly what it shows about AI. Finish the thought: the length follows the point, usually 40–85 words, and that is a guide, not a cap. Never cut an explanation short to hit a number, never stop mid-argument, never pad. Explain a technical term in a few plain words where it first matters. Introduce every person or organisation by role the first time ("the complainant", "the party's lawyer") — if the facts give no role, use the role you can see from them, never a bare surname a stranger cannot place. Write in English only. Vary the shape of your sentences: avoid the stock rhythm "X. Y, not Z." and stock phrases ("Read that again", "That is the shift to plan for", "the real story is"), do not end every note on a moral, and never write about what we have or have not seen.
 
-6. SENSITIVE stories (suicide, self-harm, violence, abuse, children): report soberly; never repeat method details or the harmful text itself; no sensational framing.
+6. SENSITIVE stories (suicide, self-harm, violence, abuse, children): report soberly; never repeat method details or the harmful text itself; no sensational framing. A forecast, verdict or bet never speculates about the guilt, health or intentions of a named private individual.
 
 7. TAKE THE SIDE NOBODY ELSE TOOK. The series must contain at least one note that argues against the obvious reading of the story (name that reading in a clause and say why it is wrong or incomplete) and at least one dated, falsifiable bet that a rival outlet would not dare to make.
 

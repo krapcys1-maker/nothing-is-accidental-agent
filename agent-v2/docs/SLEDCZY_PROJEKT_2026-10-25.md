@@ -149,3 +149,28 @@ uderzenie zabiło, „31 notatek na osobę to strona, nie teczka”. Wyłapane i
 słowo z opisu kąta przeciekło do notki; nazwisko bez roli; dopowiedziane szczegóły sceny („nieoświetlone
 pobocze”). Zostaje do decyzji: artykuł tygodnia z lekkiego stanu (dziś reguła §5 wymaga ksiąg i poziomów
 ciężkiego toru, więc artykuł idzie z puli).
+
+### Wieczór 25.10: slepe testy pisarza i promptu (≈2 USD, wszystko na kopiach)
+
+Pomiar zamiast intuicji — ta sama karta faktow, trzy serie albo szesc wariantow w losowej kolejnosci, 16 niezaleznych
+czytelnikow-agentow (po dwie paczki na karte, osiem kart z roznych dzialow), oceny 1-5 za haczyk, „wow", glebie,
+roznorodnosc, glos i liczbe tez spoza karty.
+
+1. **Pisarz serii: Flash wygral.** 11 wygranych z 16, Opus 5, Sonnet 0. Flash mial najlepszy haczyk, „wow",
+   roznorodnosc i glos oraz najmniej tez spoza karty (1,19 wobec 1,94 u Opusa); Opus wygrywa tylko glebia.
+   Koszt serii: Flash 0,005-0,010, Sonnet 0,03, Opus 0,08-0,10 USD. Zostajemy przy Flashu z myslenie.
+2. **Prompt (szesc wariantow, Flash):** sredni rank 1-6 — „strona, ktorej nikt nie wzial" 2,44 (10 z 16 w gornej
+   dwojce), trzy otwarcia do wyboru 2,94, plan najpierw 3,00, baza 3,94, narracja 4,19, krotko (35-60 slow) 4,50
+   (najplytsza). Runda 2 (kombinacje): plan+otwarcia+kontra 8 wygranych z 16 i najmniej zmyslen (0,62 na serie),
+   plan+kontra i otwarcia+kontra po 2,31 sredniego rankingu. Do produkcji poszedl wariant pelny (`c123`).
+3. **Redaktor serii** (`seria_redakcja`, 0,003 USD): jedno wywolanie, ktore tylko wyrzuca notki powtarzajace teze
+   innej (kodem: nigdy pierwsza, zawsze co najmniej dwie, awaria = cala seria). Powod: niezalezni czytelnicy
+   widzieli te sama teze w 2-3 notkach jednej serii.
+4. **Poscig za dokumentem pierwotnym w lekkim torze** (`_dokumenty_lekko`, ok. 0,01 USD): Flash nazywa do dwoch
+   dokumentow, `research.dokument` je znajduje, adresy arXiv zamieniane na pelny PDF. Na PHP2Shell dalo Wiza,
+   OpenAI i AWS, a najmocniejszy fakt (proba ataku na system-wabik 4 dni przed ujawnieniem) wszedl na otwarcie.
+   Blad z relacji z drugiej reki (etykieta „weakly supported” nadana przez sedziego GPT-4o, nie ChatGPT) nadal
+   przechodzi, gdy karta nie dostaje zdania z pracy — otwarte.
+5. **Weryfikatorzy faktow** znalezli w pierwszej wersji bledy (wymyslone „confidence scores”, „Amerykanin nie moze
+   zobaczyc wspomnien”, cytat CHP z innego wypadku). Prompt dostal: dokladne przypisania, brak wlasnych liczb
+   i odstepow czasu, wiedza modelu nie do biezacego stanu swiata (produkty, ustawienia, prawo, ceny).

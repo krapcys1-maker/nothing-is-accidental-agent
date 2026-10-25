@@ -1113,6 +1113,7 @@ sprawdz("arXiv: strona streszczenia (rowniez zrodlowe hosty arXiv) -> pelny PDF;
         and azp._pelny_tekst_url("https://arxiv.org/pdf/2602.01450") == "https://arxiv.org/pdf/2602.01450"
         and azp._pelny_tekst_url("https://notarxiv.org/abs/1") == "https://notarxiv.org/abs/1"
         and azp._pelny_tekst_url("https://dl.acm.org/doi/abs/10.1/2") == "https://dl.acm.org/doi/abs/10.1/2"
+        and azp._pelny_tekst_url("https://arxiv.org/abs/hep-th/9901001") == "https://arxiv.org/pdf/hep-th/9901001"
         and azp._pelny_tekst_url(None) is None)
 zeruj()
 SERIA_L[0] = SERIA
