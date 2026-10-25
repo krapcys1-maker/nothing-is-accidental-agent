@@ -151,7 +151,7 @@
 {{"poprawki": [{{"nr": <sentence number>, "nowe": "<replacement sentence, or empty to delete>"}}]}}
 ```
 
-#### `notka.md` (118 wierszy)
+#### `notka.md` (123 wierszy)
 
 **Pola wejściowe:** `evidence`, `form_brief`, `language`, `marka`, `max_words`, `min_words`, `note_form`, `note_type`, `ostatnie_otwarcia_json`, `ostatnie_zakonczenia_json`, `rozbior`, `type_brief`
 
@@ -191,7 +191,7 @@
 {{"grupy": [{{"zostaje": <id>, "scalone": [<id>, ...], "dlaczego": "<one clause: what makes these the same story>"}}]}}
 ```
 
-#### `pisarz.md` (130 wierszy)
+#### `pisarz.md` (144 wierszy)
 
 **Pola wejściowe:** `card_json`, `language`, `marka`, `max_words`, `min_words`, `poprzednie_uwagi`, `style_examples`, `style_negative`, `style_positive`, `target_words`
 
@@ -215,14 +215,14 @@
 {{"powtorka_nr": <number of the bank fact it repeats, or 0 if none>, "powod": "<one short sentence>"}}
 ```
 
-#### `przeslania.md` (38 wierszy)
+#### `przeslania.md` (67 wierszy)
 
 **Pola wejściowe:** `hipotezy`, `karta`, `marka`
 
 **Kontrakt wyjścia:**
 
 ```json
-{{"przeslania": [{{"rodzaj": "USTALENIE"|"MOTYW"|"ZA_DWA_LATA", "przeslanie": "<the one-sentence message of this note>", "tresc": "<3-5 sentences of reasoning the writer should convey, in plain words>", "fakty": [<claim numbers>], "za": "<the evidence for this reading>", "przeciw": "<the strongest evidence against it, or the main uncertainty>", "co_obali": "<what would prove this wrong>", "pominac": false, "powod": ""}}]}}
+{{"przeslania": [{{"rodzaj": "KURIOZUM"|"MECHANIZM"|"USTALENIE"|"KTO_PLACI"|"MOTYW"|"ZA_DWA_LATA", "przeslanie": "<the one-sentence message of this note>", "hak": "<the concrete checked detail the note opens with>", "tresc": "<2-4 sentences of reasoning the writer should convey, in plain words>", "fakty": [<claim numbers>], "za": "<the evidence for this reading>", "przeciw": "<the strongest evidence against it, or the main uncertainty>", "co_obali": "<what would prove this wrong>", "pominac": false, "powod": ""}}]}}
 ```
 
 #### `radar.md` (40 wierszy)

@@ -140,11 +140,10 @@
 | `THINKING_HEADROOM_TOKENS` | `28000` | Myślenie na Opusie 5 jest domyślnie włączone, liczy się jak tokeny wyjściowe i NIE jest częścią kontraktu — więc sufit wyliczony z samego ko |
 | `EFFORT` | `{ # NOTKI: `medium`, WPISANE SWIADOMIE — bo ` | Głębokość myślenia. Jawnie, bo domyślne `high` na Opusie 5 potrafi podwoić rachunek za wyjście bez pytania. TO JEST POKRETLO WYLACZNIE DLA M |
 | `MAX_TOKENS` | `{ # 6 tematow: tytul, pytanie, ZLAMANE PRZEK` | — |
-| `NOTE_MIN_WORDS` | `33` | --- notki i komentarze ------------------------------------------------------ SUFIT PODNIESIONY 4 wrzesnia 2026 DECYZJA WLASCICIELA: „chce z |
-| `NOTE_MAX_WORDS` | `120` | — |
+| `NOTE_MIN_WORDS` | `40` | --- notki i komentarze ------------------------------------------------------ SUFIT PODNIESIONY 4 wrzesnia 2026 DECYZJA WLASCICIELA: „chce z |
+| `NOTE_MAX_WORDS` | `65` | — |
 | `NOTE_MIN_WORDS_DLUGA` | `120` | DLUGA NOTKA — OKNO OSOBNE, BO SUFIT 64 SLOW MA ZMIERZONY KOSZT. Sufit wyzej optymalizuje ZAANGAZOWANIE i ma zrodlo. Nie optymalizuje ZROZUMI |
 | `NOTE_MAX_WORDS_DLUGA` | `200` | — |
-| `FORMY_DLUGIE` | `{"WYJASNIENIE"}` | Formy pisane w dlugim oknie. Zbior, nie pojedyncza nazwa, zeby dolozenie drugiej dlugiej formy nie wymagalo dotykania `zakres_slow`. |
 | `NOTE_CANDIDATES` | `1` | Ilu kandydatow generujemy. Dawniej bylo pieciu, potem trzech; dodatkowe warianty tego samego zdania niczego nie dokladaly, a placilismy za n |
 | `DZIEDZINY_CIEKAWOSTEK` | `( # --- co te systemy realnie robia i jak sa` | Ile ciekawostek szukamy naraz. Cztery z pięciu notek dziennie stoją na nich, a jedno szukanie kosztuje tyle co jedno — więc bierzemy zapas n |
 | `ILE_DZIEDZIN_NA_PRZEBIEG` | `5` | — |
@@ -188,16 +187,16 @@
 | `RADAR_WLACZONY` | `True` | RADAR CIEKAWOSCI I KARTA GLEBI — wlasciciel 27.09.2026: „chce pisac ciekawe notki", „miec system, ktory wylapuje to", „system glebokosci dan |
 | `GLEBIA_WLACZONA` | `True` | — |
 | `WNIOSEK_WLACZONY` | `True` | Niesztandarowy wniosek przed pisaniem notki (`stages.wniosek`). |
-| `NOTE_MIX_ARTICLE_DAY` | `("ARTYKUL", "CIEKAWOSTKA", "SPROSTOWANIE")` | MIESZANKA DNIA. Ostatnia pozycja to MYSL — notka bez zadnego dowodu. Powod jest w NOTE_TYPES przy samym typie: wszystkie pozostale wymagaja  |
+| `NOTE_MIX_ARTICLE_DAY` | `("ARTYKUL", "CIEKAWOSTKA", "SPROSTOWANIE", "` | MIESZANKA DNIA. Ostatnia pozycja to MYSL — notka bez zadnego dowodu. Powod jest w NOTE_TYPES przy samym typie: wszystkie pozostale wymagaja  |
 | `KSZTALTY_MYSLI` | `{ 'PYTANIE': 'Consider a genuine open questi` | KSZTALTY NOTKI TYPU MYSL. Losowane w kodzie i podawane jako PRZYDZIAL. Powod jest zmierzony: opis typu wymienial pytanie i obserwacje jako d |
-| `NOTE_MIX_OTHER_DAY` | `("CIEKAWOSTKA", "DYSKUSJA", "SPROSTOWANIE")` | TRZY NOTKI NA DOBE ZAMIAST DZIESIECIU — decyzja wlasciciela, 7 wrzesnia 2026. Liczba notek na dobe to DLUGOSC TEJ KROTKI i tylko ona. POWOD  |
+| `NOTE_MIX_OTHER_DAY` | `("CIEKAWOSTKA", "DYSKUSJA", "SPROSTOWANIE", ` | TRZY NOTKI NA DOBE ZAMIAST DZIESIECIU — decyzja wlasciciela, 7 wrzesnia 2026. Liczba notek na dobe to DLUGOSC TEJ KROTKI i tylko ona. POWOD  |
 | `PISARZE_NOTEK` | `("note",)` | KTO PISZE NOTKI — decyzja wlasciciela z 7 wrzesnia 2026: „zostaw Opusa". Naprzemiennosc weszla 3 wrzesnia jako SLEPA PROBA: polowa notek Opu |
 | `LAJKI_DZIENNIE` | `(0, 0)` | --- zachowanie spoleczne: widelki, nie stale liczby ------------------------- Stala liczba dziennie wyglada jak robot, bo czlowiek nie ma no |
 | `KOMENTARZE_DZIENNIE` | `(14, 20)` | Osiemnascie komentarzy dziennie pod cudzymi tekstami to nie jest tempo czytelnika, tylko podpis bota — i kosztuje najwiecej po pisaniu, bo k |
 | `FOLLOW_MIESIECZNIE` | `(10, 16)` | ZEROWANE 2026-08-23, PRZYWROCONE 2026-09-01 — BO WNIOSEK BYL FALSZYWY. Stalo tu `(0, 0)` z uzasadnieniem „Substack zdjal Follow ze stron pro |
 | `SUBSKRYPCJE_MIESIECZNIE` | `(12, 20)` | — |
 | `FOLLOW_DZIENNIE` | `5` | --- NIE JAK DRUGI BOT, 4.10.2026 (decyzja wlasciciela) -------------------- Przeglad 4.10 porownal nas z drugim botem w TYM SAMYM WIEKU kont |
-| `SUBSKRYPCJE_DZIENNIE` | `4` | — |
+| `SUBSKRYPCJE_DZIENNIE` | `1` | 25.10.2026: 4 -> 1 (decyzja wlasciciela). Na obu kontach przyrost subskrybentow idzie za wyswietleniami, a nie za liczba naszych subskrypcji |
 | `SUBSKRYPCJE_MAX_ODBIORCOW` | `1000` | SUFIT ODBIORCOW PRZY SUBSKRYPCJI. Subskrybujemy tylko publikacje, ktorych publicznosc (subskrybenci albo obserwujacy z publicznego profilu)  |
 | `SUBSKRYPCJE_MAKS_OGLADANYCH` | `40` | Ile kandydatow wolno OBEJRZEC w jednym przebiegu, szukajac malych kont. Sito jest tanie (publiczny JSON, bez przegladarki), ale duza czesc p |
 | `OBSERWACJE_MAX_ODBIORCOW` | `5000` | SUFIT ODBIORCOW PRZY OBSERWACJI (6.10.2026, decyzja wlasciciela: „ok to wykonaj”). Do tego dnia obserwacja nie miala sita: od 4.10 cztery z  |

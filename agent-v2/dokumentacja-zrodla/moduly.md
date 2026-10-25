@@ -527,7 +527,7 @@
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-4023 wierszy, 44 funkcji na poziomie modułu, 0 klas
+4049 wierszy, 44 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -706,9 +706,9 @@
 | `_znakow_spizarni()` *(wewn.)* | — |
 | `dla_weryfikatora(karta)` | Cytaty z karty w postaci wierszy rekordu dla weryfikatora faktow. |
 
-### `sledztwo.py` — śledztwo — historia z radaru, bramka nowości sprawdzana kodem, trzy przesłania (ustalenie, motyw, za dwa lata) i kolejka notek
+### `sledztwo.py` — śledztwo — historia z radaru, bramka nowości sprawdzana kodem, seria 4–5 kątów (kuriozum, mechanizm, ustalenie, kto płaci, motyw, za dwa lata) i kolejka notek
 
-508 wierszy, 27 funkcji na poziomie modułu, 0 klas
+556 wierszy, 27 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -718,7 +718,7 @@
 | `historie(korpus, conn, run_id, ile)` | Grupy naglowkow z radaru: najlepszy naglowek na poczatku, potem warianty. |
 | `zrodla_historii(h)` | Adresy historii do pobrania, w ksztalcie `stages.fetch` — bez powtorek. |
 | `_rekordy(dni)` *(wewn.)* | — |
-| `ile_sledztw(dni)` | — |
+| `ile_sledztw(dni)` | Ile SLEDZTW w oknie — bez wpisow `oznacz_artykul`. |
 | `ile_artykulow(dni)` | — |
 | `ocena_historii(h)` | Czy te historie warto badac: dosc niezaleznych zrodel i jeszcze nie badana. |
 | `fakt_z_historii(h)` | Historia w ksztalcie faktu, ktory przyjmuje `artykul_z_puli.temat_z_faktu`. |
@@ -729,15 +729,15 @@
 | `nowosc(conn, run_id, card, h, teksty_zrodel)` | Czy laczenie zrodel ustalilo cos, czego nie mowi zadne z nich. |
 | `pelny_obraz(card, min_twierdzen, min_serwisow)` | Czy karta daje czytelnikowi pelny obraz historii: dosc potwierdzonych |
 | `_hipotezy_do_promptu(dossier)` *(wewn.)* | — |
-| `przeslania(conn, run_id, card, dossier, h)` | Trzy notki z roznym przeslaniem — albo mniej, gdy karta ktores nie uniesie. |
+| `przeslania(conn, run_id, card, dossier, h)` | Seria notek o jednej historii: 4-5 katow (`RODZAJE`) — albo mniej, gdy |
 | `zapisz_sledztwo(rekord)` | Jedna linia na sledztwo — pamiec dla bramki i limitow. Nigdy nie wywala. |
 | `oznacz_artykul(run_id)` | Artykul ze sledztwa z tego przebiegu wyszedl — liczy sie do limitu tygodnia. |
 | `_kolejka()` *(wewn.)* | — |
 | `_zapisz_kolejke(kolejka)` *(wewn.)* | — |
-| `dodaj_do_kolejki(lista, h, card, run_id)` | Przeslania do kolejki notek, kazde wazne `MAKS_WIEK_TEMATU_DNI` dni. |
-| `_wydane_przeslania()` *(wewn.)* | (identyfikatory juz opublikowanych, czy dzis wyszlo juz jakies). |
+| `dodaj_do_kolejki(lista, h, card, run_id)` | Przeslania do kolejki notek, kazde wazne `WAZNOSC_PRZESLANIA_DNI` dni. |
+| `_wydane_przeslania()` *(wewn.)* | (identyfikatory juz opublikowanych, ile wyszlo dzis). |
 | `czekajace_przeslania()` | Ile przeslan czeka na notke: wazne i jeszcze nie wydane. |
-| `wez_przeslanie()` | Nastepne przeslanie do notki — JEDNO na dobe, najstarsza historia pierwsza. |
+| `wez_przeslanie()` | Nastepne przeslanie do notki — do `PRZESLAN_NA_DOBE` na dobe (jedno na |
 | `material_notki(p)` | (fakt do dziennika i straznikow, material dla pisarza) z przeslania. |
 
 ### `eksperymenty.py` — pomiar zmian — odbiór notek w grupach względem tła tygodnia, 95% przedział i werdykt (lepiej / gorzej / brak dowodu / za mało danych)
@@ -774,7 +774,7 @@
 
 ### `obserwatorium.py` — obserwatorium obu kont — dane dnia (wzrost, lejek, działania, koszt), dziennik zmian z reflogu i rejestru, tempo wzrostu i skutek zmian
 
-1287 wierszy, 54 funkcji na poziomie modułu, 0 klas
+1298 wierszy, 54 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -832,6 +832,28 @@
 | `_jakosc(konto)` *(wewn.)* | — |
 | `raport(dni_raportu, dzis)` | — |
 | `main(argv)` | — |
+
+### `laboratorium.py` — laboratorium — tygodniowy raport badawczy obu kont: prędkość przyrostu z przedziałami, dawka → skutek, notki tygodniami, atrybucja zapisów
+
+369 wierszy, 15 funkcji na poziomie modułu, 0 klas
+
+| funkcja | co robi |
+|---|---|
+| `_t95(df)` *(wewn.)* | — |
+| `przedzial_poissona(k, okres)` | 95% dla tempa zliczen `k` w `okres` (przyblizenie Byara). None dla k < 0. |
+| `iloraz_tempa(a, b)` | Iloraz dwoch zliczen w rownych oknach z 95% (log-normalny). None przy zerze. |
+| `nachylenie(y)` | Regresja liniowa y na numer tygodnia: nachylenie (osob/tydzien na tydzien) z 95%. |
+| `_rangi(v)` *(wewn.)* | Rangi z remisami usrednionymi (1 = najmniejszy). |
+| `_pearson(a, b)` *(wewn.)* | — |
+| `spearman(x, y, permutacji, ziarno)` | Rho Spearmana i p dwustronne z permutacji (stale ziarno — powtarzalne). |
+| `reszty(y, x)` | Reszty z regresji y na x — przyrost PO odjeciu tego, co tlumaczy zasieg. |
+| `tygodnie(dni, wczoraj, ile)` | Pelne tygodnie (pon-niedz) z przyrostem netto i sumami dzialan oraz zasiegu. |
+| `notki_tygodniami(dane, dzis, ile)` | Mediana wyswietlen i dlugosci notek wedlug tygodnia publikacji (notki >= 3 dni). |
+| `policz_konto(dni, dane, zrodla, wczoraj, dzis)` | — |
+| `policz(wczoraj)` | — |
+| `_rho(z)` *(wewn.)* | — |
+| `tekst(w)` | — |
+| `zapisz()` | — |
 
 ### `aktualne_modele.py` — jakie modele istnieją DZIŚ; pytane na żywo, nie z pamięci
 
@@ -951,7 +973,7 @@
 
 ### `artykul_z_puli.py` — artykuł bierze temat z tej samej puli, co notki
 
-1744 wierszy, 15 funkcji na poziomie modułu, 0 klas
+1759 wierszy, 15 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
