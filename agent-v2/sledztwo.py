@@ -326,8 +326,12 @@ def kategorie_historii(historie: list[dict[str, Any]], conn=None,
                                       (" | also: %s" % inne) if inne else ""))
     prompt = ("Write every value in English. Assign each story ONE category: %s\nAlso give "
               "\"zapytanie\": a 1-4 word English search query naming the thing itself (model, product, "
-              "company or case), as people would type it into Hacker News.\n"
-              "Return {\"historie\": [{\"nr\": <number>, \"kategoria\": \"...\", \"zapytanie\": \"...\"}]}\n\n"
+              "company or case), as people would type it into Hacker News. And \"klucze\": 1-3 "
+              "DISTINCTIVE single words that any headline about this same story would contain (a product, "
+              "model, company or case name such as \"PHP\", \"NextDC\", \"GPT-6\"); never generic words like "
+              "AI, OpenAI, Google, model or data unless they name the story itself.\n"
+              "Return {\"historie\": [{\"nr\": <number>, \"kategoria\": \"...\", \"zapytanie\": \"...\", "
+              "\"klucze\": [\"...\"]}]}\n\n"
               "Stories:\n%s" % (json.dumps(OPISY_KATEGORII, ensure_ascii=False), "\n".join(wiersze)))
     try:
         import llm
@@ -345,7 +349,9 @@ def kategorie_historii(historie: list[dict[str, Any]], conn=None,
             continue
         kat = str(w.get("kategoria") or "").upper()
         out[nr] = {"kategoria": kat if kat in WAGI_KATEGORII else "INNE",
-                   "zapytanie": " ".join(str(w.get("zapytanie") or "").split())[:60]}
+                   "zapytanie": " ".join(str(w.get("zapytanie") or "").split())[:60],
+                   "klucze": [str(k).strip()[:40] for k in (w.get("klucze") or [])
+                              if isinstance(k, str) and str(k).strip()][:3]}
     return out
 
 
@@ -361,7 +367,42 @@ def ostatnie_kategorie(ile: int = 2) -> list[str]:
     return kat[-ile:]
 
 
-def wybierz_historie(historie: list[dict[str, Any]], conn=None, run_id: int | None = None
+# Ile dni wstecz siegaja naglowki dolaczane z korpusu do historii.
+DNI_DOLACZANIA = 5
+
+
+def dolacz_z_korpusu(h: dict[str, Any], korpus: list[dict[str, Any]], klucze: list[str]) -> int:
+    """Dopisuje do historii naglowki z korpusu (ostatnie `DNI_DOLACZANIA` dni), ktore
+    zawieraja ktores z jej slow kluczowych jako cale slowo. Oddaje, ile dopisano.
+
+    Slowa daje klasyfikator i maja byc wyrozniajace („PHP", „NextDC"), nie ogolne;
+    slowa krotsze niz 3 znaki i ogolne nazwy z `OGOLNE_KLUCZE` pomijamy.
+    """
+    wzory = [re.compile(r"(?<![a-z0-9])%s(?![a-z0-9])" % re.escape(k.lower()))
+             for k in klucze if len(k) >= 3 and k.lower() not in OGOLNE_KLUCZE]
+    if not wzory:
+        return 0
+    granica = (_teraz() - timedelta(days=DNI_DOLACZANIA)).strftime("%Y-%m-%d")
+    juz = {str(w.get("url")) for w in h.get("naglowki") or []}
+    ile = 0
+    for w in korpus:
+        tytul = str(w.get("temat") or "").lower()
+        if (str(w.get("url")) in juz or str(w.get("data") or "")[:10] < granica
+                or not any(p.search(tytul) for p in wzory)):
+            continue
+        h.setdefault("naglowki", []).append(dict(w, dolaczony=True))
+        juz.add(str(w.get("url")))
+        ile += 1
+    return ile
+
+
+# Nazwy zbyt ogolne, zeby po nich laczyc naglowki w jedna historie.
+OGOLNE_KLUCZE = {"ai", "openai", "google", "anthropic", "meta", "microsoft", "apple", "amazon", "nvidia",
+                 "chatgpt", "claude", "gemini", "model", "models", "agent", "agents", "data", "the"}
+
+
+def wybierz_historie(historie: list[dict[str, Any]], conn=None, run_id: int | None = None,
+                     korpus: list[dict[str, Any]] | None = None
                      ) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
     """Najwieksza historia, ktora przejdzie bramke: (wybrana albo None, ranking).
 
@@ -370,21 +411,30 @@ def wybierz_historie(historie: list[dict[str, Any]], conn=None, run_id: int | No
     wygrywa wyzsze miejsce radaru. Historia dostaje pola `kategoria`, `zapytanie`,
     `serwisy` i `wynik_wyboru`. Bez kategorii (awaria) liczy sie sama wielkosc.
     """
+    # KATEGORIE I SLOWA KLUCZOWE DLA WSZYSTKICH, PRZED BRAMKA: radar grupuje warianty
+    # niestabilnie (ta sama luka PHP2Shell miala 25.10 w trzech losowaniach 10, 8 i 7
+    # serwisow), wiec historia dostaje tez naglowki z korpusu z jej slowem kluczowym
+    # (`dolacz_z_korpusu`), a dopiero potem liczymy serwisy i bramke.
+    kategorie = kategorie_historii(historie, conn=conn, run_id=run_id)
+    for h in historie:
+        k = kategorie.get(h["miejsce"]) or {}
+        h["kategoria"] = k.get("kategoria") or ""
+        h["zapytanie"] = k.get("zapytanie") or ""
+        h["klucze"] = k.get("klucze") or []
+        if korpus and h["klucze"]:
+            h["dolaczone"] = dolacz_z_korpusu(h, korpus, h["klucze"])
     dobre, ranking = [], []
     for h in historie:
         ok, powod = ocena_historii(h)
         h["serwisy"] = len({z["host"] for z in zrodla_historii(h)})
-        ranking.append({"miejsce": h["miejsce"], "tytul": h.get("tytul"), "ok": ok, "powod": powod})
+        ranking.append({"miejsce": h["miejsce"], "tytul": h.get("tytul"), "ok": ok,
+                        "powod": powod + (" (+%d z korpusu)" % h["dolaczone"] if h.get("dolaczone") else "")})
         if ok:
             dobre.append(h)
     if not dobre:
         return None, ranking
-    kategorie = kategorie_historii(dobre, conn=conn, run_id=run_id)
     ostatnie = set(ostatnie_kategorie())
     for h in dobre:
-        k = kategorie.get(h["miejsce"]) or {}
-        h["kategoria"] = k.get("kategoria") or ""
-        h["zapytanie"] = k.get("zapytanie") or ""
         waga = WAGI_KATEGORII.get(h["kategoria"], 1.0) if kategorie else 1.0
         kara = KARA_ZA_POWTORKE if h["kategoria"] and h["kategoria"] in ostatnie else 1.0
         h["wynik_wyboru"] = round(h["serwisy"] ** WYKLADNIK_WIELKOSCI * waga * kara, 3)

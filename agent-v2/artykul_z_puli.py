@@ -940,12 +940,12 @@ def _przebieg_sledztwa(conn, run_id: int) -> int:
               " — nowe sledztwo, gdy zostanie mniej niz %d"
               % (czeka, sledztwo.PRZESLAN_NA_DOBE), flush=True)
         return 1
-    historie = sledztwo.historie(korpus_kanalow.korpus_kanalow(400),
-                                 conn=conn, run_id=run_id)
+    _korpus = korpus_kanalow.korpus_kanalow(400)
+    historie = sledztwo.historie(_korpus, conn=conn, run_id=run_id)
     # NAJWIEKSZA HISTORIA, NIE PIERWSZA Z RADARU (25.10.2026) — `sledztwo.wybierz_historie`:
     # wielkosc (niezalezne serwisy) x waga kategorii z badania klikalnosci x kara za
     # powtorke dziedziny.
-    wybrana, ranking = sledztwo.wybierz_historie(historie, conn=conn, run_id=run_id)
+    wybrana, ranking = sledztwo.wybierz_historie(historie, conn=conn, run_id=run_id, korpus=_korpus)
     for r in ranking:
         print("  [radar %d] %s — %s%s" % (
             r["miejsce"], str(r["tytul"])[:80], r["powod"],

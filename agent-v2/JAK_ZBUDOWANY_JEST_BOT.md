@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **37 plików**, 44 560 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **37 plików**, 44 610 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -114,7 +114,7 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
 się testować bez przeglądarki i bez pieniędzy**. 207 zestawów
-testów, 5416 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+testów, 5418 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -850,7 +850,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `sledztwo.py` — śledztwo — historia z radaru, bramka nowości sprawdzana kodem, seria 4–5 kątów (kuriozum, mechanizm, ustalenie, kto płaci, motyw, za dwa lata) i kolejka notek
 
-931 wierszy, 37 funkcji na poziomie modułu, 0 klas
+981 wierszy, 38 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -865,7 +865,8 @@ wiec nie da sie go rozjechac z kodem.
 | `ocena_historii(h)` | Czy te historie warto badac: dosc niezaleznych zrodel i jeszcze nie badana. |
 | `kategorie_historii(historie, conn, run_id)` | {miejsce: {"kategoria", "zapytanie"}} dla historii — jedno tanie wywolanie. |
 | `ostatnie_kategorie(ile)` | Kategorie ostatnich `ile` sledztw (najnowsze na koncu) — do kary za powtorke. |
-| `wybierz_historie(historie, conn, run_id)` | Najwieksza historia, ktora przejdzie bramke: (wybrana albo None, ranking). |
+| `dolacz_z_korpusu(h, korpus, klucze)` | Dopisuje do historii naglowki z korpusu (ostatnie `DNI_DOLACZANIA` dni), ktore |
+| `wybierz_historie(historie, conn, run_id, korpus)` | Najwieksza historia, ktora przejdzie bramke: (wybrana albo None, ranking). |
 | `typ_sledztwa(kategoria)` | „premiera" dla premiery modelu, inaczej zwykle „sledztwo" (`ZESTAWY_KATOW`). |
 | `_bez_html(tekst)` *(wewn.)* | — |
 | `glosy_hn(zapytanie, dni, http)` | Najwieksze watki Hacker News o tej sprawie z ostatnich `dni` jako dokumenty korpusu. |

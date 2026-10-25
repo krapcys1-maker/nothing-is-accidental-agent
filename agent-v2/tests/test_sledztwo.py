@@ -360,6 +360,26 @@ try:
     sprawdz("KONTRDOWOD: bez kategorii (awaria) wybor sama wielkoscia — nadal najwieksza",
             _wyb3 is H_PREMIERA, (_wyb3 or {}).get("tytul"))
     (config.DATA_DIR / sledztwo.PLIK_SLEDZTW).unlink()
+    # ROZBITA HISTORIA: radar dal jej 2 serwisy, a korpus ma ja w jeszcze 3 (25.10:
+    # ta sama luka PHP2Shell raz 10, raz 7 serwisow, zaleznie od losowania radaru).
+    H_ROZBITA = _hist(6, "NextDC shares crash", _hosty[:2])
+    _stary = (TERAZ - timedelta(days=9)).strftime("%Y-%m-%d")
+    KORPUS = [w("Reuters", "https://www.reuters.com/x", "NextDC shares sink 42% on power delay"),
+              w("FT", "https://www.ft.com/x", "Why NextDC's fall matters for AI infrastructure"),
+              w("Verge", "https://www.theverge.com/x", "NextDC: grid works paused in Melbourne"),
+              dict(w("Ars", "https://arstechnica.com/x", "NextDC old story"), data=_stary),
+              w("TC", "https://techcrunch.com/x", "NextDCX is another company"),
+              w("Wired", "https://www.wired.com/x", "OpenAI ships a new feature")]
+    llm.call = lambda purpose, system, user, **kw: json.dumps({"historie": [
+        {"nr": 6, "kategoria": "PRACA_EKONOMIA", "zapytanie": "NextDC", "klucze": ["NextDC", "OpenAI"]}]})
+    with contextlib.redirect_stdout(io.StringIO()):
+        _wyb4, _rank4 = sledztwo.wybierz_historie([H_ROZBITA], korpus=KORPUS)
+    sprawdz("rozbita historia dostaje naglowki z korpusu po slowie kluczowym i przechodzi bramke",
+            _wyb4 is H_ROZBITA and H_ROZBITA["serwisy"] == 5 and H_ROZBITA["dolaczone"] == 3
+            and "+3 z korpusu" in _rank4[0]["powod"], (_rank4, H_ROZBITA.get("serwisy")))
+    sprawdz("KONTRDOWOD: ogolne slowo (OpenAI), stary naglowek i fragment wyrazu (NextDCX) nie lacza",
+            not any("OpenAI ships" in str(n.get("temat")) or "old story" in str(n.get("temat"))
+                    or "NextDCX" in str(n.get("temat")) for n in H_ROZBITA["naglowki"]))
 
     print()
     print("=== 4d. GLOSY LUDZI (Hacker News) I CENNIK (OpenRouter) NA ATRAPIE SIECI ===")

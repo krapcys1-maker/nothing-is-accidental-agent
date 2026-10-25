@@ -708,7 +708,7 @@
 
 ### `sledztwo.py` — śledztwo — historia z radaru, bramka nowości sprawdzana kodem, seria 4–5 kątów (kuriozum, mechanizm, ustalenie, kto płaci, motyw, za dwa lata) i kolejka notek
 
-931 wierszy, 37 funkcji na poziomie modułu, 0 klas
+981 wierszy, 38 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -723,7 +723,8 @@
 | `ocena_historii(h)` | Czy te historie warto badac: dosc niezaleznych zrodel i jeszcze nie badana. |
 | `kategorie_historii(historie, conn, run_id)` | {miejsce: {"kategoria", "zapytanie"}} dla historii — jedno tanie wywolanie. |
 | `ostatnie_kategorie(ile)` | Kategorie ostatnich `ile` sledztw (najnowsze na koncu) — do kary za powtorke. |
-| `wybierz_historie(historie, conn, run_id)` | Najwieksza historia, ktora przejdzie bramke: (wybrana albo None, ranking). |
+| `dolacz_z_korpusu(h, korpus, klucze)` | Dopisuje do historii naglowki z korpusu (ostatnie `DNI_DOLACZANIA` dni), ktore |
+| `wybierz_historie(historie, conn, run_id, korpus)` | Najwieksza historia, ktora przejdzie bramke: (wybrana albo None, ranking). |
 | `typ_sledztwa(kategoria)` | „premiera" dla premiery modelu, inaczej zwykle „sledztwo" (`ZESTAWY_KATOW`). |
 | `_bez_html(tekst)` *(wewn.)* | — |
 | `glosy_hn(zapytanie, dni, http)` | Najwieksze watki Hacker News o tej sprawie z ostatnich `dni` jako dokumenty korpusu. |
