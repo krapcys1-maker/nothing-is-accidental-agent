@@ -1926,6 +1926,19 @@ def zakres_slow(forma: str | None) -> tuple[int, int]:
 # (`_badanie_sledztwa`). Flaga `--gleboko` wybiera gleboki tor na jeden przebieg.
 SLEDZTWO_TRYB = "lekkie"
 
+
+def opis_typu_historii(typ):
+    """Rodzaj historii w prompcie serii lekkiej — NASZA stala (kotwica zaufania), nie tresc zrodel."""
+    return "a new AI model or product" if typ == "premiera" else "an AI news story"
+
+
+def liczba_notek_serii(n):
+    """Ile notek najwyzej prosi seria lekka: 2-6, zawsze nasza liczba (kotwica zaufania)."""
+    try:
+        return max(2, min(6, int(n)))
+    except (TypeError, ValueError):
+        return 5
+
 NOTE_CANDIDATES = 1
 # Ile ciekawostek szukamy naraz. Cztery z pięciu notek dziennie stoją na nich,
 # a jedno szukanie kosztuje tyle co jedno — więc bierzemy zapas na kilka dni.

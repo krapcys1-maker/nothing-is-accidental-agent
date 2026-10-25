@@ -2805,13 +2805,11 @@ def seria_lekka(conn, run_id, card: dict[str, Any], h: dict[str, Any], typ: str 
     try:
         import llm
         import stages
-        prompt = stages._prompt(
-            "seria_lekka.md", tytul=" ".join(str(h.get("tytul") or "").split())[:200],
-            typ_historii=("a new AI model or product" if typ == "premiera" else "an AI news story"),
-            n_max=ile, katy=_katy_do_promptu(), fakty=_fakty_do_promptu(card),
+        prompt = stages.prompt_serii_lekkiej(
+            tytul=" ".join(str(h.get("tytul") or "").split())[:200], fakty=_fakty_do_promptu(card),
             nieustalone="\n".join("- " + " ".join(str(x).split())[:240]
                                   for x in (card.get("not_established") or [])[:6]) or "(nothing noted)",
-            ostatnie=_ostatnie_do_promptu())
+            ostatnie=_ostatnie_do_promptu(), typ=typ, n_max=ile)
         try:
             surowe = llm.call("seria_lekka", SERIA_SYSTEM, prompt, conn=conn, run_id=run_id)
         except (llm.OdmowaDostawcy, llm.Truncated) as exc:

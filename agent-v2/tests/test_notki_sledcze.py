@@ -626,13 +626,20 @@ MATERIAL = {"fact": {"fact": "f"}, "perspective": {"wniosek": "w"},
             "investigation": {"first_line": LINIA2, "supporting_claims": FAKTY}}
 wyn, log = dzien([], od=0, przeslanie=PRZES, material=MATERIAL)
 s = WOLANE_NOTE[0]
-sprawdz("kat faktow pisze `notka_przeslania_fakt` (D1: Opus)", s["etap"] == "notka_przeslania_fakt", s["etap"])
-sprawdz("notka serii: bramka, twierdzenia kata, bez rozbioru, zdanie po bramce",
-        callable(s.get("bramka")) and s.get("twierdzenia_kata") == FAKTY and s.get("bez_rozbioru") is True
-        and s.get("pierwsze_zdanie") == LINIA2, s)
-with podmiana(sledztwo, sprawdz_notke=lambda t, f, k=None: []):
-    _ok, _zle = s["bramka"](SERIA_OK), s["bramka"](SERIA_PRZESUNIETA)
-sprawdz("bramka serii pilnuje pierwszego zdania", _ok == [] and _zle != [], (_ok, _zle))
+sprawdz("kat faktow pisze `notka_przeslania_fakt` (Flash z myslenie od 25.10 wieczorem)",
+        s["etap"] == "notka_przeslania_fakt", s["etap"])
+# Wlasciciel 25.10.2026: „w dupie mam jakies sprawdzania” — notka serii nie dostaje ani bramki tekstu, ani
+# wiernosci wobec twierdzen, ani zdania po bramce haka; zostaje tylko sprawdzenie faktow w sieci.
+sprawdz("notka serii: BEZ bramek tekstu, twierdzen kata i zdania po bramce; tylko bez rozbioru",
+        s.get("bez_rozbioru") is True and not s.get("bramka") and not s.get("twierdzenia_kata")
+        and not s.get("pierwsze_zdanie") and "gotowy_tekst" not in s, s)
+dzien([], od=0, przeslanie=dict(PRZES, gotowy_tekst="A note written with the whole series."),
+     material=MATERIAL)
+sprawdz("wpis kolejki z gotowym tekstem (seria lekka): tekst idzie do `note` jako `gotowy_tekst`",
+        WOLANE_NOTE[0].get("gotowy_tekst") == "A note written with the whole series."
+        and not WOLANE_NOTE[0].get("bramka"), WOLANE_NOTE[0])
+wyn, log = dzien([], od=0, przeslanie=PRZES, material=MATERIAL)
+s = WOLANE_NOTE[0]
 sprawdz("notka niesie identyfikator i kat do dziennika",
         wyn[0]["przeslanie_id"] == PRZES["id"] and wyn[0]["kat_serii"]["wariant"] == "gated"
         and wyn[0]["kat_serii"]["k"] == 2 and wyn[0]["kat_serii"]["kierunek"] == "AMPLIFY", wyn[0].get("kat_serii"))
@@ -648,18 +655,10 @@ wyn, log = dzien([], od=0, przeslanie=dict(PRZES, linia="", rodzaj="KURIOZUM"),
 sprawdz("bez zdania po bramce: wariant W, pierwsze zdanie sprawdzone do logu",
         wyn[0]["kat_serii"]["wariant"] == "W"
         and wyn[0]["kat_serii"]["pierwsze_zdanie_bramka"] == ["opens with a date"]
-        and WOLANE_NOTE[0]["pierwsze_zdanie"] == "", wyn[0].get("kat_serii"))
+        and not WOLANE_NOTE[0].get("pierwsze_zdanie"), wyn[0].get("kat_serii"))
 
-_sn = lambda t, f, k=None: ["more than three numbers"] if "99" in t else []  # noqa: E731
-dzien([], od=0, przeslanie=PRZES, material=MATERIAL, sprawdz_notke=_sn)
-with podmiana(sledztwo, sprawdz_notke=_sn):
-    _wynik_bramki = WOLANE_NOTE[0]["bramka"](SERIA_OK + " 99 99 99")
-sprawdz("bramka serii wola `sledztwo.sprawdz_notke` na gotowym tekscie",
-        _wynik_bramki == ["more than three numbers"], _wynik_bramki)
-with podmiana(sledztwo, sprawdz_notke=lambda *a, **k: (_ for _ in ()).throw(RuntimeError("zepsute"))):
-    _wynik_bramki, _log = cicho(WOLANE_NOTE[0]["bramka"], SERIA_PRZESUNIETA)
-sprawdz("KONTRDOWOD: zepsute `sprawdz_notke` nie wywraca bramki, log to mowi, zdanie dalej pilnowane",
-        len(_wynik_bramki) == 1 and "sprawdz_notke niedostepne" in _log, (_wynik_bramki, _log))
+# (Bramka serii i jej zepsucie nie sa juz podawane do `note` — `sprawdz_notke` zyje jako funkcja dla
+# poszczegolnych testow nizej, ale notki serii nie blokuje.)
 
 # Proba kata liczy sie tylko w produkcji (recenzja 25.10.2026: przebieg sprawdzajacy kasowal katy).
 _tor = stages._tor_produkcji
@@ -677,9 +676,10 @@ sprawdz("dzien ma jedna notke, bez identyfikatora przeslania",
 
 wyn, log = dzien([{"candidates": []}, {"candidates": []}], od=0, przeslanie=PRZES, material=MATERIAL,
                  fakty_banku=[FAKT_BANKU])
-sprawdz("odmowa Opusa: zwykly pisarz z TYMI SAMYMI bramkami",
+sprawdz("brak tekstu od pisarza przeslania: zwykly pisarz z TYM SAMYM ustawieniem (bez rozbioru, bez bramek)",
         [w["etap"] for w in WOLANE_NOTE][:2] == ["notka_przeslania_fakt", "note"]
-        and WOLANE_NOTE[1].get("bez_rozbioru") is True and WOLANE_NOTE[1].get("pierwsze_zdanie") == LINIA2)
+        and WOLANE_NOTE[1].get("bez_rozbioru") is True and not WOLANE_NOTE[1].get("pierwsze_zdanie")
+        and not WOLANE_NOTE[1].get("bramka"))
 # Awaria dostawcy (zaden pisarz bez tekstu, bez bramki) to nie wada kata — bez proby (recenzja 25.10.2026).
 sprawdz("obaj bez tekstu: BEZ proby kata, zwykla notka w tym miejscu",
         PROBY == [] and len(WOLANE_NOTE) == 3

@@ -339,7 +339,7 @@
 {{"w_prostych_slowach": "<plain explanation>", "skala": "<comparison in the material, or empty>", "pytania": [{{"pytanie": "<question>", "odpowiedz": "<answer, inference or unknown>", "z_dowodu": true|false}}], "jesli_sie_utrzyma": "<supported or conditional implications, with the steps explained>", "gdzie_by_peklo": "<specific limitation, or empty>", "co_o_tym_sadze": "<judgment and reason, or what prevents one>", "czego_nie_wiadomo": ["<unanswered question>"]}}
 ```
 
-#### `seria_lekka.md` (39 wierszy)
+#### `seria_lekka.md` (43 wierszy)
 
 **Pola wejściowe:** `fakty`, `katy`, `marka`, `n_max`, `nieustalone`, `ostatnie`, `typ_historii`, `tytul`
 

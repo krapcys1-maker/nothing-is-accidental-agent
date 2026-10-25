@@ -108,3 +108,44 @@ wierności zgłaszało nasze własne zdanie („puentę”) jako fakt bez pokryc
 reguła objaśnień zargonu AI odrzucała notkę z werdyktem. Do następnej fali: jakość wyszukiwania
 (strony-agregatory jako jedyne źródło liczby), cytowanie źródła pierwotnego zamiast agregatora,
 gdy fakt stoi w obu, pierwsze zdanie notki „jak to działa”, które definiuje zamiast zaskakiwać.
+
+## Zwrot z 25.10 wieczorem: lekkie śledztwo jest domyślne
+
+Polecenie właściciela po pierwszej serii z ciężkiego toru (dolary za temat, a notki nie lepsze od
+pierwszego posta o sprawie): **fakty o wybranym temacie mają być znalezione, a resztę — tło, mechanizm,
+porównania, konsekwencje, odważny sąd — ma dać model ze swojej wiedzy i kreatywności; ma być ciekawie i
+tanio (centy za notkę), bez sztywnych limitów długości i bez dodatkowych sprawdzeń poza faktami przy
+publikacji.**
+
+Domyślny tor (`config.SLEDZTWO_TRYB = "lekkie"`, `artykul_z_puli._badanie_lekkie`):
+
+1. historia z radaru → brief (jedno pytanie) → źródła historii + głosy z HN + cennik;
+2. klasyfikacja i **dwie** rundy starego `research.deepen` (sufit 0,06 USD) z szerokim pytaniem
+   („co się stało, dokumenty i pomiary, głosy ludzi, koszt, co komplikuje nagłówek”);
+3. karta faktów (`stages.synthesis`, `sprawdz_karte`);
+4. **jedno** wywołanie `sledztwo.seria_lekka` (DeepSeek Flash z myśleniem, `prompts/seria_lekka.md`):
+   2–5 notek z karty (liczba z bogactwa karty), fakty tylko z ponumerowanej listy, reszta z wiedzy
+   modelu, głos „we”, każda notka sama, pierwsze zdanie zatrzymuje scrollowanie; widełki 40–85 słów to
+   wskazówka, nie sufit;
+5. rekord PRZED kolejką; do kolejki wchodzą gotowe teksty (`gotowy_tekst`), a `stages.note` publikuje je
+   przez to samo sprawdzenie faktów w sieci i naprawę co zawsze — bez pisarza i bez bramek tekstu.
+
+Ciężki tor (plan soczewek, księga pytań, krytyk, dokumenty, poziomy L/XL, kąty z hipotezami) zostaje pod
+`--gleboko` — do badania pod artykuł, na żądanie. Stare kąty w kolejce i ciężki tor piszą notki na Flashu z
+myśleniem (`notka_przeslania*`), nie na Opusie.
+
+Próba na trzech świeżych tematach z różnych działów (polityka/deepfake, bezpieczeństwo/Tesla FSD i
+śmiertelny wypadek, prywatność/profile w ChatGPT) plus sześć kart zapisanych wcześniej:
+
+| Temat | Koszt całości | Seria | Fact-check 5 notek |
+|---|---|---|---|
+| deepfake żony premiera Hiszpanii | 0,084 USD | 0,004 | 0,035 |
+| Tesla FSD, pieszy na I-80 | 0,094 USD | 0,006 | 0,044 |
+| profile psychologiczne w ChatGPT (1 źródło) | 0,082 USD | 0,002 | 0,048 |
+
+Czytanie ręczne: notki dają to, czego pierwszy post nie dał — etykieta AI jako osłona prawna zamiast
+ostrzeżenia, liczba wyświetleń, której nie da się sprawdzić, wypadek, w którym nie wiadomo, który
+uderzenie zabiło, „31 notatek na osobę to strona, nie teczka”. Wyłapane i naprawione w prompcie: polskie
+słowo z opisu kąta przeciekło do notki; nazwisko bez roli; dopowiedziane szczegóły sceny („nieoświetlone
+pobocze”). Zostaje do decyzji: artykuł tygodnia z lekkiego stanu (dziś reguła §5 wymaga ksiąg i poziomów
+ciężkiego toru, więc artykuł idzie z puli).

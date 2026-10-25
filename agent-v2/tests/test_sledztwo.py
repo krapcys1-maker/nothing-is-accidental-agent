@@ -661,13 +661,15 @@ sprawdz("pisarz artykulu dostaje wszystkie katy serii",
         pathlib.Path("agent-v2/prompts/pisarz.md").read_text(encoding="utf-8"))
 # D1 fali 1 (25.10.2026): kazdy kat serii pisze Opus — prowadzacy i analiza celem
 # `notka_przeslania`, kat faktow celem `notka_przeslania_fakt` (Flash gubil wiernosc w probie).
-sprawdz("notke z przeslania pisze Opus (oba cele notki serii), zwykla notka zostaje przy rotacji pisarzy",
+# Wieczorem 25.10.2026 wlasciciel kazal pisac tanio: oba cele notki serii na Flashu z myslenie.
+sprawdz("notke z przeslania pisze tani model (oba cele notki serii), zwykla notka zostaje przy rotacji pisarzy",
         stages.etap_notki_serii({"rodzaj": "VERDICT", "lead": False}) == "notka_przeslania"
         and stages.etap_notki_serii({"rodzaj": "REVEAL", "lead": True}) == "notka_przeslania"
         and stages.etap_notki_serii({"rodzaj": "NUMBER_FELT", "lead": False}) == "notka_przeslania_fakt"
-        and config.MODEL_FOR.get("notka_przeslania") == config.CLAUDE
-        and config.MODEL_FOR.get("notka_przeslania_fakt") == config.CLAUDE
-        and config.MAX_TOKENS.get("notka_przeslania") and config.EFFORT.get("notka_przeslania"))
+        and config.MODEL_FOR.get("notka_przeslania") == config.DEEPSEEK
+        and config.MODEL_FOR.get("notka_przeslania_fakt") == config.DEEPSEEK
+        and config.MAX_TOKENS.get("notka_przeslania")
+        and (config.DEEPSEEK_MYSLENIE.get("notka_przeslania") or {}).get("type") == "enabled")
 sprawdz("notka bierze przeslanie i zapisuje jego identyfikator",
         "_sledztwo.wez_przeslanie()" in _st and 'wynik["przeslanie_id"]' in _st
         and '"przeslanie_id":' in _run)

@@ -48,12 +48,14 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-12608 wierszy, 229 funkcji na poziomie modułu, 0 klas
+12624 wierszy, 231 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
 | `_na_kanal(nazwa)` *(wewn.)* | Wszystko, co ta funkcja zaplaci, ksieguje sie na kanal `nazwa`. |
 | `_prompt(name, **fields)` *(wewn.)* | Render a task prompt and prepend the shared public voice once. |
+| `_katy_serii_opis()` *(wewn.)* | Tabela katow dla serii lekkiej — NASZ tekst (stala `sledztwo.KATY`), bez argumentow. |
+| `prompt_serii_lekkiej(tytul, fakty, nieustalone, ostatnie, typ, n_max)` | Prompt serii lekkiej (`sledztwo.seria_lekka`). Naglowek historii, fakty, nieustalone i ostatnie |
 | `pamiec_glosu(prompt)` | Kilka potwierdzonych wypowiedzi do unikania powtorek, bez wywolan API. |
 | `_juz_w_domu(ile_banku, ile_notek)` *(wewn.)* | Co juz mamy poza artykulami: fakty czekajace w banku i wydane notki. |
 | `recent_angles(conn, limit)` | Ostatnie kąty redakcyjne — wejście do reguły różnorodności. |
@@ -566,7 +568,7 @@
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-4243 wierszy, 45 funkcji na poziomie modułu, 0 klas
+4256 wierszy, 47 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -596,6 +598,8 @@
 | `dlugosc_dla(glebokosc)` | Ile slow ma miec artykul o tej glebokosci. |
 | `_tokens_for(chars)` *(wewn.)* | — |
 | `zakres_slow(forma)` | Ile slow wolno tej formie. JEDNO ZRODLO dla promptu, pomiaru i naprawy. |
+| `opis_typu_historii(typ)` | Rodzaj historii w prompcie serii lekkiej — NASZA stala (kotwica zaufania), nie tresc zrodel. |
+| `liczba_notek_serii(n)` | Ile notek najwyzej prosi seria lekka: 2-6, zawsze nasza liczba (kotwica zaufania). |
 | `losowa_postawa()` | Ktora postawa dla TEGO komentarza. Wagi, nie rownomiernie. |
 | `losowe_otwarcie()` | — |
 | `losowa_dlugosc()` | Ile slow ma miec ta konkretna wypowiedz. |
@@ -748,7 +752,7 @@
 
 ### `sledztwo.py` — śledztwo — wybór największej historii, rdzeń (sedno) i kąty serii z jednej tabeli KATY, uczciwy hak sprawdzany kodem, poziom tematu (liczba notek), bramka nowości i kolejka notek
 
-3283 wierszy, 136 funkcji na poziomie modułu, 0 klas
+3281 wierszy, 136 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|

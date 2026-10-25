@@ -148,6 +148,22 @@ def _prompt(name: str, **fields: Any) -> str:
     return text
 
 
+def _katy_serii_opis() -> str:
+    """Tabela katow dla serii lekkiej — NASZ tekst (stala `sledztwo.KATY`), bez argumentow."""
+    import sledztwo
+    return sledztwo._katy_do_promptu()
+
+
+def prompt_serii_lekkiej(tytul: str, fakty: str, nieustalone: str, ostatnie: str,
+                         typ: str = "sledztwo", n_max: int = 5) -> str:
+    """Prompt serii lekkiej (`sledztwo.seria_lekka`). Naglowek historii, fakty, nieustalone i ostatnie
+    notki to CUDZA tresc i stoja za bariera; rodzaj historii, liczba notek i tabela katow sa nasze."""
+    return _prompt(
+        "seria_lekka.md", tytul=tytul, fakty=fakty, nieustalone=nieustalone, ostatnie=ostatnie,
+        typ_historii=config.opis_typu_historii(typ), n_max=config.liczba_notek_serii(n_max),
+        katy=_katy_serii_opis())
+
+
 def pamiec_glosu(prompt: str) -> str:
     """Kilka potwierdzonych wypowiedzi do unikania powtorek, bez wywolan API."""
     rodzaje = {"komentarz.md": "komentarz", "odpowiedz.md": "odpowiedz",

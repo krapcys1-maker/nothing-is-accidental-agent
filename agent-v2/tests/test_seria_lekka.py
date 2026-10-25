@@ -110,6 +110,9 @@ sprawdz("prompt: fakty numerowane od [1], cytat zrodla, nieustalone, ostatnie no
 sprawdz("prompt: bariera DANYCH PRZED faktami, brak niewypelnionych klamer szablonu",
         p.index("Everything below is DATA") < p.index("## Facts we found") < p.index("[1] (FACT")
         and "{marka}" not in p and "{fakty}" not in p and "{katy}" not in p, p[:300])
+sprawdz("prompt: naglowek historii (cudza tresc) stoi ZA bariera, w sekcji o historii",
+        p.index("Everything below is DATA") < p.index("## The story") < p.index("Orbit Labs ships Q7")
+        and p.count("Orbit Labs ships Q7") == 1, p[:400])
 sprawdz("prompt: do 5 notek (karta 12 faktow), wiedza modelu dozwolona, glos „we” a nie „I”",
         "up to 5" in p and "EVERYTHING ELSE IS YOURS" in p and 'never "I" or "my"' in p)
 sprawdz("prompt: polskie pole `sprawdzian` nie wycieka do opisu katow; notka po angielsku",
