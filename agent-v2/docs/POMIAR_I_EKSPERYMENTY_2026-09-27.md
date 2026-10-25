@@ -511,6 +511,25 @@ rampa jest zatrzymywana na bieżącym stopniu.
 
 Test: `tests/test_nie_jak_nia.py`.
 
+**Ocena pakietu, 25.10.2026 (reguła zapisana przed startem; skrypt `robocze/ocena_pakietu_24_10.py`, tylko odczyt).**
+
+| | przed 4.10 | 4–17.10 (pełne okno 7 dni) |
+|---|---|---|
+| obserwacje: odwzajemniło w 7 dni | 0 z 10 | 4 z 59 (6,8%) |
+| subskrypcje: odwzajemniło w 7 dni | 0 z 24 | 5 z 44 (11,4%) |
+| przyrost NIE na tydzień (subskr. / obserw. / razem) | 4,0 / 6,6 / 10,6 (31.08–3.10) | 2,9 / 4,8 / 7,7 (4.10–23.10) |
+| komentarze z reakcją | 32% (22 z 68, 15.09–3.10) | 55% (128 z 234, 4–21.10) |
+
+Punkt odniesienia z reguły: 8,2 osoby tygodniowo — po zmianie 7,7, czyli **łączny przyrost nie wzrósł**.
+Odwzajemnienia (ok. 4–5 osób tygodniowo) tylko częściowo nadrabiają spadek zasięgu notek w tym samym czasie.
+Strażnicy w normie: zero ostrzeżeń od Substacka, alarm nadaktywności ani razu, jeden alarm wolumenów
+(restacki 13–19.10), komentarze z reakcją wyraźnie częściej. Sito rozmiaru odrzuciło od 4.10 ok. 1010 kandydatów
+do obserwacji i 496 do subskrypcji. Przyrząd: lista obserwujących pokazuje 40 najnowszych osób (rotuje od 7.10),
+subskrybentów rośnie z licznikiem — nowe odwzajemnienia są widoczne; dopasowanie po uchwycie zaniża wynik
+(uchwyt publikacji ≠ uchwyt osoby). Liczby małe, odsetki z szerokim marginesem.
+**Decyzja: poziom zostaje, bez zwiększania**; o dalszych krokach decydują eksperymenty z zasięgiem (E12, E15, E17)
+na początku listopada.
+
 ## Porównanie z drugim kontem i pięć zmian, 19.10.2026
 
 **Skąd.** Właściciel 19.10: „porównaj oba boty, sprawdź statystyki, zobacz, co warto
