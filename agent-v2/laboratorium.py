@@ -28,6 +28,7 @@ minus wypisy z licznika konta; przedzial Poissona liczony dla netto jest przybli
 """
 from __future__ import annotations
 
+import csv
 import json
 import math
 import random
@@ -154,12 +155,42 @@ def reszty(y: list[float], x: list[float]) -> list[float] | None:
 
 # --- dane ----------------------------------------------------------------------
 
-def tygodnie(dni: dict[str, dict], wczoraj: str, ile: int = TYGODNI) -> list[dict[str, Any]]:
+MIESIACE = {m: i for i, m in enumerate(("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug",
+                                         "Sep", "Oct", "Nov", "Dec"), 1)}
+
+
+def zapisy_z_listy(dane: Path) -> tuple[dict[str, int], str | None]:
+    """Zapisy BRUTTO na dobe z najnowszej kopii listy subskrybentow i data tej kopii.
+
+    Licznik konta (`subskrybenci` w obserwatorium) jest od 7.09.2026, a lista ma date
+    zapisu kazdego obecnego subskrybenta od poczatku konta — dluzsza historia dla
+    zaleznosci tydzien po tygodniu. Czytamy WYLACZNIE kolumne daty (adresy to dane
+    osobowe). Kto sie wypisal, tego na liscie nie ma, wiec to dolna granica.
+    """
+    kopie = sorted((dane / "kopie").glob("subskrybenci-*.csv"))
+    if not kopie:
+        return {}, None
+    zapisy: dict[str, int] = {}
+    try:
+        with open(kopie[-1], encoding="utf-8", newline="") as f:
+            for r in csv.DictReader(f):
+                c = (r.get("Start date") or "").replace(",", "").split()
+                if len(c) == 3 and c[0] in MIESIACE and c[1].isdigit() and c[2].isdigit():
+                    d = "%s-%02d-%02d" % (c[2], MIESIACE[c[0]], int(c[1]))
+                    zapisy[d] = zapisy.get(d, 0) + 1
+    except (OSError, csv.Error, UnicodeDecodeError):
+        return {}, None
+    return zapisy, kopie[-1].stem.replace("subskrybenci-", "")[:10]
+
+
+def tygodnie(dni: dict[str, dict], wczoraj: str, ile: int = TYGODNI,
+             zapisy: dict[str, int] | None = None, data_kopii: str | None = None) -> list[dict[str, Any]]:
     """Pelne tygodnie (pon-niedz) z przyrostem netto i sumami dzialan oraz zasiegu.
 
     Tydzien bez odczytu licznika na poczatku lub koncu ma `sub` = None (luka to nie zero).
     `pelny_pomiar` = co najmniej 5 dob z pomiarem tresci — tylko takie tygodnie ida do
-    rachunkow z wyswietleniami.
+    rachunkow z wyswietleniami. `nowi_lista` = zapisy brutto z kopii listy, tylko dla
+    tygodni zakonczonych przed data kopii (pozniejsze lista jeszcze nie zna).
     """
     out = []
     for od, do, przyrost in obs.tygodnie_netto(dni, wczoraj, ile):
@@ -171,6 +202,8 @@ def tygodnie(dni: dict[str, dict], wczoraj: str, ile: int = TYGODNI) -> list[dic
             w[pole] = sum(int((dni.get(d) or {}).get(pole) or 0) for d in daty)
         w["pelny_pomiar"] = sum(1 for d in daty if (dni.get(d) or {}).get("pomiar_tresci")) >= 5
         w["wychodzace"] = w["dz_subskrypcje"] + w["dz_obserwacje"]
+        w["nowi_lista"] = (sum((zapisy or {}).get(d, 0) for d in daty)
+                           if zapisy and data_kopii and do < data_kopii else None)
         out.append(w)
     return out
 
@@ -218,9 +251,10 @@ def notki_tygodniami(dane: Path, dzis: str, ile: int = TYGODNI) -> list[dict[str
 
 def policz_konto(dni: dict[str, dict], dane: Path, zrodla: dict | None, wczoraj: str,
                  dzis: str) -> dict[str, Any]:
-    tyg = tygodnie(dni, wczoraj)
+    zapisy, data_kopii = zapisy_z_listy(dane)
+    tyg = tygodnie(dni, wczoraj, zapisy=zapisy, data_kopii=data_kopii)
     z_licznikiem = [t for t in tyg if t["sub"] is not None]
-    wynik: dict[str, Any] = {"tygodnie": tyg}
+    wynik: dict[str, Any] = {"tygodnie": tyg, "kopia_listy": data_kopii}
     # 1. predkosc
     ost = z_licznikiem[-OKNO_ILORAZU:]
     wcz = z_licznikiem[-2 * OKNO_ILORAZU:-OKNO_ILORAZU]
@@ -234,9 +268,16 @@ def policz_konto(dni: dict[str, dict], dane: Path, zrodla: dict | None, wczoraj:
             wynik["tempo_4t_wczesniej"] = {"razem": b, "na_tydzien": round(b / OKNO_ILORAZU, 1)}
             wynik["iloraz_tempa"] = iloraz_tempa(a, b)
     wynik["trend"] = nachylenie([float(t["sub"]) for t in z_licznikiem])
-    # 2. dawka -> skutek (tylko tygodnie z pelnym pomiarem tresci)
-    pelne = [t for t in z_licznikiem if t["pelny_pomiar"]]
-    y = [float(t["sub"]) for t in pelne]
+    # 2. dawka -> skutek (tylko tygodnie z pelnym pomiarem tresci). Przyrost z LISTY
+    # (brutto, dluzsza historia), gdy obejmuje wiecej tygodni niz licznik; inaczej netto.
+    z_lista = [t for t in tyg if t["nowi_lista"] is not None and t["pelny_pomiar"]]
+    z_netto = [t for t in z_licznikiem if t["pelny_pomiar"]]
+    if len(z_lista) > len(z_netto):
+        pelne, pole_y = z_lista, "nowi_lista"
+    else:
+        pelne, pole_y = z_netto, "sub"
+    wynik["przyrost_w_zaleznosciach"] = pole_y
+    y = [float(t[pole_y]) for t in pelne]
     wysw = [float(t["wyswietlenia"]) for t in pelne]
     wynik["zaleznosci"] = {
         "przyrost~wyswietlenia": spearman(wysw, y),
@@ -275,6 +316,13 @@ def policz(wczoraj: str | None = None) -> dict[str, Any]:
 
 # --- tekst -----------------------------------------------------------------------
 
+def _liczba(x: Any) -> str:
+    """Mediana bez „.0" przy liczbie calkowitej; brak = „—"."""
+    if x is None:
+        return "—"
+    return str(int(x)) if float(x).is_integer() else "%.1f" % x
+
+
 def _rho(z: dict | None) -> str:
     if not z:
         return "nie do policzenia (mniej niz 5 tygodni albo stala seria)"
@@ -307,7 +355,9 @@ def tekst(w: dict[str, Any]) -> str:
             L.append("- trend %d tygodni: %+.2f osoby/tydz. na tydzien (95%%: %+.2f do %+.2f) — %s" % (
                 tr["n"], tr["nachylenie"], tr["dol"], tr["gora"],
                 "przyspiesza" if tr["dol"] > 0 else "zwalnia" if tr["gora"] < 0 else "bez wykrywalnego trendu"))
-        L += ["", "**2. Dawka -> skutek (tydzien po tygodniu, tygodnie z pelnym pomiarem tresci)**"]
+        L += ["", "**2. Dawka -> skutek (tydzien po tygodniu, tygodnie z pelnym pomiarem tresci; przyrost: %s)**"
+              % ("zapisy brutto z listy subskrybentow z %s" % k.get("kopia_listy")
+                 if k.get("przyrost_w_zaleznosciach") == "nowi_lista" else "netto z licznika konta")]
         z = k["zaleznosci"]
         L.append("- przyrost a wyswietlenia: %s" % _rho(z["przyrost~wyswietlenia"]))
         L.append("- przyrost a nasze subskrypcje + obserwacje innych kont: %s" % _rho(z["przyrost~wychodzace"]))
@@ -316,13 +366,14 @@ def tekst(w: dict[str, Any]) -> str:
         L.append("- po odjeciu zasiegu (reszta z regresji na wyswietlenia) a dzialania wychodzace: %s"
                  % _rho(z["reszta_po_zasiegu~wychodzace"]))
         if k.get("na_1000_wyswietlen") is not None:
-            L.append("- nowi netto na 1000 wyswietlen notek i artykulow: %s (to nie konwersja jednego kanalu)"
-                     % k["na_1000_wyswietlen"])
-        L += ["", "| tydzien od | subskr. netto | obserw. netto | wyswietlenia | nasze subskr. | nasze obserw. | komentarze | notki |",
-              "|---|---|---|---|---|---|---|---|"]
+            L.append("- nowi na 1000 wyswietlen notek i artykulow (przyrost jak wyzej): %s"
+                     " (to nie konwersja jednego kanalu)" % k["na_1000_wyswietlen"])
+        L += ["", "| tydzien od | subskr. netto | zapisy z listy | obserw. netto | wyswietlenia | nasze subskr. | nasze obserw. | komentarze | notki |",
+              "|---|---|---|---|---|---|---|---|---|"]
         for t in k["tygodnie"]:
-            L.append("| %s | %s | %s | %s%s | %d | %d | %d | %d |" % (
-                t["od"], "—" if t["sub"] is None else t["sub"], "—" if t["obs"] is None else t["obs"],
+            L.append("| %s | %s | %s | %s | %s%s | %d | %d | %d | %d |" % (
+                t["od"], "—" if t["sub"] is None else t["sub"],
+                "—" if t.get("nowi_lista") is None else t["nowi_lista"], "—" if t["obs"] is None else t["obs"],
                 t["wyswietlenia"], "" if t["pelny_pomiar"] else "*", t["dz_subskrypcje"],
                 t["dz_obserwacje"], t["dz_komentarze"], t["dz_notki"]))
         L.append("")
@@ -333,8 +384,8 @@ def tekst(w: dict[str, Any]) -> str:
                   "|---|---|---|---|---|---|"]
             for n in k["notki"]:
                 L.append("| %s | %d | %s | %s | %d | %s |" % (
-                    n["tydzien"], n["notek"], n["mediana_wysw"], n["mediana_slow"] or "—",
-                    n["seria_notek"], "—" if n["seria_mediana_wysw"] is None else n["seria_mediana_wysw"]))
+                    n["tydzien"], n["notek"], _liczba(n["mediana_wysw"]), _liczba(n["mediana_slow"]),
+                    n["seria_notek"], _liczba(n["seria_mediana_wysw"])))
         a = k.get("atrybucja") or {}
         if a.get("wg_rodzaju"):
             L += ["", "**4. Zapisy przypisane przez Substack** (okno %s do %s): %s; razem %s, panel %s" % (

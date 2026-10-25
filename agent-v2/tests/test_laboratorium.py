@@ -115,6 +115,27 @@ _luka[(START + timedelta(days=13)).isoformat()].pop("subskrybenci")
 sprawdz("KONTRDOWOD: brak odczytu licznika na koncu tygodnia -> None, nie zero",
         lab.tygodnie(_luka, WCZORAJ)[1]["sub"] is None and lab.tygodnie(_luka, WCZORAJ)[2]["sub"] is None)
 
+# KOPIA LISTY: zapisy brutto z kolumny daty (adresy nieczytane), tylko tygodnie przed kopia.
+LISTA = _tmp / "konto_z_lista"
+(LISTA / "kopie").mkdir(parents=True)
+(LISTA / "kopie" / "subskrybenci-2026-08-01.csv").write_text("Email,Type,Start date\n", encoding="utf-8")
+_wiersze = ["Email,Type,Start date"]
+for k in range(12):
+    for j in range(2 + k % 3):
+        d = START + timedelta(days=7 * k + j)
+        _wiersze.append('x%d_%d@example.com,Free,"%s %d, %d"' % (k, j, d.strftime("%b"), d.day, d.year))
+_wiersze.append('zly@example.com,Free,"jakas data"')
+(LISTA / "kopie" / "subskrybenci-2026-10-14.csv").write_text("\n".join(_wiersze) + "\n", encoding="utf-8")
+_zap, _data = lab.zapisy_z_listy(LISTA)
+sprawdz("lista: najnowsza kopia, zapisy na dobe, zly wiersz pominiety",
+        _data == "2026-10-14" and sum(_zap.values()) == sum(2 + k % 3 for k in range(12))
+        and _zap[START.isoformat()] == 1, (_data, sum(_zap.values())))
+_tl = lab.tygodnie(dni, WCZORAJ, zapisy=_zap, data_kopii=_data)
+sprawdz("tygodnie z lista: brutto do kopii, pozniejsze None (lista ich nie zna)",
+        [t["nowi_lista"] for t in _tl[:3]] == [2, 3, 4] and _tl[-1]["nowi_lista"] is None
+        and _tl[-1]["do"] > _data, [t["nowi_lista"] for t in _tl])
+sprawdz("KONTRDOWOD: bez kopii listy brak zapisow", lab.zapisy_z_listy(_tmp / "pusto") == ({}, None))
+
 print()
 print("=== 3. DAWKA -> SKUTEK ===")
 DZIS = (START + timedelta(days=7 * 12)).isoformat()
@@ -131,6 +152,14 @@ sprawdz("tempo 4 tygodni i iloraz do 4 wczesniejszych",
         and wynik["iloraz_tempa"]["iloraz"] == 1.0, (wynik["tempo_4t"], wynik["iloraz_tempa"]))
 sprawdz("trend bez wykrywalnego nachylenia (cykl 1-4) ma przedzial przez zero",
         wynik["trend"]["dol"] < 0 < wynik["trend"]["gora"], wynik["trend"])
+sprawdz("bez listy zaleznosci licza netto z licznika", wynik["przyrost_w_zaleznosciach"] == "sub")
+# Licznik konta od tygodnia 7 (jak NIE od 7.09), lista od poczatku: lista obejmuje 10 tygodni.
+_dni_krotkie = {d: {k: v for k, v in w.items() if k != "subskrybenci" or d >= (START + timedelta(days=41)).isoformat()}
+                for d, w in dni.items()}
+_zl = lab.policz_konto(_dni_krotkie, LISTA, None, WCZORAJ, DZIS)
+sprawdz("z dluzsza lista zaleznosci licza zapisy z listy", _zl["przyrost_w_zaleznosciach"] == "nowi_lista"
+        and _zl["kopia_listy"] == "2026-10-14" and _zl["zaleznosci"]["przyrost~wyswietlenia"]["n"] == 10,
+        (_zl["przyrost_w_zaleznosciach"], _zl["zaleznosci"]["przyrost~wyswietlenia"]))
 sprawdz("nowi na 1000 wyswietlen: suma przyrostu / suma wyswietlen",
         wynik["na_1000_wyswietlen"] == round(1000 * sum(_oczekiwane) / sum(t["wyswietlenia"] for t in tyg), 2),
         wynik["na_1000_wyswietlen"])
