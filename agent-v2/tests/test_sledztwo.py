@@ -11,10 +11,10 @@ Test pilnuje, kazde z kontrdowodem:
   2. bramka: za malo serwisow — nie; historia juz badana — nie; YouTube i hosty
      zablokowane nie licza sie jako zrodla;
   3. nowosc: ustalenie na DWOCH adresach tak, na jednym — to streszczenie;
-  4. przeslania: kod odrzuca motyw bez „przeciw", scenariusz bez „co obali",
-     przeslanie bez twierdzen karty i powtorzony rodzaj;
-  5. kolejka: od 25.10 kuriozum pierwsze, do trzech katow na dobe, wydane nie wraca,
-     stare wygasa (seria sledcza: 4-5 katow jednej historii, `sledztwo.RODZAJE`);
+  4. przeslania (od 25.10 jedna tabela `KATY`): bramka przed planista, tag ze starego
+     menu i asekuracja odrzucone, kolejnosc z regul serii (szczegoly: test_sledztwo_katy.py);
+  5. kolejka: prowadzacy pierwszy, do `na_dobe` katow na dobe, wydane nie wraca,
+     stare wygasa;
   6. limity tygodnia i droga do dziennika; zdrowie zrodel.
 
 BEZ PYTESTA, bez sieci, bez platnych wywolan. Uruchamiac z korzenia repozytorium.
@@ -206,67 +206,78 @@ try:
             not any("Our reading" in z for z in _warsztat))
 
     print()
-    print("=== 4. KATY SERII (od 25.10.2026 szesc rodzajow, 4-5 na historie) ===")
-    llm.call = lambda purpose, system, user, **kw: json.dumps(ODP[purpose])
-    ODP["przeslania"] = {"przeslania": [
-        {"rodzaj": "ZA_DWA_LATA", "przeslanie": "Scenario without facts.", "tresc": "x", "hak": "y", "fakty": [],
-         "za": "a", "przeciw": "b", "co_obali": "c"},
-        {"rodzaj": "ZA_DWA_LATA", "przeslanie": "Agent incidents get a reporting clock.", "hak": "PM promised consequences",
-         "tresc": "If regulators copy Australia...", "fakty": [1, 4], "za": "PM said legal consequences",
-         "przeciw": "self-regulation", "co_obali": "no rule by 2028"},
-        {"rodzaj": "USTALENIE", "przeslanie": "Silent while publishing a disclosure rule.", "hak": "August 11",
-         "tresc": "Timeline plus framework.", "fakty": [2, 3, 4], "za": "", "przeciw": "", "co_obali": ""},
-        {"rodzaj": "MOTYW", "przeslanie": "They let victims decide publicity.", "tresc": "Policy defers.",
-         "hak": "the framework", "fakty": [3], "za": "policy quote", "przeciw": "", "co_obali": "a request to wait"},
-        {"rodzaj": "MOTYW", "przeslanie": "Duplicate motive.", "tresc": "x", "hak": "y", "fakty": [1],
-         "za": "a", "przeciw": "b", "co_obali": "c"},
-        {"rodzaj": "KURIOZUM", "przeslanie": "Eight weeks of silence.", "tresc": "x", "fakty": [1, 2]},
-        {"rodzaj": "INNE", "przeslanie": "?", "tresc": "?", "hak": "?", "fakty": [1]},
-        {"rodzaj": "USTALENIE", "przeslanie": "A second finding.", "tresc": "x", "hak": "y", "fakty": [1]},
-        {"rodzaj": "USTALENIE", "przeslanie": "skip me", "tresc": "x", "hak": "y", "fakty": [1], "pominac": True}]}
+    print("=== 4. KATY SERII (od 25.10.2026 jedna tabela KATY, sklad i kolejnosc kodem) ===")
+    # Karta z siedmioma twierdzeniami z czterech hostow — ponizej szesciu z dwoch planista nie jest
+    # wolany (spec §2 etap 15), wiec stara czterotwierdzeniowa KARTA nie dalaby serii.
+    KARTA6 = {"working_thesis": KARTA["working_thesis"], "main_mechanism": KARTA["main_mechanism"],
+              "confirmed_claims": KARTA["confirmed_claims"] + [
+                  {"claim": "The agent ran inside the company's own evaluation",
+                   "evidence": "The agent was running inside an evaluation when it reached the portal.",
+                   "url": "https://www.npr.org/a"},
+                  {"claim": "Australia set up a taskforce of 12 agencies",
+                   "evidence": "Australia set up a taskforce of 12 agencies.", "url": "https://www.bbc.co.uk/n"},
+                  {"claim": "The PM promised legal consequences",
+                   "evidence": "The prime minister promised legal consequences.", "url": "https://www.bbc.co.uk/n"}]
+              # Notek najwyzej polowa twierdzen (spec §5: N = min(n_max, po bramkach, C/2)) — piec katow
+              # potrzebuje dziesieciu twierdzen.
+              + [{"claim": "Background claim %d" % i, "evidence": "Background passage %d." % i,
+                  "url": "https://www.wired.com/%d" % i} for i in range(3)]}
+
+    def _kat(rodzaj, fakty, naglowek, wniosek, **x):
+        return dict({"rodzaj": rodzaj, "fakty": fakty, "naglowek": naglowek, "wniosek": wniosek,
+                     "ai_link": "Shows how AI agents slip past the rules", "why_care": "people who use AI agents",
+                     "hak": "detail %s" % rodzaj, "tresc": "Reasoning.", "kierunek": "NEUTRAL", "os": "HIDDEN"}, **x)
+    KATY_ODP = {"sedno": {"jedno_zdanie": "An AI agent broke in and the company stayed quiet",
+                          "co_obchodzi": [{"os": "HIDDEN", "fakty": [2]}],
+                          "werdykt": {"teza": "Another country will set an agent-incident clock by 2027",
+                                      "zalozenie": "regulators copy Australia"}},
+                "katy": [
+                    _kat("REVEAL", [2, 1], "The AI company knew of the breach on August 11, the ABC reports.",
+                         "It knew for weeks before saying anything", lead=True),
+                    _kat("HOW_IT_WORKS", [5], "NPR says the agent was running inside an AI company's own evaluation.",
+                         "The break-in came from a test, not an attacker"),
+                    _kat("WHO_GAINS_PAYS", [6, 7], "BBC reports Australia set up a taskforce of 12 agencies after the "
+                                                   "AI breach.", "Taxpayers now fund the clean-up"),
+                    _kat("VERDICT", [3, 4], "Transformer News reports the AI company published a pro-disclosure "
+                                            "rule while silent about Australia.",
+                         "Within a year another country will set a reporting clock for AI agent incidents",
+                         zalozenie="regulators copy Australia", sprawdzian={"kiedy": "2027-12-31", "co": "a second law"}),
+                    _kat("MOTIVE", [7], "The prime minister promised legal consequences, the BBC reports.",
+                         "The company bet that victims would rather stay quiet", zalozenie="victims fear publicity"),
+                    _kat("KURIOZUM", [1], "Old tag from the old menu.", "Old menus are gone"),
+                    _kat("MOTIVE", [3], "The company is surely hiding more.", "They are nearly certainly hiding more",
+                         zalozenie="x")]}
+    llm.call = lambda purpose, system, user, **kw: json.dumps(KATY_ODP if purpose.startswith("przeslania")
+                                                              else {"pary": []})
     with contextlib.redirect_stdout(io.StringIO()) as _log:
-        pr = sledztwo.przeslania(sqlite3.connect(":memory:"), None, KARTA, {}, DUZA)
-    rodzaje = [p["rodzaj"] for p in pr]
-    sprawdz("zostaja: ustalenie, drugi motyw (pierwszy bez dowodu przeciw), scenariusz z faktami"
-            " — w kolejnosci publikacji, nie odpowiedzi modelu",
-            rodzaje == ["USTALENIE", "MOTYW", "ZA_DWA_LATA"], rodzaje)
-    # 25.10.2026 (wlasciciel: „mamy byc wyrazisci, nie wszystko musi byc na 100% udowodnione"):
-    # analiza bez dowodu przeciw PRZECHODZI — drugi motyw odpada juz jako powtorka.
-    sprawdz("motyw bez dowodu przeciw PRZYJETY (wyrazistosc), drugi motyw to powtorka",
-            [p["przeslanie"] for p in pr if p["rodzaj"] == "MOTYW"] == ["They let victims decide publicity."]
-            and "analiza bez dowodu przeciw" not in _log.getvalue(), _log.getvalue())
-    sprawdz("scenariusz bez twierdzen karty odrzucony", "bez twierdzen karty" in _log.getvalue())
-    sprawdz("powtorzony rodzaj odrzucony z nazwanym powodem", "powtorzony rodzaj" in _log.getvalue())
-    sprawdz("KONTRDOWOD: kat bez haka (konkretnego szczegolu na otwarcie) odrzucony",
-            "KURIOZUM: bez haka" in _log.getvalue(), _log.getvalue())
-    sprawdz("przeslanie niesie twierdzenia karty z cytatem i adresem oraz hak",
-            pr[0]["fakty"][0] == {k: KARTA["confirmed_claims"][1][k] for k in ("claim", "evidence", "url")}
-            and pr[0]["hak"] == "August 11", pr[0])
-    # SZESC DOBRYCH KATOW -> PIEC. Odpada kat faktow z najmniejsza liczba twierdzen
-    # (przy remisie pozniejszy); motyw i scenariusz zostaja, bo na nich stoi artykul.
-    _katy = {"KURIOZUM": [1, 2], "MECHANIZM": [1], "USTALENIE": [2, 3, 4], "KTO_PLACI": [4],
-             "MOTYW": [3], "ZA_DWA_LATA": [1]}
-    ODP["przeslania"] = {"przeslania": [
-        {"rodzaj": r, "przeslanie": "Angle %s." % r, "tresc": "x", "hak": "detail %s" % r, "fakty": f,
-         "za": "a", "przeciw": "b", "co_obali": "c"} for r, f in reversed(list(_katy.items()))]}
+        pr5 = sledztwo.przeslania(sqlite3.connect(":memory:"), None, KARTA6, {}, DUZA, ile=5)
+    sprawdz("piec katow w kolejnosci regul: prowadzacy, potem najsilniejszy, werdykt trzeci, nie ostatni",
+            [p["rodzaj"] for p in pr5] == ["REVEAL", "WHO_GAINS_PAYS", "VERDICT", "HOW_IT_WORKS", "MOTIVE"],
+            ([p["rodzaj"] for p in pr5], _log.getvalue()[-800:]))
+    sprawdz("KONTRDOWOD: tag ze starego menu (KURIOZUM) i asekuracja w analizie odrzucone z nazwanym powodem",
+            "unknown angle tag 'KURIOZUM'" in _log.getvalue() and "hedged takeaway ('nearly')" in _log.getvalue(),
+            _log.getvalue())
+    sprawdz("kat niesie twierdzenia karty z cytatem i adresem, sprawdzona linie i hak",
+            pr5[0]["fakty"][0]["evidence"] == "August 11: aware" and pr5[0]["fakty"][0]["nr"] == 2
+            and pr5[0]["linia"] == pr5[0]["naglowek"] and pr5[0]["wariant"] == "gated"
+            and pr5[0]["hak"] == "detail REVEAL", pr5[0])
+    sprawdz("sedno trafia do karty", KARTA6.get("sedno", {}).get("jedno_zdanie", "").startswith("An AI agent"))
     with contextlib.redirect_stdout(io.StringIO()) as _log:
-        pr5 = sledztwo.przeslania(sqlite3.connect(":memory:"), None, KARTA, {}, DUZA)
-    sprawdz("szesc katow -> piec; odpada KTO_PLACI (remis z MECHANIZM, pozniejszy), kuriozum pierwsze",
-            [p["rodzaj"] for p in pr5] == ["KURIOZUM", "MECHANIZM", "USTALENIE", "MOTYW", "ZA_DWA_LATA"]
-            and "KTO_PLACI: ponad 5 katow" in _log.getvalue(), ([p["rodzaj"] for p in pr5], _log.getvalue()))
+        sprawdz("KONTRDOWOD: karta z czterema twierdzeniami — planista nie wolany, brak serii",
+                sledztwo.przeslania(sqlite3.connect(":memory:"), None, KARTA, {}, DUZA) == []
+                and "nie wolany" in _log.getvalue())
     # ODMOWA OPUSA (klasyfikator „cyber", 25.10: pierwsza seria to luka PHP2Shell) —
     # te same katy pisze zapas; bez niego sledztwo zapisalo by sie bez katow.
-    _odp_katow = dict(ODP["przeslania"])
 
     def _odmowa(purpose, system, user, **kw):
         if purpose == "przeslania":
             raise llm.OdmowaDostawcy("dostawca odmówił: cyber")
-        return json.dumps(_odp_katow)
+        return json.dumps(KATY_ODP if purpose == "przeslania_zapas" else {"pary": []})
     llm.call = _odmowa
     with contextlib.redirect_stdout(io.StringIO()) as _log:
-        _zap = sledztwo.przeslania(sqlite3.connect(":memory:"), None, KARTA, {}, DUZA)
+        _zap = sledztwo.przeslania(sqlite3.connect(":memory:"), None, json.loads(json.dumps(KARTA6)), {}, DUZA, ile=5)
     sprawdz("odmowa Opusa: katy pisze zapas (DeepSeek), log to mowi",
-            len(_zap) == 5 and "odmowil katow" in _log.getvalue()
+            len(_zap) == 5 and "nie dal katow" in _log.getvalue()
             and config.MODEL_FOR.get("przeslania_zapas") == config.DEEPSEEK
             and config.MAX_TOKENS.get("przeslania_zapas"), _log.getvalue()[-300:])
 
@@ -275,51 +286,36 @@ try:
     llm.call = _odmowa_obu
     with contextlib.redirect_stdout(io.StringIO()):
         sprawdz("KONTRDOWOD: gdy odmowi tez zapas — pusto, bez wyjatku",
-                sledztwo.przeslania(sqlite3.connect(":memory:"), None, KARTA, {}, DUZA) == [])
+                sledztwo.przeslania(sqlite3.connect(":memory:"), None, json.loads(json.dumps(KARTA6)), {}, DUZA) == [])
     llm.call = lambda purpose, system, user, **kw: json.dumps(ODP[purpose])
-    sprawdz("kazdy rodzaj obu zestawow ma typ notki i opis, kolejnosc zaczyna od haka, konczy analiza",
-            set(sledztwo.TYP_NOTKI) == set(sledztwo.RODZAJE) | set(sledztwo.RODZAJE_PREMIERY)
-            == set(sledztwo.OPISY_KATOW) and sledztwo.RODZAJE[0] == "KURIOZUM"
-            and sledztwo.RODZAJE_PREMIERY[0] == "SMACZEK"
-            and sledztwo.RODZAJE[-2:] == ("MOTYW", "ZA_DWA_LATA")
-            and sledztwo.RODZAJE_PREMIERY[-1] == "CO_Z_TEGO")
 
     print()
-    print("=== 4b. PREMIERA MODELU: WLASNY ZESTAW KATOW (25.10.2026) ===")
+    print("=== 4b. PREMIERA MODELU: TEN SAM MECHANIZM, TYP HISTORII W PROMPCIE (25.10.2026) ===")
     PROMPTY_KATOW = []
 
     def _premiera(purpose, system, user, **kw):
         PROMPTY_KATOW.append(user)
-        return json.dumps({"przeslania": [
-            {"rodzaj": "KURIOZUM", "przeslanie": "Not in this set.", "tresc": "x", "hak": "y", "fakty": [1]},
-            {"rodzaj": "WIELKIE_PYTANIE", "przeslanie": "Is it AGI at maths?", "tresc": "x", "hak": "a score",
-             "fakty": [1], "za": "score", "przeciw": "", "co_obali": "c"},
-            {"rodzaj": "CO_Z_TEGO", "przeslanie": "Cheaper proofs.", "tresc": "x", "hak": "price", "fakty": [2],
-             "za": "a", "przeciw": "b", "co_obali": ""},
-            {"rodzaj": "LICZBY", "przeslanie": "Claimed 70, measured 52.", "tresc": "x", "hak": "70 vs 52",
-             "fakty": [1, 2], "za": "", "przeciw": "", "co_obali": ""},
-            {"rodzaj": "SMACZEK", "przeslanie": "It refused its own test.", "tresc": "x", "hak": "system card 4.2",
-             "fakty": [3]}]})
+        return json.dumps(KATY_ODP if purpose.startswith("przeslania") else {"pary": []})
     llm.call = _premiera
-    with contextlib.redirect_stdout(io.StringIO()) as _log:
-        _pr_p = sledztwo.przeslania(sqlite3.connect(":memory:"), None, KARTA, {}, DUZA, typ="premiera")
-    sprawdz("premiera: zostaja katy premiery w jej kolejnosci, analizy bez „przeciw” tez",
-            [p["rodzaj"] for p in _pr_p] == ["SMACZEK", "LICZBY", "WIELKIE_PYTANIE", "CO_Z_TEGO"],
-            [p["rodzaj"] for p in _pr_p])
-    sprawdz("KONTRDOWOD: kat zwyklego sledztwa w premierze odrzucony",
-            "nieznany rodzaj 'KURIOZUM'" in _log.getvalue(), _log.getvalue())
+    with contextlib.redirect_stdout(io.StringIO()):
+        _pr_p = sledztwo.przeslania(sqlite3.connect(":memory:"), None, json.loads(json.dumps(KARTA6)), {}, DUZA,
+                                    typ="premiera", ile=5)
+    sprawdz("premiera: te same katy z jednej tabeli, prompt mowi, ze to premiera modelu",
+            [p["rodzaj"] for p in _pr_p] == [p["rodzaj"] for p in pr5]
+            and "a model release" in PROMPTY_KATOW[0] and "- CLAIM_VS_MEASURED —" in PROMPTY_KATOW[0]
+            and "- REVEAL —" in PROMPTY_KATOW[0], PROMPTY_KATOW[0][:400] if PROMPTY_KATOW else "")
     _prompty = {n: pathlib.Path("agent-v2/prompts/%s" % n).read_text(encoding="utf-8")
                 for n in ("przeslania.md", "notka.md", "pisarz.md")}
-    sprawdz("prompty kaza miec zdanie i nie zakazuja werdyktu AGI",
-            "Have opinions" in _prompty["przeslania.md"] and "Have a point of view" in _prompty["notka.md"]
-            and "point of view" in _prompty["pisarz.md"]
+    sprawdz("prompty kaza miec zdanie (werdykt bierze strone) i nie zakazuja werdyktu AGI",
+            "made up their mind" in _prompty["przeslania.md"] and "taking a side" in _prompty["przeslania.md"]
+            and "Have a point of view" in _prompty["notka.md"] and "point of view" in _prompty["pisarz.md"]
             and not any("Never declare AGI" in t for t in _prompty.values())
-            and "If it looks like AGI at maths" in sledztwo.OPISY_KATOW["WIELKIE_PYTANIE"])
+            and "taking a side" in sledztwo.KATY["VERDICT"]["opis"])
+    sprawdz("bez dosłownego przykladu „AGI at maths” w prompcie i opisach katow (spec §3)",
+            "AGI at maths" not in _prompty["przeslania.md"]
+            and not any("AGI at maths" in k["opis"] for k in sledztwo.KATY.values()))
     sprawdz("granica zostaje: fakty tylko z karty",
-            "facts (numbers, quotes, people, dates, events) come only" in _prompty["przeslania.md"])
-    sprawdz("prompt premiery opisuje jej katy, nie katy sledztwa",
-            PROMPTY_KATOW and "LICZBY" in PROMPTY_KATOW[-1] and "claimed versus measured" in PROMPTY_KATOW[-1]
-            and "KURIOZUM —" not in PROMPTY_KATOW[-1] and '"SMACZEK"|"LICZBY"' in PROMPTY_KATOW[-1])
+            "facts (numbers, quotes, people, dates, events) come only" in _prompty["przeslania.md"].lower())
     # PYTANIA CIEKAWOSCI (wlasciciel 25.10: „pytania zadawac i odpowiadac ciekawe pytania").
     llm.call = lambda purpose, system, user, **kw: json.dumps({"pytania": [
         "Why did the benchmark score appear before anyone could test it?", "not a question", 7,
@@ -348,10 +344,9 @@ try:
     sprawdz("schemat planu jest ogolny: co nowego, skutki dla grup, co blokuje, wielkie pytanie, smaczek",
             all(k in _pp for k in ("What is actually new", "second-order", "What could block it",
                                    "big question", "wait, really")) and "open-weights" not in _pp.lower())
-    sprawdz("kat pytanie-odpowiedz jest w obu zestawach, z opisem i typem notki",
-            "PYTANIE_ODPOWIEDZ" in sledztwo.RODZAJE and "PYTANIE_ODPOWIEDZ" in sledztwo.RODZAJE_PREMIERY
-            and sledztwo.TYP_NOTKI["PYTANIE_ODPOWIEDZ"] == "CIEKAWOSTKA")
-    llm.call = _premiera
+    sprawdz("kazdy tag tabeli ma typ notki i opis; stare menu (KURIOZUM, LICZBY) nie istnieje",
+            all(sledztwo.KATY[r]["typ_notki"] in config.NOTE_TYPES and sledztwo.KATY[r]["opis"] for r in sledztwo.KATY)
+            and "KURIOZUM" not in sledztwo.KATY and "LICZBY" not in sledztwo.KATY)
     sprawdz("typ sledztwa z kategorii", sledztwo.typ_sledztwa("PREMIERA_MODELU") == "premiera"
             and sledztwo.typ_sledztwa("PRACA_EKONOMIA") == "sledztwo" and sledztwo.typ_sledztwa(None) == "sledztwo")
 
@@ -559,17 +554,17 @@ finally:
     llm.call = _prawdziwy_call
 
 print()
-print("=== 5. KOLEJKA: DO TRZECH KATOW NA DOBE ===")
+print("=== 5. KOLEJKA: DO TRZECH KATOW NA DOBE (duzy temat, na_dobe 3) ===")
 sprawdz("pusta kolejka — nic", sledztwo.wez_przeslanie() is None)
 sprawdz("pusta kolejka — nic nie czeka, mozna badac", sledztwo.czekajace_przeslania() == 0)
-sledztwo.dodaj_do_kolejki(pr5, DUZA, KARTA, run_id=7)
+sledztwo.dodaj_do_kolejki(pr5, DUZA, KARTA6, run_id=7, poziom={"poziom": "L", "na_dobe": 3})
 sprawdz("po sledztwie czeka piec katow", sledztwo.czekajace_przeslania() == 5,
         sledztwo.czekajace_przeslania())
 _k0 = json.loads((config.DATA_DIR / sledztwo.PLIK_KOLEJKI).read_text(encoding="utf-8"))
 sprawdz("kat wazny cztery dni i niesie hak do notki",
         all(datetime.fromisoformat(p["wazny_do"]) - datetime.fromisoformat(p["kiedy"])
             == timedelta(days=sledztwo.WAZNOSC_PRZESLANIA_DNI) for p in _k0)
-        and sledztwo.WAZNOSC_PRZESLANIA_DNI == 4 and _k0[0]["perspektywa"]["hak"] == "detail KURIOZUM", _k0[0])
+        and sledztwo.WAZNOSC_PRZESLANIA_DNI == 4 and _k0[0]["perspektywa"]["hak"] == "detail REVEAL", _k0[0])
 # Sledztwo bierze czolo radaru, ktore tego samego dnia poszlo juz zwykla notka
 # (27.09: 11:22 notka o Medicare, 13:11 sledztwo o tym samym).
 sprawdz("KONTRDOWOD: w dniu sledztwa przeslanie czeka do jutra", sledztwo.wez_przeslanie() is None)
@@ -586,11 +581,11 @@ sprawdz("MYSL w dzien serii dostaje temat dnia, a prompt notki mowi, co z nim zr
         and _st_kod.index('elif typ == "MYSL":') < _st_kod.index('material["temat_dnia"] = _temat_dnia')
         and "`temat_dnia`" in pathlib.Path("agent-v2/prompts/notka.md").read_text(encoding="utf-8"))
 p1 = sledztwo.wez_przeslanie()
-sprawdz("pierwsze idzie kuriozum", (p1 or {}).get("rodzaj") == "KURIOZUM", p1)
+sprawdz("pierwszy idzie prowadzacy kat serii", (p1 or {}).get("rodzaj") == "REVEAL" and p1["k"] == 1, p1)
 fakt, material = sledztwo.material_notki(p1)
 sprawdz("notka dostaje przeslanie, hak i twierdzenia sledztwa",
         material["perspective"]["przeslanie"] == pr5[0]["przeslanie"]
-        and material["perspective"]["hak"] == "detail KURIOZUM"
+        and material["perspective"]["hak"] == "detail REVEAL"
         and material["investigation"]["supporting_claims"] and fakt["url"])
 sprawdz("typ notki z rodzaju", p1["typ_notki"] == "CIEKAWOSTKA")
 
@@ -602,30 +597,30 @@ def _wydane(*pary):
         for i, k in pary), encoding="utf-8")
 
 
-_id = [p["id"] for p in sorted(_k0, key=lambda p: p["kolejnosc"])]
+_id = [p["id"] for p in sorted(_k0, key=lambda p: p["k"])]
 _wydane((_id[0], TERAZ))
 # Proba 25.10: MYSL wziela prognoze kata, ktory mial wyjsc nazajutrz.
 _td1 = sledztwo.temat_dnia()
 sprawdz("temat dnia niesie tylko katy, ktore juz wyszly (nie zabiera jutrzejszych)",
         _td1["our_published_notes"] == [pr5[0]["przeslanie"]], _td1["our_published_notes"])
 p2 = sledztwo.wez_przeslanie()
-sprawdz("po jednym dzis — drugi kat jeszcze dzis (mechanizm)", (p2 or {}).get("rodzaj") == "MECHANIZM", p2)
+sprawdz("po jednym dzis — drugi kat jeszcze dzis (k=2)", (p2 or {}).get("rodzaj") == "WHO_GAINS_PAYS", p2)
 # Zywy test 25.10: notka ze scenariuszem otworzyla faktem, na ktorym stala notka z ustaleniem.
 _wcz = sledztwo.material_notki(p2)[1]["investigation"]["earlier_angles_already_published"]
 sprawdz("notka wie, jakie katy tej historii juz wyszly (przeslanie i hak), bez siebie samej",
-        [k["angle"] for k in _wcz] == ["KURIOZUM"] and _wcz[0]["opening_detail"] == "detail KURIOZUM"
+        [k["angle"] for k in _wcz] == ["REVEAL"] and _wcz[0]["opening_detail"] == "detail REVEAL"
         and _wcz[0]["message"] == pr5[0]["przeslanie"], _wcz)
 sprawdz("KONTRDOWOD: katy innej historii i niewydane sie nie licza",
         sledztwo._wczesniejsze_katy({"historia": "Inna historia", "id": "x"}) == []
-        and all(k["angle"] != "USTALENIE" for k in _wcz))
+        and all(k["angle"] != "VERDICT" for k in _wcz))
 _wydane((_id[0], TERAZ), (_id[1], TERAZ), (_id[2], TERAZ))
 sprawdz("KONTRDOWOD: po trzech dzis — czwarty dopiero jutro", sledztwo.wez_przeslanie() is None)
 _wydane((_id[0], TERAZ), (_id[0], TERAZ), (_id[1], TERAZ))
 sprawdz("ta sama notka zapisana dwa razy liczy sie raz",
-        (sledztwo.wez_przeslanie() or {}).get("rodzaj") == "USTALENIE")
+        (sledztwo.wez_przeslanie() or {}).get("rodzaj") == "VERDICT")
 _wydane(*((i, TERAZ - timedelta(days=1)) for i in _id[:3]))
 p3 = sledztwo.wez_przeslanie()
-sprawdz("nazajutrz: motyw, a wydane wczoraj nie wracaja", (p3 or {}).get("rodzaj") == "MOTYW", p3)
+sprawdz("nazajutrz: czwarty kat serii, a wydane wczoraj nie wracaja", (p3 or {}).get("rodzaj") == "HOW_IT_WORKS", p3)
 sprawdz("wydane nie czekaja — zostaja dwa", sledztwo.czekajace_przeslania() == 2,
         sledztwo.czekajace_przeslania())
 _kol = json.loads((config.DATA_DIR / sledztwo.PLIK_KOLEJKI).read_text(encoding="utf-8"))
@@ -677,21 +672,27 @@ sprawdz("artykul tylko o temacie dosc duzym (sledztwo.temat_na_artykul), liczba 
         and "_ile = sledztwo.ile_katow(wybrana, card)" in _art)
 _k8 = {"confirmed_claims": [{"claim": "c%d" % i, "url": "https://s%d.example/x" % (i % 5)} for i in range(12)]}
 _k4 = {"confirmed_claims": [{"claim": "c%d" % i, "url": "https://s%d.example/x" % i} for i in range(5)]}
-sprawdz("ile katow: duzy temat 6, sredni 5, ubogi 3",
-        sledztwo.ile_katow({"serwisy": 9}, _k8) == 6 and sledztwo.ile_katow({"serwisy": 5}, _k8) == 5
-        and sledztwo.ile_katow({"serwisy": 9}, _k4) == 3)
-_katy4 = [{"rodzaj": r} for r in ("KURIOZUM", "MECHANIZM", "USTALENIE", "MOTYW")]
-sprawdz("temat na artykul: szeroki zasieg + pelny obraz + analiza; maly zasieg nie; ustalenie zawsze",
-        sledztwo.temat_na_artykul({"serwisy": 6}, _k8, {}, _katy4)[0]
-        and not sledztwo.temat_na_artykul({"serwisy": 4}, _k8, {}, _katy4)[0]
-        and sledztwo.temat_na_artykul({"serwisy": 4}, _k4, {"jest": True}, _katy4[:2])[0])
+# 25.10.2026 (spec §5 „Number of notes", §9 pkt 18): liczba notek z bogactwa sledztwa, nie z samego
+# zasiegu i liczby twierdzen — bez zrodla pierwotnego i ksiegi szeroki zasieg nie daje szesciu notek.
+_k8p = {"confirmed_claims": [dict(c, klasa="PRIMARY" if i < 2 else "SECONDARY",
+                                  claim="c%d at $3 per million tokens" % i if i == 0 else c["claim"])
+                             for i, c in enumerate(_k8["confirmed_claims"])]}
+sprawdz("ile katow = poziom tematu: bez zrodla pierwotnego 3 (zasieg 9) i 2 (zasieg 5); ze zrodlem i cena 4",
+        sledztwo.ile_katow({"serwisy": 9}, _k8) == 3 and sledztwo.ile_katow({"serwisy": 5}, _k8) == 2
+        and sledztwo.ile_katow({"serwisy": 9}, _k8p) == 4,
+        (sledztwo.ile_katow({"serwisy": 9}, _k8), sledztwo.ile_katow({"serwisy": 5}, _k8),
+         sledztwo.ile_katow({"serwisy": 9}, _k8p)))
+_katy4 = [{"rodzaj": r} for r in ("REVEAL", "HOW_IT_WORKS", "VERDICT", "MOTIVE")]
+sprawdz("temat na artykul: bez ksiegi i zrodel pierwotnych nie; nowe ustalenie samo tez nie (spec §9 pkt 17)",
+        not sledztwo.temat_na_artykul({"serwisy": 6}, _k8, {}, _katy4)[0]
+        and not sledztwo.temat_na_artykul({"serwisy": 4}, _k4, {"jest": True, "zgodne": True}, _katy4[:2])[0])
 _sl = _art[_art.index("def _przebieg_sledztwa"):]
-sprawdz("kazde sledztwo pyta o dokumenty pierwotne i ma 3 rundy dogrywki",
+sprawdz("kazde sledztwo pyta o dokumenty pierwotne i ma 6 rund ksiegi (spec §9 pkt 4)",
         "pod.append(sledztwo.PYTANIE_PIERWOTNE)" in _sl and "max_rund=sledztwo.RUND_SLEDZTWA" in _sl
         and "_ciekawe, _plan = sledztwo.pytania_ciekawosci(conn, run_id, wybrana" in _sl
         and 'card["investigation_plan"] = _plan' in _sl
         and "sledztwo.scal_historie(" in _sl and "sledztwo.wielkie_historie(_korpus" in _sl
-        and sledztwo.RUND_SLEDZTWA == 3 and "original document" in sledztwo.PYTANIE_PIERWOTNE)
+        and sledztwo.RUND_SLEDZTWA == 6 and "original document" in sledztwo.PYTANIE_PIERWOTNE)
 sprawdz("przebieg: wybor duzego tematu, pytania premiery, glosy HN i cennik w korpusie, typ do pisarza",
         "sledztwo.wybierz_historie(historie" in _art and "pod += list(sledztwo.PYTANIA_PREMIERY)" in _art
         and "sledztwo.glosy_hn(_zapytanie, klucze=" in _art and "sledztwo.cennik_openrouter(_zapytanie)" in _art
