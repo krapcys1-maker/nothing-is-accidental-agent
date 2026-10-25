@@ -48,7 +48,7 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-12624 wierszy, 231 funkcji na poziomie modułu, 0 klas
+12630 wierszy, 232 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -56,6 +56,7 @@
 | `_prompt(name, **fields)` *(wewn.)* | Render a task prompt and prepend the shared public voice once. |
 | `_katy_serii_opis()` *(wewn.)* | Tabela katow dla serii lekkiej — NASZ tekst (stala `sledztwo.KATY`), bez argumentow. |
 | `prompt_serii_lekkiej(tytul, fakty, nieustalone, ostatnie, typ, n_max)` | Prompt serii lekkiej (`sledztwo.seria_lekka`). Naglowek historii, fakty, nieustalone i ostatnie |
+| `prompt_redakcji_serii(notki)` | Prompt redaktora serii lekkiej (`sledztwo._bez_powtorek`). Notki to tekst napisany z cudzych |
 | `pamiec_glosu(prompt)` | Kilka potwierdzonych wypowiedzi do unikania powtorek, bez wywolan API. |
 | `_juz_w_domu(ile_banku, ile_notek)` *(wewn.)* | Co juz mamy poza artykulami: fakty czekajace w banku i wydane notki. |
 | `recent_angles(conn, limit)` | Ostatnie kąty redakcyjne — wejście do reguły różnorodności. |
@@ -568,7 +569,7 @@
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-4256 wierszy, 47 funkcji na poziomie modułu, 0 klas
+4260 wierszy, 47 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -752,7 +753,7 @@
 
 ### `sledztwo.py` — śledztwo — wybór największej historii, rdzeń (sedno) i kąty serii z jednej tabeli KATY, uczciwy hak sprawdzany kodem, poziom tematu (liczba notek), bramka nowości i kolejka notek
 
-3281 wierszy, 136 funkcji na poziomie modułu, 0 klas
+3320 wierszy, 137 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -868,6 +869,7 @@
 | `ile_notek_lekko(card)` | Ile notek uniesie temat: z bogactwa karty, nie z reguly o poziomach. Malo faktow -> 2-3 notki. |
 | `_fakty_do_promptu(card)` *(wewn.)* | — |
 | `_ostatnie_do_promptu(ile)` *(wewn.)* | — |
+| `_bez_powtorek(conn, run_id, notki)` *(wewn.)* | Jedno tanie wywolanie redaktora: notki, ktore powtarzaja teze innej, odpadaja (nigdy pierwsza, |
 | `seria_lekka(conn, run_id, card, h, typ, ile)` | Seria notek JEDNYM wywolaniem: [{rodzaj, tekst, wniosek, fakty, wiedza, lead, ...}] — gotowe teksty |
 | `zapisz_sledztwo(rekord)` | Jedna linia na sledztwo — pamiec dla bramki i limitow. Nigdy nie wywala. |
 | `oznacz_artykul(run_id)` | Artykul ze sledztwa z tego przebiegu wyszedl — liczy sie do limitu tygodnia. |

@@ -164,6 +164,12 @@ def prompt_serii_lekkiej(tytul: str, fakty: str, nieustalone: str, ostatnie: str
         katy=_katy_serii_opis())
 
 
+def prompt_redakcji_serii(notki: str) -> str:
+    """Prompt redaktora serii lekkiej (`sledztwo._bez_powtorek`). Notki to tekst napisany z cudzych
+    faktow, wiec stoja za bariera."""
+    return _prompt("seria_redakcja.md", notki=notki)
+
+
 def pamiec_glosu(prompt: str) -> str:
     """Kilka potwierdzonych wypowiedzi do unikania powtorek, bez wywolan API."""
     rodzaje = {"komentarz.md": "komentarz", "odpowiedz.md": "odpowiedz",

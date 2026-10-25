@@ -185,7 +185,59 @@ except BaseException as exc:   # noqa: BLE001
 sprawdz("KONTRDOWOD: wyczerpany budzet / wylacznik NIE jest polykany jako „seria pusta”", przepuszczony)
 
 print()
+print("=== 3b. REDAKTOR SERII: NOTKI POWTARZAJACE TEZE ODPADAJA (kod, nie prosba w prompcie) ===")
+
+
+def seria_pieciu(odp_redaktora):
+    otwarcia = ["Alpha opening about the licence.", "Bravo opening about the price.", "Charlie opening about the leak.",
+                "Delta opening about the lawsuit.", "Echo opening about the benchmark."]
+    WYWOLANIA.clear()
+    ODPOWIEDZI[:] = [{"notki": [nota(r, o + " " + SLOWA, fakty=(i + 1,))
+                                for i, (r, o) in enumerate(zip(("REVEAL", "VERDICT", "HOW_IT_WORKS", "PEOPLE",
+                                                                "WHERE_IT_LEADS"), otwarcia))]},
+                     odp_redaktora]
+    return cicho(sledztwo.seria_lekka, CONN, 1, karta(12), H)
+
+
+wynik, log = seria_pieciu({"drop": [{"n": 3, "repeats": 2, "why": "same moral"}, {"n": 5, "repeats": 1, "why": "same bet"}]})
+sprawdz("redaktor wskazuje powtorki -> odpadaja 3. i 5. notka, zostaja 1, 2, 4",
+        [w["rodzaj"] for w in wynik] == ["REVEAL", "VERDICT", "PEOPLE"], [w["rodzaj"] for w in wynik])
+sprawdz("wolane dokladnie dwa cele: seria, potem redaktor; log mowi, co i dlaczego odpadlo",
+        [w["purpose"] for w in WYWOLANIA] == ["seria_lekka", "seria_redakcja"]
+        and "notka 3" in log and "same moral" in log, ([w["purpose"] for w in WYWOLANIA], log))
+_pr = WYWOLANIA[1]["prompt"] if len(WYWOLANIA) > 1 else ""
+sprawdz("prompt redaktora: notki ZA bariera, numerowane, bez surowych klamer",
+        _pr.index("Everything below is DATA") < _pr.index("[1] (REVEAL)") < _pr.index("[5] (WHERE_IT_LEADS)")
+        and "{notki}" not in _pr and _pr.count("Alpha opening") == 1, _pr[:500])
+sprawdz("pierwsza zostaje prowadzaca", wynik[0]["lead"] is True and [w["lead"] for w in wynik][1:] == [False, False])
+wynik, log = seria_pieciu({"drop": [{"n": 1, "repeats": 2, "why": "x"}, {"n": 2, "repeats": 2, "why": "self"},
+                                    {"n": 9, "repeats": 1, "why": "out of range"}, {"n": "x", "repeats": 1},
+                                    "nie slownik", {"n": 4}]})
+sprawdz("KONTRDOWOD: nigdy nie odpada pierwsza; zle wpisy (self, poza zakresem, nie-liczba) sa ignorowane",
+        len(wynik) == 5, [w["rodzaj"] for w in wynik])
+wynik, log = seria_pieciu({"drop": [{"n": i, "repeats": 1, "why": "all the same"} for i in (2, 3, 4, 5)]})
+sprawdz("KONTRDOWOD: nigdy mniej niz dwie notki (redaktor chce wyrzucic wszystkie poza pierwsza)",
+        len(wynik) == 2 and wynik[0]["rodzaj"] == "REVEAL", [w["rodzaj"] for w in wynik])
+wynik, log = seria_pieciu(RuntimeError("redaktor padl"))
+sprawdz("awaria redaktora: seria idzie w calosci, log to mowi", len(wynik) == 5 and "redaktor nie odpowiedzial" in log, log)
+wynik, log = seria_pieciu("to nie jest json")
+sprawdz("smieci od redaktora: seria idzie w calosci", len(wynik) == 5)
+WYWOLANIA.clear()
+ODPOWIEDZI[:] = [{"notki": [nota("REVEAL", "First distinct opening here. " + SLOWA),
+                            nota("VERDICT", "Second distinct opening there. " + SLOWA)]}]
+wynik, _ = cicho(sledztwo.seria_lekka, CONN, 1, karta(12), H)
+sprawdz("dwie notki: redaktor nie jest wolany (nie ma czego porownywac)",
+        [w["purpose"] for w in WYWOLANIA] == ["seria_lekka"] and len(wynik) == 2)
+try:
+    seria_pieciu(_klasa("budzet"))
+    przepuszczony = False
+except BaseException as exc:   # noqa: BLE001
+    przepuszczony = isinstance(exc, _przerywa)
+sprawdz("KONTRDOWOD: wyczerpany budzet w redaktorze NIE jest polykany (jak w serii)", przepuszczony)
+
+print()
 print("=== 4. KOLEJKA NIESIE GOTOWY TEKST ===")
+
 ODPOWIEDZI[:] = [{"notki": [nota("REVEAL", dluga, wiedza=["bg one"]), nota("VERDICT", "Our call is different. " + SLOWA)]}]
 seria, _ = cicho(sledztwo.seria_lekka, CONN, 1, karta(12), H)
 n, _ = cicho(sledztwo.dodaj_do_kolejki, seria, H, karta(12), 7, {"poziom": "LEKKI"})

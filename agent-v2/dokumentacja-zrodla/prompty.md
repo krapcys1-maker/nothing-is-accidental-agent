@@ -349,6 +349,16 @@
 {{"notki": [{{"rodzaj": "<one angle tag from the list>", "tekst": "<the finished note>", "fakty": [<numbers of the facts it uses>], "wiedza": ["<each background claim from your own knowledge that the note relies on>"]}}]}}
 ```
 
+#### `seria_redakcja.md` (13 wierszy)
+
+**Pola wejściowe:** `marka`, `notki`
+
+**Kontrakt wyjścia:**
+
+```json
+{{"drop": [{{"n": <number of the note to drop>, "repeats": <number of the note it repeats>, "why": "<one line: the shared point>"}}]}}
+```
+
 #### `skaut.md` (65 wierszy)
 
 **Pola wejściowe:** `count`, `history_json`, `juz_mamy`, `marka`, `pytania_czytelnikow`, `zaczyn_kanalow`

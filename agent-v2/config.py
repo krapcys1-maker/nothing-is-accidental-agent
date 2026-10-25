@@ -441,6 +441,8 @@ MODEL_FOR = {
     # modelem — fakty z karty, reszta z wiedzy i osadu modelu. Flash z myslenie; zapas tez Flash.
     "seria_lekka": DEEPSEEK,
     "seria_lekka_zapas": DEEPSEEK,
+    # Redaktor serii: jedno tanie wywolanie, ktore tylko WYRZUCA notki powtarzajace te sama teze.
+    "seria_redakcja": DEEPSEEK,
     # KATEGORIA HISTORII PRZY WYBORZE SLEDZTWA (25.10.2026, `sledztwo.wybierz_historie`):
     # jedno krotkie wywolanie na kilka-kilkanascie naglowkow, ulamek centa.
     "kategoria_historii": DEEPSEEK,
@@ -597,6 +599,7 @@ DEEPSEEK_MYSLENIE: dict[str, dict[str, str]] = {
     "notka_przeslania": {"type": "enabled"},
     "notka_przeslania_fakt": {"type": "enabled"},
     "seria_lekka_zapas": {"type": "enabled"},
+    "seria_redakcja": {"type": "enabled"},
     "kategoria_historii": {"type": "disabled"},
     "wielkie_historie": {"type": "disabled"},
     # SLEDZTWO — FALA 1 (25.10.2026, kontrakt). Zapasy Sonneta MYSLA, bo zastepuja
@@ -1813,6 +1816,7 @@ MAX_TOKENS = {
     "przeslania_zapas": 12000,
     "seria_lekka": 8000,
     "seria_lekka_zapas": 8000,
+    "seria_redakcja": 6000,
     "kategoria_historii": 3000,
     "wielkie_historie": 4000,
     "pytania_ciekawosci": 8000,
