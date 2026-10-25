@@ -1828,6 +1828,172 @@ def _badanie_sledztwa(conn, run_id, stan: dict, zegar: _Zegar, sledztwo, na_seri
     return _katy_serii(conn, run_id, stan, zegar, sledztwo, na_serio)
 
 
+# --- LEKKIE SLEDZTWO (25.10.2026) ------------------------------------------------------------------
+# Wlasciciel: „fakty na wybrany temat maja zostac znalezione, a reszta ma pochodzic z modelu — z jego
+# kreatywnosci i wiedzy — plus te fakty"; „ma byc tanio i dobrze"; „w dupie mam jakies sprawdzania".
+# Dlatego domyslna droga to: zrodla historii + glosy -> klasyfikacja -> DWIE rundy dogrywki (stary,
+# tani `research.deepen`) -> karta faktow -> seria napisana JEDNYM wywolaniem (`sledztwo.seria_lekka`).
+# Bez planu dwunastu soczewek, ksiegi pytan, starszego redaktora, pogoni za dokumentami, oceny nowosci
+# i poziomow; calosc kosztuje kilka centow (zmierzone: 0,12-0,18 USD za temat z calym ciezkim torem na
+# Flashu, z czego sama seria 0,004-0,007 USD). Gleboki tor zostaje pod `--gleboko`
+# (`config.SLEDZTWO_TRYB = "gleboko"`) — do badania pod artykul.
+RUND_LEKKIE = 2
+SLEDZTWO_LEKKIE_STOP_USD = 0.06
+PYTANIE_SZEROKIE = (
+    "\n\nCollect what a sharp editor needs to write about this: exactly what happened (numbers, dates, who "
+    "said or did what); the documents and independent measurements behind it; what people who used, tested "
+    "or were affected by it say; what it costs and who pays; and anything that contradicts or complicates "
+    "the headline.")
+
+
+def _badanie(conn, run_id, stan: dict, zegar: "_Zegar", sledztwo, na_serio: bool) -> int:
+    """Wybor toru badania: lekki (domyslny) albo gleboki (`--gleboko` / `config.SLEDZTWO_TRYB`)."""
+    if "--gleboko" in sys.argv or str(getattr(config, "SLEDZTWO_TRYB", "lekkie")) == "gleboko":
+        stan["tryb_badania"] = "gleboko"
+        return _badanie_sledztwa(conn, run_id, stan, zegar, sledztwo, na_serio)
+    stan["tryb_badania"] = "lekkie"
+    return _badanie_lekkie(conn, run_id, stan, zegar, sledztwo, na_serio)
+
+
+def _badanie_lekkie(conn, run_id, stan: dict, zegar: "_Zegar", sledztwo, na_serio: bool) -> int:
+    wybrana = stan["wybrana"]
+    zrodla = sledztwo.zrodla_historii(wybrana)
+    stan["zrodla"] = zrodla
+    print("  ZRODLA HISTORII (%d):" % len(zrodla), flush=True)
+    for z in zrodla:
+        print("    - %s | %s" % (z.get("publisher"), str(z.get("title"))[:90]), flush=True)
+    typ = sledztwo.typ_sledztwa(wybrana.get("kategoria"))
+    stan["typ"] = typ
+    brief = _brief_sledztwa(conn, run_id, wybrana, sledztwo)
+    stan["brief"] = brief
+    print()
+    print("  TYP: %s | PYTANIE: %s" % (typ, brief.get("question")), flush=True)
+    zegar.etap(stan, "brief")
+
+    print()
+    print("-- zrodla historii i glosy --", flush=True)
+    corpus, pobrania = _pobierz_zrodla_historii(conn, run_id, zrodla)
+    stan["pobrania"] = pobrania
+    glosy = _glosy_i_cennik(sledztwo, wybrana, typ)
+    corpus = corpus + glosy
+    stan["glosy"] = [{"url": d.get("url"), "title": d.get("title")} for d in glosy]
+    zegar.etap(stan, "pobranie")
+
+    print()
+    print("-- fakty: klasyfikacja i dwie rundy dogrywki --", flush=True)
+    pytanie = (brief.get("question") or "") + PYTANIE_SZEROKIE
+    try:
+        evidence = [e for e in (stages.classify(conn, run_id, pytanie, corpus) or []) if isinstance(e, dict)]
+    except PRZERYWAJA:
+        raise
+    except Exception as exc:
+        print("  [klasyfikacja] padla (%s: %s) — badanie bez wyciagow z korpusu"
+              % (type(exc).__name__, str(exc)[:120]), flush=True)
+        evidence = []
+    try:
+        evidence, dossier = research.deepen(conn, run_id, pytanie, evidence, corpus,
+                                            max_rund=RUND_LEKKIE, stop_usd=SLEDZTWO_LEKKIE_STOP_USD)
+    except PRZERYWAJA:
+        raise
+    except Exception as exc:
+        print("  [badanie] dogrywka padla (%s: %s) — ide z tym, co dala klasyfikacja"
+              % (type(exc).__name__, str(exc)[:120]), flush=True)
+        dossier = {"question": pytanie, "stop_reason": "failed:%s" % type(exc).__name__, "assessment": {}}
+    dossier = dossier if isinstance(dossier, dict) else {}
+    stan["dossier"] = _dossier_do_stanu(dossier)
+    stan["sciezka_dossier"] = dossier.get("path")
+    zegar.etap(stan, "klasyfikacja")
+
+    print()
+    print("-- karta faktow --", flush=True)
+    try:
+        pytanie_karty = research.synthesis_question(pytanie, dossier)
+    except Exception:
+        pytanie_karty = pytanie
+    try:
+        card = stages.synthesis(conn, run_id, pytanie_karty, evidence, tryb="sledztwo")
+        if not isinstance(card, dict):
+            raise ValueError("karta nie jest slownikiem")
+    except PRZERYWAJA:
+        raise
+    except Exception as exc:
+        print("  synteza padla (%s) — karta zapasowa" % type(exc).__name__, flush=True)
+        try:
+            card = stages.fallback_card(brief.get("question") or "", evidence)
+        except Exception:
+            card = {"working_thesis": brief.get("question") or "", "confirmed_claims": [],
+                    "not_established": [], "_fallback": True}
+    try:
+        sprawdzona = stages.sprawdz_karte(card, evidence,
+                                          klucze=sledztwo.nazwy_wlasne(wybrana.get("klucze")) or None,
+                                          rekord=wybrana.get("rekord") or None)
+        if isinstance(sprawdzona, dict) and "confirmed_claims" in sprawdzona:
+            card = sprawdzona
+    except PRZERYWAJA:
+        raise
+    except Exception as exc:
+        card["_karta_niesprawdzona"] = type(exc).__name__
+        print("  [karta] sprawdz_karte padlo (%s) — twierdzenia NIESPRAWDZONE kodem" % type(exc).__name__,
+              flush=True)
+    try:
+        research.attach(card, dossier)
+    except Exception as exc:
+        print("  [karta] attach padl (%s)" % type(exc).__name__, flush=True)
+    card.setdefault("broken_belief", brief.get("broken_belief") or "")
+    card.setdefault("why_they_believe_it", brief.get("why_they_believe_it") or "")
+    print("  karta: %d potwierdzonych twierdzen z %d serwisow" % (
+        len(_twierdzenia(card)), len({_host_url(c.get("url")) for c in _twierdzenia(card)} - {""})),
+        flush=True)
+    stan["karta"] = card
+    stan["evidence"] = evidence
+    zegar.etap(stan, "karta")
+    return _seria_lekka_etap(conn, run_id, stan, zegar, sledztwo, na_serio)
+
+
+def _seria_lekka_etap(conn, run_id, stan: dict, zegar: "_Zegar", sledztwo, na_serio: bool) -> int:
+    """Seria jednym wywolaniem -> REKORD PRZED KOLEJKA -> kolejka (jak `_katy_serii`, bez poziomow)."""
+    card = stan.get("karta") or {}
+    wybrana = stan.get("wybrana") or {}
+    typ = stan.get("typ") or "sledztwo"
+    print()
+    print("-- seria (jedno wywolanie, fakty z karty + wiedza modelu) --", flush=True)
+    try:
+        przes = sledztwo.seria_lekka(conn, run_id, card, wybrana, typ)
+    except PRZERYWAJA:
+        raise
+    except Exception as exc:
+        print("  [seria] padla (%s: %s)" % (type(exc).__name__, str(exc)[:120]), flush=True)
+        przes = []
+    przes = [p for p in przes or [] if isinstance(p, dict) and p.get("tekst")]
+    for p in przes:
+        print("  [%s]%s %s" % (p.get("rodzaj"), " (lead)" if p.get("lead") else "",
+                               str(p.get("tekst"))[:170]), flush=True)
+    stan["katy"] = przes
+    stan["poziom"] = {"poziom": "LEKKI", "n_max": len(przes)}
+    zegar.etap(stan, "seria")
+    _zapisz_rekord(stan, sledztwo, na_serio)
+    zegar.etap(stan, "rekord")
+    if len(przes) < 2:
+        print(">> za malo notek na serie (%d) — %s, kolejka nietknieta"
+              % (len(przes), "rekord zapisany" if stan.get("rekord_zapisany") else "bez rekordu"), flush=True)
+        _zapisz_raport(stan)
+        return 1
+    if not na_serio:
+        print("  (bez --wyslij: seria NIE idzie do kolejki notek)", flush=True)
+        _zapisz_raport(stan)
+        return 0
+    if stan.get("kolejka_dodana") and "--mimo-kolejki" not in sys.argv:
+        print("  seria tego sledztwa juz jest w kolejce (%s) — nie dubluje (--mimo-kolejki)"
+              % stan["kolejka_dodana"], flush=True)
+    else:
+        dodane = _do_kolejki(sledztwo, przes, wybrana, card, stan.get("run_id"), {})
+        stan["kolejka_dodana"] = dodane
+        print("  do kolejki notek: %d" % dodane, flush=True)
+    zegar.etap(stan, "kolejka")
+    _zapisz_raport(stan)
+    return 0
+
+
 def _po_awarii(stan: dict, sledztwo, na_serio: bool, exc: BaseException) -> None:
     """Wyjatek w srodku sledztwa: stan, raport i — po oplaconym planie — rekord.
 
@@ -1947,7 +2113,7 @@ def _przebieg_sledztwa(conn, run_id: int) -> int:
     stan["wybrana"] = wybrana
     zegar.etap(stan, "wybor")
     try:
-        return _badanie_sledztwa(conn, run_id, stan, zegar, sledztwo, na_serio)
+        return _badanie(conn, run_id, stan, zegar, sledztwo, na_serio)
     except BaseException as exc:
         _po_awarii(stan, sledztwo, na_serio, exc)
         raise
@@ -1986,6 +2152,8 @@ def _wznow_sledztwo(conn, run_id: int, rid_tekst: str) -> int:
     stan.pop("przerwane", None)
     zegar = _Zegar(conn, run_id)
     try:
+        if stan.get("tryb_badania") == "lekkie":
+            return _seria_lekka_etap(conn, run_id, stan, zegar, sledztwo, na_serio)
         return _katy_serii(conn, run_id, stan, zegar, sledztwo, na_serio)
     except BaseException as exc:
         _po_awarii(stan, sledztwo, na_serio, exc)

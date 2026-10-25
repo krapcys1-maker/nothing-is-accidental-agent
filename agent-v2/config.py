@@ -1917,6 +1917,11 @@ def zakres_slow(forma: str | None) -> tuple[int, int]:
 # cala reszta agenta razem wzieta.
 #
 # Zostawiamy pokretlo: gdyby jakosc spadla, wystarczy wrocic do 2 albo 3.
+# TOR SLEDZTWA (25.10.2026): „lekkie" = fakty z kilku zrodel + jedna seria napisana jednym wywolaniem
+# tanim modelem (`artykul_z_puli._badanie_lekkie`); „gleboko" = plan soczewek, ksiega pytan, krytyk
+# (`_badanie_sledztwa`). Flaga `--gleboko` wybiera gleboki tor na jeden przebieg.
+SLEDZTWO_TRYB = "lekkie"
+
 NOTE_CANDIDATES = 1
 # Ile ciekawostek szukamy naraz. Cztery z pięciu notek dziennie stoją na nich,
 # a jedno szukanie kosztuje tyle co jedno — więc bierzemy zapas na kilka dni.

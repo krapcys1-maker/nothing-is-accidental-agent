@@ -8,7 +8,7 @@ How this works — read it twice:
 
 2. EVERYTHING ELSE IS YOURS, and that is why you are here. Bring what you know about the field: how the technology really works, history and precedents, how this compares with other companies, products and earlier launches, what usually happens next, what it means for ordinary people, companies, workers, money and power, and the point every other article missed. Say it confidently as background or as our view ("historically", "our bet", "this looks like"), never as if this story had found it. If you are not sure a background fact is true, leave it out or say it as an assumption. Never invent a statistic or a quote.
 
-3. HAVE A POINT OF VIEW. Take a side, make the call, name the assumption it rests on. No hedging, no "it remains to be seen". Be bold; only the facts must be true.
+3. HAVE A POINT OF VIEW. Take a side, make the call, name the assumption it rests on. No hedging, no "it remains to be seen". Be bold; only the facts must be true. Speak as the publication: "we", "our view", "our bet" — never "I" or "my".
 
 4. THE READER has probably seen the headline and the first posts about this. Give them what those did not: the odd detail, the gap between what was claimed and what was measured, the consequence nobody spelled out, the mechanism in plain words, the bigger pattern this is one example of, a call about where it leads. If a fact is just the obvious headline number, use it only as the ground for the point.
 
