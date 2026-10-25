@@ -398,6 +398,27 @@ try:
             sledztwo.zasieg_historii(H_KIMI) == 5
             and sledztwo.ocena_historii(H_KIMI, sledztwo.MIN_SERWISOW_PREMIERY)[0]
             and not sledztwo.ocena_historii(H_KIMI)[0], sledztwo.ocena_historii(H_KIMI, 2))
+    # DETEKTOR DUZYCH HISTORII (25.10.2026): Kimi K3.1 Pro nie weszla do 15 historii radaru.
+    KORPUS_W = [w("Simon Willison", "https://simonwillison.net/k", "Introducing Kimi K3.1 Pro"),
+                w("Matt Wolfe", "https://www.youtube.com/watch?v=a", "Open-Source AI Models Caught Up! (Kimi K3.1 Pro)"),
+                w("Latent Space", "https://www.latent.space/k", "Kimi 3.1 Pro narrows the closed-AI lead"),
+                w("Matthew Berman", "https://www.youtube.com/watch?v=b", "Kimi K3.1 Invented the Benchmark Scores"),
+                w("BBC", "https://www.bbc.co.uk/php", "What is PHP and why did it spark a scramble?"),
+                dict(w("Old", "https://old.example/k", "Kimi K2 from last month"), data=_stary)]
+    llm.call = lambda purpose, system, user, **kw: json.dumps({"historie": [
+        {"tytul": "Kimi K3.1 Pro release", "nr": [4, 3, 2, 1, 99, "x"]}, {"tytul": "solo", "nr": [5]}]})
+    with contextlib.redirect_stdout(io.StringIO()):
+        _wh = sledztwo.wielkie_historie(KORPUS_W)
+    sprawdz("detektor: historia z numerow naglowkow, serwis do pobrania na czele, smieci i stare pominiete",
+            len(_wh) == 1 and len(_wh[0]["naglowki"]) == 4 and "youtube" not in _wh[0]["naglowki"][0]["url"]
+            and _wh[0]["miejsce"] == 101 and sledztwo.zasieg_historii(_wh[0]) == 4
+            and all("K2" not in n["temat"] for n in _wh[0]["naglowki"]), _wh)
+    H_RADAR_KIMI = {"miejsce": 2, "tytul": "Introducing Kimi K3.1 Pro", "naglowki": [KORPUS_W[0]]}
+    _sc = sledztwo.scal_historie([H_RADAR_KIMI, H_PRZEDRUK], _wh)
+    sprawdz("scalanie: historia detektora ze wspolnym adresem dokleja sie do radarowej, bez dubli",
+            len(_sc) == 2 and len(H_RADAR_KIMI["naglowki"]) == 4, [len(h["naglowki"]) for h in _sc])
+    _sc2 = sledztwo.scal_historie([H_PRZEDRUK], _wh)
+    sprawdz("scalanie: nowa duza historia staje obok radarowych", len(_sc2) == 2 and _sc2[1]["z_detektora"])
     sprawdz("KONTRDOWOD: ogolne slowo (OpenAI), stary naglowek i fragment wyrazu (NextDCX) nie lacza",
             not any("OpenAI ships" in str(n.get("temat")) or "old story" in str(n.get("temat"))
                     or "NextDCX" in str(n.get("temat")) for n in H_ROZBITA["naglowki"]))

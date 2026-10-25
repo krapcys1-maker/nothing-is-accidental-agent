@@ -527,7 +527,7 @@
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-4062 wierszy, 44 funkcji na poziomie modułu, 0 klas
+4067 wierszy, 44 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -708,7 +708,7 @@
 
 ### `sledztwo.py` — śledztwo — historia z radaru, bramka nowości sprawdzana kodem, seria 4–5 kątów (kuriozum, mechanizm, ustalenie, kto płaci, motyw, za dwa lata) i kolejka notek
 
-1074 wierszy, 42 funkcji na poziomie modułu, 0 klas
+1158 wierszy, 44 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -716,6 +716,8 @@
 | `_host(url)` *(wewn.)* | — |
 | `_klucz(url)` *(wewn.)* | — |
 | `historie(korpus, conn, run_id, ile)` | Grupy naglowkow z radaru: najlepszy naglowek na poczatku, potem warianty. |
+| `wielkie_historie(korpus, conn, run_id, ile)` | Najwieksze historie z korpusu ostatnich `DNI_WIELKICH` dni — niezaleznie od radaru. |
+| `scal_historie(radarowe, wielkie)` | Radar + detektor duzych historii bez dubli: historia detektora, ktora dzieli adres |
 | `zrodla_historii(h)` | Adresy historii do pobrania, w ksztalcie `stages.fetch` — bez powtorek. |
 | `_rekordy(dni)` *(wewn.)* | — |
 | `ile_sledztw(dni)` | Ile SLEDZTW w oknie — bez wpisow `oznacz_artykul`. |
@@ -990,7 +992,7 @@
 
 ### `artykul_z_puli.py` — artykuł bierze temat z tej samej puli, co notki
 
-1787 wierszy, 15 funkcji na poziomie modułu, 0 klas
+1789 wierszy, 15 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|

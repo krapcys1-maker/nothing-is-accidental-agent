@@ -941,7 +941,9 @@ def _przebieg_sledztwa(conn, run_id: int) -> int:
               % (czeka, sledztwo.PRZESLAN_NA_DOBE), flush=True)
         return 1
     _korpus = korpus_kanalow.korpus_kanalow(400)
-    historie = sledztwo.historie(_korpus, conn=conn, run_id=run_id)
+    # RADAR (ciekawosc) + DETEKTOR DUZYCH HISTORII (zasieg) — patrz `sledztwo.wielkie_historie`.
+    historie = sledztwo.scal_historie(sledztwo.historie(_korpus, conn=conn, run_id=run_id),
+                                      sledztwo.wielkie_historie(_korpus, conn=conn, run_id=run_id))
     # NAJWIEKSZA HISTORIA, NIE PIERWSZA Z RADARU (25.10.2026) — `sledztwo.wybierz_historie`:
     # wielkosc (niezalezne serwisy) x waga kategorii z badania klikalnosci x kara za
     # powtorke dziedziny.
