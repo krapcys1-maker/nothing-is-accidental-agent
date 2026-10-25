@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **38 plików**, 52 175 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **38 plików**, 52 181 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -708,7 +708,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-4217 wierszy, 45 funkcji na poziomie modułu, 0 klas
+4223 wierszy, 45 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -11006,7 +11006,7 @@ see it. An empty answer costs nothing; a wrong group costs a paid fact.
 
 #### `prompts/pisarz.md`
 
-**176 wierszy.** Pola wejsciowe: `card_json`, `language`, `marka`, `max_words`, `min_words`, `poprzednie_uwagi`, `style_examples`, `style_negative`, `style_positive`, `target_words`
+**175 wierszy.** Pola wejsciowe: `card_json`, `language`, `marka`, `max_words`, `min_words`, `poprzednie_uwagi`, `style_examples`, `style_negative`, `style_positive`, `target_words`
 
 ````markdown
 Write an article in {language} for {marka}, using the evidence card below.
@@ -11060,28 +11060,25 @@ evidence for it, the strongest evidence against it and what would prove it
 wrong. A hypothesis never becomes a fact in the text.
 
 It may also carry `investigation_angles`: the angles our investigation found in
-this story, each with the checked detail (`hak`) it rests on: the telling
-detail (KURIOZUM), how it works (MECHANIZM), what the sources show side by side
-(USTALENIE), a curious reader's question and its answer (PYTANIE_ODPOWIEDZ), who
-bears the cost (KTO_PLACI), the motive and the two-year scenario. Then this is the full investigation, not a news summary; the reader
+this story, each with its one-sentence takeaway and the checked detail (`hak`) it
+rests on. Then this is the full investigation, not a news summary; the reader
 may already know the headline. Open with the most telling checked detail
 rather than background, and make the question the piece answers clear early.
 Show the sequence of events where the order matters, explain the mechanism in
 plain words, make the stakes concrete (who pays, how much, where the card says),
-and set what the actors said beside what they did. Give the motive and the
-scenario as labelled analysis. These are materials, not a required outline:
-merge, reorder or drop an angle that does not earn its place.
+and set what the actors said beside what they did. Give a motive or a scenario
+as labelled analysis. These are materials, not a required outline: merge, reorder
+or drop an angle that does not earn its place.
 
-When `investigation_type` is `model_release`, the angles are a model launch:
-the telling detail (SMACZEK), claimed versus measured benchmarks (LICZBY), what
-hands-on testers and practitioners found (TEST), the big question (WIELKIE_PYTANIE),
-who gains and what it costs (KTO_ZYSKA), what it leads to (CO_Z_TEGO). Put the
-developer's own scores next to independent ones and say which is which; explain
-what each test measures in a sentence a non-engineer can repeat; give the price
-in human terms; include at least one place where it failed or disappointed;
-attribute reader comments as opinions. Answer the big question with a verdict:
-if it looks like AGI at maths, or like the end of some job, say so and argue
-it, using the human baseline and test conditions from the card as evidence.
+When `investigation_type` is `model_release`, treat the story the way an expert
+reviewer treats a model launch: put the developer's own scores next to
+independent ones and say which is which; explain what each test measures in a
+sentence a non-engineer can repeat; give the price in human terms, and what a
+finished task costs rather than only the price per token when the card has it;
+include at least one place where it failed or disappointed; attribute reader and
+tester comments as opinions. Answer the big question with a verdict: say plainly
+what you think and argue it, using the human baseline and test conditions from
+the card as evidence.
 
 Write it like the best AI writers: with a point of view. Take a side, make the
 call, reason from a named assumption where the evidence stops short. Not
@@ -11089,9 +11086,6 @@ everything has to be proven; the reader must only be able to tell which part
 is fact and which is our view. Speak as the publication: "we", "our view",
 "our bet" — never "I" or "my". Say a view once and confidently; don't wrap
 every sentence in "our reading is that".
-
-The two closing parts below count toward the planned length; trim the body to
-make room for them rather than running long.
 
 End an investigation article with two short parts under plain-text
 subheadings, after the body:
@@ -11147,9 +11141,14 @@ as "the card" or "the prompt". Say what is known and what would settle the gap.
 
 ## Length and presentation
 
-The planning range is {min_words}–{max_words} words, around {target_words}.
-Let the available substance determine the length within that plan. Do not pad
-to a minimum, or cut the explanation that makes a difficult point understandable.
+How long the article is depends on one thing: how much in this story is worth a
+curious reader's time. Material like this usually fills about {target_words} words
+({min_words}–{max_words}), but that is a guide to the usual size, not a limit.
+When the story holds more that is surprising, consequential or needed to
+understand it, go as long as it takes and go into detail exactly there. When a
+point is minor, give it a sentence or leave it out. Do not pad, never say a point
+twice in new words, and spend no words on what a headline already told the
+reader. Never cut the explanation that makes a difficult point understandable.
 Use a specific, accurate headline and a useful subtitle. Paragraphs and optional
 plain-text subheadings should help the reader follow the argument. No fixed
 sentence rhythm, punctuation quota or compulsory reader-address applies.
@@ -12653,9 +12652,9 @@ wartosc i komentarz stojacy bezposrednio nad definicja.
 | `CARD_MAX_CLAIM_CHARS` | `240` | — |
 | `DLUGOSC_WG_GLEBOKOSCI` | `{ # drugi mechanizm albo ta sama rzecz w kil` | Zmierzone na dziewięciu artykułach: przy „cel 1075, zakres 950-1250" model kotwiczył się przy górnej granicy (średnia 1212). Sufit obniżony, |
 | `KOTWICE_DLUGOSCI` | `{ # ZDANIE, KTORE PISARZ DOSTAJE TUZ PO CELU` | — |
-| `TARGET_WORDS` | `1075` | — |
-| `MIN_WORDS` | `950` | — |
-| `MAX_WORDS` | `1200` | — |
+| `TARGET_WORDS` | `1400` | — |
+| `MIN_WORDS` | `900` | — |
+| `MAX_WORDS` | `4000` | — |
 | `BUDZET_ZASTRZEZEN` | `1` | Ile razy w jednym tekscie wolno powiedziec „moim zdaniem" i pochodne. Znakowanie wnioskowania jest DOBRE — recenzent wprost go chce, bo dzie |
 | `NASYCENIE_OD_ILU` | `2` | Od ilu ZNANYCH ISTNIEJACYCH TEKSTOW temat uznajemy za nasycony. Skaut wymienia, co jego zdaniem juz o danym temacie napisano — i uzywamy jeg |
 | `PRECEDENSOW_NA_ARTYKUL` | `2` | ILE UDOKUMENTOWANYCH AWARII ROBI Z TEMATU ARTYKUL. To jest kryterium, ktorego nie mielismy w ogole, i to przez jego brak wychodzily tematy w |
