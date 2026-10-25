@@ -287,9 +287,13 @@ def _jaccard(a: frozenset, b: frozenset) -> float:
     return len(a & b) / len(a | b)
 
 
+# Liczba RAZEM z doklejonym sufiksem (80GB, 1GW, 2nd, 1990s, $2.8T) i z jednostka po spacji.
+# Recenzja 25.10.2026: wzor wymagal konca slowa po liczbie, wiec „565MW" zostawal, a z „$2.8T"
+# zostawalo „.8T". Nazwy z cyfra zaczynaja sie od litery (H100, GPT-6, K3.1) i nie pasuja.
 _LICZBA = re.compile(
-    r"(?<![A-Za-z0-9\-.])(?:[$€£]\s?)?\d(?:[\d,.]*\d)?"
-    r"(?:\s?%|\s?(?:percent|per\s?cent|x|k|m|bn|b|tn|million|billion|trillion|thousand)\b)?"
+    r"(?<![A-Za-z0-9\-.])(?:[$€£]\s?)?\d(?:[\d,.]*\d)?[A-Za-z]*"
+    r"(?:\s?%|\s(?:percent|per\s?cent|x|k|m|bn|b|tn|million|billion|trillion|thousand|"
+    r"gb|tb|mb|pb|gw|mw|kw|kwh|twh|nm|ms)\b)?"
     r"(?![A-Za-z0-9])", re.I)
 _MIESIAC = (r"(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|"
             r"sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\.?")
@@ -321,18 +325,30 @@ _LUKA = re.compile(
     r"incident|breach|advisory)|data breach|ransomware|malware|backdoor|cyber[- ]?attacks?|remote code "
     r"execution|rce|phishing|spyware|botnet|hacked|hackers?)\b", re.I)
 _LUKA_SLABA = re.compile(r"\b(attack|security|cyber|hack|breach|patch)", re.I)
+# RECENZJA 25.10.2026: przechodzily „Where can the X exploit be downloaded from GitHub?" i dokument
+# {"co": "public exploit for X", "gdzie": "exploit-db.com"}. Teraz kazde „exploit(s)" jako
+# rzeczownik (zostaje „exploited in the wild" / „actively exploited" — to pytanie o narazenie),
+# bazy exploitow, repozytoria z CVE/PoC, zlosliwe zadanie i to, co wyzwala blad.
 _SZUKA_EXPLOITA = re.compile(
-    r"(exploit (?:code|script|steps?|chain|kit|source)|working exploit|weaponi[sz]|proof[- ]of[- ]concept|"
+    r"(\bexploits?\b(?!ed|ation)|exploit[- ]?db|metasploit|packetstorm|weaponi[sz]|proof[- ]of[- ]concept|"
     r"\bpoc\b|shellcode|\bpayloads?\b|how to (?:exploit|attack|hack|break into|reproduce)|reproduc(?:e|ing) "
-    r"the (?:attack|exploit|bug)|attack steps|step[- ]by[- ]step (?:attack|exploit|instructions))", re.I)
+    r"the (?:attack|exploit|bug)|attack steps|step[- ]by[- ]step (?:attack|exploit|instructions)|"
+    r"(?:github|gitlab)\S*/\S*cve-\d{4}|malicious (?:request|payload|input|file)|"
+    r"trigger(?:s|ing)? (?:the )?(?:bug|flaw|vulnerability|crash))", re.I)
 
 
 def _bezpieczenstwo(h: dict[str, Any]) -> bool:
-    teksty = " | ".join([str(h.get("tytul") or "")] + [str(w.get("temat") or "") for w in
-                                                       (h.get("naglowki") or [])[:8] if isinstance(w, dict)])
-    if _LUKA.search(teksty):
+    # RECENZJA 25.10.2026: jeden naglowek „Hackers jailbreak X within hours" robil z premiery
+    # modelu historie o luce, a „Gig workers exploited by..." z historii o pracy. Silne slowo
+    # liczy sie w tytule albo w co najmniej dwoch naglowkach; slabe tylko przy kategorii.
+    naglowki = [str(w.get("temat") or "") for w in (h.get("naglowki") or [])[:8] if isinstance(w, dict)]
+    tytul = str(h.get("tytul") or "")
+    kat = h.get("kategoria") == "RYZYKO_BEZPIECZENSTWO"
+    if _LUKA.search(tytul) and (kat or not re.search(r"\bexploited by\b", tytul, re.I)):
         return True
-    return h.get("kategoria") == "RYZYKO_BEZPIECZENSTWO" and bool(_LUKA_SLABA.search(teksty))
+    if sum(1 for n in naglowki if _LUKA.search(n) and not re.search(r"\bexploited by\b", n, re.I)) >= 2:
+        return True
+    return kat and bool(_LUKA_SLABA.search(" | ".join([tytul] + naglowki)))
 
 
 def _typ_dla_modelu(typ: str, bezp: bool) -> str:
@@ -432,8 +448,9 @@ def _poprzednie_plany(run_id: int | None = None, ile: int = OSTATNICH_PLANOW) ->
     obiektow z `q`; czytamy oba ksztalty. Zla linia pliku odpada sama, nie caly plik.
     """
     try:
-        linie = (config.DATA_DIR / sledztwo.PLIK_SLEDZTW).read_text(encoding="utf-8").splitlines()
-    except OSError:
+        linie = (config.DATA_DIR / sledztwo.PLIK_SLEDZTW).read_text(
+            encoding="utf-8", errors="replace").splitlines()
+    except (OSError, ValueError):
         return []
     plany = []
     for linia in linie:
@@ -520,17 +537,32 @@ def _kontekst(h: dict[str, Any], pytanie: str, ledes: list[dict[str, Any]] | Non
     }
 
 
+def _liczba_wyrozniajaca(tok: str) -> bool:
+    """Liczba, ktora cos mowi o tej historii: z ulamkiem, procentem, waluta albo co najmniej
+    trzema cyframi — ale nie rok 1900-2199 (rok stoi w co drugim pytaniu o cokolwiek)."""
+    cyfry = re.sub(r"\D", "", tok)
+    if not cyfry:
+        return False
+    if re.fullmatch(r"(19|20|21)\d\d", cyfry) and "." not in tok and "%" not in tok:
+        return False
+    return "." in tok or "%" in tok or tok[0] in "$€£" or len(cyfry) >= 3
+
+
 def _nazywa_historie(q: str, kont: dict[str, Any]) -> bool:
     """Czy pytanie nazywa aktora, produkt albo liczbe TEJ historii (spec §3 regula 2)."""
+    # RECENZJA 25.10.2026: przechodzily „Overall, who pays for this?" (pierwsze slowo z wielkiej
+    # litery stalo gdzies w lede) i „What will change for ordinary people in 2026?" (rok z daty).
+    # Teraz pierwsze slowo zdania liczy sie tylko jako mocna nazwa albo klucz, a liczba tylko
+    # wyrozniajaca (nie rok, nie mala liczba calkowita bez jednostki).
     for tok, pierwszy in _tokeny(q):
         if _jest_liczba(tok):
-            if _liczba(tok) in kont["liczby"]:
+            if _liczba(tok) in kont["liczby"] and _liczba_wyrozniajaca(tok):
                 return True
             continue
         low = _norm(tok)
         if low in kont["klucze_tok"]:
             return True
-        if low in kont["slownik"] and (_nazwopodobny(tok, pierwszy) or tok[0].isupper()):
+        if low in kont["slownik"] and (_mocny(tok) or (not pierwszy and _nazwopodobny(tok, pierwszy))):
             return True
     niskie = q.lower()
     if any(k in niskie for k in kont["klucze"] if " " in k):
@@ -636,6 +668,9 @@ def _terminy(x: Any) -> list[dict[str, str]]:
         if not isinstance(t, dict):
             continue
         co, kiedy = _tekst(t.get("co"), 200), _tekst(t.get("kiedy"), 10)
+        # `fromisoformat` w 3.12 przyjmuje tez „20261104" i „2026-W45-3" — najpierw sam ksztalt.
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", kiedy):
+            continue
         try:
             date.fromisoformat(kiedy)
         except ValueError:
@@ -653,7 +688,7 @@ def _dokumenty(x: Any, kont: dict[str, Any], odrzucone: list[dict[str, str]]) ->
         co, kto, gdzie = _tekst(d.get("co"), 200), _tekst(d.get("kto"), 120), _tekst(d.get("gdzie"), 200)
         if not co or not (kto or gdzie):
             continue
-        if kont["bezp"] and _SZUKA_EXPLOITA.search(" ".join((co, gdzie))):
+        if kont["bezp"] and _SZUKA_EXPLOITA.search(" ".join((co, kto, gdzie))):
             odrzucone.append({"q": "dokument: %s" % co[:150],
                               "powod": "historia o luce: dokument z exploitem, nie pobieramy"})
             continue

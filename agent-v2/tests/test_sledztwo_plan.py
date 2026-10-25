@@ -334,6 +334,15 @@ sprawdz("KONTRDOWOD: przy historii z nazwa same slowa tytulu nie wystarcza",
 sprawdz("liczba z tekstow historii nazywa historie, liczba spoza nie",
         sp._nazywa_historie("Why does a model need 150 times more tokens?", _k)
         and not sp._nazywa_historie("Why does a model need 999 times more tokens?", _k))
+# RECENZJA 25.10.2026: te ogolne pytania przechodzily bramke nazwy (pierwsze slowo z wielkiej
+# litery z lede, rok albo mala liczba z tekstow historii).
+for _ogolne in ("Overall, who pays for this?", "Despite the hype, what do ordinary users actually report?",
+                "After the launch, who pays first and who gains later?",
+                "What will change for ordinary people in 2026?",
+                "What are the 3 biggest complaints users have about chatbots?"):
+    sprawdz("ogolne pytanie nie nazywa historii: %s" % _ogolne[:40], not sp._nazywa_historie(_ogolne, _k))
+sprawdz("KONTRDOWOD: nazwa produktu na poczatku pytania dalej nazywa historie",
+        sp._nazywa_historie("Kimi K3.1 Pro or Claude: which one costs less per task?", _k))
 
 # =================================================================================
 print()
@@ -441,6 +450,35 @@ LUKA = {"miejsce": 2, "tytul": "PHP2Shell: AI-found PHP vulnerability lets attac
         "kategoria": "RYZYKO_BEZPIECZENSTWO", "zapytanie": "PHP2Shell", "klucze": ["PHP2Shell", "PHP"],
         "naglowki": [{"kanal": "The Register", "temat": "PHP2Shell vulnerability found with frontier models",
                       "url": "https://www.theregister.com/php", "data": "2026-10-21"}]}
+# RECENZJA 25.10.2026: filtr exploita przepuszczal pytania o samo „exploit" i repozytoria.
+_kl = sp._kontekst(LUKA, "", [], poprzednie=False)
+for _zle in ("Where can the PHP2Shell exploit be downloaded from GitHub?",
+             "Is there a public exploit for PHP2Shell yet?",
+             "Which PHP request triggers PHP2Shell and what does the malicious request look like?"):
+    _pz = sp._pytanie_z_modelu({"soczewka": "PRACTICAL", "pytanie": _zle, "dowod": "repo", "gdzie": "github"}, 0)
+    sprawdz("luka: pytanie o exploit odpada: %s" % _zle[:40], "exploita" in sp._powod_odrzucenia(_pz, _kl, []))
+_pz = sp._pytanie_z_modelu({"soczewka": "PRACTICAL", "pytanie": "Is PHP2Shell being exploited in the wild, "
+                            "and which PHP versions are exposed?", "dowod": "advisory", "gdzie": "php.net"}, 0)
+sprawdz("KONTRDOWOD: pytanie o wykorzystywanie w sieci (narazenie) zostaje",
+        "exploita" not in sp._powod_odrzucenia(_pz, _kl, []))
+_odrz_dok = []
+_dok = sp._dokumenty([{"co": "public exploit for PHP2Shell", "kto": "researchers", "gdzie": "exploit-db.com"},
+                      {"co": "PHP2Shell advisory", "kto": "PHP maintainers", "gdzie": "php.net"}], _kl, _odrz_dok)
+sprawdz("luka: dokument z exploitem odpada, advisory zostaje",
+        [d["co"] for d in _dok] == ["PHP2Shell advisory"] and len(_odrz_dok) == 1, (_dok, _odrz_dok))
+sprawdz("premiera z jednym naglowkiem o hakerach to nie historia o luce",
+        not sp._bezpieczenstwo({"tytul": "Kimi K3.1 Pro launches", "kategoria": "PREMIERA_MODELU",
+                                "naglowki": [{"temat": "Hackers jailbreak Kimi K3.1 Pro within hours"}]}))
+sprawdz("historia o pracy z 'exploited by' to nie historia o luce",
+        not sp._bezpieczenstwo({"tytul": "Gig workers exploited by AI data-labelling firms",
+                                "kategoria": "PRACA_EKONOMIA", "naglowki": []}))
+# Proza planu bez liczb, takze z doklejona jednostka (recenzja 25.10.2026).
+for _wej, _wyj in (("Each H100 has 80GB of memory", "Each H100 has of memory"),
+                   ("a 1GW data centre", "a data centre"),
+                   ("565MW against 296.8 MW", "against"),
+                   ("the 2nd lab", "the lab"), ("a $2.8T market", "a market"),
+                   ("Kimi K3.1 Pro beats GPT-6", "Kimi K3.1 Pro beats GPT-6")):
+    sprawdz("bez cyfr: %r" % _wej, sp._bez_cyfr(_wej) == _wyj, sp._bez_cyfr(_wej))
 _pyt_luki = [
     q("NEW", "What did the PHP2Shell disclosure add to the 2024 maintainers' note on the same PHP weakness?", 1),
     q("HOW_IT_WORKS", "How much did frontier models lower the cost of finding PHP2Shell compared with the "
