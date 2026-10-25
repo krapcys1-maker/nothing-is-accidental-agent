@@ -10242,7 +10242,7 @@ Return only valid JSON:
 
 #### `prompts/notka.md`
 
-**141 wierszy.** Pola wejsciowe: `evidence`, `form_brief`, `language`, `marka`, `max_words`, `min_words`, `note_form`, `note_type`, `ostatnie_otwarcia_json`, `ostatnie_zakonczenia_json`, `rozbior`, `type_brief`
+**144 wierszy.** Pola wejsciowe: `evidence`, `form_brief`, `language`, `marka`, `max_words`, `min_words`, `note_form`, `note_type`, `ostatnie_otwarcia_json`, `ostatnie_zakonczenia_json`, `rozbior`, `type_brief`
 
 ````markdown
 Write a standalone Substack note in {language} for {marka}.
@@ -10338,8 +10338,11 @@ For MYSL, the material may carry `temat_dnia`: the big story we are covering
 in a series these days, with our thesis and the messages of our notes on it.
 Then the note is our boldest take on what that story means beyond itself — a
 provocative position or a sharp question about where it leads, the kind a
-reader argues with in the comments. You may name the story; add no new numbers
-or facts beyond what `temat_dnia` already says.
+reader argues with in the comments. The same readers already saw our notes on
+it: don't retell the story or repeat their facts and figures. Go up a level —
+what it says about the AI boom, who should be worried, what everyone is
+getting wrong. You may name the story; add no new numbers or facts beyond what
+`temat_dnia` already says.
 
 For MYSL without factual material, write a clearly hypothetical question or
 editorial view. Don't invent an event or personal experience. If earlier notes
