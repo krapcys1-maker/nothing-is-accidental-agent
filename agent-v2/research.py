@@ -855,13 +855,47 @@ def _wywolaj_ksiege(conn, run_id, question, paczka, widok, stop_usd, dzis):
     # PAMIEC TYLKO DLA ODPOWIEDZI, KTORA COS MOWI O TEJ PACZCE (recenzja 25.10.2026): poprawny
     # JSON bez zadnego id paczki ({"questions": []}) trafial do pamieci i ponowny przebieg tego
     # samego dnia dostawal go znowu bez wywolania — paczka padala drugi raz za darmo i na zawsze.
-    ids = {w["id"] for w in paczka}
-    if any(isinstance(q, dict) and str(q.get("id") or "").strip() in ids for q in _list(raw.get("questions"))):
+    po_id = {w["id"]: w for w in paczka}
+    if any(isinstance(q, dict) and _id_pozycji(q, po_id) for q in _pozycje_ksiegi(raw)):
         _write(path, {"created_at": datetime.now(timezone.utc).isoformat(), "raw": raw})
     return raw
 
 
 _RANGA = {"open": 0, "not_yet": 1, "partial": 1, "answered": 2}
+
+
+def _pozycje_ksiegi(raw):
+    """Lista pozycji odpowiedzi ksiegi. Proba 25.10.2026: czesc paczek wracala bez zadnego
+    z naszych id — model kladzie liste pod inna nazwa albo oddaje sama liste."""
+    if isinstance(raw, list):
+        return raw
+    if not isinstance(raw, dict):
+        return []
+    for klucz in ("questions", "results", "answers", "ledger", "statuses", "items"):
+        if isinstance(raw.get(klucz), list):
+            return raw[klucz]
+    return []
+
+
+def _id_pozycji(item, po_id):
+    """Id pozycji odpowiedzi w paczce: „Q3", „q3", 3, „Q3:" albo dokladny tekst pytania."""
+    for k in ("id", "question_id", "qid", "question_number", "number"):
+        v = item.get(k)
+        if v is None or isinstance(v, (dict, list)):
+            continue
+        t = str(v).strip().rstrip(":.").strip()
+        if t in po_id:
+            return t
+        if t.upper() in po_id:
+            return t.upper()
+        if t.isdigit() and ("Q" + t) in po_id:
+            return "Q" + t
+    q = " ".join(str(item.get("question") or "").split()).casefold()
+    if q:
+        for ident, w in po_id.items():
+            if " ".join(str(w.get("q") or "").split()).casefold() == q:
+                return ident
+    return None
 
 
 def _scal_statusy(paczka, raw, widok, teksty, dzis):
@@ -874,10 +908,10 @@ def _scal_statusy(paczka, raw, widok, teksty, dzis):
     po_id = {w["id"]: w for w in paczka}
     widok_po_id = {s["source_id"]: s for s in widok}
     ile = 0
-    for item in _list(raw.get("questions")):
+    for item in _pozycje_ksiegi(raw):
         if not isinstance(item, dict):
             continue
-        w = po_id.pop(str(item.get("id") or "").strip(), None)
+        w = po_id.pop(_id_pozycji(item, po_id) or "", None)
         if w is None:
             continue
         ile += 1
@@ -943,8 +977,12 @@ def _ocen_ksiege(conn, run_id, question, wpisy, widok, evidence, stop_usd, dzis)
             ok += 1
         else:
             zle += 1
-            print("  [ksiega] paczka %s: odpowiedz bez zadnego z tych id" % (
-                ",".join(w["id"] for w in paczka)), flush=True)
+            # KSZTALT ODPOWIEDZI W LOGU — bez tego nie da sie powiedziec, co model oddal.
+            _poz = _pozycje_ksiegi(raw)
+            print("  [ksiega] paczka %s: odpowiedz bez zadnego z tych id (klucze %s, pierwsza pozycja %s)" % (
+                ",".join(w["id"] for w in paczka),
+                sorted(raw.keys())[:6] if isinstance(raw, dict) else type(raw).__name__,
+                (sorted(_poz[0].keys())[:8] if _poz and isinstance(_poz[0], dict) else _poz[:1])), flush=True)
     return ok, zle
 
 
