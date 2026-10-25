@@ -31,7 +31,8 @@ print("    SINGLE cel %s (%s-%s)" % (s["cel"], s["min"], s["max"]))
 sprawdz("waski temat dostaje wyraznie krotsza forme", s["cel"] < r["cel"] * 0.7,
         "%s vs %s" % (s["cel"], r["cel"]))
 sprawdz("krotki artykul ma sensowne dno (nie notka)", s["min"] >= 400, s["min"])
-sprawdz("dlugi nie przekracza tego, co czyta sie do konca", r["max"] <= 1300, r["max"])
+# 25.10.2026 (wlasciciel): bogaty temat nie ma sztucznego sufitu dlugosci — `max` to zabezpieczenie.
+sprawdz("bogaty temat nie ma sztucznego sufitu (dlugosc idzie za trescia)", r["max"] >= 3000, r["max"])
 sprawdz("zakresy sie nie nakladaja", s["max"] < r["min"], (s["max"], r["min"]))
 # ZMIANA DECYZJI (2026-08-20). Bylo: nieznana glebokosc dostaje RICH. Nieznana
 # glebokosc znaczy jednak „model oddal cos spoza slownika", czyli NIE WIEM, ile

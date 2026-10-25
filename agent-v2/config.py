@@ -1473,7 +1473,12 @@ CARD_MAX_CLAIM_CHARS = 240
 # Waski temat nie jest odrzucany — dostaje krotsza forme, i to jest w porzadku.
 DLUGOSC_WG_GLEBOKOSCI = {
     # drugi mechanizm albo ta sama rzecz w kilku dziedzinach
-    "RICH":   {"cel": 1075, "min": 900, "max": 1250},
+    # 25.10.2026 (wlasciciel: „artykul ma miec tyle, zeby byl ciekawy; jak bedzie o czyms
+    # ciekawym, moze miec w huj dlugi, ale ma sie nie rozpisywac o pierdolach"): bogaty temat
+    # NIE MA sztucznego sufitu — `max` to tylko zabezpieczenie kosztu (limit tokenow pisarza),
+    # a `cel` i `min` mowia pisarzowi, jak duzo zwykle jest materialu. Sufit 1250 wyciety
+    # w sierpniu (model kotwiczyl sie przy gornej granicy) dzialal jak skracanie.
+    "RICH":   {"cel": 1400, "min": 900, "max": 4000},
     # jeden mechanizm, dobrze udokumentowany
     "SINGLE": {"cel": 650,  "min": 480, "max": 820},
     # USTALENIE NA JEDNO ZDANIE. Prompt odsiewu mowi o THIN wprost: „no article
@@ -1497,8 +1502,9 @@ KOTWICE_DLUGOSCI = {
     # mowilo wiec pisarzowi, ze teksty przyjete przez to konto sa dwuipolkrotnie
     # dluzsze od tego, co ma napisac — czyli pracowalo PRZECIW jedynemu
     # mechanizmowi skalowania dlugosci, jaki tu zbudowano.
-    "RICH": ("the two articles this publication has approved run 1048 and 1101 "
-             "words, and neither felt short"),
+    "RICH": ("the two articles this publication has approved ran just over a thousand "
+             "words because that is all they had to say; a story with more to say runs "
+             "longer"),
     "SINGLE": ("this subject carries one mechanism, well documented. Our longer "
                "pieces run past a thousand words because they carry two. Shorter "
                "here is the right size, not a shortfall"),
@@ -1525,9 +1531,9 @@ def dlugosc_dla(glebokosc: str) -> dict[str, int]:
         (glebokosc or "").upper(), DLUGOSC_WG_GLEBOKOSCI["SINGLE"])
 
 
-TARGET_WORDS = 1075
-MIN_WORDS = 950
-MAX_WORDS = 1200
+TARGET_WORDS = 1400
+MIN_WORDS = 900
+MAX_WORDS = 4000
 
 # Ile razy w jednym tekscie wolno powiedziec „moim zdaniem" i pochodne.
 # Znakowanie wnioskowania jest DOBRE — recenzent wprost go chce, bo dzieki
