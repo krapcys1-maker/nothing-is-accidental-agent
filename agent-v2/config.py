@@ -220,7 +220,7 @@ SWIEZY_CEL_MIN = 120
 # E16 — w ramieniu „on" notki wychodza od tego przebiegu doby (liczac od 1).
 PORA_NOTKI_OD_PRZEBIEGU = 3
 # E17 — okno krotkiej notki (obecne: `NOTE_MIN_WORDS`-`NOTE_MAX_WORDS`).
-KROTKA_NOTKA_SLOW = (33, 60)
+KROTKA_NOTKA_SLOW = (33, 80)
 
 # ILE RAZY ODPISUJEMY W JEDNEJ ROZMOWIE. Rozmowa to galaz komentarzy: ten,
 # ktory ja zaczal, i wszystko pod nim. Liczy `browser.nasze_odpowiedzi_w_rozmowie`
@@ -437,6 +437,10 @@ MODEL_FOR = {
     # 14 dni blokowala powrot do historii. DeepSeek z rozumowaniem: A/B 27.09 —
     # ostrozny, motyw plaski, za ok. 0,003 USD.
     "przeslania_zapas": DEEPSEEK,
+    # SERIA LEKKA (25.10.2026, `sledztwo.seria_lekka`): cala seria notek jednym wywolaniem tanim
+    # modelem — fakty z karty, reszta z wiedzy i osadu modelu. Flash z myslenie; zapas tez Flash.
+    "seria_lekka": DEEPSEEK,
+    "seria_lekka_zapas": DEEPSEEK,
     # KATEGORIA HISTORII PRZY WYBORZE SLEDZTWA (25.10.2026, `sledztwo.wybierz_historie`):
     # jedno krotkie wywolanie na kilka-kilkanascie naglowkow, ulamek centa.
     "kategoria_historii": DEEPSEEK,
@@ -583,6 +587,8 @@ DEEPSEEK_MYSLENIE: dict[str, dict[str, str]] = {
     "nowosc": {"type": "enabled"},
     "przeslania": {"type": "enabled"},
     "przeslania_zapas": {"type": "enabled"},
+    "seria_lekka": {"type": "enabled"},
+    "seria_lekka_zapas": {"type": "enabled"},
     "kategoria_historii": {"type": "disabled"},
     "wielkie_historie": {"type": "disabled"},
     # SLEDZTWO — FALA 1 (25.10.2026, kontrakt). Zapasy Sonneta MYSLA, bo zastepuja
@@ -1801,6 +1807,8 @@ MAX_TOKENS = {
     # `THINKING_HEADROOM_TOKENS` doliczane nizej.
     "przeslania": 12000,
     "przeslania_zapas": 12000,
+    "seria_lekka": 8000,
+    "seria_lekka_zapas": 8000,
     "kategoria_historii": 3000,
     "wielkie_historie": 4000,
     "pytania_ciekawosci": 8000,
@@ -1844,8 +1852,11 @@ MAX_TOKENS = {
 # 52-64 slowa. Sens z 4.09 („notki maja miec sens") zostaje: notka niesie jedna
 # mysl, a glebie daja seria katow sledztwa (`sledztwo.RODZAJE`) i artykul.
 # Zakonczylo to E17 (polowa notek krotka) przed terminem.
+# 25.10.2026, wieczorem: wlasciciel — „notki nie maja miec sztywnych ograniczen, widelki
+# owszem, ale ma konczyc mysl, zeby to mialo sens; to jest pisanie, a nie matematyka".
+# Okno 40-85 to WSKAZOWKA dla pisarza i pomiar (`length_ok`); nigdzie nie odrzuca ani nie tnie.
 NOTE_MIN_WORDS = 40
-NOTE_MAX_WORDS = 65
+NOTE_MAX_WORDS = 85
 
 # DLUGA NOTKA — OKNO OSOBNE, BO SUFIT 64 SLOW MA ZMIERZONY KOSZT.
 #

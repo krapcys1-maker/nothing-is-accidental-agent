@@ -30,7 +30,8 @@ RULES
    sources say", "roughly" and "arguably" are not corrections. If the number was
    wrong, a vaguer version of the wrong number is still wrong.
 
-6. Keep the length between {min_slow} and {max_slow} words.
+6. Keep roughly the original length (usually {min_slow}–{max_slow} words). That is a
+   guide, not a cap: the corrected text must still finish its thought and make sense.
 
 CONTEXT: {kontekst}
 

@@ -58,7 +58,7 @@ print("=== 1. OKNO DLUGOSCI ZALEZY OD FORMY ===")
 # niego wroci — sprawdzany na formie wstawionej na chwile.
 sprawdz("od 25.10 WYJASNIENIE tez w krotkim oknie (FORMY_DLUGIE puste)",
         not config.FORMY_DLUGIE
-        and config.zakres_slow("WYJASNIENIE") == (config.NOTE_MIN_WORDS, config.NOTE_MAX_WORDS) == (40, 65),
+        and config.zakres_slow("WYJASNIENIE") == (config.NOTE_MIN_WORDS, config.NOTE_MAX_WORDS) == (40, 85),
         config.zakres_slow("WYJASNIENIE"))
 _oryg_dlugie = config.FORMY_DLUGIE
 config.FORMY_DLUGIE = {"WYJASNIENIE"}

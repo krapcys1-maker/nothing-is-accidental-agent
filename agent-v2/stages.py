@@ -209,6 +209,7 @@ def pamiec_glosu(prompt: str) -> str:
 Z_PO_LUDZKU = frozenset()  # legacy fragment no longer injected
 Z_GLOSEM_KROTKICH = frozenset({
     "pisarz.md", "notka.md", "komentarz.md", "odpowiedz.md", "restack.md", "naprawa.md",
+    "seria_lekka.md",
 })
 
 
@@ -3812,11 +3813,16 @@ def dopnij_pytanie(notka: str, pytanie: str) -> str:
 # wprost; strazem zrozumialosci jest ostatnie zdanie (3.09 wlasciciel nie
 # zrozumial notki scisnietej do 64 slow).
 ZDANIE_O_DLUGOSCI = "The planning range is %d–%d words; understanding comes first."
+# 25.10.2026 (wlasciciel: „notki nie maja miec sztywnych ograniczen; widelki jak najbardziej,
+# ale ma konczyc mysl, zeby to mialo sens — to jest pisanie, a nie matematyka"): okno slow
+# to WSKAZOWKA, nie sufit. Poprzednie „and no more than %d" sciskalo mysl do liczby i dawalo
+# aforyzmy bez wyjasnienia; trzeci znacznik %d zostaje tylko w zdaniu, ze limitu nie ma.
 POLECENIE_KROTKIEJ = (
-    "This is a SHORT note: %d–%d words, and no more than %d. Make one point and "
-    "explain it in ordinary words; leave out a second example and any caveat that "
-    "does not change the point. Short does not mean cryptic: a reader must still "
-    "get it on the first read.")
+    "This is a SHORT note: usually %d–%d words. Make one point and explain it in "
+    "ordinary words; leave out a second example and any caveat that does not change "
+    "the point. The word range is a guide, not a cap: finish the thought even if it "
+    "runs past %d, and never cut a point short or stop mid-argument to hit a number. "
+    "Short does not mean cryptic: a reader must still get it on the first read.")
 
 
 def z_krotka_notka(prompt: str, dol: int, gora: int) -> str:
@@ -3833,8 +3839,10 @@ def z_krotka_notka(prompt: str, dol: int, gora: int) -> str:
 # wprost zadzialalo (135 -> 47-75 slow). NADAL NIC NIE TNIEMY (decyzja wlasciciela
 # z 9.09): to polecenie, dlugosc dalej tylko mierzymy. Obu pisarzom E11 to samo.
 POLECENIE_DLUGOSCI = (
-    "Length: %d–%d words, and no more than %d. One point, explained in ordinary "
-    "words; drop a second example or a side remark before you drop clarity.")
+    "Length: usually %d–%d words — a guide, not a cap. Finish the thought: if the "
+    "point needs more than %d words to make sense, take them; never cut a point "
+    "short or stop mid-argument to hit a number, and never pad. One point, explained "
+    "in ordinary words; drop a second example or a side remark before you drop clarity.")
 
 
 def z_dlugoscia(prompt: str, dol: int, gora: int) -> str:
@@ -4319,8 +4327,14 @@ def note(
     twierdzenia_kata: list[dict[str, Any]] | None = None,
     bez_rozbioru: bool = False,
     pierwsze_zdanie: str = "",
+    gotowy_tekst: str = "",
 ) -> dict[str, Any]:
     """Jedna notka danego typu i danej FORMY — do szuflady.
+
+    `gotowy_tekst` (25.10.2026, seria lekka — `sledztwo.seria_lekka`): notka napisana
+    wczesniej, razem z cala seria, jednym wywolaniem. Omija pisarza (bez wywolania modelu),
+    ale idzie TA SAMA droga dalej: pomiar dlugosci, zapora wstrzykniecia, sprawdzenie faktow
+    w sieci i naprawa obalonego zdania.
 
     `evidence` to karta artykułu albo fragmenty, których artykuł nie zużył.
     W obu wypadkach notka stoi na materiale ocytowanym, więc nie ma skąd
@@ -4530,14 +4544,19 @@ def note(
     zajete_otwarcia = set(ostatnie_otwarcia())
     candidates: list[dict[str, Any]] = []
     odrzucone_bramka: list[dict[str, Any]] = []
-    for i in range(config.NOTE_CANDIDATES):
+    for i in range(1 if gotowy_tekst else config.NOTE_CANDIDATES):
         try:
-            raw = llm.call(etap, NOTE_SYSTEM, prompt, conn=conn, run_id=run_id)
-            data = llm.parse_json(raw)
-            # KTORY PISARZ TO NAPISAL — niesione dalej az do dziennika.
-            # Bez tego pola po dwoch tygodniach mielibysmy dwie kolumny kosztow
-            # i ZERO mozliwosci porownania, ktore notki cos przyniosly.
-            data["model"] = config.MODEL_FOR.get(etap, "")
+            if gotowy_tekst:
+                data = {"note": " ".join(str(gotowy_tekst).split()), "fact_used": "", "source_url": ""}
+                data["words"] = len(data["note"].split())
+                data["model"] = config.MODEL_FOR.get("seria_lekka", "")
+            else:
+                raw = llm.call(etap, NOTE_SYSTEM, prompt, conn=conn, run_id=run_id)
+                data = llm.parse_json(raw)
+                # KTORY PISARZ TO NAPISAL — niesione dalej az do dziennika.
+                # Bez tego pola po dwoch tygodniach mielibysmy dwie kolumny kosztow
+                # i ZERO mozliwosci porownania, ktore notki cos przyniosly.
+                data["model"] = config.MODEL_FOR.get(etap, "")
             # Zapowiedz powtarzajaca poprzednie: ten sam pisarz pisze jeszcze raz,
             # wychodzi wersja z mniejszym powtorzeniem (`powtorzenie`).
             if _zapowiedzi and isinstance(data.get("note"), str):
@@ -6305,10 +6324,14 @@ def notki_dnia(
             # bramce haka, `sledztwo.sprawdz_notke` na gotowym tekscie, wiernosc
             # wobec twierdzen kata przed sprawdzeniem w sieci, bez rozbioru.
             _seria_sledcza = kontekst_notki_serii(_przes, material)
-            _bramki = {"bramka": _seria_sledcza["bramka"],
-                       "twierdzenia_kata": _seria_sledcza["fakty"],
-                       "bez_rozbioru": True,
-                       "pierwsze_zdanie": _seria_sledcza["linia"]}
+            # BEZ BRAMEK TEKSTU (25.10.2026, wlasciciel: „w dupie mam jakies sprawdzania" i „nie
+            # blokowac"): ani pierwsze zdanie po bramce haka, ani `sprawdz_notke`, ani wiernosc
+            # wobec twierdzen — notka serii idzie jak kazda inna, a jedynym sprawdzeniem jest
+            # sprawdzenie faktow w sieci z naprawa obalonego zdania (`zweryfikuj`). Fakty o TEJ
+            # sprawie maja stac na karcie, reszta to wiedza i osad modelu.
+            _bramki = {"bez_rozbioru": True}
+            if _przes.get("gotowy_tekst"):
+                _bramki["gotowy_tekst"] = _przes["gotowy_tekst"]
         elif typ == "MYSL":
             # JEDYNY TYP BEZ KARTY DOWODOWEJ — i dlatego nie zabiera faktu z
             # puli. Fakt zuzyty na notke, ktorej nie wolno go uzyc, przepadlby

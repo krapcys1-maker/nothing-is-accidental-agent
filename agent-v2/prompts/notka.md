@@ -92,9 +92,15 @@ really change a reader's mind; don't end on a hedge. If
 `investigation.earlier_angles_already_published` lists angles, the same readers
 saw them: don't restate their message or open with their detail. For a model
 release, keep a developer's own score apart from an independent one, and
-attribute what readers or testers said as their opinion. Every number in the
-note must be one of the supporting claims' numbers, and at most three of them.
-Facts still come only from the evidence; a hypothesis never turns into one.
+attribute what readers or testers said as their opinion. Facts about this
+story (numbers, dates, quotes, who did or said what, scores, prices) come only
+from the supporting claims. Everything else is yours: what you know about the
+field — how the technology works, history and precedents, comparisons with
+other companies and products, what usually happens next, what it means for
+ordinary people, companies, workers and power. Bring it in confidently as
+background or as our view ("historically", "our bet", "this looks like"), never
+as a finding of this story, and leave out a background fact you are not sure is
+true. Never invent a statistic or a quote. A hypothesis never turns into a fact.
 
 For MYSL, the material carries `o_czym_sie_mowi` (headlines from this week)
 and may carry `inne_historie_tygodnia`: other AI stories in the news this week
