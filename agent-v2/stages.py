@@ -164,6 +164,12 @@ def prompt_serii_lekkiej(tytul: str, fakty: str, nieustalone: str, ostatnie: str
         katy=_katy_serii_opis())
 
 
+def prompt_dokumentow_lekkich(tytul: str, pytanie: str, zrodla: str) -> str:
+    """Prompt nazywania dokumentow pierwotnych w lekkim torze. Naglowek, pytanie i wycinki zrodel to
+    CUDZA tresc, wiec stoja za bariera."""
+    return _prompt("dokumenty_lekkie.md", tytul=tytul, pytanie=pytanie, zrodla=zrodla)
+
+
 def prompt_redakcji_serii(notki: str) -> str:
     """Prompt redaktora serii lekkiej (`sledztwo._bez_powtorek`). Notki to tekst napisany z cudzych
     faktow, wiec stoja za bariera."""

@@ -48,7 +48,7 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-12630 wierszy, 232 funkcji na poziomie modułu, 0 klas
+12636 wierszy, 233 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -56,6 +56,7 @@
 | `_prompt(name, **fields)` *(wewn.)* | Render a task prompt and prepend the shared public voice once. |
 | `_katy_serii_opis()` *(wewn.)* | Tabela katow dla serii lekkiej — NASZ tekst (stala `sledztwo.KATY`), bez argumentow. |
 | `prompt_serii_lekkiej(tytul, fakty, nieustalone, ostatnie, typ, n_max)` | Prompt serii lekkiej (`sledztwo.seria_lekka`). Naglowek historii, fakty, nieustalone i ostatnie |
+| `prompt_dokumentow_lekkich(tytul, pytanie, zrodla)` | Prompt nazywania dokumentow pierwotnych w lekkim torze. Naglowek, pytanie i wycinki zrodel to |
 | `prompt_redakcji_serii(notki)` | Prompt redaktora serii lekkiej (`sledztwo._bez_powtorek`). Notki to tekst napisany z cudzych |
 | `pamiec_glosu(prompt)` | Kilka potwierdzonych wypowiedzi do unikania powtorek, bez wywolan API. |
 | `_juz_w_domu(ile_banku, ile_notek)` *(wewn.)* | Co juz mamy poza artykulami: fakty czekajace w banku i wydane notki. |
@@ -569,7 +570,7 @@
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-4260 wierszy, 47 funkcji na poziomie modułu, 0 klas
+4264 wierszy, 47 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -1231,7 +1232,7 @@
 
 ### `artykul_z_puli.py` — artykuł bierze temat z tej samej puli, co notki
 
-3416 wierszy, 64 funkcji na poziomie modułu, 1 klas
+3457 wierszy, 65 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -1274,6 +1275,7 @@
 | `_poziom(sledztwo, wybrana, card, dossier)` *(wewn.)* | Poziom tematu (`sledztwo.poziom_tematu`, spec §5) z zapasem S. |
 | `_katy_serii(conn, run_id, stan, zegar, sledztwo, na_serio)` *(wewn.)* | Etapy 15-17: poziom -> katy -> REKORD -> kolejka. Wspolne dla swiezego |
 | `_badanie_sledztwa(conn, run_id, stan, zegar, sledztwo, na_serio)` *(wewn.)* | Etapy 5-14 po wyborze historii, potem `_katy_serii`. |
+| `_dokumenty_lekko(conn, run_id, wybrana, brief, corpus)` *(wewn.)* | Lekki tor: nazwij najwyzej dwa dokumenty pierwotne (jedno tanie wywolanie) i znajdz je tym samym |
 | `_badanie(conn, run_id, stan, zegar, sledztwo, na_serio)` *(wewn.)* | Wybor toru badania: lekki (domyslny) albo gleboki (`--gleboko` / `config.SLEDZTWO_TRYB`). |
 | `_badanie_lekkie(conn, run_id, stan, zegar, sledztwo, na_serio)` *(wewn.)* | — |
 | `_seria_lekka_etap(conn, run_id, stan, zegar, sledztwo, na_serio)` *(wewn.)* | Seria jednym wywolaniem -> REKORD PRZED KOLEJKA -> kolejka (jak `_katy_serii`, bez poziomow). |

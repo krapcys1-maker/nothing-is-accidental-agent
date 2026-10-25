@@ -412,6 +412,10 @@ class AtrapaStages:
         zd("fallback_card")
         return {"working_thesis": question, "confirmed_claims": [], "_fallback": True}
 
+    def prompt_dokumentow_lekkich(self, tytul, pytanie, zrodla):
+        zd("prompt_dokumentow_lekkich")
+        return "T:%s Q:%s S:%s" % (tytul, pytanie, zrodla)
+
     def discovery(self, *a, **k):
         zd("ZAKAZANE:discovery")
         return []
@@ -451,8 +455,19 @@ azp.research, azp.stages = RESEARCH, STAGES
 PYTANIA_BRIEFU: list = []
 
 
+# Lekki tor nazywa dokumenty pierwotne jednym wywolaniem: None = jeden domyslny dokument, lista = te,
+# wyjatek = rzucany.
+DOKUMENTY_LLM = [None]
+
+
 def atrapa_llm(purpose, system, prompt, conn=None, run_id=None, **k):
     zd("llm:" + purpose, prompt=prompt)
+    if purpose == "dokumenty_lekkie":
+        d = DOKUMENTY_LLM[0]
+        if isinstance(d, BaseException):
+            raise d
+        return json.dumps({"documents": [{"what": "Orbit Labs Q7 model card", "who": "Orbit Labs",
+                                          "where": "orbit.example"}] if d is None else d})
     if purpose != "wybor":
         raise AssertionError("niespodziewane platne wywolanie: %s" % purpose)
     q = PYTANIA_BRIEFU.pop(0) if PYTANIA_BRIEFU else "Why did Orbit Labs call Q7 open before shipping weights?"
@@ -520,11 +535,12 @@ def zeruj():
     STAGES.karta, STAGES.pada = KARTA, {}
     KOD_NAPISZ[0] = 0
     PYTANIA_BRIEFU.clear()
+    DOKUMENTY_LLM[0] = None
 
 
 def zakazane():
     return [n for n in nazwy() if n.startswith(("ZAKAZANE:", "NIEZNANE:", "_napisz_i_zapisz"))
-            or (n.startswith("llm:") and n != "llm:wybor")]
+            or (n.startswith("llm:") and n not in ("llm:wybor", "llm:dokumenty_lekkie"))]
 
 
 print("=== 1. PELNE SLEDZTWO Z --wyslij: KOLEJNOSC ETAPOW, REKORD PRZED KOLEJKA ===")
@@ -994,8 +1010,18 @@ zeruj()
 SERIA_L[0] = SERIA
 kod, log, RL, exc = uruchom(["--sledztwo", "--wyslij"])
 sprawdz("lekki: przebieg konczy sie kodem 0, bez wyjatku", kod == 0 and exc is None, (kod, exc, log[-1200:]))
-sprawdz("lekki: ZERO planu, krytyka, pogoni za dokumentami i przeslan ciezkiego toru",
-        not (set(nazwy()) & {"plan", "krytyk", "dokument", "przeslania", "poziom", "nowosc"}), nazwy())
+sprawdz("lekki: ZERO planu, krytyka, przeslan i poziomow ciezkiego toru",
+        not (set(nazwy()) & {"plan", "krytyk", "przeslania", "poziom", "nowosc"}), nazwy())
+_dok_l = zdarzenia("dokument")
+sprawdz("lekki: jeden dokument pierwotny nazwany jednym wywolaniem i znaleziony tym samym poscigiem co ciezki tor",
+        len(zdarzenia("llm:dokumenty_lekkie")) == 1 and [d["co"] for d in _dok_l] == ["Orbit Labs Q7 model card"]
+        and gdzie("glosy_hn") < gdzie("llm:dokumenty_lekkie") < gdzie("dokument") < gdzie("classify"), nazwy())
+_kl_l = (zdarzenia("classify") or [{}])[0]
+sprawdz("lekki: pobrany dokument wchodzi do korpusu przed klasyfikacja",
+        "https://orbit.example/docs/orbit-labs-q7-model-card" in (_kl_l.get("urls") or []), _kl_l.get("urls"))
+sprawdz("lekki: nazywanie dokumentow dostaje tytul historii, pytanie i wycinki zrodel (bariera: test_bariera_wstrzykniecia)",
+        "Orbit Labs ships Q7" in zdarzenia("llm:dokumenty_lekkie")[0]["prompt"]
+        and "https://a.example/q7" in zdarzenia("llm:dokumenty_lekkie")[0]["prompt"], zdarzenia("llm:dokumenty_lekkie")[0]["prompt"][:300])
 sprawdz("lekki: kolejnosc zrodla -> glosy -> klasyfikacja -> dogrywka -> karta -> seria -> REKORD -> kolejka",
         gdzie("fetch") < gdzie("glosy_hn") < gdzie("classify") < gdzie("deepen") < gdzie("synthesis")
         < gdzie("sprawdz_karte") < gdzie("seria_lekka") < gdzie("zapisz_sledztwo") < gdzie("dodaj_do_kolejki"),
@@ -1031,6 +1057,25 @@ kod, log, _, exc = uruchom(["--sledztwo"])
 sprawdz("lekki bez --wyslij: seria jest, ale ani rekord, ani kolejka",
         kod == 0 and zdarzenia("seria_lekka") and not SLEDZTWO.rekordy and not SLEDZTWO.kolejka, (kod, nazwy()))
 
+zeruj()
+SERIA_L[0] = SERIA
+DOKUMENTY_LLM[0] = RuntimeError("nazywanie padlo")
+kod, log, _, exc = uruchom(["--sledztwo", "--wyslij"])
+sprawdz("lekki: nazywanie dokumentow pada — bez poscigu, sledztwo idzie dalej do serii i kolejki",
+        kod == 0 and exc is None and not zdarzenia("dokument") and zdarzenia("seria_lekka")
+        and len(SLEDZTWO.kolejka) == 3 and "nazwanie dokumentow nie wyszlo" in log, (kod, exc, log[-500:]))
+zeruj()
+SERIA_L[0] = SERIA
+DOKUMENTY_LLM[0] = []
+kod, log, _, exc = uruchom(["--sledztwo", "--wyslij"])
+sprawdz("lekki: zaden dokument nie wskazany — zero poscigu, seria idzie", kod == 0 and not zdarzenia("dokument")
+        and zdarzenia("seria_lekka") and "zaden dokument pierwotny" in log, (kod, log[-400:]))
+zeruj()
+SERIA_L[0] = SERIA
+DOKUMENTY_LLM[0] = [{"what": "Doc %d" % i, "who": "W", "where": "w.example"} for i in range(5)]
+kod, log, _, exc = uruchom(["--sledztwo", "--wyslij"])
+sprawdz("KONTRDOWOD: najwyzej dwa dokumenty, nawet gdy model nazwie piec",
+        kod == 0 and len(zdarzenia("dokument")) == azp.MAKS_DOKUMENTOW_LEKKICH == 2, [d["co"] for d in zdarzenia("dokument")])
 zeruj()
 SERIA_L[0] = SERIA
 RESEARCH.pada = RuntimeError("dogrywka padla")
