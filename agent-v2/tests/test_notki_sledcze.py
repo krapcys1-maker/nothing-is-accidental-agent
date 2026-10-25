@@ -491,13 +491,23 @@ sprawdz("zdanie po bramce w prompcie, jako ostatnie polecenie",
         and LINIA2 in ZDARZENIA[0][1])
 sprawdz("wychodzi wersja z zachowanym pierwszym zdaniem",
         [k["note"] for k in wyn["candidates"]] == [SERIA_OK] and wyn["candidates"][0]["wiernosc"]["wierna"])
+# Od proby 25.10.2026 odrzuca tylko zgloszenie, ktore wnosi nowa liczbe albo nazwe
+# (`_zdanie_wnosi_fakt`); nasze zdanie bez nowego faktu jest uwaga (test nizej).
+SERIA_ZLA = SERIA_OK.replace("not the makers' own.", "not the makers' own, from 900 tests.")
 NIEWIERNA = json.dumps({"faithful": False, "problems": [
-    {"sentence": "That is an independent number, not the makers' own.", "why": "x", "claim": 1}]})
-wyn, _ = zrob_note([nota(SERIA_OK), NIEWIERNA, nota(SERIA_OK), NIEWIERNA], "CIEKAWOSTKA",
+    {"sentence": "That is an independent number, not the makers' own, from 900 tests.", "why": "x", "claim": 1}]})
+wyn, _ = zrob_note([nota(SERIA_ZLA), NIEWIERNA, nota(SERIA_ZLA), NIEWIERNA], "CIEKAWOSTKA",
                    {"fact": {"fact": "f"}}, etap="notka_przeslania", bramka=bramka_serii,
                    twierdzenia_kata=FAKTY, bez_rozbioru=True)
-sprawdz("niewierna dwa razy: odrzucona z powodem wiernosci",
+sprawdz("niewierna dwa razy (nowa liczba spoza twierdzen): odrzucona z powodem wiernosci",
         wyn["candidates"] == [] and "does not match the claims" in " ".join(wyn["bramka_odrzucila"]), wyn)
+OPINIA = json.dumps({"faithful": False, "problems": [
+    {"sentence": "That is an independent number, not the makers' own.", "why": "x", "claim": 1}]})
+wyn, _ = zrob_note([nota(SERIA_OK), OPINIA], "CIEKAWOSTKA", {"fact": {"fact": "f"}},
+                   etap="notka_przeslania", bramka=bramka_serii, twierdzenia_kata=FAKTY, bez_rozbioru=True)
+sprawdz("zgloszone nasze zdanie bez nowej liczby i nazwy: notka wychodzi, zgloszenie jako uwaga",
+        [k["note"] for k in wyn["candidates"]] == [SERIA_OK]
+        and wyn["candidates"][0]["wiernosc"]["uwagi"], wyn)
 wyn, _ = zrob_note([nota(SERIA_OK), WIERNA], "CIEKAWOSTKA", {"fact": {"fact": "f"}},
                    bramka=bramka_serii, twierdzenia_kata=FAKTY)
 sprawdz("KONTRDOWOD: bez `bez_rozbioru` rozbior idzie jak dotad",
@@ -700,6 +710,18 @@ sprawdz("kontekst bramki notki serii ma encje z kolejki (nazwy modeli to aktor A
 sprawdz("nazwa modelu z encji w pierwszym zdaniu wystarcza za termin AI",
         not any(b.startswith("AI term") for b in _sl.sprawdz_notke(
             "Gizmo 2.5 costs half as much as Rival Max 4. Buyers noticed fast.", [], _k["kontekst"])))
+# Wiernosc: zgloszenie bez nowej liczby i nowej nazwy to nasze zdanie, nie odrzucenie (proba 25.10).
+_tw = [{"claim": "A reviewer reports Gizmo 2.5 priced at $2.00/million input, half the price of Rival Max 4.",
+        "evidence": "Gizmo 2.5 is priced at $2.00/million input, half the price of Rival Max 4."},
+       {"claim": "An evaluator ranks Gizmo 2.5 fourth with a score of 55.", "evidence": "fourth, score of 55"}]
+sprawdz("wniosek i puenta bez nowego faktu nie blokuja notki",
+        not stages._zdanie_wnosi_fakt("Pay per use and that difference shows up on every bill.", _tw)
+        and not stages._zdanie_wnosi_fakt("The model did its homework; the brochure didn't.", _tw)
+        and not stages._zdanie_wnosi_fakt("Open AI has reached the front rank, and Gizmo 2.5 will prove it.", _tw))
+sprawdz("KONTRDOWOD: nowa liczba albo nowa nazwa dalej blokuje",
+        stages._zdanie_wnosi_fakt("It scored 71 on the index.", _tw)
+        and stages._zdanie_wnosi_fakt("Its comparison was Sonnet, not Opus.", _tw)
+        and stages._zdanie_wnosi_fakt("The best open model trails the front by 12 points.", _tw))
 print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))
 sys.exit(1 if oblane else 0)

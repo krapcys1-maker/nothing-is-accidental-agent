@@ -4127,6 +4127,46 @@ def _podobne_zdanie(zdanie: str, tekst: str) -> bool:
     return False
 
 
+_NIE_NAZWY = frozenset({"our", "we", "the", "a", "an", "this", "that", "it", "its", "if", "so", "but",
+                        "and", "or", "when", "then", "yes", "no", "meanwhile", "still", "until", "pay",
+                        "open-weight", "open", "ai", "i", "you", "your", "they", "their", "there", "here"})
+
+
+def _zdanie_wnosi_fakt(zdanie: str, twierdzenia: list[dict[str, Any]]) -> bool:
+    """Czy zgloszone przez sprawdzajacego zdanie wnosi TWARDY fakt spoza twierdzen kata:
+    liczbe, ktorej w nich nie ma, albo nazwe wlasna (slowo z wielkiej litery poza poczatkiem
+    zdania), ktorej w nich nie ma.
+
+    PROBA 25.10.2026 (trzy przebiegi notek na kopii): sprawdzajacy (Flash bez myslenia) zglaszal
+    nasze zdanie i wnioski — „The model did its homework; the brochure didn't.", „Pay per use and
+    that difference shows up on every bill.", a raz sam werdykt z pierwszego zdania — i notka
+    prowadzaca oraz werdykt wypadaly albo psula je poprawka. Prosba w prompcie tego nie
+    zatrzymala; zatrzymuje kod: zdanie bez nowej liczby i nowej nazwy to nasza opinia albo
+    wniosek z twierdzen — uwaga w logu, nie odrzucenie. Zmyslona liczba albo nazwa dalej odrzuca.
+    """
+    zrodla = " ".join("%s %s" % (c.get("claim") or "", c.get("evidence") or "")
+                      for c in twierdzenia or [] if isinstance(c, dict))
+    try:
+        import sledztwo as _s
+        if _s._liczby(zdanie) - _s._liczby(zrodla):
+            return True
+    except Exception:  # noqa: BLE001 — bez liczb z modulu zostaje kontrola nazw
+        if re.search(r"\d", zdanie) and not re.search(r"\d", zrodla):
+            return True
+    male_zrodla = zrodla.lower()
+    slowa = re.findall(r"[A-Za-z][\w.'’-]*", zdanie)
+    for i, sl in enumerate(slowa):
+        czyste = sl.strip(".'’-")
+        if i == 0 or not czyste or not czyste[0].isupper():
+            continue
+        rdzen = re.sub(r"['’]s$", "", czyste).lower()
+        if rdzen in _NIE_NAZWY or len(rdzen) < 2:
+            continue
+        if rdzen not in male_zrodla:
+            return True
+    return False
+
+
 @_na_kanal("notka")
 def wiernosc_notki(conn: sqlite3.Connection | None, run_id: int | None, tekst: str,
                    twierdzenia: list[dict[str, Any]]) -> dict[str, Any]:
@@ -4164,23 +4204,29 @@ def wiernosc_notki(conn: sqlite3.Connection | None, run_id: int | None, tekst: s
               % type(exc).__name__, flush=True)
         return {"wierna": None, "problemy": [], "nie_sprawdzone": True,
                 "powod": type(exc).__name__}
-    problemy = []
+    problemy, uwagi = [], []
     for p in ((dane.get("problems") if isinstance(dane, dict) else None) or []):
         if not isinstance(p, dict):
             continue
         zdanie = " ".join(str(p.get("sentence") or "").split())
         if not zdanie or not _podobne_zdanie(zdanie, str(tekst)):
             continue
-        problemy.append({"zdanie": zdanie[:300],
-                         "dlaczego": " ".join(str(p.get("why") or "").split())[:300],
-                         "twierdzenie": p.get("claim")})
+        wpis = {"zdanie": zdanie[:300], "dlaczego": " ".join(str(p.get("why") or "").split())[:300],
+                "twierdzenie": p.get("claim")}
+        if not _zdanie_wnosi_fakt(zdanie, tw):
+            uwagi.append(wpis)
+            continue
+        problemy.append(wpis)
     if isinstance(dane, dict) and dane.get("faithful") is False and not problemy:
         print("    [wiernosc] sprawdzajacy mowi „niewierna\", ale nie wskazal zdania z notki "
               "— traktuje jak wierna", flush=True)
+    for u in uwagi:
+        print("    [wiernosc] uwaga (bez nowej liczby ani nazwy — nasze zdanie, nie odrzucam): %s"
+              % u["zdanie"][:110], flush=True)
     if problemy:
         print("    [wiernosc] %d zdan niezgodnych z twierdzeniami kata: %s"
               % (len(problemy), problemy[0]["zdanie"][:90]), flush=True)
-    return {"wierna": not problemy, "problemy": problemy[:5], "nie_sprawdzone": False}
+    return {"wierna": not problemy, "problemy": problemy[:5], "uwagi": uwagi[:5], "nie_sprawdzone": False}
 
 
 def _problemy_bramki(conn, run_id, tekst: str, bramka, twierdzenia_kata,

@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **38 plików**, 52 028 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **38 plików**, 52 085 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -114,7 +114,7 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
 się testować bez przeglądarki i bez pieniędzy**. 213 zestawów
-testów, 5965 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+testów, 5970 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -190,7 +190,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-12491 wierszy, 227 funkcji na poziomie modułu, 0 klas
+12543 wierszy, 228 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -285,6 +285,7 @@ wiec nie da sie go rozjechac z kodem.
 | `nazwy_serii_w_tekscie(tekst, klucze)` | Klucze serii, ktorych nazwa pada w tekscie (bez wielkosci liter). |
 | `bramka_mysli(tekst, klucze)` | Reguly MYSL sprawdzane kodem (spec §5 „MYSL", §9 pkt 8). Pusta lista = OK. |
 | `_podobne_zdanie(zdanie, tekst)` *(wewn.)* | Czy zdanie wskazane przez sprawdzajacego naprawde stoi w notce. |
+| `_zdanie_wnosi_fakt(zdanie, twierdzenia)` *(wewn.)* | Czy zgloszone przez sprawdzajacego zdanie wnosi TWARDY fakt spoza twierdzen kata: |
 | `wiernosc_notki(conn, run_id, tekst, twierdzenia)` | Czy notka serii mowi to samo, co twierdzenia, na ktorych stoi (spec §6 „Verification chain" 6). |
 | `_problemy_bramki(conn, run_id, tekst, bramka, twierdzenia_kata, data)` *(wewn.)* | Najpierw darmowe reguly kodu; wiernosc (platna) tylko dla tekstu, ktory je przeszedl. |
 | `_przez_bramke_notki(conn, run_id, etap, prompt, data, bramka, twierdzenia_kata, wariant)` *(wewn.)* | Notka po regulach: przeszla, przeszla po JEDNEJ poprawce, albo `bramka_odrzucila`. |
@@ -888,7 +889,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `sledztwo.py` — śledztwo — wybór największej historii, rdzeń (sedno) i kąty serii z jednej tabeli KATY, uczciwy hak sprawdzany kodem, poziom tematu (liczba notek), bramka nowości i kolejka notek
 
-3143 wierszy, 131 funkcji na poziomie modułu, 0 klas
+3148 wierszy, 131 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
