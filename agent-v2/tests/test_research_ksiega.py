@@ -669,5 +669,25 @@ finally:
     llm.call, stages.fetch = _oryginal_call, _oryginal_fetch
 
 print()
+print("=== 15. PO RECENZJI 25.10.2026 ===")
+sprawdz("skrot z nazwy testu albo modelu to nie instytucja (SWE-bench, GPT-5, HN)",
+        research._instytucja("It scores 65.7% on SWE-bench Verified, the report shows") == ""
+        and research._instytucja("GPT-5 reached 80% on the test, the paper found") == ""
+        and research._instytucja("HN commenters said it costs 40% less") == "")
+sprawdz("KONTRDOWOD: znana instytucja ze skrotu dalej jest instytucja",
+        research._instytucja("The IMF estimated that 40% of jobs are exposed") == "IMF")
+sprawdz("adres, ktory nie jest napisem, daje pusty klucz zamiast wyjatku",
+        research.url_key(123) == "" and research.url_key(None) == "")
+_zasiane = [{"id": "Q%d" % i, "q": "Question %d?" % i, "waga": 3 if i > 10 else 1,
+             "status": "answered" if i in (11, 12) else "open", "odpowiedz": "x" if i in (11, 12) else ""}
+            for i in range(1, 16)]
+_zasiane += [{"id": "K%d" % i, "q": "Critic %d?" % i, "waga": 1} for i in range(1, 4)]
+with contextlib.redirect_stdout(io.StringIO()):
+    _wp = research._wpisy_z_pytan("Main question?", _zasiane)
+_ids = {w["id"] for w in _wp}
+sprawdz("sufit ksiegi nie wycina pytan z odpowiedzia (Q11, Q12 answered zostaja)",
+        len(_wp) <= research.MAKS_PYTAN_KSIEGI and {"Q11", "Q12", "K1", "K2", "K3"} <= _ids, sorted(_ids))
+
+print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))
 sys.exit(1 if oblane else 0)

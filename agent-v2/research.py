@@ -59,6 +59,10 @@ def _list(value):
 
 def url_key(url):
     """Keep meaningful query arguments and different documents on one host."""
+    # Recenzja 25.10.2026: `"url": 123` z modelu dawal AttributeError w urlsplit i
+    # `dokument()` lamal obietnice „nigdy nie podnosi wyjatku".
+    if not isinstance(url, str):
+        return ""
     try:
         p = urlsplit(url)
         host = (p.hostname or "").lower()
@@ -732,8 +736,14 @@ def _wpisy_z_pytan(question, pytania):
             w["q"].casefold() == glowne.casefold() for w in wpisy):
         wpisy.append(_wpis_ksiegi({"q": glowne, "soczewka": "MAIN", "waga": 2}, "Q0"))
     if len(wpisy) > MAKS_PYTAN_KSIEGI:
-        zostaja = set(sorted(range(len(wpisy)), key=lambda i: (wpisy[i]["waga"], i))
-                      [:MAKS_PYTAN_KSIEGI])
+        # Recenzja 25.10.2026: sufit cial po (waga, kolejnosc) i wyrzucal OPLACONE odpowiedzi
+        # wagi 3 z zasianej ksiegi. Odpowiedziane, czesciowe, not_yet i wpisy pochodne zostaja
+        # zawsze; tniemy tylko otwarte.
+        def _klucz_sufitu(i):
+            w = wpisy[i]
+            ma_odpowiedz = w.get("status") in ("answered", "partial", "not_yet") or w.get("pochodne")
+            return (not ma_odpowiedz, w["waga"], i)
+        zostaja = set(sorted(range(len(wpisy)), key=_klucz_sufitu)[:MAKS_PYTAN_KSIEGI])
         print("  [ksiega] %d pytan przy suficie %d — odpadaja: %s" % (
             len(wpisy), MAKS_PYTAN_KSIEGI,
             ", ".join(w["id"] for i, w in enumerate(wpisy) if i not in zostaja)), flush=True)
@@ -842,7 +852,12 @@ def _wywolaj_ksiege(conn, run_id, question, paczka, widok, stop_usd, dzis):
     except (OSError, ValueError, TypeError, KeyError):
         pass
     raw = _call(conn, run_id, "ksiega", prompt, stop_usd=stop_usd)
-    _write(path, {"created_at": datetime.now(timezone.utc).isoformat(), "raw": raw})
+    # PAMIEC TYLKO DLA ODPOWIEDZI, KTORA COS MOWI O TEJ PACZCE (recenzja 25.10.2026): poprawny
+    # JSON bez zadnego id paczki ({"questions": []}) trafial do pamieci i ponowny przebieg tego
+    # samego dnia dostawal go znowu bez wywolania — paczka padala drugi raz za darmo i na zawsze.
+    ids = {w["id"] for w in paczka}
+    if any(isinstance(q, dict) and str(q.get("id") or "").strip() in ids for q in _list(raw.get("questions"))):
+        _write(path, {"created_at": datetime.now(timezone.utc).isoformat(), "raw": raw})
     return raw
 
 
@@ -988,14 +1003,26 @@ _SKROTY_NIE_INSTYTUCJE = frozenset({
     "THE", "AND", "NEW", "LTD", "INC", "PLC", "LLC"})
 
 
+_SKROTY_INSTYTUCJI = frozenset({
+    "IMF", "BIS", "ECB", "SEC", "FTC", "FCC", "OECD", "IEA", "NIST", "WHO", "WTO", "FDA", "EPA",
+    "DOJ", "DOE", "DOD", "GAO", "CBO", "OMB", "CISA", "NSA", "ENISA", "ITU", "WIPO", "ISO", "CMA",
+    "ICO", "CNIL", "NHS", "UN", "NATO", "ESMA", "EBA", "FSB", "ASIC", "ACCC", "APRA", "RBA", "ASX",
+    "NYSE", "FERC", "NERC", "EIA", "BLS", "BEA", "ONS", "OFCOM", "FCA", "PRA", "CFTC", "FINRA",
+    "MAS", "SEBI", "RBI", "PBOC", "CAC", "MIIT", "METI", "IPCC", "UNESCO", "UNICEF", "ILO",
+    "WEF", "EIB", "ADB", "AIIB"})
+
+
 def _instytucja(cytat):
     m = _INSTYTUCJA.search(cytat)
     if m:
         # „The Bank of England" na poczatku zdania: rodzajnik nie jest czescia nazwy,
         # a z nim nazwa nie trafilaby w tytul raportu wsrod zrodel pierwotnych.
         return re.sub(r"^(?:The|A|An)\s+", "", " ".join(m.group(1).split()))
+    # Recenzja 25.10.2026: kazdy skrot spoza krotkiej listy wykluczen byl „instytucja" —
+    # „SWE" z SWE-bench, „GPT" z GPT-5, „HN" — i wpis „znajdz oryginal" zjadal rundy w kazdej
+    # premierze. Skrot liczy sie tylko z ogolnej listy instytucji publicznych i branzowych.
     for skrot in _SKROT.findall(cytat):
-        if skrot not in _SKROTY_NIE_INSTYTUCJE:
+        if skrot in _SKROTY_INSTYTUCJI:
             return skrot
     return ""
 

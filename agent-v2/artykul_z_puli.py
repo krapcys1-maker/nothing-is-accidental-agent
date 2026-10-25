@@ -498,7 +498,9 @@ def _przebieg(conn, run_id: int) -> int:
     # SLEDZTWO (27.09.2026) — osobna droga do tematu i do notek. Stoi PRZED odmowa
     # artykulu ponizej, bo sledztwo artykulu juz nie pisze (spec §9 pkt 1, patrz
     # `_przebieg_sledztwa`) — proba na kopii w trybie testu ma przez nie przejsc.
-    if "--sledztwo" in sys.argv:
+    # `--z-sledztwa` i `--historia` to flagi SLEDZTWA (recenzja 25.10.2026): bez `--sledztwo`
+    # przebieg szedl droga artykulu tygodnia — wznowienie katow konczyloby sie platnym pisarzem.
+    if any(f in sys.argv for f in ("--sledztwo", "--z-sledztwa", "--historia")):
         return _przebieg_sledztwa(conn, run_id)
 
     # ODMOWA ARTYKULU W TRYBIE TESTU — BEZWZGLEDNA (25.10.2026). Proba sledztwa na
@@ -1588,7 +1590,15 @@ def _katy_serii(conn, run_id, stan: dict, zegar: _Zegar, sledztwo, na_serio: boo
 
     # REKORD PRZED KOLEJKA, NA KAZDEJ SCIEZCE. Gdy na serie jest za malo, historia
     # i tak zostala zbadana i oplacona — bez rekordu jutro wrocilaby na nowo.
-    ok, braki, _ = _ocena_kandydata(stan, w_tescie=True)
+    # OCENA W OSLONIE (recenzja 25.10.2026): wyjatek tutaj, po oplaconym Opusie, konczyl
+    # przebieg ERROR-em, a katy nie trafialy do kolejki. Ocena kandydata to tylko znacznik.
+    try:
+        ok, braki, _ = _ocena_kandydata(stan, w_tescie=True)
+    except PRZERYWAJA:
+        raise
+    except Exception as exc:
+        ok, braki = False, ["ocena kandydata padla: %s" % type(exc).__name__]
+        print("  [artykul] ocena kandydata padla (%s) — katy ida dalej" % type(exc).__name__, flush=True)
     stan["artykul_kandydat"] = ok
     stan["artykul_kandydat_braki"] = braki
     _zapisz_rekord(stan, sledztwo, na_serio)
@@ -1790,7 +1800,7 @@ def _badanie_sledztwa(conn, run_id, stan: dict, zegar: _Zegar, sledztwo, na_seri
         if isinstance(c, dict) and c.get("text"):
             teksty_zrodel[str(c.get("url"))] = str(c.get("text"))
     for e in evidence:
-        if e.get("url"):
+        if isinstance(e, dict) and e.get("url"):
             teksty_zrodel.setdefault(str(e["url"]), " ".join(str(x) for x in e.get("excerpts") or []))
     try:
         nowe = sledztwo.nowosc(conn, run_id, card, wybrana, teksty_zrodel=teksty_zrodel)
@@ -1992,6 +2002,23 @@ def _rekordy_pierwotne(card: dict) -> int:
     return len(adresy - {""})
 
 
+def _wpis_ksiegi_kata(q, ksiega: dict) -> dict | None:
+    """Wpis ksiegi, na ktorym stoi kat. Model oddaje `q` jako id („Q3"), liste id,
+    „Q3: tekst" albo sam tekst pytania (recenzja 25.10.2026: lista dawala TypeError,
+    tekst — cichy brak dopasowania i zadnego kandydata na artykul)."""
+    kandydaci = q if isinstance(q, (list, tuple)) else [q]
+    for x in kandydaci:
+        tekst = " ".join(str(x or "").split())
+        for ident in re.findall(r"\b[QKO]\d+(?:-\d+)?\b", tekst):
+            if ident in ksiega:
+                return ksiega[ident]
+        if tekst:
+            for e in ksiega.values():
+                if " ".join(str(e.get("q") or "").split()).casefold() == tekst.casefold():
+                    return e
+    return None
+
+
 def _werdykt_z_dowodami(stan: dict) -> bool:
     """Kat-werdykt, ktorego dowody za i przeciw stoja w ksiedze (spec §5).
 
@@ -2005,7 +2032,7 @@ def _werdykt_z_dowodami(stan: dict) -> bool:
     for p in stan.get("katy") or []:
         if not isinstance(p, dict) or str(p.get("rodzaj") or "").upper() != "VERDICT":
             continue
-        wpis = ksiega.get(p.get("q"))
+        wpis = _wpis_ksiegi_kata(p.get("q"), ksiega)
         if not wpis or wpis.get("status") not in _STATUSY_Z_ODPOWIEDZIA or not wpis.get("zrodla"):
             continue
         adresy = {str(z.get("url")) for z in wpis.get("zrodla") or [] if isinstance(z, dict) and z.get("url")}
