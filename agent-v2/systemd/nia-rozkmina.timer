@@ -1,0 +1,11 @@
+[Unit]
+Description=Zegar rozkminy (codziennie; czestosc pilnuje kod: co 3 dni, kolejka do 8 katow)
+
+[Timer]
+# 14:40 UTC — po sledztwie (13:10) i poza godzinami szczytu DeepSeeka; rozkmina bierze swiezy korpus kanalow.
+OnCalendar=*-*-* 14:40:00
+Persistent=true
+RandomizedDelaySec=600
+
+[Install]
+WantedBy=timers.target

@@ -134,6 +134,13 @@ KARTA = {"working_thesis": "Q7 is open in name only for now", "main_mechanism": 
 
 # --- atrapy cudzych czesci ---------------------------------------------------------
 
+ROZKMINA_H = {"miejsce": 0, "tytul": "Risk gets disclosed, labour stays human", "naglowki": HISTORIA_A["naglowki"], "rozkmina": True,
+              "przeczucia": [{"mysl": "Two stories share a hidden incentive.", "pozycje": [1, 2]}],
+              "brief_rozkminy": {"title": "Risk gets disclosed", "question": "What would ground these hunches?",
+                                 "kind": "RUMINATION", "sub_questions": [], "broken_belief": ""},
+              "kategoria": "", "zapytanie": "", "klucze": [], "hak": "", "glebia": "", "serwisy": 3, "wynik_wyboru": 0.0}
+
+
 class AtrapaSledztwo(types.ModuleType):
     SLEDZTW_NA_TYDZIEN = 99
     ARTYKULOW_NA_TYDZIEN = 1
@@ -153,6 +160,7 @@ class AtrapaSledztwo(types.ModuleType):
         self.poziom = {"n_max": 5, "poziom": "L", "W": 7, "C": 12, "H": 5, "Pr": 2, "A": 9, "V": True,
                        "dolar": True, "powod": "atrapa"}
         self.katy = None
+        self.czeka, self.rozkmin_w_oknie, self.rozkmina_h = 0, 0, copy.deepcopy(ROZKMINA_H)
         self.pada = {}
         self.zly_kat = None
 
@@ -168,7 +176,14 @@ class AtrapaSledztwo(types.ModuleType):
         return len(self.oznaczone)
 
     def czekajace_przeslania(self):
-        return 0
+        return self.czeka
+
+    def ile_rozkmin(self, dni=3):
+        return self.rozkmin_w_oknie
+
+    def rozkmina_historia(self, korpus, conn=None, run_id=None):
+        zd("rozkmina_historia", n=len(korpus))
+        return copy.deepcopy(self.rozkmina_h)
 
     def popularne_hn(self, *a, **k):
         return []
@@ -1134,6 +1149,51 @@ _pobr = [u for f in zdarzenia("fetch") for u in f["urls"]]
 sprawdz("pościg: do pobrania idzie PDF pracy, nie streszczenie arXiv",
         "https://arxiv.org/pdf/2602.01450" in _pobr and "https://arxiv.org/abs/2602.01450" not in _pobr, _pobr)
 config.SLEDZTWO_TRYB = "gleboko"
+del SLEDZTWO.seria_lekka
+
+print()
+print("=== 13. ROZKMINA (--rozkmina): swobodne myslenie przez kilka historii ===")
+SLEDZTWO.seria_lekka = _seria_lekka
+zeruj()
+SERIA_L[0] = SERIA
+kod, log, RR, exc = uruchom(["--rozkmina", "--wyslij"])
+sprawdz("rozkmina: kod 0, bez wyjatku, ZADNEGO pisarza artykulu", kod == 0 and exc is None and not NAPISANE, (kod, exc, log[-600:]))
+sprawdz("rozkmina: kolejnosc przeczucia -> zrodla -> klasyfikacja -> dogrywka -> karta -> seria -> REKORD -> kolejka",
+        gdzie("rozkmina_historia") < gdzie("fetch") < gdzie("classify") < gdzie("deepen") < gdzie("synthesis")
+        < gdzie("seria_lekka") < gdzie("zapisz_sledztwo") < gdzie("dodaj_do_kolejki"), nazwy())
+sprawdz("rozkmina: bez brief-u z modelu `wybor`, bez glosow z HN i cennika, bez poscigu za dokumentem pierwotnym",
+        not (set(nazwy()) & {"llm:wybor", "glosy_hn", "cennik", "dokument", "llm:dokumenty_lekkie", "plan", "krytyk"}), nazwy())
+_kl = (zdarzenia("classify") or [{}])[0]
+sprawdz("rozkmina: pytanie badawcze to pytanie z przeczuc + polecenie szukania faktow ZA I PRZECIW",
+        "What would ground these hunches?" in str(_kl.get("question")) and "AND the facts that would contradict" in str(_kl.get("question")),
+        str(_kl.get("question"))[:300])
+_sl = (zdarzenia("seria_lekka") or [{}])[0]
+sprawdz("rozkmina: seria dostaje typ „rozkmina”", _sl.get("typ") == "rozkmina", _sl)
+_stl = stan_z_dysku(RR)
+sprawdz("rozkmina: stan zna tryb i typ; rekord niesie `rozkmina` (czestosc), kolejka dostaje serie",
+        _stl.get("typ") == "rozkmina" and SLEDZTWO.rekordy and SLEDZTWO.rekordy[0].get("rozkmina") is True
+        and len(SLEDZTWO.kolejka) == 3, (_stl.get("typ"), SLEDZTWO.rekordy, SLEDZTWO.kolejka))
+
+zeruj()
+SLEDZTWO.rozkmin_w_oknie = 1
+kod, log, _, exc = uruchom(["--rozkmina", "--wyslij"])
+sprawdz("czestosc: rozkmina byla w ostatnich 3 dniach -> kod 1, zero etapow", kod == 1 and not zdarzenia("rozkmina_historia"), (kod, nazwy()))
+kod, log, _, exc = uruchom(["--rozkmina", "--wyslij", "--mimo-limitu"])
+sprawdz("KONTRDOWOD: --mimo-limitu omija czestosc", kod == 0 and zdarzenia("rozkmina_historia"), (kod, nazwy()))
+zeruj()
+SLEDZTWO.czeka = config.ROZKMINA_MAX_KOLEJKA
+kod, log, _, exc = uruchom(["--rozkmina", "--wyslij"])
+sprawdz("kolejka pelna (>= prog) -> kod 1, zero etapow", kod == 1 and not zdarzenia("rozkmina_historia"), (kod, nazwy()))
+zeruj()
+SLEDZTWO.rozkmina_h = None
+kod, log, _, exc = uruchom(["--rozkmina", "--wyslij"])
+sprawdz("nic nie sklonilo do myslenia -> kod 1, bez zrodel, rekordu i kolejki",
+        kod == 1 and not zdarzenia("fetch") and not SLEDZTWO.rekordy and not SLEDZTWO.kolejka and "nic nie sklonilo" in log,
+        (kod, nazwy(), log[-300:]))
+zeruj()
+kod, log, _, exc = uruchom(["--rozkmina"])
+sprawdz("bez --wyslij: seria jest, ale ani rekord, ani kolejka", kod == 0 and zdarzenia("seria_lekka")
+        and not SLEDZTWO.rekordy and not SLEDZTWO.kolejka, (kod, nazwy()))
 del SLEDZTWO.seria_lekka
 
 llm.call = _prawdziwy_llm

@@ -1,0 +1,17 @@
+[Unit]
+Description=Nothing Is Accidental — rozkmina: swobodne myslenie przez kilka historii naraz
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=/home/ubuntu/nothing-is-accidental-agent
+Environment=AGENT_V2_SERVER=1
+Environment=PYTHONUNBUFFERED=1
+# ROZKMINA (26.10.2026) — patrz `sledztwo.rozkmina_historia`: Flash czyta naglowki calego korpusu, wybiera
+# przeczucia (polaczenia i napiecia miedzy roznymi historiami), badanie w sieci je uziemia lub sprawdza, a seria
+# jest swobodnym myśleniem, ktore moze sie mylic. Czestosc pilnuje kod (co 3 dni, kolejka do 8 katow).
+ExecStart=/home/ubuntu/nothing-is-accidental-agent/.venv/bin/python agent-v2/artykul_z_puli.py --rozkmina --wyslij
+MemoryMax=3G
+TimeoutStartSec=5400

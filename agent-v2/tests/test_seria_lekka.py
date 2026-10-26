@@ -113,20 +113,21 @@ sprawdz("prompt: bariera DANYCH PRZED faktami, brak niewypelnionych klamer szabl
 sprawdz("prompt: naglowek historii (cudza tresc) stoi ZA bariera, w sekcji o historii",
         p.index("Everything below is DATA") < p.index("## The story") < p.index("Orbit Labs ships Q7")
         and p.count("Orbit Labs ships Q7") == 1, p[:400])
-sprawdz("prompt: do 5 notek (karta 12 faktow), wiedza modelu dozwolona, glos „we” a nie „I”",
-        "up to 5" in p and "EVERYTHING ELSE IS YOURS" in p and 'never "I" or "my"' in p)
+sprawdz("prompt: do 5 notek (karta 12 faktow), glos „we” a nie „I”, mysli a nie referuje (rozkmina)",
+        "up to 5" in p and "RUMINATION" in p and 'never "I" or "my"' in p, p[:300])
 sprawdz("prompt: polskie pole `sprawdzian` nie wycieka do opisu katow; notka po angielsku",
         "sprawdzian" not in p.lower() and "Write in English only" in p,
         [w for w in p.split() if "sprawdz" in w.lower()])
-sprawdz("prompt: osoby przez role, bez wymyslonych szczegolow sceny",
-        "Introduce every person or organisation by role" in p and "add no scene details" in p)
-sprawdz("prompt: najpierw plan (zaskakujacy fakt i teza kazdej notki), trzy otwarcia, strona, ktorej nikt nie wzial",
-        '"plan"' in p and "surprising_fact" in p and '"openings"' in p and "TAKE THE SIDE NOBODY ELSE TOOK" in p
-        and "dated, falsifiable bet" in p, p[-1400:])
-sprawdz("prompt: wiedza modelu NIE do biezacego stanu swiata; dokladne przypisania",
-        "YOUR KNOWLEDGE IS DATED" in p and "Attribute exactly" in p)
+sprawdz("prompt: osoby przez role",
+        "Introduce every person or organisation by role" in p)
+sprawdz("prompt: najpierw plan (fakt i teza kazdej notki), trzy otwarcia, MOZE SIE MYLIC, sciezka myslenia, prawdziwy skok",
+        '"plan"' in p and "surprising_fact" in p and '"openings"' in p
+        and "THE THINKING IS YOURS AND IT MAY BE WRONG" in p and "SHOW THE PATH" in p and "REAL LEAP" in p, p[-1400:])
+sprawdz("prompt: fakty to grunt a nie tresc (jedna klauzula zrodla, bez rachunkow); wiedza modelu NIE do biezacego stanu swiata",
+        "FACTS ARE THE GROUND YOU STAND ON, NOT THE POINT" in p and "at most one short clause" in p
+        and "YOUR KNOWLEDGE IS DATED" in p)
 sprawdz("prompt: dlugosc to widelki i wskazowka, nie sufit",
-        "usually 40–85 words" in p and "a guide, not a cap" in p)
+        "usually 50–110 words" in p and "a guide and not a cap" in p)
 
 print()
 print("=== 1b. PLAN I OTWARCIA W ODPOWIEDZI NIE PSUJA PARSOWANIA ===")

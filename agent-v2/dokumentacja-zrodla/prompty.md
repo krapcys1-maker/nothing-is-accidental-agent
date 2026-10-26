@@ -376,7 +376,7 @@
 **Kontrakt wyjścia:**
 
 ```json
-{{"plan": [{{"surprising_fact": <fact number>, "point": "<the one point of this note, one sentence>"}}], "notki": [{{"rodzaj": "<one angle tag from the list>", "openings": ["<candidate 1>", "<candidate 2>", "<candidate 3>"], "tekst": "<the finished note>", "fakty": [<numbers of the facts it uses>], "wiedza": ["<each background claim from your own knowledge that the note relies on>"]}}]}}
+{{"plan": [{{"surprising_fact": <fact number>, "point": "<the one thought of this note, one sentence>"}}], "notki": [{{"rodzaj": "<one angle tag from the list>", "openings": ["<candidate 1>", "<candidate 2>", "<candidate 3>"], "tekst": "<the finished note>", "fakty": [<numbers of the facts it uses>], "wiedza": ["<each background claim from your own knowledge that the note relies on>"]}}]}}
 ```
 
 #### `seria_redakcja.md` (13 wierszy)
