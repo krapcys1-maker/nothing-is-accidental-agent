@@ -6031,7 +6031,11 @@ TEKST_MYSLI_BEZ_CYTATU = (
     "Do NOT quote, cite, or state any of them as fact — you have "
     "no evidence card and this type is not allowed to make "
     "checkable claims. Use them only so your thought is about "
-    "something current.")
+    "something current. Do not describe ANY specific event, "
+    "leak, report, study, document, launch or company action as "
+    "having happened — not even unnamed (\"a leaked handbook\", "
+    "\"a recent study\", \"one company just\"). Reason about the "
+    "general pattern with \"when\" and \"if\", or ask the question.")
 
 
 def material_mysli() -> tuple[dict[str, Any], list[str]]:

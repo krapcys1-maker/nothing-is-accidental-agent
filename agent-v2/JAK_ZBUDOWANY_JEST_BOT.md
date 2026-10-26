@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **38 plików**, 52 710 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **38 plików**, 52 714 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -190,7 +190,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-12650 wierszy, 233 funkcji na poziomie modułu, 0 klas
+12654 wierszy, 233 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
