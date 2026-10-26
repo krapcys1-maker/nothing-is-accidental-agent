@@ -446,7 +446,7 @@ MODEL_FOR = {
     # Lekki tor: Flash nazywa najwyzej dwa dokumenty pierwotne, na ktorych stoi historia.
     "dokumenty_lekkie": DEEPSEEK,
     # HORYZONT: jedno wywolanie Flasha wybiera okno katalizatorow z naglowkow wielu historii.
-    "horyzont_wybor": DEEPSEEK,
+    "rozkmina_wybor": DEEPSEEK,
     # KATEGORIA HISTORII PRZY WYBORZE SLEDZTWA (25.10.2026, `sledztwo.wybierz_historie`):
     # jedno krotkie wywolanie na kilka-kilkanascie naglowkow, ulamek centa.
     "kategoria_historii": DEEPSEEK,
@@ -605,7 +605,7 @@ DEEPSEEK_MYSLENIE: dict[str, dict[str, str]] = {
     "seria_lekka_zapas": {"type": "enabled"},
     "seria_redakcja": {"type": "enabled"},
     "dokumenty_lekkie": {"type": "disabled"},
-    "horyzont_wybor": {"type": "enabled"},
+    "rozkmina_wybor": {"type": "enabled"},
     "kategoria_historii": {"type": "disabled"},
     "wielkie_historie": {"type": "disabled"},
     # SLEDZTWO — FALA 1 (25.10.2026, kontrakt). Zapasy Sonneta MYSLA, bo zastepuja
@@ -1824,7 +1824,7 @@ MAX_TOKENS = {
     "seria_lekka_zapas": 8000,
     "seria_redakcja": 6000,
     "dokumenty_lekkie": 3000,
-    "horyzont_wybor": 6000,
+    "rozkmina_wybor": 6000,
     "kategoria_historii": 3000,
     "wielkie_historie": 4000,
     "pytania_ciekawosci": 8000,
@@ -1939,10 +1939,10 @@ def zakres_slow(forma: str | None) -> tuple[int, int]:
 SLEDZTWO_TRYB = "lekkie"
 
 
-# HORYZONT (26.10.2026): przekrojowa seria o oknie dat z roznych historii. Co ile dni najwyzej i przy jakiej
-# kolejce wolno ja zaczac (kolejka notek nie moze sie rozlewac: horyzont dokleja 3-5 wpisow).
-HORYZONT_CO_DNI = 3
-HORYZONT_MAX_KOLEJKA = 8
+# ROZKMINA (26.10.2026): przekrojowa seria o oknie dat z roznych historii. Co ile dni najwyzej i przy jakiej
+# kolejce wolno ja zaczac (kolejka notek nie moze sie rozlewac: rozkmina dokleja 3-5 wpisow).
+ROZKMINA_CO_DNI = 3
+ROZKMINA_MAX_KOLEJKA = 8
 
 
 def dzisiaj():
@@ -1953,8 +1953,8 @@ def dzisiaj():
 
 def opis_typu_historii(typ):
     """Rodzaj historii w prompcie serii lekkiej — NASZA stala (kotwica zaufania), nie tresc zrodel."""
-    if typ == "horyzont":
-        return "a cross-story window of dated events and the incentives around them"
+    if typ == "rozkmina":
+        return "Today we are thinking, not reporting: this piece connects several stories and says what we make of them"
     return "a new AI model or product" if typ == "premiera" else "an AI news story"
 
 

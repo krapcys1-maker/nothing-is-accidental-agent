@@ -158,9 +158,9 @@ def prompt_serii_lekkiej(tytul: str, fakty: str, nieustalone: str, ostatnie: str
                          typ: str = "sledztwo", n_max: int = 5) -> str:
     """Prompt serii lekkiej (`sledztwo.seria_lekka`). Naglowek historii, fakty, nieustalone i ostatnie
     notki to CUDZA tresc i stoja za bariera; rodzaj historii, liczba notek i tabela katow sa nasze."""
-    if typ == "horyzont":
+    if typ == "rozkmina":
         return _prompt(
-            "horyzont_seria.md", tytul=tytul, fakty=fakty, nieustalone=nieustalone, ostatnie=ostatnie,
+            "rozkmina_seria.md", tytul=tytul, fakty=fakty, nieustalone=nieustalone, ostatnie=ostatnie,
             typ_historii=config.opis_typu_historii(typ), n_max=config.liczba_notek_serii(n_max),
             katy=_katy_serii_opis())
     return _prompt(
@@ -169,10 +169,10 @@ def prompt_serii_lekkiej(tytul: str, fakty: str, nieustalone: str, ostatnie: str
         katy=_katy_serii_opis())
 
 
-def prompt_horyzontu(pozycje: str) -> str:
-    """Prompt wyboru okna katalizatorow (`sledztwo.horyzont_historia`). Naglowki z kanalow to CUDZA tresc
+def prompt_rozkminy(pozycje: str) -> str:
+    """Prompt wyboru okna katalizatorow (`sledztwo.rozkmina_historia`). Naglowki z kanalow to CUDZA tresc
     i stoja za bariera; dzisiejsza data jest nasza."""
-    return _prompt("horyzont_wybor.md", dzis=config.dzisiaj(), pozycje=pozycje)
+    return _prompt("rozkmina_wybor.md", dzis=config.dzisiaj(), pozycje=pozycje)
 
 
 def prompt_dokumentow_lekkich(tytul: str, pytanie: str, zrodla: str) -> str:

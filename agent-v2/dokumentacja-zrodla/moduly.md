@@ -56,7 +56,7 @@
 | `_prompt(name, **fields)` *(wewn.)* | Render a task prompt and prepend the shared public voice once. |
 | `_katy_serii_opis()` *(wewn.)* | Tabela katow dla serii lekkiej — NASZ tekst (stala `sledztwo.KATY`), bez argumentow. |
 | `prompt_serii_lekkiej(tytul, fakty, nieustalone, ostatnie, typ, n_max)` | Prompt serii lekkiej (`sledztwo.seria_lekka`). Naglowek historii, fakty, nieustalone i ostatnie |
-| `prompt_horyzontu(pozycje)` | Prompt wyboru okna katalizatorow (`sledztwo.horyzont_historia`). Naglowki z kanalow to CUDZA tresc |
+| `prompt_rozkminy(pozycje)` | Prompt wyboru okna katalizatorow (`sledztwo.rozkmina_historia`). Naglowki z kanalow to CUDZA tresc |
 | `prompt_dokumentow_lekkich(tytul, pytanie, zrodla)` | Prompt nazywania dokumentow pierwotnych w lekkim torze. Naglowek, pytanie i wycinki zrodel to |
 | `prompt_redakcji_serii(notki)` | Prompt redaktora serii lekkiej (`sledztwo._bez_powtorek`). Notki to tekst napisany z cudzych |
 | `pamiec_glosu(prompt)` | Kilka potwierdzonych wypowiedzi do unikania powtorek, bez wywolan API. |
@@ -758,7 +758,7 @@
 
 ### `sledztwo.py` — śledztwo — wybór największej historii, rdzeń (sedno) i kąty serii z jednej tabeli KATY, uczciwy hak sprawdzany kodem, poziom tematu (liczba notek), bramka nowości i kolejka notek
 
-3426 wierszy, 139 funkcji na poziomie modułu, 0 klas
+3424 wierszy, 140 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -874,9 +874,10 @@
 | `ile_notek_lekko(card)` | Ile notek uniesie temat: z bogactwa karty, nie z reguly o poziomach. Malo faktow -> 2-3 notki. |
 | `_fakty_do_promptu(card)` *(wewn.)* | — |
 | `_ostatnie_do_promptu(ile)` *(wewn.)* | — |
-| `ile_horyzontow(dni)` | Ile serii horyzontu w oknie (rekord niesie `horyzont: true`). |
-| `horyzont_historia(korpus, conn, run_id)` | Pseudo-historia z okna katalizatorow albo None, gdy zadnego okna nie ma. Nigdy nie podnosi wyjatku |
+| `ile_rozkmin(dni)` | Ile serii rozkminy w oknie (rekord niesie `rozkmina: true`). |
+| `rozkmina_historia(korpus, conn, run_id)` | Pseudo-historia z przeczuc albo None, gdy nic nie skloniło do myslenia. Nigdy nie podnosi wyjatku poza |
 | `_bez_powtorek(conn, run_id, notki)` *(wewn.)* | Jedno tanie wywolanie redaktora: notki, ktore powtarzaja teze innej, odpadaja (nigdy pierwsza, |
+| `_tytul_do_serii(h)` *(wewn.)* | Tytul historii dla promptu serii; przy rozkminie dochodza NASZE przeczucia (nie fakty) jako ziarna. |
 | `seria_lekka(conn, run_id, card, h, typ, ile)` | Seria notek JEDNYM wywolaniem: [{rodzaj, tekst, wniosek, fakty, wiedza, lead, ...}] — gotowe teksty |
 | `zapisz_sledztwo(rekord)` | Jedna linia na sledztwo — pamiec dla bramki i limitow. Nigdy nie wywala. |
 | `oznacz_artykul(run_id)` | Artykul ze sledztwa z tego przebiegu wyszedl — liczy sie do limitu tygodnia. |
@@ -1238,7 +1239,7 @@
 
 ### `artykul_z_puli.py` — artykuł bierze temat z tej samej puli, co notki
 
-3515 wierszy, 67 funkcji na poziomie modułu, 1 klas
+3514 wierszy, 67 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -1289,7 +1290,7 @@
 | `_po_awarii(stan, sledztwo, na_serio, exc)` *(wewn.)* | Wyjatek w srodku sledztwa: stan, raport i — po oplaconym planie — rekord. |
 | `_nowy_stan(conn, run_id, na_serio)` *(wewn.)* | — |
 | `_przebieg_sledztwa(conn, run_id)` *(wewn.)* | Sledztwo: wybor historii -> brief -> zrodla historii (PRZED planem) -> plan |
-| `_przebieg_horyzontu(conn, run_id)` *(wewn.)* | HORYZONT (26.10.2026): okno katalizatorow z roznych historii -> lekki tor -> seria przekrojowa -> kolejka. |
+| `_przebieg_rozkminy(conn, run_id)` *(wewn.)* | ROZKMINA (26.10.2026): okno katalizatorow z roznych historii -> lekki tor -> seria przekrojowa -> kolejka. |
 | `_wznow_sledztwo(conn, run_id, rid_tekst)` *(wewn.)* | `--z-sledztwa <run_id>`: zapisany stan -> etapy 15-17 (poziom, katy, rekord, |
 | `_kat_analizy(sledztwo, rodzaj)` *(wewn.)* | — |
 | `_rekordy_pierwotne(card)` *(wewn.)* | Ile roznych zrodel PRIMARY albo INDEPENDENT stoi za potwierdzonymi |

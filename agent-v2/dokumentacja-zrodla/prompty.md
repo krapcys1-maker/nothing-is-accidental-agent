@@ -111,26 +111,6 @@
 {{"subject": "<the scene, in one line>", "why_this_scene": "<one sentence tying it to the article's mechanism>", "prompt": "<the full image prompt: your scene sentence and its concrete detail first, then the style block below copied word for word>"}}
 ```
 
-#### `horyzont_seria.md` (45 wierszy)
-
-**Pola wejściowe:** `fakty`, `katy`, `marka`, `n_max`, `nieustalone`, `ostatnie`, `typ_historii`, `tytul`
-
-**Kontrakt wyjścia:**
-
-```json
-{{"plan": [{{"surprising_fact": <fact number>, "point": "<the one conjecture of this note, one sentence>"}}], "notki": [{{"rodzaj": "<one angle tag from the list>", "openings": ["<candidate 1>", "<candidate 2>", "<candidate 3>"], "tekst": "<the finished note>", "fakty": [<numbers of the facts it uses>], "wiedza": ["<each background claim from your own knowledge that the note relies on>"]}}]}}
-```
-
-#### `horyzont_wybor.md` (21 wierszy)
-
-**Pola wejściowe:** `dzis`, `marka`, `pozycje`
-
-**Kontrakt wyjścia:**
-
-```json
-{{"tytul": "<a working title for the window, plain words, max 14 words>", "pytanie": "<one research question: what is scheduled in the next weeks, who has a reason to move before or after it, and what do the confirmed sources say?>", "katalizatory": [{{"co": "<the event, one sentence>", "kiedy": "<date or window as stated, or 'date not stated'>", "status": "<confirmed | reported | rumoured>", "pozycje": [<item numbers>]}}], "tlo": [<item numbers>]}}
-```
-
 #### `klasyfikacja.md` (58 wierszy)
 
 **Pola wejściowe:** `max_excerpt_chars`, `max_excerpts`, `publisher`, `question`, `text`, `title`, `url`
@@ -367,6 +347,26 @@
 
 ```json
 {{"w_prostych_slowach": "<plain explanation>", "skala": "<comparison in the material, or empty>", "pytania": [{{"pytanie": "<question>", "odpowiedz": "<answer, inference or unknown>", "z_dowodu": true|false}}], "jesli_sie_utrzyma": "<supported or conditional implications, with the steps explained>", "gdzie_by_peklo": "<specific limitation, or empty>", "co_o_tym_sadze": "<judgment and reason, or what prevents one>", "czego_nie_wiadomo": ["<unanswered question>"]}}
+```
+
+#### `rozkmina_seria.md` (47 wierszy)
+
+**Pola wejściowe:** `fakty`, `katy`, `marka`, `n_max`, `nieustalone`, `ostatnie`, `typ_historii`, `tytul`
+
+**Kontrakt wyjścia:**
+
+```json
+{{"plan": [{{"surprising_fact": <fact number>, "point": "<the one thought of this note, one sentence>"}}], "notki": [{{"rodzaj": "<one angle tag from the list>", "openings": ["<candidate 1>", "<candidate 2>", "<candidate 3>"], "tekst": "<the finished note>", "fakty": [<numbers of the facts it uses>], "wiedza": ["<each background claim from your own knowledge that the note relies on>"]}}]}}
+```
+
+#### `rozkmina_wybor.md` (20 wierszy)
+
+**Pola wejściowe:** `dzis`, `marka`, `pozycje`
+
+**Kontrakt wyjścia:**
+
+```json
+{{"tytul": "<a working title for the thought, plain words, max 14 words>", "pytanie": "<one research question: what facts would we need to ground or test these hunches?>", "przeczucia": [{{"mysl": "<the hunch, one sentence, as our guess>", "pozycje": [<item numbers>]}}]}}
 ```
 
 #### `seria_lekka.md` (47 wierszy)

@@ -148,8 +148,8 @@
 | `NOTE_MIN_WORDS_DLUGA` | `120` | DLUGA NOTKA — OKNO OSOBNE, BO SUFIT 64 SLOW MA ZMIERZONY KOSZT. Sufit wyzej optymalizuje ZAANGAZOWANIE i ma zrodlo. Nie optymalizuje ZROZUMI |
 | `NOTE_MAX_WORDS_DLUGA` | `200` | — |
 | `SLEDZTWO_TRYB` | `"lekkie"` | Ilu kandydatow generujemy. Dawniej bylo pieciu, potem trzech; dodatkowe warianty tego samego zdania niczego nie dokladaly, a placilismy za n |
-| `HORYZONT_CO_DNI` | `3` | HORYZONT (26.10.2026): przekrojowa seria o oknie dat z roznych historii. Co ile dni najwyzej i przy jakiej kolejce wolno ja zaczac (kolejka  |
-| `HORYZONT_MAX_KOLEJKA` | `8` | — |
+| `ROZKMINA_CO_DNI` | `3` | ROZKMINA (26.10.2026): przekrojowa seria o oknie dat z roznych historii. Co ile dni najwyzej i przy jakiej kolejce wolno ja zaczac (kolejka  |
+| `ROZKMINA_MAX_KOLEJKA` | `8` | — |
 | `NOTE_CANDIDATES` | `1` | — |
 | `DZIEDZINY_CIEKAWOSTEK` | `( # --- co te systemy realnie robia i jak sa` | Ile ciekawostek szukamy naraz. Cztery z pięciu notek dziennie stoją na nich, a jedno szukanie kosztuje tyle co jedno — więc bierzemy zapas n |
 | `ILE_DZIEDZIN_NA_PRZEBIEG` | `5` | — |
