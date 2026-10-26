@@ -288,7 +288,7 @@
 
 ### `browser.py` — cała styczność z Substackiem; nie woła modelu
 
-6040 wierszy, 117 funkcji na poziomie modułu, 0 klas
+6088 wierszy, 119 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -385,6 +385,8 @@
 | `nieudane_odpowiedzi_pod_artykulem(komentarz_id, gdzie, komu)` | Ile razy obecna metoda NIE odpisala na ten komentarz pod artykulem. Bez sieci. |
 | `wystaw_odpowiedz_pod_artykulem(url_artykulu, autor, tekst, wyslij, kontekst)` | Odpowiada pod KONKRETNYM komentarzem pod naszym artykułem. |
 | `potwierdz_artykul(page, tytul)` | Pyta Substacka, czy artykuł naprawdę jest opublikowany. |
+| `_przyciski_okna(page)` *(wewn.)* | (napis, element) widocznych przyciskow okna ustawien. |
+| `wylacz_wykrywanie_ai_artykulu(page)` | Klika w oknie ustawien artykulu przelacznik wykrywania AI (ustawienie platformy, sterowane przez autora). |
 | `wystaw_artykul(sciezka_md, sciezka_png, wyslij)` | Wystawia artykuł na Substacku. Domyślnie WYPEŁNIA i NIE WYSYŁA. |
 | `_watek_z_paginacja(page, nid, stron)` *(wewn.)* | Caly watek notki — ze WSZYSTKICH stron, nie tylko z pierwszej. |
 | `potwierdz_odpowiedz(page, note_id, tekst)` | Pyta Substacka, czy nasza odpowiedź naprawdę jest w wątku — i KTORA. |

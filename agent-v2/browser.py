@@ -4439,6 +4439,60 @@ def potwierdz_artykul(page, tytul: str) -> bool:
     return any(probka in plaski(x.get("title") or "") and x.get("post_date")
                for x in lista if isinstance(x, dict))
 
+# Napisy przycisku w oknie ustawien artykulu („Text Analysis”). Substack zmienil „Turn off AI detection” na
+# „Disable AI detection” i kod, szukajacy starego napisu, po cichu przestal dzialac (artykul 0496, 25.10.2026).
+# Dopasowanie po wzorcu, wiec kolejna zmiana slowa („Turn off” / „Disable” / po polsku) nie wylaczy go znowu.
+WZORZEC_WYLACZ_WYKRYWANIE = re.compile(
+    r"^(disable|turn off|wy[łl][ąa]cz)\b.*\b(detection|wykrywanie)", re.I)
+WZORZEC_WLACZ_WYKRYWANIE = re.compile(
+    r"^(re-?enable|enable|turn on|w[łl][ąa]cz)\b.*\b(detection|wykrywanie)", re.I)
+
+
+def _przyciski_okna(page) -> list[tuple[str, Any]]:
+    """(napis, element) widocznych przyciskow okna ustawien."""
+    out = []
+    for el in page.query_selector_all("button"):
+        try:
+            if not el.is_visible():
+                continue
+            t = " ".join((el.inner_text() or "").split())
+        except Exception:
+            continue
+        if t and len(t) <= 60:
+            out.append((t, el))
+    return out
+
+
+def wylacz_wykrywanie_ai_artykulu(page) -> bool:
+    """Klika w oknie ustawien artykulu przelacznik wykrywania AI (ustawienie platformy, sterowane przez autora).
+
+    SPRAWDZA WYNIK, NIE MELDUJE GO: po udanym wylaczeniu przycisk „Disable AI detection” znika albo zmienia sie
+    w „Re-enable AI detection”. Gdy przycisku nie ma albo nic sie nie zmienilo, GLOSNE ostrzezenie w logu —
+    cicha porazka trwala tu od zmiany napisu przez Substack. Nigdy nie rzuca: publikacja idzie dalej."""
+    try:
+        cel = next((el for t, el in _przyciski_okna(page) if WZORZEC_WYLACZ_WYKRYWANIE.search(t)), None)
+        if cel is None:
+            if any(WZORZEC_WLACZ_WYKRYWANIE.search(t) for t, _ in _przyciski_okna(page)):
+                print("  wykrywanie AI juz wylaczone dla tego posta", flush=True)
+                return True
+            print("  UWAGA: nie ma przycisku wylaczania wykrywania AI (Substack zmienil okno?) — artykul wyjdzie"
+                  " z plakietka; przyciski okna: %s" % [t for t, _ in _przyciski_okna(page)][:25], flush=True)
+            return False
+        cel.click(timeout=5000)
+        page.wait_for_timeout(2500)
+        po = [t for t, _ in _przyciski_okna(page)]
+        if any(WZORZEC_WLACZ_WYKRYWANIE.search(t) for t in po) or not any(WZORZEC_WYLACZ_WYKRYWANIE.search(t) for t in po):
+            print("  wykrywanie AI wyłączone dla tego posta (sprawdzone: przycisk zmienil sie / zniknal)", flush=True)
+            return True
+        print("  UWAGA: klikniecie nie wylaczylo wykrywania AI (przycisk nadal ten sam) — artykul wyjdzie z plakietka",
+              flush=True)
+        return False
+    except Exception as exc:
+        print("  UWAGA: wylaczanie wykrywania AI padlo (%s: %s) — publikacja idzie dalej"
+              % (type(exc).__name__, str(exc)[:100]), flush=True)
+        return False
+
+
 def wystaw_artykul(
     sciezka_md: Path, sciezka_png: Path | None = None, wyslij: bool = False,
 ) -> dict[str, Any]:
@@ -4483,13 +4537,7 @@ def wystaw_artykul(
         page.wait_for_timeout(8000)
 
         if config.WYLACZ_WYKRYWANIE_AI:
-            for nazwa in ("Wyłącz wykrywanie AI", "Turn off AI detection"):
-                k = page.get_by_role("button", name=nazwa).first
-                if k.count() > 0 and k.is_visible():
-                    k.click()
-                    page.wait_for_timeout(2500)
-                    print("  wykrywanie AI wyłączone dla tego posta", flush=True)
-                    break
+            wynik["wykrywanie_ai_wylaczone"] = wylacz_wykrywanie_ai_artykulu(page)
 
         publikuj = None
         for nazwa in ("Wyślij teraz do wszystkich", "Send to everyone now",
