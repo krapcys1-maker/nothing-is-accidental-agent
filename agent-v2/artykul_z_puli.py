@@ -1853,7 +1853,9 @@ PYTANIE_SZEROKIE = (
     "\n\nCollect what a sharp editor needs to write about this: exactly what happened (numbers, dates, who "
     "said or did what); the documents and independent measurements behind it; what people who used, tested "
     "or were affected by it say; what it costs and who pays; and anything that contradicts or complicates "
-    "the headline.")
+    "the headline. Where a news report describes a study, filing, advisory or announcement, take the "
+    "document's own wording over the report's paraphrase, and always record WHO produced each label, "
+    "score or annotation (the system itself, the researchers, a judge model, a vendor).")
 
 
 MAKS_DOKUMENTOW_LEKKICH = 2
