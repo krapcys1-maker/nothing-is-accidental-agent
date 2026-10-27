@@ -210,6 +210,12 @@ EKSPERYMENTY: dict = {
     "krotka_notka": {"udzial": 0.5, "od": "2026-10-20", "do": "2026-10-25"},
     "pytanie_na_koncu": {"udzial": 0.5, "od": "2026-11-09", "do": "2026-12-06"},
     "pamiec_rozmowcy": {"udzial": 0.5, "od": "2026-09-29", "do": "2026-10-27"},
+    # E22 — DLUGOSC NOTEK SERII (27.10.2026): ramie na CALA SERIE (los po numerze przebiegu), bo cztery notki
+    # jednego sledztwa pisze jedno wywolanie. „on" = prosba o 30-60 slow, „off" = 50-110 jak dotad; w obu
+    # „wskazowka, nie sufit". Powod: notki NIE maja zasiegu zalezacego od pisarza, a drugie konto ma krotsze
+    # i wieksze (E17); seria jest dluzsza, bo rozkmina potrzebuje miejsca — to sprawdzamy, nie zakladamy.
+    # Analiza po SERIACH (`co_dziala.py`), nie po notkach: notki jednej serii nie sa niezalezne.
+    "dlugosc_serii": {"udzial": 0.5, "od": "2026-10-29", "do": "2026-12-03"},
 }
 
 # E12 — dobowe widelki restackow w obu ramionach (srednio 4 i 2). Widelki, nie
@@ -1977,6 +1983,16 @@ def opis_typu_historii(typ):
     if typ == "rozkmina":
         return "Today we are thinking, not reporting: this piece connects several stories and says what we make of them"
     return "a new AI model or product" if typ == "premiera" else "an AI news story"
+
+
+# Wskazowka dlugosci notki serii w promptach (E22, `EKSPERYMENTY["dlugosc_serii"]`). NASZA stala: do promptu idzie
+# przez `dlugosc_serii(ramie)`, nigdy tresc ze zrodel.
+DLUGOSC_SERII = {"on": "usually 30–60 words", "off": "usually 50–110 words"}
+
+
+def dlugosc_serii(ramie):
+    """Wskazowka dlugosci dla ramienia E22; nieznane albo puste ramie = zwykla (off)."""
+    return DLUGOSC_SERII.get(str(ramie or ""), DLUGOSC_SERII["off"])
 
 
 def liczba_notek_serii(n):

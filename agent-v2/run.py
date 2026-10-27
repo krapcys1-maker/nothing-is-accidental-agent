@@ -1779,6 +1779,9 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
                                                  "wersja": n.get("wersja") or "",
                                                  "eksperymenty":
                                                      n.get("eksperymenty") or {},
+                                                 # CO ZROBILO Z TEKSTEM SPRAWDZENIE FAKTOW
+                                                 # (27.10.2026) — statystyki `co_dziala.py`.
+                                                 "fc": stages.skrot_weryfikacji(gotowe[0]),
                                              })
                 # Fakt odhaczamy DOPIERO po potwierdzonej publikacji. Wczesniej
                 # znikal juz przy znalezieniu, wiec przepadal takze wtedy, gdy

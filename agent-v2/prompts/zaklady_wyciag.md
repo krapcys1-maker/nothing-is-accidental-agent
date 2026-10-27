@@ -11,7 +11,7 @@ For each guess return:
 - "note": the number of the note it comes from;
 - "bet": the guess as ONE standalone sentence in English that makes sense without the note — names, what, and a time frame — phrased as our guess ("We guess that ...");
 - "wrong_if": the observable thing that would show it wrong, one sentence;
-- "check_from": the earliest date (YYYY-MM-DD) on which the outcome could be known;
+- "check_from": the earliest date (YYYY-MM-DD) on which the outcome can be DECIDED — for a guess that something will NOT happen by a deadline, that is the day after the deadline, not today;
 - "check_by": the date (YYYY-MM-DD) after which an unfulfilled guess counts as expired, at most {max_dni} days after today;
 - "probability": how likely YOU think it is to turn out true, from 0.05 to 0.95, honestly — a bold guess may well sit below 0.5.
 

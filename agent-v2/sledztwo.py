@@ -3048,11 +3048,13 @@ def seria_lekka(conn, run_id, card: dict[str, Any], h: dict[str, Any], typ: str 
     try:
         import llm
         import stages
+        # E22: ramie dlugosci na CALA SERIE (los po numerze przebiegu); poza oknem eksperymentu puste.
+        ramie_dlugosci = stages.ramie("dlugosc_serii", run_id or 0)
         prompt = stages.prompt_serii_lekkiej(
             tytul=_tytul_do_serii(h), fakty=_fakty_do_promptu(card),
             nieustalone="\n".join("- " + " ".join(str(x).split())[:240]
                                   for x in (card.get("not_established") or [])[:6]) or "(nothing noted)",
-            ostatnie=_ostatnie_do_promptu(), typ=typ, n_max=ile)
+            ostatnie=_ostatnie_do_promptu(), typ=typ, n_max=ile, ramie_dlugosci=ramie_dlugosci)
         try:
             surowe = llm.call("seria_lekka", SERIA_SYSTEM, prompt, conn=conn, run_id=run_id)
         except (llm.OdmowaDostawcy, llm.Truncated) as exc:
@@ -3091,7 +3093,8 @@ def seria_lekka(conn, run_id, card: dict[str, Any], h: dict[str, Any], typ: str 
                     "naglowek": "", "linia": "", "wariant": "lekka", "lead": not out,
                     "fakty": [{k: twierdzenia[i - 1].get(k) for k in ("claim", "evidence", "url")} for i in nr]
                     or [{k: twierdzenia[0].get(k) for k in ("claim", "evidence", "url")}],
-                    "wiedza": [" ".join(str(w).split())[:240] for w in (p.get("wiedza") or [])[:8] if w is not None and str(w).strip()]})
+                    "wiedza": [" ".join(str(w).split())[:240] for w in (p.get("wiedza") or [])[:8] if w is not None and str(w).strip()],
+                    "eksperymenty": {"dlugosc_serii": ramie_dlugosci} if ramie_dlugosci else {}})
         if len(out) >= ile:
             break
     out = _bez_powtorek(conn, run_id, out)
@@ -3196,6 +3199,8 @@ def dodaj_do_kolejki(lista: list[dict[str, Any]], h: dict[str, Any], card: dict[
                 # bez pisarza, po sprawdzeniu faktow w sieci.
                 "gotowy_tekst": " ".join(str(p.get("tekst") or "").split()),
                 "wiedza": list(p.get("wiedza") or [])[:8],
+                # RAMIONA EKSPERYMENTOW USTALONE PRZY PISANIU SERII (E22) — `stages.notki_dnia` dolacza je do dziennika.
+                "eksperymenty": {k: v for k, v in (p.get("eksperymenty") or {}).items() if v},
             })
         except Exception as exc:
             print("  [kolejka] kat %d odpada (%s: %s), reszta wchodzi" % (nr, type(exc).__name__, str(exc)[:80]),

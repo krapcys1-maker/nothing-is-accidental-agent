@@ -155,18 +155,18 @@ def _katy_serii_opis() -> str:
 
 
 def prompt_serii_lekkiej(tytul: str, fakty: str, nieustalone: str, ostatnie: str,
-                         typ: str = "sledztwo", n_max: int = 5) -> str:
+                         typ: str = "sledztwo", n_max: int = 5, ramie_dlugosci: str = "") -> str:
     """Prompt serii lekkiej (`sledztwo.seria_lekka`). Naglowek historii, fakty, nieustalone i ostatnie
     notki to CUDZA tresc i stoja za bariera; rodzaj historii, liczba notek i tabela katow sa nasze."""
     if typ == "rozkmina":
         return _prompt(
             "rozkmina_seria.md", tytul=tytul, fakty=fakty, nieustalone=nieustalone, ostatnie=ostatnie,
             typ_historii=config.opis_typu_historii(typ), n_max=config.liczba_notek_serii(n_max),
-            katy=_katy_serii_opis())
+            katy=_katy_serii_opis(), dlugosc=config.dlugosc_serii(ramie_dlugosci))
     return _prompt(
         "seria_lekka.md", tytul=tytul, fakty=fakty, nieustalone=nieustalone, ostatnie=ostatnie,
         typ_historii=config.opis_typu_historii(typ), n_max=config.liczba_notek_serii(n_max),
-        katy=_katy_serii_opis())
+        katy=_katy_serii_opis(), dlugosc=config.dlugosc_serii(ramie_dlugosci))
 
 
 def prompt_rozkminy(pozycje: str) -> str:
@@ -6777,6 +6777,8 @@ def notki_dnia(
             ("pora_notki", ramie("pora_notki", 0)),
             ("krotka_notka", _ramie_krotkiej),
             ("pytanie_na_koncu", _ramie_pytania)) if r}
+        # RAMIE LICZONE PRZY PISANIU SERII (E22 `dlugosc_serii`): niesie je wpis kolejki.
+        wynik["eksperymenty"].update({k: v for k, v in ((_przes or {}).get("eksperymenty") or {}).items() if v})
         wynik["wersja"] = WERSJA_KODU
         # RODZAJ WNIOSKU — karta wynikow policzy, ktory rodzaj chwyta.
         wynik["wniosek"] = ((material.get("our_angle") or {}).get("kind") or ""
@@ -7483,6 +7485,26 @@ def _weryfikacja_bez_jsonu(conn: sqlite3.Connection, run_id: int, raw: Any, prom
             "safe_to_post": False,
             "verdict": "weryfikacja oddala proze zamiast werdyktu, takze po ponowce — "
                        "tekst NIE jest sprawdzony (to nie jest czysty wynik)"}
+
+
+def skrot_weryfikacji(kandydat: dict[str, Any]) -> dict[str, Any]:
+    """Co sprawdzenie faktow zrobilo z tekstem notki — krotko, do dziennika (statystyki `co_dziala.py`).
+
+    `obalonych` = twierdzenia `refuted`/`outdated` PRZED naprawa (naprawa trzyma audyt oryginalu w
+    `naprawa`), `naprawiona` = tekst zmieniony przez `napraw_obalone`, `zastrzezenia` = werdykt nie byl
+    czysty (notka i tak wyszla), `nie_sprawdzone` = sprawdzenie nie doszlo do skutku. Nigdy nie rzuca.
+    """
+    try:
+        audyt = kandydat.get("weryfikacja") or {}
+        statusy = [_status_twierdzenia(c) for c in (audyt.get("claims") or []) if isinstance(c, dict)]
+        return {"twierdzen": len(statusy),
+                "obalonych": sum(1 for s in statusy if s in ("refuted", "outdated")),
+                "niepotwierdzonych": sum(1 for s in statusy if s == "unverified"),
+                "naprawiona": bool(kandydat.get("naprawa")),
+                "zastrzezenia": not audyt.get("safe_to_post", True),
+                "nie_sprawdzone": bool(audyt.get("nie_sprawdzone") or audyt.get("bez_json"))}
+    except Exception:                                           # noqa: BLE001
+        return {}
 
 
 def zweryfikuj(

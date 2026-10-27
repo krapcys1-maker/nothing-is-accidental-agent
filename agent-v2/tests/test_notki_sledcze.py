@@ -643,6 +643,9 @@ s = WOLANE_NOTE[0]
 sprawdz("notka niesie identyfikator i kat do dziennika",
         wyn[0]["przeslanie_id"] == PRZES["id"] and wyn[0]["kat_serii"]["wariant"] == "gated"
         and wyn[0]["kat_serii"]["k"] == 2 and wyn[0]["kat_serii"]["kierunek"] == "AMPLIFY", wyn[0].get("kat_serii"))
+wyn_e22, _ = dzien([], od=0, przeslanie=dict(PRZES, eksperymenty={"dlugosc_serii": "on"}), material=MATERIAL)
+sprawdz("ramie ustalone przy pisaniu serii (E22) wpisu kolejki trafia do `eksperymenty` notki, razem z ramionami z `ramie()`",
+        wyn_e22[0]["eksperymenty"].get("dlugosc_serii") == "on", wyn_e22[0].get("eksperymenty"))
 for opis, zmiana, etap in (("kat prowadzacy", {"lead": True}, "notka_przeslania"),
                            ("analiza (KATY)", {"rodzaj": "VERDICT"}, "notka_przeslania"),
                            ("stary wpis MOTYW", {"rodzaj": "MOTYW", "typ_notki": "DYSKUSJA"}, "notka_przeslania"),

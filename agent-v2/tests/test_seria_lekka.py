@@ -302,6 +302,61 @@ sprawdz("jeden kandydat: gotowy tekst, slowa zmierzone, model = seria lekka",
 sprawdz("sprawdzenie faktow w sieci DZIALA na takiej notce (cel `factcheck` wolany)",
         "factcheck" in purposy, purposy)
 
+print()
+print("=== 7. E22: DLUGOSC SERII JAKO EKSPERYMENT NA CALA SERIE ===")
+sprawdz("config: ramie on = 30-60 slow, off albo nieznane albo puste = 50-110 jak dotad",
+        config.dlugosc_serii("on") == "usually 30–60 words" and config.dlugosc_serii("off") == "usually 50–110 words"
+        and config.dlugosc_serii("") == config.dlugosc_serii(None) == config.dlugosc_serii("x") == "usually 50–110 words")
+for typ in ("sledztwo", "rozkmina"):
+    for ramie, oczek in (("on", "usually 30–60 words"), ("off", "usually 50–110 words"), ("", "usually 50–110 words")):
+        pr = stages.prompt_serii_lekkiej("T", "[1] f", "- u", "(none yet)", typ=typ, n_max=3, ramie_dlugosci=ramie)
+        sprawdz("prompt %s, ramie %r: wskazowka %s, nie sufit, brak niewypelnionej klamry" % (typ, ramie, oczek),
+                oczek + ", a guide and not a cap" in pr and "{dlugosc}" not in pr
+                and (ramie != "on" or "50–110" not in pr), pr[1500:1900])
+_stare = config.EKSPERYMENTY
+config.EKSPERYMENTY = dict(_stare, dlugosc_serii={"udzial": 0.5, "od": "2000-01-01", "do": "2999-12-31"})
+ramiona = {stages.ramie("dlugosc_serii", i) for i in range(1, 41)}
+sprawdz("los po numerze przebiegu: oba ramiona wystepuja, a ten sam przebieg zawsze dostaje to samo",
+        ramiona == {"on", "off"} and stages.ramie("dlugosc_serii", 7) == stages.ramie("dlugosc_serii", 7), ramiona)
+WYWOLANIA.clear()
+ODPOWIEDZI[:] = [{"notki": [nota("REVEAL", "First distinct opening here. " + SLOWA), nota("VERDICT", "Second distinct opening there. " + SLOWA)]}]
+run_on = next(i for i in range(1, 99) if stages.ramie("dlugosc_serii", i) == "on")
+wynik, _ = cicho(sledztwo.seria_lekka, CONN, run_on, karta(12), H)
+sprawdz("seria w ramieniu on: prompt prosi o 30-60 slow, a KAZDA notka niesie ramie do dziennika",
+        "usually 30–60 words" in WYWOLANIA[0]["prompt"] and wynik
+        and all(w["eksperymenty"] == {"dlugosc_serii": "on"} for w in wynik), (WYWOLANIA[0]["prompt"][1500:1900], wynik))
+lista_wpisow = []
+sledztwo._zapisz_kolejke([])
+sledztwo.dodaj_do_kolejki(wynik, H, karta(12), run_id=run_on)
+sprawdz("wpis kolejki niesie ramie (`stages.notki_dnia` dolacza je do dziennika)",
+        all(p["eksperymenty"] == {"dlugosc_serii": "on"} for p in sledztwo._kolejka()) and len(sledztwo._kolejka()) == 2,
+        sledztwo._kolejka())
+config.EKSPERYMENTY = dict(_stare, dlugosc_serii={"udzial": 0.5, "od": "2999-01-01", "do": "2999-12-31"})
+WYWOLANIA.clear()
+ODPOWIEDZI[:] = [{"notki": [nota("REVEAL", "First distinct opening here. " + SLOWA), nota("VERDICT", "Second distinct opening there. " + SLOWA)]}]
+wynik, _ = cicho(sledztwo.seria_lekka, CONN, run_on, karta(12), H)
+sprawdz("poza oknem dat eksperymentu: zwykla wskazowka i puste ramie (nic nie psuje dotychczasowej serii)",
+        "usually 50–110 words" in WYWOLANIA[0]["prompt"] and all(w["eksperymenty"] == {} for w in wynik), wynik)
+config.EKSPERYMENTY = _stare
+sprawdz("`EKSPERYMENTY` ma E22 i `run.py` zapisuje `fc` do dziennika",
+        "dlugosc_serii" in config.EKSPERYMENTY
+        and '"fc": stages.skrot_weryfikacji(gotowe[0])' in open("agent-v2/run.py", encoding="utf-8").read())
+
+print()
+print("=== 8. `skrot_weryfikacji`: CO SPRAWDZENIE FAKTOW ZROBILO Z NOTKA ===")
+czysty = {"weryfikacja": {"claims": [{"claim": "a", "status": "confirmed"}], "safe_to_post": True}}
+sprawdz("czysta notka: 1 twierdzenie, zero obalonych, bez naprawy i zastrzezen",
+        stages.skrot_weryfikacji(czysty) == {"twierdzen": 1, "obalonych": 0, "niepotwierdzonych": 0, "naprawiona": False,
+                                              "zastrzezenia": False, "nie_sprawdzone": False}, stages.skrot_weryfikacji(czysty))
+naprawiona = {"weryfikacja": {"claims": [{"status": "REFUTED"}, {"status": "maybe"}, {"status": "outdated"}], "safe_to_post": False},
+              "naprawa": {"tekst": "x"}}
+w = stages.skrot_weryfikacji(naprawiona)
+sprawdz("etykiety znormalizowane (wielkie litery = obalone, wymyslona = niepotwierdzone), naprawa i zastrzezenia widoczne",
+        w["obalonych"] == 2 and w["niepotwierdzonych"] == 1 and w["naprawiona"] and w["zastrzezenia"], w)
+sprawdz("sprawdzenie bez JSON-a = `nie_sprawdzone`; brak weryfikacji albo smieci = nigdy wyjatek",
+        stages.skrot_weryfikacji({"weryfikacja": {"bez_json": True, "safe_to_post": False}})["nie_sprawdzone"]
+        and stages.skrot_weryfikacji({})["twierdzen"] == 0 and stages.skrot_weryfikacji({"weryfikacja": 5}) == {})
+
 llm.call = _prawdziwy_call
 print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))
