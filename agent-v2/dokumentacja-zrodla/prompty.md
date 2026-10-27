@@ -399,7 +399,7 @@
 {{"topics": [<topic objects>], "ranking": {{"most_written_about": [<3 zero-based indices>], "least_written_about": [<3 zero-based indices>], "richest": [<3 zero-based indices>], "thinnest": [<3 zero-based indices>]}}}}
 ```
 
-#### `spojnosc.md` (37 wierszy)
+#### `spojnosc.md` (43 wierszy)
 
 **Pola wejściowe:** `dzis`, `maks`, `nowa`, `wczesniejsze`
 

@@ -10,7 +10,10 @@ aktualnym stanie.
 JAK (w kolejnosci, kazdy krok tanszy od nastepnego):
   1. KOD wybiera z dziennika z ostatnich 21 dni opublikowane notki powiazane z nowa
      (wspolne slowa tresci i liczby), najwyzej 12. Brak kandydatow = zero wywolan.
-  2. FLASH Z MYSLENIEM (`spojnosc`) wskazuje najwyzej trzy pary i CYTUJE obie strony.
+  2. FLASH Z MYSLENIEM (`spojnosc`, wysilek `medium`, DWA niezalezne przebiegi, wyniki sie sumuja)
+     wskazuje najwyzej trzy pary i CYTUJE obie strony. Dwa przebiegi, bo wykrywanie jest losowe: zmierzone
+     na zywo 27.10 — wyrazne sprzecznosci lapie 16/16, ale subtelna („znano od lat” kontra „wykryto
+     w sierpniu”) tylko co drugi raz; drugi przebieg podnosi to do ok. trzech na cztery za ok. 0,003 USD.
   3. KOD sprawdza cytaty doslownie — cytat, ktorego nie ma w tekscie, odrzuca znalezisko.
      Model, ktory wymysli sprzecznosc, zostaje tu zlapany bez kosztu.
   4. OPUS (`spojnosc_potwierdz`) dostaje PELNE obie notki i material, z ktorego powstala nowa
@@ -180,6 +183,16 @@ def material_z_audytu(audyt: dict[str, Any] | None, kontekst: str) -> str:
     return blok + str(kontekst or "")
 
 
+def _ta_sama_para(a: dict[str, Any], b: dict[str, Any]) -> bool:
+    """Ta sama sprzecznosc podana dwa razy: ta sama wczesniejsza notka i cytat nowej strony, ktory jest
+    fragmentem drugiego (model raz cytuje zdanie, raz jego poczatek). Dwa ROZNE zdania nowej notki
+    zderzone z ta sama wczesniejsza notka to dwie sprawy."""
+    if a["nr"] != b["nr"]:
+        return False
+    na, nb = _norm(a["nowy_cytat"]), _norm(b["nowy_cytat"])
+    return na in nb or nb in na
+
+
 def _wykryj(conn, run_id: int, tekst: str, kandydaci: list[dict[str, Any]],
             dzis: str) -> tuple[list[dict[str, Any]], int]:
     """(znaleziska z cytatami potwierdzonymi kodem, ile odrzucono za cytat spoza tekstu).
@@ -196,7 +209,6 @@ def _wykryj(conn, run_id: int, tekst: str, kandydaci: list[dict[str, Any]],
         raise ValueError("odpowiedz bez listy `findings`")
     po_nr = {k["nr"]: k for k in kandydaci}
     znalezione: list[dict[str, Any]] = []
-    widziane: set[tuple[str, str, str]] = set()
     odrzucone = 0
     for x in lista[:2 * config.SPOJNOSC_MAKS_PAR]:
         k = po_nr.get(str(x.get("id") or "").strip().upper()) if isinstance(x, dict) else None
@@ -205,14 +217,12 @@ def _wykryj(conn, run_id: int, tekst: str, kandydaci: list[dict[str, Any]],
         if not (k and nowy and stary):
             odrzucone += 1
             continue
-        klucz = (k["nr"], _norm(nowy), _norm(stary))
-        if klucz in widziane:          # ta sama para powtorzona nie zjada miejsca innej
-            continue
-        widziane.add(klucz)
-        znalezione.append({"nr": k["nr"], "kiedy": k["kiedy"].strftime("%Y-%m-%d"),
-                           "nowy_cytat": nowy, "wczesniejszy_cytat": stary,
-                           "wczesniejsza_pelna": k["tekst"], "dlaczego": _jedna_linia(x.get("why"))[:200]})
-    return znalezione[:config.SPOJNOSC_MAKS_PAR], odrzucone
+        para = {"nr": k["nr"], "kiedy": k["kiedy"].strftime("%Y-%m-%d"),
+                "nowy_cytat": nowy, "wczesniejszy_cytat": stary,
+                "wczesniejsza_pelna": k["tekst"], "dlaczego": _jedna_linia(x.get("why"))[:200]}
+        if not any(_ta_sama_para(para, juz) for juz in znalezione):   # powtorka nie zjada miejsca innej pary
+            znalezione.append(para)
+    return znalezione, odrzucone
 
 
 def _oceny(dane: Any, ile: int) -> list[dict[str, str]]:
@@ -278,7 +288,7 @@ def sprawdz(conn, run_id: int, tekst: str, dowod: str = "", *, teraz: datetime |
     nowa_lepsza | sprzecznosc | nie_sprawdzone. `sprzecznosci` = potwierdzone, a nie rozstrzygniete
     na korzysc nowej notki (do naprawy); `nowa_lepsza` = potwierdzone, ale material popiera nowa notke.
     """
-    wynik: dict[str, Any] = {"stan": "wylaczone", "kandydatow": 0, "znalezione": 0,
+    wynik: dict[str, Any] = {"stan": "wylaczone", "kandydatow": 0, "znalezione": 0, "przebiegi": 0,
                              "cytaty_odrzucone": 0, "sprzecznosci": [], "nowa_lepsza": [],
                              "potwierdzil": ""}
     if not config.SPOJNOSC_Z_DZIENNIKIEM or not str(tekst or "").strip():
@@ -290,7 +300,25 @@ def sprawdz(conn, run_id: int, tekst: str, dowod: str = "", *, teraz: datetime |
         if not kandydaci:
             wynik["stan"] = "brak_kandydatow"
             return wynik
-        znalezione, odrzucone = _wykryj(conn, run_id, tekst, kandydaci, dzis)
+        znalezione, odrzucone, ostatni_blad = [], 0, None
+        for _ in range(max(1, int(config.SPOJNOSC_PRZEBIEGI))):
+            try:
+                z, o = _wykryj(conn, run_id, tekst, kandydaci, dzis)
+            except stages.PRZERYWAJA:
+                raise
+            except Exception as exc:                                # noqa: BLE001
+                ostatni_blad = exc
+                print("    [spojnosc] przebieg wykrywania %d nie wyszedl (%s)" % (wynik["przebiegi"] + 1, type(exc).__name__),
+                      flush=True)
+                continue
+            wynik["przebiegi"] += 1
+            odrzucone += o
+            znalezione += [p for p in z if not any(_ta_sama_para(p, juz) for juz in znalezione)]
+            if len(znalezione) >= config.SPOJNOSC_MAKS_PAR:
+                break                                               # komplet: drugi przebieg niczego nie doda
+        if not wynik["przebiegi"]:
+            raise ostatni_blad                                      # ani jeden przebieg nie dal uzytecznej odpowiedzi
+        znalezione = znalezione[:config.SPOJNOSC_MAKS_PAR]
         wynik["znalezione"], wynik["cytaty_odrzucone"] = len(znalezione), odrzucone
         if odrzucone:
             print("    [spojnosc] %d znalezisk odrzuconych: cytat spoza tekstu" % odrzucone, flush=True)
@@ -347,6 +375,8 @@ def skrot(sp: dict[str, Any]) -> dict[str, Any]:
     out = {"stan": str(sp.get("stan") or ""),
            "kandydatow": int(sp.get("kandydatow") or 0),
            "znalezione": int(sp.get("znalezione") or 0),
+           "cytaty_odrzucone": int(sp.get("cytaty_odrzucone") or 0),
+           "przebiegi": int(sp.get("przebiegi") or 0),
            "sprzecznosci": len(sp.get("sprzecznosci") or []),
            "nowa_lepsza": len(sp.get("nowa_lepsza") or []),
            "naprawiona": bool(sp.get("naprawiona")),

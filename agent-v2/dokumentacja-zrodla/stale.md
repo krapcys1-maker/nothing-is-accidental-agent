@@ -274,6 +274,7 @@
 | `SPOJNOSC_KANDYDATOW` | `12` | — |
 | `SPOJNOSC_MIN_WSPOLNYCH` | `3` | — |
 | `SPOJNOSC_MAKS_PAR` | `3` | — |
+| `SPOJNOSC_PRZEBIEGI` | `2` | — |
 | `RUCHY_KONCOWE` | `{ "DO_SPRAWDZENIA": ( "Close by handing the ` | --- ruch koncowy i szerokosc drugiego aktu -------------------------------- Dwa artykuly napisane PO naprawie szamponu (0017 "The Gas You Di |
 | `RUCH_KONCOWY_MIX` | `("DO_SPRAWDZENIA", "KTO_NA_TYM_STOI", "POWRO` | — |
 | `ILE_PARALELI_WAGI` | `{1: 4, 2: 4, 3: 3}` | Ile paraleli w drugim akcie. Trzy wyliczone po kolei czytaja sie jak lista; jedna rozwinieta na dwa akapity czyta sie jak mysl. Chcemy obu,  |

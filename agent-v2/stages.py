@@ -4930,14 +4930,18 @@ def note(
             # wychodzi oryginal (naprawa tylko przemieszczala wade); gdy poprawiala tez obalony fakt, zostaje,
             # bo falsz z sieci jest gorszy, a zapis mowi, co stoi.
             audyt_po = poprawka.get("audyt") or {}
-            siec_zla = [c for c in (audyt_po.get("zarzuty") or [])
-                        if _status_twierdzenia(c) in ("refuted", "outdated")]
-            if not zarzuty_sieci and (siec_zla or audyt_po.get("nie_sprawdzone")):
+            # NOWY ZARZUT Z SIECI to dowolny zarzut sprawdzenia (obalone, nieaktualne, a takze liczba, ktorej
+            # siec nie potwierdzila) niewystepujacy przy oryginale.
+            nowe_zarzuty = [d for d in (audyt_po.get("zarzuty") or [])
+                            if not any(_ten_sam_zarzut(d, c) for c in (audyt.get("zarzuty") or []))]
+            if not zarzuty_sieci and (nowe_zarzuty or audyt_po.get("nie_sprawdzone")):
                 spojnosc["stoi"] = spojnosc["naprawa_odrzucona"] = True
-                spojnosc["powod_odrzucenia"] = "siec" if siec_zla else "siec_nie_sprawdzona"
+                spojnosc["powod_odrzucenia"] = "siec" if nowe_zarzuty else "siec_nie_sprawdzona"
                 print("    [spojnosc] naprawa ODRZUCONA: %s — zostaje oryginal, czysty w sieci"
-                      % ("siec obala naprawiony tekst" if siec_zla else "naprawy nie udalo sie sprawdzic w sieci"),
-                      flush=True)
+                      % ("siec zglasza nowy zarzut wobec naprawionego tekstu (%s)"
+                         % str(nowe_zarzuty[0].get("claim"))[:70] if nowe_zarzuty
+                         else "naprawy nie udalo sie sprawdzic w sieci"), flush=True)
+                print("    [spojnosc] odrzucony tekst: %s" % poprawka["tekst"][:200], flush=True)
                 poprawka = None
             else:
                 ponownie = _spojnosc.sprawdz(conn, run_id, poprawka["tekst"],
@@ -4952,6 +4956,7 @@ def note(
                         spojnosc["powod_odrzucenia"] = "dziennik"
                         print("    [spojnosc] naprawa ODRZUCONA: sprzecznosc stoi dalej — zostaje oryginal",
                               flush=True)
+                        print("    [spojnosc] odrzucony tekst: %s" % poprawka["tekst"][:200], flush=True)
                         poprawka = None
                 else:
                     spojnosc["naprawiona"] = ponownie.get("stan") != "nie_sprawdzone"

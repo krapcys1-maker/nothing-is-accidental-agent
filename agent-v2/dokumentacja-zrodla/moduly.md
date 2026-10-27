@@ -48,7 +48,7 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-12796 wierszy, 239 funkcji na poziomie modułu, 0 klas
+12801 wierszy, 239 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -578,7 +578,7 @@
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-4362 wierszy, 49 funkcji na poziomie modułu, 0 klas
+4365 wierszy, 49 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -999,7 +999,7 @@
 
 ### `spojnosc.py` — spójność notki serii z tym, co już wyszło — przy publikacji kod wybiera z dziennika z 21 dni powiązane notki, Flash wskazuje sprzeczności z cytatami, kod sprawdza cytaty dosłownie, Opus potwierdza (zapas: Flash), potwierdzona sprzeczność idzie do tej samej naprawy co obalony fakt i jest sprawdzana ponownie; nie jest bramką
 
-359 wierszy, 14 funkcji na poziomie modułu, 0 klas
+389 wierszy, 15 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -1011,6 +1011,7 @@
 | `wczesniejsze_notki(tekst)` | Opublikowane notki z okna dni, najbardziej zwiazane z `tekst`, od najstarszej (E1, E2...). |
 | `_cytat_w_tekscie(zrodlo, cytat)` *(wewn.)* | Cytat modelu, gdy stoi w `zrodlo` doslownie (z dokladnoscia do wielkosci liter, cudzyslowow |
 | `material_z_audytu(audyt, kontekst)` | Material dla potwierdzenia: NAJPIERW to, co sprawdzenie w sieci powiedzialo o nowej notce |
+| `_ta_sama_para(a, b)` *(wewn.)* | Ta sama sprzecznosc podana dwa razy: ta sama wczesniejsza notka i cytat nowej strony, ktory jest |
 | `_wykryj(conn, run_id, tekst, kandydaci, dzis)` *(wewn.)* | (znaleziska z cytatami potwierdzonymi kodem, ile odrzucono za cytat spoza tekstu). |
 | `_oceny(dane, ile)` *(wewn.)* | Oceny w kolejnosci par. Rzuca `ValueError`, gdy odpowiedz jest bezuzyteczna: brak listy `pairs`, |
 | `_potwierdz(conn, run_id, tekst, znalezione, dowod, dzis)` *(wewn.)* | (oceny w kolejnosci znalezisk, kto ocenial: „opus” albo „zapas”). Rzuca, gdy zawiodly oba. |

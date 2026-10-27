@@ -26,6 +26,8 @@ import config   # noqa: E402
 
 KATALOG = pathlib.Path(tempfile.mkdtemp())
 config.uzyj_katalogu_danych(KATALOG)
+PROD_PRZEBIEGI = config.SPOJNOSC_PRZEBIEGI       # domyslna wartosc produkcyjna; test pinuje ja nizej
+config.SPOJNOSC_PRZEBIEGI = 1                    # pojedyncze przypadki: jeden przebieg; sekcja 4b liczy dwa
 
 import db          # noqa: E402
 import llm         # noqa: E402
@@ -357,6 +359,83 @@ sprawdz("Opus NIE dostaje uzasadnienia pierwszego czytelnika (zakotwiczenie), al
         and "Today is 2026-10-27" in WYWOLANIA[0]["prompt"], pot[:300])
 
 print()
+print("=== 4b. DWA PRZEBIEGI WYKRYWANIA (wykrywanie jest losowe) I NAKLADAJACE SIE CYTATY ===")
+config.SPOJNOSC_PRZEBIEGI = 2
+reset(spojnosc=[{"findings": []}, znalezisko()], spojnosc_potwierdz=[ocena("CONTRADICTION", "EARLIER")])
+w, _ = cicho(spojnosc.sprawdz, CONN, 1, NOWA, "", teraz=TERAZ)
+sprawdz("pierwszy przebieg pusty, drugi znajduje: sprzecznosc nie umyka (o to chodzi w drugim przebiegu)",
+        w["stan"] == "sprzecznosc" and w["przebiegi"] == 2 and cele() == ["spojnosc", "spojnosc", "spojnosc_potwierdz"], (w["stan"], cele()))
+
+para_a = {"findings": [{"id": "E1", "new_quote": NOWE_5[0], "earlier_quote": STARE_5[0], "why": "a"}]}
+para_b = {"findings": [{"id": "E1", "new_quote": NOWE_5[2], "earlier_quote": STARE_5[3], "why": "b"}]}
+reset(spojnosc=[para_a, para_b],
+      spojnosc_potwierdz=[{"pairs": [{"n": i, "verdict": "CONSISTENT", "supported_by": "NEITHER"} for i in (1, 2)]}])
+w, _ = cicho(spojnosc.sprawdz, CONN, 1, NOWA, "", teraz=TERAZ)
+sprawdz("przebiegi SUMUJA wyniki: dwa przebiegi znajduja dwie rozne pary, Opus dostaje obie",
+        w["znalezione"] == 2 and NOWE_5[0] in WYWOLANIA[2]["prompt"] and NOWE_5[2] in WYWOLANIA[2]["prompt"]
+        and "PAIR 2" in WYWOLANIA[2]["prompt"], (w["znalezione"], cele()))
+reset(spojnosc=[znalezisko(), znalezisko()], spojnosc_potwierdz=[ocena("CONSISTENT", "NEITHER")])
+w, _ = cicho(spojnosc.sprawdz, CONN, 1, NOWA, "", teraz=TERAZ)
+sprawdz("ta sama para z obu przebiegow to JEDNA para, a Opus dostaje ja raz",
+        w["znalezione"] == 1 and "PAIR 2" not in WYWOLANIA[2]["prompt"], (w["znalezione"], cele()))
+
+reset(spojnosc=[{"findings": [
+          {"id": "E1", "new_quote": NOWE_5[0], "earlier_quote": STARE_5[0], "why": "a"},
+          {"id": "E1", "new_quote": NOWE_5[1], "earlier_quote": STARE_5[1], "why": "b"},
+          {"id": "E1", "new_quote": NOWE_5[2], "earlier_quote": STARE_5[2], "why": "c"}]}],
+      spojnosc_potwierdz=[{"pairs": [{"n": i, "verdict": "CONSISTENT", "supported_by": "NEITHER"} for i in range(1, 4)]}])
+w, _ = cicho(spojnosc.sprawdz, CONN, 1, NOWA, "", teraz=TERAZ)
+sprawdz("pierwszy przebieg dal komplet (%d par): drugi NIE jest wolany (nic by nie dodal, a kosztuje)" % config.SPOJNOSC_MAKS_PAR,
+        w["znalezione"] == config.SPOJNOSC_MAKS_PAR and cele() == ["spojnosc", "spojnosc_potwierdz"] and w["przebiegi"] == 1, (w, cele()))
+
+reset(spojnosc=[RuntimeError("padl"), znalezisko()], spojnosc_potwierdz=[ocena("CONTRADICTION", "EARLIER")])
+w, _ = cicho(spojnosc.sprawdz, CONN, 1, NOWA, "", teraz=TERAZ)
+sprawdz("padl pierwszy przebieg, drugi dziala: wynik z drugiego, stan nie `nie_sprawdzone`",
+        w["stan"] == "sprzecznosc" and w["przebiegi"] == 1, (w["stan"], w["przebiegi"]))
+
+reset(spojnosc=[znalezisko(), RuntimeError("padl")], spojnosc_potwierdz=[ocena("CONTRADICTION", "EARLIER")])
+w, _ = cicho(spojnosc.sprawdz, CONN, 1, NOWA, "", teraz=TERAZ)
+sprawdz("padl drugi przebieg, pierwszy dal wynik: wynik z pierwszego", w["stan"] == "sprzecznosc" and w["przebiegi"] == 1, w)
+
+reset(spojnosc=[RuntimeError("padl"), "to nie jest json"])
+w, _ = cicho(spojnosc.sprawdz, CONN, 1, NOWA, "", teraz=TERAZ)
+sprawdz("padly OBA przebiegi: `nie_sprawdzone`, nie `czysto`", w["stan"] == "nie_sprawdzone" and w["przebiegi"] == 0, w)
+
+reset(spojnosc=[{"findings": []}, {"findings": []}])
+w, _ = cicho(spojnosc.sprawdz, CONN, 1, NOWA, "", teraz=TERAZ)
+sprawdz("oba przebiegi puste: `czysto`, dwa wywolania Flasha, zero Opusa", w["stan"] == "czysto" and cele() == ["spojnosc", "spojnosc"], cele())
+
+reset(spojnosc=[llm.BudgetExceeded("sufit"), znalezisko()])
+try:
+    cicho(spojnosc.sprawdz, CONN, 1, NOWA, "", teraz=TERAZ)
+    sprawdz("BudgetExceeded w pierwszym przebiegu leci na wylot (drugi przebieg go nie maskuje)", False, "zjedzony")
+except llm.BudgetExceeded:
+    sprawdz("BudgetExceeded w pierwszym przebiegu leci na wylot (drugi przebieg go nie maskuje)", True)
+config.SPOJNOSC_PRZEBIEGI = 1
+
+nakladanie = {"findings": [
+    {"id": "E1", "new_quote": "The PHP Foundation reported the remote code execution flaw first", "earlier_quote": STARE_5[0], "why": "a"},
+    {"id": "E1", "new_quote": CYTAT_NOWY, "earlier_quote": CYTAT_STARY, "why": "b"}]}
+reset(spojnosc=[nakladanie], spojnosc_potwierdz=[ocena("CONSISTENT", "NEITHER")])
+w, _ = cicho(spojnosc.sprawdz, CONN, 1, NOWA, "", teraz=TERAZ)
+sprawdz("to samo zdanie raz w calosci, raz jego poczatek (ta sama wczesniejsza notka) to JEDNA sprzecznosc, nie dwie",
+        w["znalezione"] == 1, (w["znalezione"], WYWOLANIA[1]["prompt"][-400:]))
+zapisz_dziennik([wpis(WCZESNIEJSZA, 5), wpis(DRUGA, 4)])
+dwie_notki = {"findings": [
+    {"id": "E1", "new_quote": CYTAT_NOWY, "earlier_quote": CYTAT_STARY, "why": "a"},
+    {"id": "E2", "new_quote": CYTAT_NOWY, "earlier_quote": CYTAT_STARY_2, "why": "b"}]}
+reset(spojnosc=[dwie_notki], spojnosc_potwierdz=[{"pairs": [{"n": i, "verdict": "CONSISTENT", "supported_by": "NEITHER"} for i in (1, 2)]}])
+w, _ = cicho(spojnosc.sprawdz, CONN, 1, NOWA, "", teraz=TERAZ)
+sprawdz("to samo zdanie nowej notki zderzone z DWOMA roznymi wczesniejszymi to dwie pary (numer notki rozstrzyga)", w["znalezione"] == 2, w["znalezione"])
+zapisz_dziennik([wpis(WCZESNIEJSZA, 5), wpis(NIEZWIAZANA, 2)])
+dwa_zdania = {"findings": [
+    {"id": "E1", "new_quote": "The PHP Foundation reported the remote code execution flaw first", "earlier_quote": STARE_5[0], "why": "a"},
+    {"id": "E1", "new_quote": "credit is the prize in every advisory", "earlier_quote": "nobody else had found the same root cause", "why": "b"}]}
+reset(spojnosc=[dwa_zdania], spojnosc_potwierdz=[{"pairs": [{"n": i, "verdict": "CONSISTENT", "supported_by": "NEITHER"} for i in (1, 2)]}])
+w, _ = cicho(spojnosc.sprawdz, CONN, 1, NOWA, "", teraz=TERAZ)
+sprawdz("dwa ROZNE zdania nowej notki zderzone z ta sama wczesniejsza to dwie sprawy (obie zostaja)", w["znalezione"] == 2, w["znalezione"])
+
+print()
 print("=== 5. ZAPAS PRZY ODMOWIE OPUSA I GRANICA „NIE SPRAWDZILEM” ===")
 reset(spojnosc=[znalezisko()], spojnosc_potwierdz=[llm.OdmowaDostawcy("cyber")],
       spojnosc_potwierdz_zapas=[ocena("CONTRADICTION", "EARLIER")])
@@ -415,8 +494,12 @@ sprawdz("material naprawy to wlasna notka, z data i cytatem",
 sk = spojnosc.skrot(sp)
 sprawdz("skrot do dziennika: liczby i znaczniki",
         {k: v for k, v in sk.items() if k != "szczegoly"} == {
-            "stan": "sprzecznosc", "kandydatow": 3, "znalezione": 2, "sprzecznosci": 1, "nowa_lepsza": 0,
-            "naprawiona": True, "stoi": False, "naprawa_odrzucona": False, "powod_odrzucenia": "", "potwierdzil": "opus"}, sk)
+            "stan": "sprzecznosc", "kandydatow": 3, "znalezione": 2, "cytaty_odrzucone": 0, "przebiegi": 0,
+            "sprzecznosci": 1, "nowa_lepsza": 0, "naprawiona": True, "stoi": False, "naprawa_odrzucona": False,
+            "powod_odrzucenia": "", "potwierdzil": "opus"}, sk)
+sprawdz("skrot niesie licznik odrzuconych cytatow i przebiegow (czysto po odrzuconych znaleziskach to nie to samo co czysto po pustej liscie)",
+        spojnosc.skrot(dict(sp, cytaty_odrzucone=2, przebiegi=2))["cytaty_odrzucone"] == 2
+        and spojnosc.skrot(dict(sp, cytaty_odrzucone=2, przebiegi=2))["przebiegi"] == 2)
 sprawdz("skrot niesie krotkie cytaty, zeby dalo sie przeczytac, CO sie zderzylo (a nie tylko ile razy)",
         sk["szczegoly"] == [{"rodzaj": "sprzecznosc", "kiedy": "2026-10-22", "popiera": "", "nowy": CYTAT_NOWY, "wczesniejszy": CYTAT_STARY}], sk)
 sp2 = dict(sp, sprzecznosci=[], nowa_lepsza=sp["sprzecznosci"] * 5)
@@ -449,11 +532,15 @@ def zapisz_swiezy_dziennik():
     (config.DATA_DIR / "dziennik.jsonl").write_text("\n".join(json.dumps(w) for w in wpisy) + "\n", encoding="utf-8")
 
 
+LOG_NOTKI = [""]
+
+
 def notka(nr, flaga=True, tekst=NOWA, typ="CIEKAWOSTKA", **kw):
     stages._NAPRAW_ZUZYTE.clear()
-    with contextlib.redirect_stdout(io.StringIO()):
+    with contextlib.redirect_stdout(io.StringIO()) as log:
         wynik = stages.note(conn, rid + nr, typ, DOWOD, etap="notka_przeslania_fakt", bez_rozbioru=True,
                             gotowy_tekst=tekst, sprawdz_spojnosc=flaga, **kw)
+    LOG_NOTKI[0] = log.getvalue()
     return (wynik.get("candidates") or [{}])[0]
 
 
@@ -498,6 +585,8 @@ fc = stages.skrot_weryfikacji(kand)
 sprawdz("naprawa NIE usunela sprzecznosci, a nie poprawiala faktu z sieci: ODRZUCONA, zostaje oryginal",
         kand.get("note") == NOWA and "tekst_przed_naprawa" not in kand and kand["spojnosc"]["naprawa_odrzucona"] is True
         and kand["spojnosc"]["stoi"] is True, (kand.get("note"), kand["spojnosc"]))
+sprawdz("log pokazuje odrzucony tekst takze przy odrzuceniu przez dziennik",
+        "odrzucony tekst: The PHP Foundation reported" in LOG_NOTKI[0], LOG_NOTKI[0][-500:])
 sprawdz("a notka i tak idzie (nic nie blokuje), powod odrzucenia to dziennik",
         kand.get("safe_to_post") is True and kand["spojnosc"]["powod_odrzucenia"] == "dziennik", kand["spojnosc"])
 sprawdz("zapis niesie, ze sprzecznosc stoi", fc["spojnosc"]["stoi"] is True and fc["spojnosc"]["naprawa_odrzucona"] is True, fc)
@@ -534,9 +623,29 @@ sprawdz("TEKST CZYSTY W SIECI NIE ZOSTAJE ZAMIENIONY NA OBALONY: siec obala napr
         kand.get("note") == NOWA and "tekst_przed_naprawa" not in kand and kand["spojnosc"]["naprawa_odrzucona"] is True
         and kand["spojnosc"]["powod_odrzucenia"] == "siec" and kand["spojnosc"]["stoi"] is True,
         (kand.get("note"), kand["spojnosc"]))
+sprawdz("...a log pokazuje, CO zostalo odrzucone (tekst naprawy) i dlaczego",
+        "odrzucony tekst: Wiz reported" in LOG_NOTKI[0] and "nowy zarzut" in LOG_NOTKI[0], LOG_NOTKI[0][-500:])
 sprawdz("...bez zbednej ponownej spojnosci (tekst i tak odrzucony) i bez blokowania publikacji",
         cele() == ["factcheck", "spojnosc", "spojnosc_potwierdz", "naprawa", "factcheck"] and kand.get("safe_to_post") is True, cele())
 sprawdz("...a zapis niesie powod", fc["spojnosc"]["powod_odrzucenia"] == "siec" and fc["spojnosc"]["naprawa_odrzucona"] is True, fc)
+
+FAKT_LICZBA_NIEPOTW = {"claims": [{"claim": "Wiz began tracking the flaw in 2019.", "status": "unverified"}]}
+FAKT_TEZA_NIEZNALEZIONA = {"claims": [{"claim": "Labs compete on reputation, not on revenue.", "status": "unverified"}]}
+reset(factcheck=[FAKT_CZYSTO, FAKT_LICZBA_NIEPOTW], spojnosc=[znalezisko()], spojnosc_potwierdz=[ocena("CONTRADICTION", "EARLIER")],
+      naprawa=[{"text": POPRAWIONA, "co_zmienione": "x"}])
+kand = notka(16)
+sprawdz("naprawa wprowadza LICZBE, ktorej siec nie potwierdzila: tez nowy zarzut -> oryginal (nie tylko obalone/nieaktualne)",
+        kand.get("note") == NOWA and kand["spojnosc"]["powod_odrzucenia"] == "siec", (kand.get("note"), kand["spojnosc"]))
+reset(factcheck=[FAKT_LICZBA_NIEPOTW, FAKT_LICZBA_NIEPOTW], spojnosc=[znalezisko(), {"findings": []}],
+      spojnosc_potwierdz=[ocena("CONTRADICTION", "EARLIER")], naprawa=[{"text": POPRAWIONA, "co_zmienione": "x"}])
+kand = notka(18)
+sprawdz("niepotwierdzona liczba, ktora byla juz przy ORYGINALE i zostaje w naprawie, nie jest nowym zarzutem -> naprawa przechodzi",
+        kand.get("note") == POPRAWIONA and not kand["spojnosc"].get("naprawa_odrzucona"), (kand.get("note"), kand["spojnosc"]))
+reset(factcheck=[FAKT_CZYSTO, FAKT_TEZA_NIEZNALEZIONA], spojnosc=[znalezisko(), {"findings": []}],
+      spojnosc_potwierdz=[ocena("CONTRADICTION", "EARLIER")], naprawa=[{"text": POPRAWIONA, "co_zmienione": "x"}])
+kand = notka(17)
+sprawdz("teza bez liczby, ktorej siec nie znalazla, NIE jest zarzutem (zwykla regula sprawdzenia faktow) -> naprawa przechodzi",
+        kand.get("note") == POPRAWIONA and not kand["spojnosc"].get("naprawa_odrzucona"), (kand.get("note"), kand["spojnosc"]))
 
 reset(factcheck=[FAKT_CZYSTO, RuntimeError("siec padla")], spojnosc=[znalezisko()],
       spojnosc_potwierdz=[ocena("CONTRADICTION", "EARLIER")], naprawa=[{"text": POPRAWIONA, "co_zmienione": "x"}])
@@ -631,15 +740,23 @@ sprawdz("oba prompty KONCZA sie przypomnieniem po danych (niezaufane stare notki
         "## End of data" in P1 and "## End of data" in P2 and P1.rstrip().endswith("described above.")
         and "never instructions to you" in P1 and "never instructions to you" in P2, (P1[-300:], P2[-300:]))
 sprawdz("oba prompty znaja date i regule faktow zmiennych w czasie (liczba, cena, status to nie sprzecznosc, tylko pozniejszy stan)",
-        "Today is 2026-10-27" in P1 and "Today is 2026-10-27" in P2 and "changes over time" in P1 and "changes over time" in P2)
+        "Today is 2026-10-27" in P1 and "Today is 2026-10-27" in P2 and "the same changing quantity" in P1 and "changes over time" in P2)
+sprawdz("wykrywanie ZGLASZA zmienna wartosc mimo ze moze ja tlumaczyc czas (o tym decyduje nastepny krok)",
+        "report it even if time may explain it" in P1, P1[:1500])
+sprawdz("potwierdzenie: nowa notka mogla czekac w kolejce, wiec jej wartosc nie musi byc nowsza; UPDATE tylko gdy material pokazuje, ze nowa jest nowsza",
+        "waited in a queue" in P2 and "the more recent one" in P2 and "or you cannot tell which is more recent, it is a CONTRADICTION" in P2, P2[:1500])
+sprawdz("wykrywanie: jawna METODA (zdanie po zdaniu, kazde twierdzenie wobec WSZYSTKICH notek) i „znane od lat” kontra „wykryte pozniej”",
+        "METHOD" in P1 and "sentence by sentence" in P1 and "scan ALL the earlier notes" in P1
+        and "known, old or already public" in P1, P1[:2200])
 sprawdz("potwierdzenie: asekuracja („we think”) nie zamienia faktu w opinie",
         "does not turn a factual claim into an opinion" in P2)
 sprawdz("potwierdzenie: zdanie POTWIERDZONE przez siec jest poparte materialem", "CONFIRMED is supported by the evidence" in P2)
 sprawdz("stale kontraktu: okno 21 dni, 12 kandydatow, prog 3, 3 pary (zmiana wymaga swiadomej zmiany testu)",
         (config.SPOJNOSC_OKNO_DNI, config.SPOJNOSC_KANDYDATOW, config.SPOJNOSC_MIN_WSPOLNYCH, config.SPOJNOSC_MAKS_PAR) == (21, 12, 3, 3))
-sprawdz("wykrywanie na Flashu z myslenie ma ograniczony wysilek (koszt), zapas tak samo; Opus ma `medium`",
-        config.DEEPSEEK_EFFORT_FOR.get("spojnosc") == "low" and config.DEEPSEEK_EFFORT_FOR.get("spojnosc_potwierdz_zapas") == "low"
+sprawdz("wykrywanie i zapas na Flashu z myslenie `medium` (zmierzone 27.10: `low` lapie subtelna sprzecznosc 1 raz na 4, `medium` z metoda 2 na 4); Opus tez `medium`",
+        config.DEEPSEEK_EFFORT_FOR.get("spojnosc") == "medium" and config.DEEPSEEK_EFFORT_FOR.get("spojnosc_potwierdz_zapas") == "medium"
         and config.EFFORT.get("spojnosc_potwierdz") == "medium")
+sprawdz("domyslnie produkcyjnie DWA przebiegi wykrywania (test dziala na jednym, sekcja 4b liczy dwa)", PROD_PRZEBIEGI == 2, PROD_PRZEBIEGI)
 
 llm.call = _prawdziwy_call
 print()

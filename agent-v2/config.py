@@ -580,9 +580,11 @@ DEEPSEEK_EFFORT_FOR: dict[str, str] = {
     # zamiast 0,012-0,016). Bez rozumowania trojka rozjechala sie calkiem
     # (0 wspolnych, 0,55) — dlatego `low`, nie wylaczenie.
     "bank": "low",
-    # SPOJNOSC (27.10.2026): porownanie notki z kilkunastoma innymi to rozumowanie, ale domyslna glebokosc
-    # Flasha to 10-26 tys. tokenow wyjscia (pomiar sedziego banku wyzej) — `low` trzyma koszt przy kilku groszach.
-    "spojnosc": "low", "spojnosc_potwierdz_zapas": "low",
+    # SPOJNOSC (27.10.2026): porownanie notki z kilkunastoma innymi to rozumowanie. Domyslna glebokosc Flasha to
+    # 10-26 tys. tokenow wyjscia (pomiar sedziego banku wyzej), `low` jest tanie (ok. 0,001 USD), ale na zywych
+    # probach z 27.10 lapalo subtelna sprzecznosc 1 raz na 4 (V1) wobec 2 na 4 przy `medium` z jawna metoda (V3,
+    # ok. 0,003 USD; wyrazne sprzecznosci 16/16 w obu), bez fałszywych trafien na negatywach. Dokladnosc kosztuje tu groszowe sumy.
+    "spojnosc": "medium", "spojnosc_potwierdz_zapas": "medium",
 }
 
 # Pamiec brzmienia z juz potwierdzonych publikacji, bez dodatkowego modelu.
@@ -4038,6 +4040,7 @@ SPOJNOSC_OKNO_DNI = 21          # jak daleko wstecz szukamy naszych notek
 SPOJNOSC_KANDYDATOW = 12        # ile najbardziej powiazanych notek idzie do porownania
 SPOJNOSC_MIN_WSPOLNYCH = 3      # ile wspolnych slow tresci (liczba liczy sie za dwa), zeby notka byla kandydatem
 SPOJNOSC_MAKS_PAR = 3           # ile znalezisk bierze potwierdzenie
+SPOJNOSC_PRZEBIEGI = 2          # ile niezaleznych przebiegow wykrywania (wyniki sie sumuja; wykrywanie jest losowe)
 
 # --- bramki jakości ----------------------------------------------------------
 # NIC NIE BLOKUJE. Bramki są zgłaszane właścicielowi jako uwagi do przeczytania;

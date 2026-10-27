@@ -217,8 +217,10 @@ zwykle notki z banku i MYSL jej nie dostaja (`stages.note(sprawdz_spojnosc=...)`
 1. **Kod** wybiera z dziennika z ostatnich 21 dni udane notki powiazane z nowa (wspolne slowa tresci, wspolna liczba liczy sie za dwa, prog 3), najwyzej 12;
    restacki, nieudane, duplikaty i ta sama tresc odpadaja. Dziennik czytany po `\n` i z `errors="replace"` (U+2028 w notce albo jeden zly bajt nie
    wylaczaja sprawdzenia). Brak kandydatow = ZERO wywolan modelu.
-2. **Flash z myslenie** (`spojnosc`, wysilek `low`) wskazuje najwyzej 3 pary i CYTUJE obie strony. Odpowiedz bez listy `findings` to NIE „nic nie ma”, tylko brak
-   odpowiedzi (`nie_sprawdzone`); pusta lista jest uczciwym `czysto`. Powtorzona para zajmuje jedno miejsce.
+2. **Flash z myslenie** (`spojnosc`, wysilek `medium`, jawna METODA: zdanie po zdaniu, kazde twierdzenie wobec WSZYSTKICH kandydatow) wskazuje najwyzej 3 pary i CYTUJE
+   obie strony. **Dwa niezalezne przebiegi, wyniki sie sumuja** (`SPOJNOSC_PRZEBIEGI`; drugi pomijany, gdy pierwszy dal komplet par), bo wykrywanie jest losowe — patrz
+   „Pomiar czulosci” nizej. Odpowiedz bez listy `findings` to NIE „nic nie ma”, tylko brak odpowiedzi; gdy zawiodly oba przebiegi, stan to `nie_sprawdzone`; pusta lista
+   jest uczciwym `czysto`. Ta sama sprzecznosc podana dwa razy (takze raz zdaniem, raz jego poczatkiem) zajmuje jedno miejsce.
 3. **Kod sprawdza cytaty doslownie** (wielkosc liter, cudzyslowy i spacje bez znaczenia, 3-40 slow). Cytat spoza tekstu zabija znalezisko PRZED platnym
    potwierdzeniem — model, ktory wymysli sprzecznosc, jest tu zlapany bez kosztu.
 4. **Opus 5.5** (`spojnosc_potwierdz`) dostaje PELNE obie notki (bez uzasadnienia pierwszego czytelnika — zakotwiczenie), dzisiejsza date, material z jakiego
@@ -246,10 +248,18 @@ znalezisk i sprzecznosci, `naprawiona`, `stoi`, `naprawa_odrzucona`, `powod_odrz
 po 160 znakow: co sie zderzylo, z notka z jakiego dnia, i czy materialem wygral nowy czy stary). `fc.obalonych` zostaje miara FAKTOW z sieci, a `fc.naprawiona` NIE
 liczy naprawy samej sprzecznosci (ta ma `fc.spojnosc.naprawiona`) — `co_dziala` liczy „naprawionych” jako podzbior „z obalonym”.
 
-**Koszt (oszacowany z ksiegi, NIE zmierzony na produkcji — pierwsze przebiegi dadza liczby).** Flash z myslenie (`low`; domyslna glebokosc to 10-26 tys. tokenow
-wyjscia, `low` ok. polowy) rzedu 0,003-0,01 USD na sprawdzenie; Opus 5.5 ok. 0,05 USD tylko gdy cytaty przejda krok 3. Najgorszy przypadek na jedna notke (cytaty OK,
-Opus odmawia, naprawa, ponowne sprawdzenia): ok. 9 platnych wywolan, z czego tylko Flash i jedna naprawa to realny koszt, a odmowy Opusa ksieguja sie po 0 USD.
-Do 90 notek serii miesiecznie: rzad 0,3-1 USD (Flash) plus Opus przy kilku przypadkach. Etapy ida do grupy kosztu „sprawdzenie faktow i naprawa” w `co_dziala`.
+**Pomiar czulosci (zywe wywolania na kopii danych produkcji, 27.10 wieczorem, ok. 0,14 USD).** Pozytywy: oryginal 506-2 (znana, SUBTELNA sprzecznosc: „vulnerabilities were
+known for years” kontra nasza notka, ze luke znaleziono w sierpniu) i 4 syntetyczne WYRAZNE sprzecznosci z prawdziwymi notkami 499/Kimi; po 4 powtorzenia. Negatywy: 5 notek
+poprawionych recznie. Wariant `low` (pierwotny): wyrazne 16/16, subtelna 1/4, jedno falszywe trafienie na negatywach (odsiewa je Opus). `low` + metoda: subtelna 0/4.
+`medium` + metoda (wybrany): wyrazne 16/16, subtelna 2/4, 0 falszywych. Koszt wywolania wykrywania: `low` ok. 0,001 USD, `medium` ok. 0,003 USD. Dwa przebiegi `medium`
+podnosza czulosc na subtelnej do ok. 3/4 za ok. 0,006 USD. **Wniosek: wyrazna sprzecznosc nie ucieknie, subtelna (wymagajaca wnioskowania) zostaje czesciowo poza zasiegiem
+— to granica tej metody, nie blad.** Jedyny raz, gdy Flash znalazl subtelna pare, Opus ocenil ja trafnie (CONTRADICTION, NEITHER).
+
+**Koszt (zmierzony na zywo 27.10).** Flash wykrywanie 0,0005-0,0035 USD za wywolanie (`low`), `medium` ok. 0,003 USD; Opus 5.5 0,012-0,020 USD za potwierdzenie (ok. 1,3 tys.
+tokenow wejscia, 0,3-0,75 tys. wyjscia), tylko gdy cytaty przejda krok 3. Typowa notka bez znalezisk: dwa przebiegi Flasha, ok. 0,006 USD. Najgorszy przypadek (cytaty OK,
+Opus odmawia, naprawa, ponowne sprawdzenia): ok. 9 platnych wywolan, z czego realny koszt to Flash, jedna naprawa i potwierdzenie; odmowy Opusa ksieguja sie po 0 USD, a po
+pierwszej odmowie kolejne potwierdzenia przebiegu ida od razu do zapasu. Do 90 notek serii miesiecznie: ok. 0,5-1 USD (Flash) plus Opus przy kilku przypadkach. Etapy ida do
+grupy kosztu „sprawdzenie faktow i naprawa” w `co_dziala`.
 
 **Czego to NIE lapie.** (a) Bledu rozumowania w obrebie jednej notki (prawdziwe fakty, zly wniosek — 506-3). (b) Sprzecznosci z notka spoza okna kandydatow
 (starszej niz 21 dni albo o innym temacie slowami; prog to wspolne slowa i liczby, nie znaczenie). (c) Sprzecznosci z naszymi ARTYKULAMI (dziennik trzyma tylko
@@ -258,9 +268,11 @@ nowa notka ma racje, a wczesniejsza byla bledna — tylko zapis, bez sprostowani
 ponownie porownywana z dziennikiem, wiec `fc.spojnosc.stan` opisuje tekst sprzed tej naprawy. (g) Ponowne sprawdzenie po naprawie to swieze, losowe wykrycie:
 potwierdzona KAZDA pozostala sprzecznosc (takze inna niz pierwotna) odrzuca naprawe, co moze zostawic oryginal ze sprzecznoscia — skutek lagodny (to samo, co brak sprawdzenia).
 
-**Testy.** `tests/test_spojnosc.py` (135 asercji, bez sieci), 99 mutantow (`robocze/mutacje_spojnosc.py`, poza repozytorium): 98 zabitych, 1 rownowazny (jawne sprawdzenie
-„`pairs` jest lista” dubluje „kazda para ma ocene”). Przeglad niezalezny 27.10 (6 kierunkow, 34 znaleziska, 16 zweryfikowanych sceptykami) znalazl m.in. odpowiedzi o zlym
-ksztalcie liczone jako `czysto`, naprawe przyjmowana mimo ze siec obala nowy tekst, czerwony `tests/test_glos_i_routing.py` i zaniezony koszt myslenia Flasha — wszystko poprawione.
+**Testy.** `tests/test_spojnosc.py` (157 asercji, bez sieci), 117 mutantow (`robocze/mutacje_spojnosc.py`, poza repozytorium): 116 zabitych, 1 rownowazny (jawne sprawdzenie
+„`pairs` jest lista” dubluje „kazda para ma ocene”). Dwa przeglady niezalezne 27.10 (runda 1: 6 kierunkow, 34 znaleziska, 16 zweryfikowanych sceptykami; runda 2 na poprawkach:
+4 kierunki, 16 znalezisk, 14 zweryfikowanych) znalazly m.in. odpowiedzi o zlym ksztalcie liczone jako `czysto`, naprawe przyjmowana mimo ze siec obala nowy tekst, czerwony
+`tests/test_glos_i_routing.py`, zaniezony koszt myslenia Flasha, nakladajace sie cytaty zjadajace miejsca par i brak licznika odrzuconych cytatow w zapisie — wszystko poprawione.
+Wartosc zmiennej w czasie: wykrywanie ja ZGLASZA, a potwierdzenie uznaje za aktualizacje tylko gdy material pokazuje, ze nowa notka ma wartosc NOWSZA (notka z kolejki bywa starsza).
 
 ## 6. Pliki
 
