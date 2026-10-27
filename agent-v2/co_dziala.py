@@ -131,6 +131,7 @@ def zbierz_dane() -> dict[str, Any]:
             "kolejka": _json(kat / "przeslania.json", []),
             "co_klika": _jsonl(kat / "co_klika.jsonl"),
             "koszty": koszty_z_bazy(kat / "agent-v2.db"),
+            "artykuly": statystyki.najnowsze_per_pozycja("artykul"),
             "dni": _wczytaj_dni()}
 
 
@@ -532,6 +533,32 @@ def czujnik(dane: dict[str, Any], teraz: datetime) -> dict[str, Any]:
                      "reakcje": w.get("reakcje"), "data": w.get("data")} for w in top]}
 
 
+def artykuly(dane: dict[str, Any], ile: int = 8) -> list[dict[str, Any]]:
+    """Ostatnie artykuly (najnowszy pomiar kazdego): wyswietlenia, otwarcia maila, reakcje, subskrypcje w oknie doby.
+
+    `subskrypcje` artykulu to OKNO czasowe po wysylce, nie przypisanie (patrz `obserwatorium`): tu tylko jako kontekst."""
+    out = []
+    for ident, s in (dane.get("artykuly") or {}).items():
+        wyslane = int(s.get("dostarczone") or s.get("wyslane") or 0)
+        out.append({"id": ident, "tytul": " ".join(str(s.get("tekst") or "").split())[:70], "wystawiony": str(s.get("wystawione") or "")[:10],
+                    "wyswietlenia": int(s.get("wyswietlenia") or 0), "otwarcia": int(s.get("otwarcia") or 0),
+                    "otwarcia_proc": round(100 * int(s.get("otwarcia") or 0) / wyslane) if wyslane else None,
+                    "polubienia": int(s.get("polubienia") or 0), "restacki": int(s.get("restacki") or 0),
+                    "subskrypcje_okno": int(s.get("subskrypcje") or 0), "udostepnienia": int(s.get("udostepnienia") or 0),
+                    "klikniecia": int(s.get("klikniecia_w_link") or 0)})
+    return sorted(out, key=lambda a: a["wystawiony"], reverse=True)[:ile]
+
+
+def ruch_wychodzacy(dane: dict[str, Any], rows: list[dict[str, Any]], od: str) -> dict[str, Any]:
+    """Restacki wedlug zasiegu po 72 h wobec notek tej samej epoki (mediana) oraz liczby dzialan wychodzacych w oknie 7 dob
+    z obserwatorium (komentarze, odpowiedzi, restacki, obserwacje, subskrypcje, polubienia)."""
+    # Restack z notka jest NOTKA na naszym profilu: pomiar ma pod tym samym numerem co wpis `restack` (35 z 35 od 1.09.2026).
+    rest = [e for e in dane["dziennik"] if e.get("rodzaj") == "restack" and e.get("udane") and str(e.get("kiedy") or "")[:10] >= od]
+    mierzone = [int(dane["pomiary"][str(e.get("id"))].get("wyswietlenia") or 0) for e in rest if str(e.get("id")) in dane["pomiary"]]
+    return {"restackow": len(rest), "z_dojrzalym_pomiarem": len(mierzone), "mediana_wysw_restacku": _mediana([v for v in mierzone if v > 0]),
+            "mediana_wysw_notki": _mediana([x["w"] for x in rows])}
+
+
 def wzrost(dane: dict[str, Any], dzis: date) -> dict[str, Any]:
     """Tempo i lejek konta z obserwatorium (`dni_NIE.json`); brak pliku = puste."""
     dni = dane.get("dni") or {}
@@ -597,6 +624,8 @@ def policz(dane: dict[str, Any] | None = None, od: str = EPOKA_OD, dzis: date | 
     w["fc"] = sprawdzenie_faktow(dane, rozkminy, od)
     w["potok"] = potok(dane, rozkminy, od, teraz)
     w["wzrost"] = wzrost(dane, dzis)
+    w["artykuly"] = artykuly(dane)
+    w["ruch"] = ruch_wychodzacy(dane, rows, od)
     w["czujnik"] = czujnik(dane, teraz)
     w["zaklady"] = _zaklady()
     w["wnioski"] = wnioski(w)
@@ -755,6 +784,24 @@ def tekst(w: dict[str, Any]) -> str:
                                                                 (", %s subskr. na 1000 wysw." % t["subskr_na_1000_wysw"]) if t.get("subskr_na_1000_wysw") is not None else ""))
     else:
         L.append("Brak doby w obserwatorium (uruchom `obserwatorium.py zbierz`).")
+    L += ["", "## 9. Artykuly (ostatnie osiem)", ""]
+    if w["artykuly"]:
+        L += ["| wystawiony | tytul | wysw. | otwarcia maila | polubienia | restacki | udostepnienia | subskr. (okno doby) |", "|---|---|---|---|---|---|---|---|"]
+        for a in w["artykuly"]:
+            L.append("| %s | %s | %d | %d (%s) | %d | %d | %d | %d |" % (a["wystawiony"], a["tytul"].replace("|", "/"), a["wyswietlenia"], a["otwarcia"],
+                                                                      _p(a["otwarcia_proc"], "%"), a["polubienia"], a["restacki"], a["udostepnienia"],
+                                                                      a["subskrypcje_okno"]))
+        L.append("Subskrypcje artykulu to okno doby po wysylce, NIE przypisanie (Substack nie rozbija artykulow w zrodlach zapisow).")
+    else:
+        L.append("Brak pomiarow artykulow.")
+    r = w["ruch"]
+    L += ["", "### Ruch wychodzacy", "",
+          "- restackow w epoce: %d (z dojrzalym pomiarem %d); mediana wyswietlen restacku %s wobec mediany notki %s" % (
+              r["restackow"], r["z_dojrzalym_pomiarem"], _p(r["mediana_wysw_restacku"]), _p(r["mediana_wysw_notki"]))]
+    if w["wzrost"]:
+        t7 = w["wzrost"]["7"]
+        L.append("- dzialania z 7 dob: " + ", ".join("%s %s" % (k[3:], v) for k, v in sorted(t7.items())
+                                                      if k.startswith("dz_") and k != "dz_do_siostry" and v is not None))
     try:
         import zaklady
         L += [""] + zaklady.tekst_statystyk(w["zaklady"] or None)

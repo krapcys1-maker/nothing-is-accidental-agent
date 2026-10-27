@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **40 plików**, 54 603 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **40 plików**, 54 650 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -114,7 +114,7 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
 się testować bez przeglądarki i bez pieniędzy**. 219 zestawów
-testów, 6260 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+testów, 6264 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -1279,7 +1279,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `co_dziala.py` — co działa — statystyki NIE jako produktu: formaty notek, wymiary (kąt, długość, pora, model...), eksperymenty także po seriach, koszt tematu i notki, sprawdzenie faktów, potok, wzrost, zakłady i czujnik; werdykt tylko z przedziałem 95%, grupa poniżej progu to „za mało danych”
 
-809 wierszy, 37 funkcji na poziomie modułu, 0 klas
+856 wierszy, 39 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -1310,6 +1310,8 @@ wiec nie da sie go rozjechac z kodem.
 | `sprawdzenie_faktow(dane, rozkminy, od)` | Pole `fc` (od 27.10.2026): ile notek mialo obalone twierdzenie, ile naprawiono, ile zastrzezen, ile bez sprawdzenia. |
 | `potok(dane, rozkminy, od, teraz)` | Ile sledztw, ile notek z nich powstalo, wyszlo i wygaslo w kolejce; ile dni od sledztwa do pierwszej notki. |
 | `czujnik(dane, teraz)` | — |
+| `artykuly(dane, ile)` | Ostatnie artykuly (najnowszy pomiar kazdego): wyswietlenia, otwarcia maila, reakcje, subskrypcje w oknie doby. |
+| `ruch_wychodzacy(dane, rows, od)` | Restacki wedlug zasiegu po 72 h wobec notek tej samej epoki (mediana) oraz liczby dzialan wychodzacych w oknie 7 dob |
 | `wzrost(dane, dzis)` | Tempo i lejek konta z obserwatorium (`dni_NIE.json`); brak pliku = puste. |
 | `policz(dane, od, dzis)` | — |
 | `od_dzis(s)` | — |

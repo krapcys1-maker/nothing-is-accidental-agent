@@ -356,6 +356,27 @@ sprawdz("KONTRDOWOD: 12 notek serii z TRZECH serii (wiecej niz 10 notek, ale 3 n
         wk["n"] == 12 and wk["klastrow"] == 3 and wk["werdykt"].startswith("za malo danych") and "niezaleznych jednostek" in wk["werdykt"]
         and wk["przedzial_95"] is None, wk)
 
+da = dane_puste()
+da["artykuly"] = {str(1000 + i): {"wystawione": "2026-10-%02dT10:00:00.000Z" % (1 + i), "tekst": "Article number %d | with a pipe" % i, "wyswietlenia": 10 * i,
+                                  "otwarcia": i, "dostarczone": 4 * i if i else 0, "polubienia": 1, "restacki": 2, "subskrypcje": 3, "udostepnienia": 1,
+                                  "klikniecia_w_link": 5} for i in range(10)}
+at = cd.artykuly(da)
+sprawdz("artykuly: osiem najnowszych wedlug daty wystawienia, malejaco; procent otwarc z dostarczonych (0 dostarczonych = brak procentu)",
+        len(at) == 8 and at[0]["tytul"].startswith("Article number 9") and at[-1]["tytul"].startswith("Article number 2")
+        and at[0]["otwarcia_proc"] == 25 and cd.artykuly({"artykuly": {"1": {"wystawione": "2026-10-01", "tekst": "x"}}})[0]["otwarcia_proc"] is None, at)
+dr = dane_puste()
+dr["dziennik"] = [{"kiedy": "2026-11-02T10:00:00+00:00", "rodzaj": "restack", "udane": True, "id": str(7000 + i)} for i in range(4)]     + [{"kiedy": "2026-10-01T10:00:00+00:00", "rodzaj": "restack", "udane": True, "id": "7100"}]
+dr["pomiary"] = {"7000": stat(30), "7001": stat(10), "7002": stat(0), "7100": stat(500)}
+rw = cd.ruch_wychodzacy(dr, [{"w": 12}, {"w": 20}, {"w": 8}], "2026-10-26")
+sprawdz("ruch wychodzacy: restacki epoki (stary odpada), z dojrzalym pomiarem (3 z 4), mediana wyswietlen bez zer wobec mediany notki",
+        rw == {"restackow": 4, "z_dojrzalym_pomiarem": 3, "mediana_wysw_restacku": 20.0, "mediana_wysw_notki": 12.0}, rw)
+tekst_art = cd.tekst(cd.policz(da, od="2026-10-26", dzis=DZIS))
+wiersz = next(l for l in tekst_art.splitlines() if "Article number 9" in l)
+sprawdz("raport z artykulami: sekcja 9 w tekscie, a pipe w tytule nie psuje tabeli markdown (osiem kolumn = dziewiec kresek)",
+        "## 9. Artykuly" in tekst_art and wiersz.count("|") == 9 and "with a pipe" in wiersz, wiersz)
+sprawdz("raport: sekcja „Ruch wychodzacy” obecna; `dz_do_siostry` (ruch do drugiego konta) nie wchodzi do raportu NIE",
+        "### Ruch wychodzacy" in tekst_art and "do_siostry" not in tekst_art)
+
 print()
 print("=== 5. CALY RAPORT: PUSTE I PELNE DANE, ZAPIS, HISTORIA ===")
 wp = cd.policz(dane_puste(), dzis=DZIS)

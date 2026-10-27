@@ -1137,7 +1137,7 @@
 
 ### `co_dziala.py` — co działa — statystyki NIE jako produktu: formaty notek, wymiary (kąt, długość, pora, model...), eksperymenty także po seriach, koszt tematu i notki, sprawdzenie faktów, potok, wzrost, zakłady i czujnik; werdykt tylko z przedziałem 95%, grupa poniżej progu to „za mało danych”
 
-809 wierszy, 37 funkcji na poziomie modułu, 0 klas
+856 wierszy, 39 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -1168,6 +1168,8 @@
 | `sprawdzenie_faktow(dane, rozkminy, od)` | Pole `fc` (od 27.10.2026): ile notek mialo obalone twierdzenie, ile naprawiono, ile zastrzezen, ile bez sprawdzenia. |
 | `potok(dane, rozkminy, od, teraz)` | Ile sledztw, ile notek z nich powstalo, wyszlo i wygaslo w kolejce; ile dni od sledztwa do pierwszej notki. |
 | `czujnik(dane, teraz)` | — |
+| `artykuly(dane, ile)` | Ostatnie artykuly (najnowszy pomiar kazdego): wyswietlenia, otwarcia maila, reakcje, subskrypcje w oknie doby. |
+| `ruch_wychodzacy(dane, rows, od)` | Restacki wedlug zasiegu po 72 h wobec notek tej samej epoki (mediana) oraz liczby dzialan wychodzacych w oknie 7 dob |
 | `wzrost(dane, dzis)` | Tempo i lejek konta z obserwatorium (`dni_NIE.json`); brak pliku = puste. |
 | `policz(dane, od, dzis)` | — |
 | `od_dzis(s)` | — |
