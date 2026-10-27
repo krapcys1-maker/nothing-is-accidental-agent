@@ -458,6 +458,9 @@ MODEL_FOR = {
     "zaklady_wyciag": DEEPSEEK,
     "zaklady_sprawdzenie": DEEPSEEK,
     "zaklady_notka": DEEPSEEK,
+    # TEZA ARTYKULU TYGODNIA z lekkiego sledztwa / rozkminy (27.10.2026, `sledztwo.teza_artykulu`): jedno tanie
+    # wywolanie wybiera teze i numery faktow, a kod pilnuje niezaleznych zrodel pod nia.
+    "teza_artykulu": DEEPSEEK,
     # KATEGORIA HISTORII PRZY WYBORZE SLEDZTWA (25.10.2026, `sledztwo.wybierz_historie`):
     # jedno krotkie wywolanie na kilka-kilkanascie naglowkow, ulamek centa.
     "kategoria_historii": DEEPSEEK,
@@ -619,6 +622,7 @@ DEEPSEEK_MYSLENIE: dict[str, dict[str, str]] = {
     "rozkmina_wybor": {"type": "enabled"},
     "zaklady_wyciag": {"type": "enabled"},
     "zaklady_notka": {"type": "enabled"},
+    "teza_artykulu": {"type": "enabled"},
     "kategoria_historii": {"type": "disabled"},
     "wielkie_historie": {"type": "disabled"},
     # SLEDZTWO — FALA 1 (25.10.2026, kontrakt). Zapasy Sonneta MYSLA, bo zastepuja
@@ -1843,6 +1847,7 @@ MAX_TOKENS = {
     "zaklady_wyciag": 6000,
     "zaklady_sprawdzenie": 8000,
     "zaklady_notka": 4000,
+    "teza_artykulu": 6000,
     "kategoria_historii": 3000,
     "wielkie_historie": 4000,
     "pytania_ciekawosci": 8000,
@@ -1970,6 +1975,13 @@ ZAKLADY_WLACZONE = True
 # bo wchodza do promptu wyciagu jako NASZE wartosci (kotwica zaufania).
 ZAKLADY_MAKS_Z_SERII = 2
 ZAKLADY_MAKS_DNI_DO_TERMINU = 400
+
+
+# ARTYKUL TYGODNIA Z LEKKIEGO SLEDZTWA I ROZKMINY (27.10.2026, wlasciciel: „artykul z najlepszej rozkminy, z co
+# najmniej dwoma niezaleznymi zrodlami pod teza naglowka”). Do tej pory artykul ze sledztwa pisal tylko ciezki tor
+# (poziom L/XL, ksiega pytan, rekordy pierwotne), a lekki tor, ktory chodzi codziennie, nie mial jak go uniesc, wiec
+# tydzien szedl artykulem z puli. `ARTYKUL_Z_LEKKIEGO = False` wraca do starego zachowania.
+ARTYKUL_Z_LEKKIEGO = True
 
 
 def dzisiaj():

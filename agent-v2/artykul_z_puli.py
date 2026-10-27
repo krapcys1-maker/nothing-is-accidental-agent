@@ -2464,6 +2464,85 @@ def _kandydat_ze_sledztwa(w_tescie: bool = False) -> dict | None:
     return max(dobre, key=_waga)[0]
 
 
+# --- DRUGI STOPIEN: LEKKIE SLEDZTWO I ROZKMINA (27.10.2026) -----------------------------------------------
+# Ciezki tor (poziom L/XL, ksiega pytan, rekordy pierwotne) nie chodzi juz codziennie; lekki tor i rozkmina zostawiaja
+# stan z karta 14-16 twierdzen i seria notek, ale `_ocena_kandydata` ich nie przepuszcza (brak ksiegi, brak poziomu).
+# Wlasciciel: tygodniowy artykul z najlepszej rozkminy, z co najmniej dwoma niezaleznymi zrodlami pod teza naglowka.
+MIN_TWIERDZEN_ARTYKULU_LEKKO = 10
+MIN_HOSTOW_ARTYKULU_LEKKO = 5
+MAKS_STANOW_DO_TEZY = 4          # tyle najnowszych stanow dostaje teze (jedno tanie wywolanie na stan)
+
+
+def _braki_stanu_lekkiego(stan: dict, teraz: datetime | None = None) -> list[str]:
+    """Czego brakuje lekkiemu stanowi, zeby w ogole dostac teze: produkcja, wiek, brak artykulu z tego stanu, katy i karta."""
+    braki: list[str] = []
+    if not stan.get("na_serio"):
+        braki.append("sledztwo bez --wyslij")
+    if stan.get("tryb") == "test":
+        braki.append("sledztwo w trybie test")
+    try:
+        wiek = (teraz or _teraz()) - datetime.fromisoformat(str(stan.get("kiedy")))
+        if wiek > timedelta(days=DNI_KANDYDATA):
+            braki.append("stan sprzed %.1f dni (prog %d)" % (wiek.total_seconds() / 86400, DNI_KANDYDATA))
+    except (TypeError, ValueError):
+        braki.append("stan bez daty")
+    if stan.get("artykul"):
+        braki.append("artykul z tego stanu juz byl")
+    if stan.get("przerwane"):
+        braki.append("sledztwo przerwane")
+    if len([p for p in stan.get("katy") or [] if isinstance(p, dict)]) < 2:
+        braki.append("mniej niz dwa katy")
+    twierdzenia = [c for c in _twierdzenia(stan.get("karta") or {}) if not c.get("not_fetched")]
+    hosty = {_host_url(c.get("url")) for c in twierdzenia} - {""}
+    if len(twierdzenia) < MIN_TWIERDZEN_ARTYKULU_LEKKO or len(hosty) < MIN_HOSTOW_ARTYKULU_LEKKO:
+        braki.append("%d twierdzen z %d serwisow (prog %d z %d)" % (len(twierdzenia), len(hosty), MIN_TWIERDZEN_ARTYKULU_LEKKO,
+                                                                    MIN_HOSTOW_ARTYKULU_LEKKO))
+    return braki
+
+
+def _kandydat_lekki(conn, run_id, teraz: datetime | None = None) -> dict | None:
+    """Najlepszy stan lekkiego sledztwa albo rozkminy z ostatnich dni na artykul tygodnia, z TEZA (`stan["teza_artykulu"]`)
+    wsparta co najmniej dwoma niezaleznymi zrodlami; None, gdy zadnego nie ma. Rozkmina przed zwyklym sledztwem, potem
+    liczba niezaleznych wydawcow pod teza, liczba faktow, swiezosc. Tylko najnowsze `MAKS_STANOW_DO_TEZY` stanow placi za teze."""
+    import sledztwo
+
+    if not getattr(config, "ARTYKUL_Z_LEKKIEGO", True):
+        return None
+    katalog = config.DATA_DIR / KATALOG_SLEDZTW
+    stany = []
+    for plik in sorted(katalog.glob("*.json")) if katalog.exists() else []:
+        try:
+            stan = json.loads(plik.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if not isinstance(stan, dict) or not stan.get("run_id"):
+            continue
+        if stan.get("tryb_badania") != "lekkie" and (stan.get("poziom") or {}).get("poziom") != "LEKKI":
+            continue            # ciezki tor ocenia `_kandydat_ze_sledztwa`
+        stany.append(stan)
+    stany.sort(key=lambda s: str(s.get("kiedy") or ""), reverse=True)
+    dobre = []
+    sprawdzone = 0
+    for stan in stany:
+        braki = _braki_stanu_lekkiego(stan, teraz)
+        if braki:
+            print("  [kandydat lekki %s] %s — nie: %s" % (stan.get("run_id"), str((stan.get("wybrana") or {}).get("tytul"))[:70],
+                                                       "; ".join(braki)), flush=True)
+            continue
+        if sprawdzone >= MAKS_STANOW_DO_TEZY:
+            break
+        sprawdzone += 1
+        teza = sledztwo.teza_artykulu(conn, run_id, stan)
+        if teza:
+            dobre.append((stan, teza))
+    if not dobre:
+        return None
+    stan, teza = max(dobre, key=lambda st: (st[0].get("typ") == "rozkmina", len(st[1]["niezalezne_zrodla"]), len(st[1]["za"]),
+                                            str(st[0].get("kiedy") or "")))
+    stan["teza_artykulu"] = teza
+    return stan
+
+
 def _karta_artykulu(stan: dict) -> tuple[dict, dict]:
     """(brief, karta dla pisarza) z zapisanego stanu sledztwa.
 
@@ -2488,6 +2567,24 @@ def _karta_artykulu(stan: dict) -> tuple[dict, dict]:
         {k: p.get(k) for k in ("rodzaj", "przeslanie", "wniosek", "tresc", "zalozenie", "za", "przeciw",
                                "co_obali")}
         for p in przes if _kat_analizy(sledztwo, p.get("rodzaj"))]
+    # TEZA Z LEKKIEGO STANU (27.10.2026, `sledztwo.teza_artykulu`): nowe ustalenie lekki tor nie liczy, wiec artykul stoi
+    # na tezie z dwoma niezaleznymi zrodlami. Idzie jako ustalenie (o ile ciezki tor nie dal wlasnego) i jako pierwsza,
+    # JAWNIE nasza hipoteza z dowodami za i przeciw oraz warunkiem pomylki — takiego ksztaltu wymaga `pisarz.md`.
+    # Przeczucia rozkminy to nasze zgadywania: pisarz dostaje je jako hipotezy, nigdy jako fakty.
+    teza = stan.get("teza_artykulu") or {}
+    if teza.get("teza"):
+        if not card.get("investigation_finding"):
+            card["investigation_finding"] = {"finding": teza["teza"], "how_the_sources_combine": teza.get("jak_zrodla_lacza") or "",
+                                             "claims": list(teza.get("twierdzenia_za") or [])}
+        card["editorial_hypotheses"] = [{
+            "rodzaj": "THESIS", "przeslanie": teza["teza"], "za": list(teza.get("twierdzenia_za") or []),
+            "przeciw": list(teza.get("twierdzenia_przeciw") or []), "co_obali": teza.get("co_obali") or ""}] + card["editorial_hypotheses"]
+        for p in (stan.get("wybrana") or {}).get("przeczucia") or []:
+            if isinstance(p, dict) and p.get("mysl"):
+                card["editorial_hypotheses"].append({"rodzaj": "HUNCH", "przeslanie": " ".join(str(p["mysl"]).split()),
+                                                     "zalozenie": "our guess, not a fact"})
+        if teza.get("tytul"):
+            brief["title"] = teza["tytul"]
     card["investigation_type"] = "model_release" if stan.get("typ") == "premiera" else "investigation"
     zarezerwowane = []
     for x in card.get("do_artykulu") or []:
@@ -2517,9 +2614,13 @@ def _artykul_ze_sledztwa(conn, run_id: int) -> int | None:
     # zaplacono za pisanie, a przejscie do puli zaplaciloby za drugi artykul.
     try:
         stan = _kandydat_ze_sledztwa()
+        if stan is None:
+            stan = _kandydat_lekki(conn, run_id)
         if stan is not None:
             brief, card = _karta_artykulu(stan)
             evidence = [e for e in stan.get("evidence") or [] if isinstance(e, dict)] or None
+    except PRZERYWAJA:
+        raise
     except Exception as exc:
         print("  [artykul] wybor kandydata ze sledztwa padl (%s: %s) — artykul z puli"
               % (type(exc).__name__, str(exc)[:120]), flush=True)

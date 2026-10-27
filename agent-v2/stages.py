@@ -187,6 +187,12 @@ def prompt_redakcji_serii(notki: str) -> str:
     return _prompt("seria_redakcja.md", notki=notki)
 
 
+def prompt_tezy_artykulu(mysli: str, fakty: str, nieustalone: str) -> str:
+    """Prompt wyboru tezy artykulu tygodnia (`sledztwo.teza_artykulu`). Fakty, nasze notatki z cudzych faktow i
+    nieustalone stoja za bariera; dzisiejsza data jest nasza."""
+    return _prompt("teza_artykulu.md", dzis=config.dzisiaj(), mysli=mysli, fakty=fakty, nieustalone=nieustalone)
+
+
 def prompt_zakladow_wyciag(notki: str) -> str:
     """Prompt wyciagu zakladow z opublikowanych notek (`zaklady.wyciagnij`). Notki to tekst napisany z cudzych
     faktow, wiec stoja za bariera; dzisiejsza data, limit zakladow i okno terminu sa nasze."""
