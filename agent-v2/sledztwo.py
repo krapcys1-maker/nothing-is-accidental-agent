@@ -390,6 +390,18 @@ def _archiwum_substack(host: str, ile: int = 30) -> list[dict[str, Any]]:
     return [p for p in dane if isinstance(p, dict)] if isinstance(dane, list) else []
 
 
+def _nazwa_publikacji(host: str) -> str:
+    """Nazwa publikacji z adresu: `newsletter.semianalysis.com` -> semianalysis, `thezvi.substack.com` -> thezvi.
+
+    Pierwszy czlon bywa tylko poddomena (newsletter, magazine, www), wiec poza `*.substack.com` bierzemy
+    przedostatni; do 27.10.2026 bralo sie zawsze pierwszy i trzy publikacje `newsletter.*` zlewaly sie w jeden
+    kanal „Substack newsletter” (a liczba roznych serwisow pod przeczuciem jest czescia jego wyniku)."""
+    czlony = str(host or "").lower().strip(".").split(".")
+    if len(czlony) >= 3 and czlony[-2:] == ["substack", "com"]:
+        return czlony[0]
+    return czlony[-2] if len(czlony) >= 2 else czlony[0]
+
+
 def popularne_substack(dni: int = 14, min_przebicie: float = 1.5, min_reakcji: int = 40, maks: int = 12,
                        archiwum=None) -> list[dict[str, Any]]:
     """Przebicia z ostatnich `dni` w czolowych AI-Substackach jako pozycje korpusu (z `sygnal` i `przebicie`).
@@ -428,7 +440,7 @@ def popularne_substack(dni: int = 14, min_przebicie: float = 1.5, min_reakcji: i
                     continue
                 przebicie = round(r / mediana, 1)
                 znalezione.append({
-                    "temat": tytul, "surowy": tytul, "kanal": "Substack " + host.replace("www.", "").split(".")[0],
+                    "temat": tytul, "surowy": tytul, "kanal": "Substack " + _nazwa_publikacji(host),
                     "data": data, "url": p.get("canonical_url") or "https://%s/p/%s" % (host, p.get("slug")),
                     "reakcje": r, "mediana": mediana, "przebicie": przebicie, "komentarze": int(p.get("comment_count") or 0),
                     "sygnal": "breakout: %.1fx the usual reactions at this publication (%d)" % (przebicie, r),
@@ -3090,6 +3102,28 @@ def _tytul_do_serii(h: dict[str, Any]) -> str:
     return t
 
 
+_ETYKIETY_NIEUSTALONEGO = {"not_established": "not established",
+                           "contradictions": "the evidence cuts against a claim or hunch", "uncertain_claims": "doubtful"}
+_LIMITY_NIEUSTALONEGO = (("not_established", 6), ("contradictions", 4), ("uncertain_claims", 4))
+
+
+def _nieustalone_do_serii(card: dict[str, Any]) -> str:
+    """Co zrodla zostawily nieustalone, co przeczy twierdzeniom i przeczuciom, i co jest watpliwe — dla pisarza serii.
+
+    Do 27.10.2026 szlo tylko `not_established`: pisarz nie widzial sprzecznosci karty, wiec cztery notki rozkminy z
+    26.10 podawaly przeczucie jako przeslanke, choc karta wprost pisala, ze szeroka baza klientow przeczy tezie o waskim
+    strumieniu renty, a „profilowanie jest wiekszym ryzykiem” jest nieudowodnione. Wpis niesie etykiete rodzaju."""
+    linie = []
+    for klucz, maks in _LIMITY_NIEUSTALONEGO:
+        wziete = 0
+        for x in card.get(klucz) or []:
+            tekst = _tekst_zastrzezenia(x)
+            if tekst and wziete < maks:
+                linie.append("- (%s) %s" % (_ETYKIETY_NIEUSTALONEGO[klucz], tekst[:360]))
+                wziete += 1
+    return "\n".join(linie) or "(nothing noted)"
+
+
 def seria_lekka(conn, run_id, card: dict[str, Any], h: dict[str, Any], typ: str = "sledztwo",
                 ile: int | None = None) -> list[dict[str, Any]]:
     """Seria notek JEDNYM wywolaniem: [{rodzaj, tekst, wniosek, fakty, wiedza, lead, ...}] — gotowe teksty
@@ -3108,8 +3142,7 @@ def seria_lekka(conn, run_id, card: dict[str, Any], h: dict[str, Any], typ: str 
         ramie_dlugosci = stages.ramie("dlugosc_serii", run_id or 0)
         prompt = stages.prompt_serii_lekkiej(
             tytul=_tytul_do_serii(h), fakty=_fakty_do_promptu(card),
-            nieustalone="\n".join("- " + " ".join(str(x).split())[:240]
-                                  for x in (card.get("not_established") or [])[:6]) or "(nothing noted)",
+            nieustalone=_nieustalone_do_serii(card),
             ostatnie=_ostatnie_do_promptu(), typ=typ, n_max=ile, ramie_dlugosci=ramie_dlugosci)
         try:
             surowe = llm.call("seria_lekka", SERIA_SYSTEM, prompt, conn=conn, run_id=run_id)

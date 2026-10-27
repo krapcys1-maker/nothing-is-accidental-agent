@@ -2466,7 +2466,7 @@ Return only valid JSON:
 
 #### `prompts/rozkmina_seria.md`
 
-**47 wierszy.** Pola wejsciowe: `dlugosc`, `fakty`, `katy`, `marka`, `n_max`, `nieustalone`, `ostatnie`, `typ_historii`, `tytul`
+**49 wierszy.** Pola wejsciowe: `dlugosc`, `fakty`, `katy`, `marka`, `n_max`, `nieustalone`, `ostatnie`, `typ_historii`, `tytul`
 
 ````markdown
 You are the thinking columnist of {marka}, a small publication that explains AI to curious people who are not experts. {typ_historii}. The working title, our hunches and the FACTS we found are listed under the barrier below.
@@ -2491,6 +2491,8 @@ How this works — read it twice:
 
 8. ORDER: the most striking thought first; the most speculative last.
 
+9. THE EVIDENCE MAY BEAT YOUR HUNCH. Under "What our sources did not settle, or contradicted", a line marked "the evidence cuts against a claim or hunch" or "doubtful" is research that argues with an idea. If a note would lean on a hunch or claim that such a line cuts against, either say in the note what cuts against it (a note may argue a side and still show the strongest fact against it) or take another thought. Never state the contradicted version as the premise, never turn a "not established" line into a fact, and never claim more than a source did: keep its "reportedly", "at least in part", "estimated".
+
 Angle tags to choose from (pick the closest for each note; the note itself may be anything that works):
 {katy}
 
@@ -2509,7 +2511,7 @@ Return only valid JSON, no text outside it:
 
 {fakty}
 
-## What our sources did not settle
+## What our sources did not settle, or contradicted
 
 {nieustalone}
 
@@ -2555,7 +2557,7 @@ Return only valid JSON:
 
 #### `prompts/seria_lekka.md`
 
-**47 wierszy.** Pola wejsciowe: `dlugosc`, `fakty`, `katy`, `marka`, `n_max`, `nieustalone`, `ostatnie`, `typ_historii`, `tytul`
+**49 wierszy.** Pola wejsciowe: `dlugosc`, `fakty`, `katy`, `marka`, `n_max`, `nieustalone`, `ostatnie`, `typ_historii`, `tytul`
 
 ````markdown
 You are the thinking columnist of {marka}, a small publication that explains AI to curious people who are not experts. The story ({typ_historii}) and the FACTS we found about it are listed under the barrier below.
@@ -2580,6 +2582,8 @@ How this works — read it twice:
 
 8. ORDER: the most striking thought first; the most speculative last.
 
+9. THE EVIDENCE MAY BEAT YOUR HUNCH. Under "What our sources did not settle, or contradicted", a line marked "the evidence cuts against a claim or hunch" or "doubtful" is research that argues with an idea. If a note would lean on a hunch or claim that such a line cuts against, either say in the note what cuts against it (a note may argue a side and still show the strongest fact against it) or take another thought. Never state the contradicted version as the premise, never turn a "not established" line into a fact, and never claim more than a source did: keep its "reportedly", "at least in part", "estimated".
+
 Angle tags to choose from (pick the closest for each note; the note itself may be anything that works):
 {katy}
 
@@ -2598,7 +2602,7 @@ Return only valid JSON, no text outside it:
 
 {fakty}
 
-## What our sources did not settle
+## What our sources did not settle, or contradicted
 
 {nieustalone}
 

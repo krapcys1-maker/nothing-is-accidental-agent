@@ -147,6 +147,28 @@ w, log = cicho(sledztwo.popularne_substack, archiwum=lambda h: 1 / 0)
 sprawdz("awaria archiwum w kazdej publikacji = pusta lista, nie wyjatek", w == [], (w, log))
 
 print()
+print("=== 3b. ETYKIETA KANALU (27.10: trzy `newsletter.*` zlewaly sie w „Substack newsletter”) ===")
+nazwy = {h: sledztwo._nazwa_publikacji(h) for h in HOSTY}
+sprawdz("kazda publikacja z listy ma wlasna nazwe (zadnych kolizji, zadnej nazwy-poddomeny)",
+        len(set(nazwy.values())) == len(HOSTY) and not {"newsletter", "magazine", "www", "substack"} & set(nazwy.values()),
+        {n: [h for h in HOSTY if nazwy[h] == n] for n in set(nazwy.values()) if list(nazwy.values()).count(n) > 1})
+sprawdz("poddomena `newsletter.`/`magazine.` nie jest nazwa; `*.substack.com` daje pierwszy czlon; `www.` odpada",
+        (nazwy["newsletter.semianalysis.com"], nazwy["magazine.sebastianraschka.com"], nazwy["thezvi.substack.com"],
+         nazwy["www.oneusefulthing.org"], nazwy["newsletter.pragmaticengineer.com"])
+        == ("semianalysis", "sebastianraschka", "thezvi", "oneusefulthing", "pragmaticengineer"), nazwy)
+sprawdz("brzegi: wielkie litery, kropka na koncu, pusty adres i adres bez kropki nie rzucaja",
+        (sledztwo._nazwa_publikacji("Newsletter.Example.COM."), sledztwo._nazwa_publikacji(""),
+         sledztwo._nazwa_publikacji("localhost")) == ("example", "", "localhost"),
+        (sledztwo._nazwa_publikacji("Newsletter.Example.COM."), sledztwo._nazwa_publikacji(""),
+         sledztwo._nazwa_publikacji("localhost")))
+odswiez()
+dane = {"newsletter.semianalysis.com": tlo() + [wpis("AI chip supply breakout one", 400, 1)],
+        "newsletter.pragmaticengineer.com": tlo() + [wpis("AI engineering breakout two", 410, 1)]}
+w, _ = cicho(sledztwo.popularne_substack, archiwum=archiwum_z(dane))
+sprawdz("pozycje z dwoch `newsletter.*` trafiaja do korpusu pod dwoma ROZNYMI kanalami",
+        {e["kanal"] for e in w} == {"Substack semianalysis", "Substack pragmaticengineer"}, [e["kanal"] for e in w])
+
+print()
 print("=== 4. PODLACZENIE ===")
 kod = open("agent-v2/artykul_z_puli.py", encoding="utf-8").read()
 sprawdz("przebieg rozkminy dokleja przebicia do korpusu", "sledztwo.popularne_hn() + sledztwo.popularne_substack()" in kod)

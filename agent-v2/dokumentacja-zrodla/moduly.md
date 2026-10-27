@@ -764,7 +764,7 @@
 
 ### `sledztwo.py` — śledztwo — wybór największej historii, rdzeń (sedno) i kąty serii z jednej tabeli KATY, uczciwy hak sprawdzany kodem, poziom tematu (liczba notek), bramka nowości i kolejka notek
 
-3847 wierszy, 158 funkcji na poziomie modułu, 0 klas
+3880 wierszy, 160 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -775,6 +775,7 @@
 | `wielkie_historie(korpus, conn, run_id, ile)` | Najwieksze historie z korpusu ostatnich `DNI_WIELKICH` dni — niezaleznie od radaru. |
 | `popularne_hn(dni, min_punktow, http)` | Najpopularniejsze watki AI z Hacker News z ostatnich dni — jako pozycje korpusu. |
 | `_archiwum_substack(host, ile)` *(wewn.)* | Najnowsze wpisy publicznego archiwum Substacka (tytul, data, reakcje...). Awaria = pusta lista. |
+| `_nazwa_publikacji(host)` *(wewn.)* | Nazwa publikacji z adresu: `newsletter.semianalysis.com` -> semianalysis, `thezvi.substack.com` -> thezvi. |
 | `popularne_substack(dni, min_przebicie, min_reakcji, maks, archiwum)` | Przebicia z ostatnich `dni` w czolowych AI-Substackach jako pozycje korpusu (z `sygnal` i `przebicie`). |
 | `scal_historie(radarowe, wielkie)` | Radar + detektor duzych historii bez dubli: historia detektora, ktora dzieli adres |
 | `zrodla_historii(h)` | Adresy historii do pobrania, w ksztalcie `stages.fetch` — bez powtorek. |
@@ -887,6 +888,7 @@
 | `rozkmina_historia(korpus, conn, run_id)` | Pseudo-historia z przeczuc albo None, gdy nic nie skloniło do myslenia. Nigdy nie podnosi wyjatku poza |
 | `_bez_powtorek(conn, run_id, notki)` *(wewn.)* | Jedno tanie wywolanie redaktora: notki, ktore powtarzaja teze innej, odpadaja (nigdy pierwsza, |
 | `_tytul_do_serii(h)` *(wewn.)* | Tytul historii dla promptu serii; przy rozkminie dochodza NASZE przeczucia (nie fakty) jako ziarna. |
+| `_nieustalone_do_serii(card)` *(wewn.)* | Co zrodla zostawily nieustalone, co przeczy twierdzeniom i przeczuciom, i co jest watpliwe — dla pisarza serii. |
 | `seria_lekka(conn, run_id, card, h, typ, ile)` | Seria notek JEDNYM wywolaniem: [{rodzaj, tekst, wniosek, fakty, wiedza, lead, ...}] — gotowe teksty |
 | `_domena(url)` *(wewn.)* | Klucz wydawcy adresu albo pusty ciag, gdy adres nie jest wydawca. Domena rejestrowana (example.co.uk, nie |
 | `_slowa_porownania(tekst)` *(wewn.)* | — |

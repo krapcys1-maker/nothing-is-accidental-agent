@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **40 plików**, 55 147 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **40 plików**, 55 180 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -114,7 +114,7 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
 się testować bez przeglądarki i bez pieniędzy**. 221 zestawów
-testów, 6364 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+testów, 6375 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -906,7 +906,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `sledztwo.py` — śledztwo — wybór największej historii, rdzeń (sedno) i kąty serii z jednej tabeli KATY, uczciwy hak sprawdzany kodem, poziom tematu (liczba notek), bramka nowości i kolejka notek
 
-3847 wierszy, 158 funkcji na poziomie modułu, 0 klas
+3880 wierszy, 160 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -917,6 +917,7 @@ wiec nie da sie go rozjechac z kodem.
 | `wielkie_historie(korpus, conn, run_id, ile)` | Najwieksze historie z korpusu ostatnich `DNI_WIELKICH` dni — niezaleznie od radaru. |
 | `popularne_hn(dni, min_punktow, http)` | Najpopularniejsze watki AI z Hacker News z ostatnich dni — jako pozycje korpusu. |
 | `_archiwum_substack(host, ile)` *(wewn.)* | Najnowsze wpisy publicznego archiwum Substacka (tytul, data, reakcje...). Awaria = pusta lista. |
+| `_nazwa_publikacji(host)` *(wewn.)* | Nazwa publikacji z adresu: `newsletter.semianalysis.com` -> semianalysis, `thezvi.substack.com` -> thezvi. |
 | `popularne_substack(dni, min_przebicie, min_reakcji, maks, archiwum)` | Przebicia z ostatnich `dni` w czolowych AI-Substackach jako pozycje korpusu (z `sygnal` i `przebicie`). |
 | `scal_historie(radarowe, wielkie)` | Radar + detektor duzych historii bez dubli: historia detektora, ktora dzieli adres |
 | `zrodla_historii(h)` | Adresy historii do pobrania, w ksztalcie `stages.fetch` — bez powtorek. |
@@ -1029,6 +1030,7 @@ wiec nie da sie go rozjechac z kodem.
 | `rozkmina_historia(korpus, conn, run_id)` | Pseudo-historia z przeczuc albo None, gdy nic nie skloniło do myslenia. Nigdy nie podnosi wyjatku poza |
 | `_bez_powtorek(conn, run_id, notki)` *(wewn.)* | Jedno tanie wywolanie redaktora: notki, ktore powtarzaja teze innej, odpadaja (nigdy pierwsza, |
 | `_tytul_do_serii(h)` *(wewn.)* | Tytul historii dla promptu serii; przy rozkminie dochodza NASZE przeczucia (nie fakty) jako ziarna. |
+| `_nieustalone_do_serii(card)` *(wewn.)* | Co zrodla zostawily nieustalone, co przeczy twierdzeniom i przeczuciom, i co jest watpliwe — dla pisarza serii. |
 | `seria_lekka(conn, run_id, card, h, typ, ile)` | Seria notek JEDNYM wywolaniem: [{rodzaj, tekst, wniosek, fakty, wiedza, lead, ...}] — gotowe teksty |
 | `_domena(url)` *(wewn.)* | Klucz wydawcy adresu albo pusty ciag, gdy adres nie jest wydawca. Domena rejestrowana (example.co.uk, nie |
 | `_slowa_porownania(tekst)` *(wewn.)* | — |
@@ -11993,7 +11995,7 @@ Return only valid JSON:
 
 #### `prompts/rozkmina_seria.md`
 
-**47 wierszy.** Pola wejsciowe: `dlugosc`, `fakty`, `katy`, `marka`, `n_max`, `nieustalone`, `ostatnie`, `typ_historii`, `tytul`
+**49 wierszy.** Pola wejsciowe: `dlugosc`, `fakty`, `katy`, `marka`, `n_max`, `nieustalone`, `ostatnie`, `typ_historii`, `tytul`
 
 ````markdown
 You are the thinking columnist of {marka}, a small publication that explains AI to curious people who are not experts. {typ_historii}. The working title, our hunches and the FACTS we found are listed under the barrier below.
@@ -12018,6 +12020,8 @@ How this works — read it twice:
 
 8. ORDER: the most striking thought first; the most speculative last.
 
+9. THE EVIDENCE MAY BEAT YOUR HUNCH. Under "What our sources did not settle, or contradicted", a line marked "the evidence cuts against a claim or hunch" or "doubtful" is research that argues with an idea. If a note would lean on a hunch or claim that such a line cuts against, either say in the note what cuts against it (a note may argue a side and still show the strongest fact against it) or take another thought. Never state the contradicted version as the premise, never turn a "not established" line into a fact, and never claim more than a source did: keep its "reportedly", "at least in part", "estimated".
+
 Angle tags to choose from (pick the closest for each note; the note itself may be anything that works):
 {katy}
 
@@ -12036,7 +12040,7 @@ Return only valid JSON, no text outside it:
 
 {fakty}
 
-## What our sources did not settle
+## What our sources did not settle, or contradicted
 
 {nieustalone}
 
@@ -12082,7 +12086,7 @@ Return only valid JSON:
 
 #### `prompts/seria_lekka.md`
 
-**47 wierszy.** Pola wejsciowe: `dlugosc`, `fakty`, `katy`, `marka`, `n_max`, `nieustalone`, `ostatnie`, `typ_historii`, `tytul`
+**49 wierszy.** Pola wejsciowe: `dlugosc`, `fakty`, `katy`, `marka`, `n_max`, `nieustalone`, `ostatnie`, `typ_historii`, `tytul`
 
 ````markdown
 You are the thinking columnist of {marka}, a small publication that explains AI to curious people who are not experts. The story ({typ_historii}) and the FACTS we found about it are listed under the barrier below.
@@ -12107,6 +12111,8 @@ How this works — read it twice:
 
 8. ORDER: the most striking thought first; the most speculative last.
 
+9. THE EVIDENCE MAY BEAT YOUR HUNCH. Under "What our sources did not settle, or contradicted", a line marked "the evidence cuts against a claim or hunch" or "doubtful" is research that argues with an idea. If a note would lean on a hunch or claim that such a line cuts against, either say in the note what cuts against it (a note may argue a side and still show the strongest fact against it) or take another thought. Never state the contradicted version as the premise, never turn a "not established" line into a fact, and never claim more than a source did: keep its "reportedly", "at least in part", "estimated".
+
 Angle tags to choose from (pick the closest for each note; the note itself may be anything that works):
 {katy}
 
@@ -12125,7 +12131,7 @@ Return only valid JSON, no text outside it:
 
 {fakty}
 
-## What our sources did not settle
+## What our sources did not settle, or contradicted
 
 {nieustalone}
 

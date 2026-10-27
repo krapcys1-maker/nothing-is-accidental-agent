@@ -349,7 +349,7 @@
 {{"w_prostych_slowach": "<plain explanation>", "skala": "<comparison in the material, or empty>", "pytania": [{{"pytanie": "<question>", "odpowiedz": "<answer, inference or unknown>", "z_dowodu": true|false}}], "jesli_sie_utrzyma": "<supported or conditional implications, with the steps explained>", "gdzie_by_peklo": "<specific limitation, or empty>", "co_o_tym_sadze": "<judgment and reason, or what prevents one>", "czego_nie_wiadomo": ["<unanswered question>"]}}
 ```
 
-#### `rozkmina_seria.md` (47 wierszy)
+#### `rozkmina_seria.md` (49 wierszy)
 
 **Pola wejściowe:** `dlugosc`, `fakty`, `katy`, `marka`, `n_max`, `nieustalone`, `ostatnie`, `typ_historii`, `tytul`
 
@@ -369,7 +369,7 @@
 {{"tytul": "<a working title for the thought, plain words, max 14 words>", "pytanie": "<one research question: what facts would we need to ground or test these hunches?>", "przeczucia": [{{"mysl": "<the hunch, one sentence, as our guess>", "pozycje": [<item numbers>]}}]}}
 ```
 
-#### `seria_lekka.md` (47 wierszy)
+#### `seria_lekka.md` (49 wierszy)
 
 **Pola wejściowe:** `dlugosc`, `fakty`, `katy`, `marka`, `n_max`, `nieustalone`, `ostatnie`, `typ_historii`, `tytul`
 

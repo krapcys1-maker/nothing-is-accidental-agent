@@ -177,6 +177,35 @@ przechodza 1-3 uwagi, wiec to sygnal rzadki, ale darmowy.
 - **Podlaczenie czujnika do wyboru tematu:** dopiero po 3-4 tygodniach dziennika `co_klika.jsonl` (ekstrapolacja z danych, nie z intuicji).
 - **Notka-zapowiedz artykulu z tezy:** artykul tygodnia ma juz swoje notki promujace (`typ` ARTYKUL); osobnej nie dodajemy.
 
+## 5d. Czujnik „co klika” w praktyce (kontrola wieczorna 27.10.2026)
+
+- **Kiedy pierwszy raz zywo.** Czujnik woła wylacznie korpus rozkminy, a brama rozkminy (`ROZKMINA_CO_DNI = 3`, okno liczone co do godziny) widziala
+  reczna rozkmine 506 z 26.10 18:48 UTC, wiec zegarowa rozkmina 27.10 14:44 UTC wyszla kodem 1 przed jakimkolwiek wywolaniem modelu. Pierwsza zegarowa
+  rozkmina (i pierwszy zapis `co_klika.jsonl`) wypada 30.10 ok. 14:45 UTC. Proba czujnika na katalogu tymczasowym (20 s, bez zapisu do `data/`):
+  3 przebicia, pieciu nowych hostow czyta sie poprawnie (14-23 wpisy), po prostu bez swiezych przebic.
+- **Etykieta kanalu.** Do 27.10 wieczorem nazwa kanalu brala pierwszy czlon adresu, wiec `newsletter.semianalysis.com`,
+  `newsletter.maartengrootendorst.com` i `newsletter.pragmaticengineer.com` zlewaly sie w jeden kanal „Substack newsletter” (a `magazine.sebastianraschka.com`
+  nazywal sie „magazine”); liczba roznych serwisow pod przeczuciem (`serwisy`) jest czescia jego wyniku. `sledztwo._nazwa_publikacji` bierze nazwe
+  domeny (`semianalysis`), a dla `*.substack.com` pierwszy czlon; test pilnuje, ze zadne dwie publikacje z listy nie dziela nazwy.
+
+- **Pisarz serii widzi sprzecznosci karty (audyt wieczorny).** Dwie z notek rozkminy z 26.10 mialy w kolejce teze, ktorej wlasna karta wprost przeczyla:
+  szeroka baza klientow Anthropic (11 900 / 1 900 / 250) przeczy tezie o „waskim strumieniu renty” (506-1), a „profilowanie jest wiekszym ryzykiem”
+  jest nieudowodnione (506-4) — ale pisarz serii dostawal z karty tylko `not_established`, nie `contradictions`. Teraz `sledztwo._nieustalone_do_serii` daje mu
+  trzy listy z etykieta rodzaju (6 nieustalonych / 4 sprzecznosci „the evidence cuts against a claim or hunch” / 4 watpliwe, do 360 znakow), sekcja promptu
+  nazywa sie „What our sources did not settle, or contradicted”, a regula 9 szablonow `seria_lekka.md` i `rozkmina_seria.md` mowi: dowod moze pokonac
+  przeczucie — nalezy napisac, co mu przeczy, albo wziac inna mysl; nie wolno podawac sprzecznego jako przeslanki ani twierdzic mocniej niz zrodlo
+  („reportedly”, „at least in part”). To prosba w prompcie, nie bramka (zgodnie z decyzja wlasciciela o notkach bez bramek tekstu); sprawdzenie faktow w
+  sieci przy publikacji zostaje. **Czego ta zmiana NIE zalatwia:** (a) fakt, ktory pisarz juz widzial jako potwierdzony (Artificial Analysis: luka otwarte-vs-
+  zamkniete 12 -> 3 pkt po wydaniu wag, 506-3), a mimo to napisal „wagi to wczorajsza wiadomosc” — to blad rozumowania, nie brak danych; (b) sprzecznosc
+  z INNYM sledztwem lub z naszymi juz opublikowanymi notkami (506-2 „AI nie znalazlo bledu” przeczylo osi czasu Wiz z karty 499 i notce 499-1) —
+  pisarz widzi tylko karte swojej historii i naglowki ostatnich notek, wiec to wymagaloby osobnego sprawdzenia z dziennikiem (kolejna decyzja, nie ta zmiana).
+  Proba zywa na zapisanej karcie 506 (Flash, 0,007 USD): seria uzyla szerokiej bazy klientow zamiast tezy o „waskiej rencie”.
+- **Reczna redakcja kolejki 27.10 15:38 UTC.** Pieciu oczekujacych notek (499-5, 506-1..4) nie dalo sie puscic: audyt 3 soczewkami (wiernosc, spojnosc z
+  14 dniami opublikowanych, oznaczenie spekulacji) znalazl wzmocnione zrodla („known for years” zamiast „at least in part”, „mass” dopisane do cytatu
+  Fundacji PHP, „deliberately”), wymyslonego „partnera”, analogie z patentami, teze o „waskim” strumieniu przy 250 / 1 900 / 11 900 klientach w tym samym
+  zdaniu, i sprzecznosc 506-2 z naszymi opublikowanymi 499-1 i 499-4. Teksty przepisano recznie (zachowano glos i dlugosc), sprawdzilo je dwoch
+  sceptykow na notke; oryginaly leza w polu `redakcja_reczna.oryginal` wpisu kolejki, kopia pliku w `data/przeslania.json.przed-redakcja-27-10`.
+
 ## 6. Pliki
 
 - `agent-v2/zaklady.py`, `agent-v2/co_dziala.py`; prompty `agent-v2/prompts/zaklady_*.md`; budowniczowie w `stages.py`

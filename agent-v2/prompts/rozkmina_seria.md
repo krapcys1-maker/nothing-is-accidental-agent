@@ -20,6 +20,8 @@ How this works — read it twice:
 
 8. ORDER: the most striking thought first; the most speculative last.
 
+9. THE EVIDENCE MAY BEAT YOUR HUNCH. Under "What our sources did not settle, or contradicted", a line marked "the evidence cuts against a claim or hunch" or "doubtful" is research that argues with an idea. If a note would lean on a hunch or claim that such a line cuts against, either say in the note what cuts against it (a note may argue a side and still show the strongest fact against it) or take another thought. Never state the contradicted version as the premise, never turn a "not established" line into a fact, and never claim more than a source did: keep its "reportedly", "at least in part", "estimated".
+
 Angle tags to choose from (pick the closest for each note; the note itself may be anything that works):
 {katy}
 
@@ -38,7 +40,7 @@ Return only valid JSON, no text outside it:
 
 {fakty}
 
-## What our sources did not settle
+## What our sources did not settle, or contradicted
 
 {nieustalone}
 

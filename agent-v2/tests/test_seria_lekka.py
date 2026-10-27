@@ -364,6 +364,46 @@ sprawdz("sprawdzenie bez JSON-a = `nie_sprawdzone`; brak weryfikacji albo smieci
         stages.skrot_weryfikacji({"weryfikacja": {"bez_json": True, "safe_to_post": False}})["nie_sprawdzone"]
         and stages.skrot_weryfikacji({})["twierdzen"] == 0 and stages.skrot_weryfikacji({"weryfikacja": 5}) == {})
 
+print()
+print("=== 9. PISARZ WIDZI SPRZECZNOSCI KARTY (27.10: cztery notki rozkminy podawaly przeczucie jako przeslanke) ===")
+DLUGA = "The 'narrow rent stream' reading is partly contradicted by the customer counts: " + "base " * 40 + "not only a handful."
+karta_sp = dict(karta(12),
+                not_established=["Open question %d about Q7." % i for i in range(1, 9)],
+                contradictions=[DLUGA, {"claim": "A dict contradiction about the Q7 benchmark."}, None, "", {}]
+                + ["Extra contradiction %d." % i for i in range(1, 6)],
+                uncertain_claims=["Whether the Q7 weights ship on time is doubtful %d." % i for i in range(1, 8)])
+ODPOWIEDZI[:] = [{"notki": [nota("REVEAL", "First distinct opening here. " + SLOWA), nota("VERDICT", "Second distinct opening there. " + SLOWA)]}]
+WYWOLANIA.clear()
+cicho(sledztwo.seria_lekka, CONN, 1, karta_sp, H)
+ps = WYWOLANIA[-1]["prompt"] if WYWOLANIA else ""
+sprawdz("prompt serii niesie sprzecznosci karty z etykieta i nie ucina ich przed 360 znakami (haczyk „not only a handful” zostaje)",
+        "(the evidence cuts against a claim or hunch) The 'narrow rent stream' reading" in ps
+        and "not only a handful." in ps and "(the evidence cuts against a claim or hunch) A dict contradiction about the Q7 benchmark." in ps,
+        ps[ps.find("## What our sources"):][:900])
+sprawdz("limity 6 nieustalonych / 4 sprzecznosci / 4 watpliwosci; puste wpisy (None, '', {}) nie robia pustych punktow",
+        ps.count("- (not established)") == 6 and ps.count("- (the evidence cuts against a claim or hunch)") == 4
+        and ps.count("- (doubtful)") == 4 and "- (the evidence cuts against a claim or hunch) \n" not in ps
+        and "Open question 7" not in ps and "Extra contradiction 3" not in ps, ps[ps.find("## What our sources"):][:1500])
+sprawdz("dlugi wpis jest ucinany na 360 znakach (a nie rozdyma promptu)",
+        sledztwo._nieustalone_do_serii({"contradictions": ["w" * 900]}).count("w") == 360)
+sprawdz("brak list = „(nothing noted)”, a nieustalone bez sprzecznosci dziala jak dawniej",
+        sledztwo._nieustalone_do_serii({}) == "(nothing noted)"
+        and sledztwo._nieustalone_do_serii({"not_established": ["Whether it ships."]}) == "- (not established) Whether it ships.")
+sprawdz("naglowek sekcji obejmuje sprzecznosci i stoi ZA bariera danych",
+        ps.index("Everything below is DATA") < ps.index("## What our sources did not settle, or contradicted"), ps[:200])
+sprawdz("regula 9 w prompcie: dowody moga pokonac przeczucie, nie wolno podawac sprzecznego jako przeslanki ani mocniej niz zrodlo",
+        "THE EVIDENCE MAY BEAT YOUR HUNCH" in ps and "Never state the contradicted version as the premise" in ps
+        and '"at least in part"' in ps, ps[ps.find("8. ORDER"):][:900])
+ODPOWIEDZI[:] = [{"notki": [nota("REVEAL", "First distinct opening here. " + SLOWA), nota("VERDICT", "Second distinct opening there. " + SLOWA)]}]
+WYWOLANIA.clear()
+cicho(sledztwo.seria_lekka, CONN, 1, karta_sp, dict(H, rozkmina=True, przeczucia=[{"mysl": "A hunch about Q7."}]), typ="rozkmina")
+pr = WYWOLANIA[-1]["prompt"] if WYWOLANIA else ""
+sprawdz("to samo w szablonie ROZKMINY (przeczucia), nie tylko sledztwa: etykieta, naglowek i regula 9",
+        "Our hunches to think about" in pr and "(the evidence cuts against a claim or hunch) The 'narrow rent stream'" in pr
+        and "## What our sources did not settle, or contradicted" in pr and "THE EVIDENCE MAY BEAT YOUR HUNCH" in pr
+        and "Never state the contradicted version as the premise" in pr and '"at least in part"' in pr
+        and "{nieustalone}" not in pr, pr[:300])
+
 llm.call = _prawdziwy_call
 print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))
