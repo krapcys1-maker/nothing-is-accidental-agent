@@ -187,6 +187,27 @@ def prompt_redakcji_serii(notki: str) -> str:
     return _prompt("seria_redakcja.md", notki=notki)
 
 
+def prompt_zakladow_wyciag(notki: str) -> str:
+    """Prompt wyciagu zakladow z opublikowanych notek (`zaklady.wyciagnij`). Notki to tekst napisany z cudzych
+    faktow, wiec stoja za bariera; dzisiejsza data, limit zakladow i okno terminu sa nasze."""
+    return _prompt("zaklady_wyciag.md", dzis=config.dzisiaj(), n_max=config.ZAKLADY_MAKS_Z_SERII,
+                   max_dni=config.ZAKLADY_MAKS_DNI_DO_TERMINU, notki=notki)
+
+
+def prompt_zakladu_sprawdzenia(zaklad: str, obali: str, opublikowano: str, od: str, do: str) -> str:
+    """Prompt sprawdzenia zakladu wyszukiwarka (`zaklady.sprawdz`). Tresc zakladu i daty pochodza z odpowiedzi
+    modelu o cudzych faktach, wiec stoja za bariera; dzisiejsza data jest nasza."""
+    return _prompt("zaklady_sprawdzenie.md", dzis=config.dzisiaj(), zaklad=zaklad, obali=obali,
+                   opublikowano=opublikowano, od=od, do=do)
+
+
+def prompt_zakladu_notki(zaklad: str, wynik: str, dowod: str, opublikowano: str, sprawdzono: str) -> str:
+    """Prompt notki rozliczajacej zaklad (`zaklady.napisz_rozliczenie`). Zaklad, wynik i dowod to tresc
+    z wyszukiwarki i z modelu, wiec stoja za bariera."""
+    return _prompt("zaklady_notka.md", zaklad=zaklad, wynik=wynik, dowod=dowod, opublikowano=opublikowano,
+                   sprawdzono=sprawdzono)
+
+
 def pamiec_glosu(prompt: str) -> str:
     """Kilka potwierdzonych wypowiedzi do unikania powtorek, bez wywolan API."""
     rodzaje = {"komentarz.md": "komentarz", "odpowiedz.md": "odpowiedz",

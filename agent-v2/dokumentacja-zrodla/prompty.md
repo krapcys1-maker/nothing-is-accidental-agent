@@ -468,3 +468,33 @@
 ```json
 {{"assessments": [{{"index": <0-based index of the topic>, "feasible": true|false, "confidence": 0.0-1.0, "expected_primary_sources": <integer>, "depth": "RICH"|"SINGLE"|"THIN", "parallels": ["<other domain where the same mechanism appears>"], "note": "<one sentence: where the record most likely lives, or why it does not>"}}]}}
 ```
+
+#### `zaklady_notka.md` (34 wierszy)
+
+**Pola wejściowe:** `dowod`, `marka`, `opublikowano`, `sprawdzono`, `wynik`, `zaklad`
+
+**Kontrakt wyjścia:**
+
+```json
+{{"tekst": "<the finished note>"}}
+```
+
+#### `zaklady_sprawdzenie.md` (28 wierszy)
+
+**Pola wejściowe:** `do`, `dzis`, `marka`, `obali`, `od`, `opublikowano`, `zaklad`
+
+**Kontrakt wyjścia:**
+
+```json
+{{"result": "yes|no|not_yet|unclear", "evidence": "<what you found>", "sources": ["<url>"]}}
+```
+
+#### `zaklady_wyciag.md` (28 wierszy)
+
+**Pola wejściowe:** `dzis`, `marka`, `max_dni`, `n_max`, `notki`
+
+**Kontrakt wyjścia:**
+
+```json
+{{"bets": [{{"note": <number>, "bet": "<one sentence>", "wrong_if": "<one sentence>", "check_from": "<YYYY-MM-DD>", "check_by": "<YYYY-MM-DD>", "probability": <number>}}]}}
+```

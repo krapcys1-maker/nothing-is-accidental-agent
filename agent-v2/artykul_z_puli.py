@@ -503,7 +503,12 @@ def _przebieg(conn, run_id: int) -> int:
     if "--rozkmina" in sys.argv:
         return _przebieg_rozkminy(conn, run_id)
     if any(f in sys.argv for f in ("--sledztwo", "--z-sledztwa", "--historia")):
-        return _przebieg_sledztwa(conn, run_id)
+        try:
+            return _przebieg_sledztwa(conn, run_id)
+        finally:
+            # PO sledztwie, nie przed: sledztwo ma pierwsze prawo do kolejki (wpuszcza nowa historie, gdy
+            # czeka mniej niz `PRZESLAN_NA_DOBE` katow), a notka rozliczajaca wchodzi tylko do pustej kolejki.
+            _zaklady_przy_okazji(conn, run_id)
 
     # ODMOWA ARTYKULU W TRYBIE TESTU — BEZWZGLEDNA (25.10.2026). Proba sledztwa na
     # kopii danych szla z `--wyslij` (tak jak zegar, inaczej katy nie trafilyby do
@@ -2085,6 +2090,19 @@ def _nowy_stan(conn, run_id, na_serio: bool) -> dict:
         tryb = "nieznany"
     return {"run_id": run_id, "kiedy": _teraz().isoformat(), "tryb": tryb, "na_serio": na_serio,
             "argv": list(sys.argv[1:]), "etapy": {}}
+
+
+def _zaklady_przy_okazji(conn, run_id: int) -> None:
+    """Ksiega zakladow (`zaklady.obsluz`) przy zegarowym przebiegu sledztwa: wyciag z notek, ktore wyszly,
+    sprawdzenie zakladow po terminie i najwyzej jedna notka rozliczajaca. Proby reczne (`--z-sledztwa`,
+    `--historia`) jej nie ruszaja; bez `--wyslij` tylko liczy. Nigdy nie wywala przebiegu."""
+    if "--z-sledztwa" in sys.argv or _arg("--historia") is not None:
+        return
+    try:
+        import zaklady
+        zaklady.obsluz(conn, run_id, na_serio="--wyslij" in sys.argv)
+    except Exception as exc:    # takze przerwania budzetu (RuntimeError): kod wyjscia ma sledztwo, nie ksiega
+        print("  [zaklady] ksiega pominieta (%s: %s)" % (type(exc).__name__, str(exc)[:100]), flush=True)
 
 
 def _przebieg_sledztwa(conn, run_id: int) -> int:

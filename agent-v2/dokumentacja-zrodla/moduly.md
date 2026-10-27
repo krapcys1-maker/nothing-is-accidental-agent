@@ -48,7 +48,7 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-12665 wierszy, 234 funkcji na poziomie modułu, 0 klas
+12686 wierszy, 237 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -59,6 +59,9 @@
 | `prompt_rozkminy(pozycje)` | Prompt wyboru okna katalizatorow (`sledztwo.rozkmina_historia`). Naglowki z kanalow to CUDZA tresc |
 | `prompt_dokumentow_lekkich(tytul, pytanie, zrodla)` | Prompt nazywania dokumentow pierwotnych w lekkim torze. Naglowek, pytanie i wycinki zrodel to |
 | `prompt_redakcji_serii(notki)` | Prompt redaktora serii lekkiej (`sledztwo._bez_powtorek`). Notki to tekst napisany z cudzych |
+| `prompt_zakladow_wyciag(notki)` | Prompt wyciagu zakladow z opublikowanych notek (`zaklady.wyciagnij`). Notki to tekst napisany z cudzych |
+| `prompt_zakladu_sprawdzenia(zaklad, obali, opublikowano, od, do)` | Prompt sprawdzenia zakladu wyszukiwarka (`zaklady.sprawdz`). Tresc zakladu i daty pochodza z odpowiedzi |
+| `prompt_zakladu_notki(zaklad, wynik, dowod, opublikowano, sprawdzono)` | Prompt notki rozliczajacej zaklad (`zaklady.napisz_rozliczenie`). Zaklad, wynik i dowod to tresc |
 | `pamiec_glosu(prompt)` | Kilka potwierdzonych wypowiedzi do unikania powtorek, bez wywolan API. |
 | `_juz_w_domu(ile_banku, ile_notek)` *(wewn.)* | Co juz mamy poza artykulami: fakty czekajace w banku i wydane notki. |
 | `recent_angles(conn, limit)` | Ostatnie kąty redakcyjne — wejście do reguły różnorodności. |
@@ -573,7 +576,7 @@
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-4282 wierszy, 48 funkcji na poziomie modułu, 0 klas
+4303 wierszy, 48 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -973,6 +976,42 @@
 | `krytyk(conn, run_id, h, plan, ksiega, karta)` | Starszy redaktor (spec §2 etap 11, §3 „Senior editor"). |
 | `_krytyk(conn, run_id, h, plan, ksiega, karta)` *(wewn.)* | — |
 
+### `zaklady.py` — księga zakładów — publiczne zgadywania z notek serii liczone i rozliczane: wyciąg po publikacji, sprawdzenie wyszukiwarką (rozstrzygnięcie tylko z adresem z wyszukiwania), notka rozliczająca w kolejce serii, trafienia z przedziałem Wilsona i wynik Briera
+
+549 wierszy, 29 funkcji na poziomie modułu, 0 klas
+
+| funkcja | co robi |
+|---|---|
+| `_teraz()` *(wewn.)* | — |
+| `_dzis()` *(wewn.)* | — |
+| `_przerywaja()` *(wewn.)* | Wyjatki, ktore przechodza przez kazdy etap (budzet, wylacznik) — jak `sledztwo._przerywaja`. |
+| `zdarzenia()` | Wszystkie zdarzenia ksiegi, w kolejnosci zapisu. Brak pliku = pusta ksiega. |
+| `dopisz(z)` | Dopisuje zdarzenie. False, gdy sie nie udalo — ksiega nigdy nie wywala przebiegu. |
+| `stan_zakladow(lista)` | Zaklady zlozone ze zdarzen: {id: zaklad + wynik, sprawdzen, dowod, zrodla, w_kolejce}. |
+| `_notki_dziennika()` *(wewn.)* | — |
+| `_klucz_grupy(w)` *(wewn.)* | Notki jednej serii maja wspolny poczatek `przeslanie_id` (czas-przebieg); MYSL — doba. |
+| `grupy_do_wyciagu(dzis)` | Grupy opublikowanych notek, z ktorych jeszcze nie wyciagnelismy zakladow. |
+| `_jedna_linia(x, dl)` *(wewn.)* | — |
+| `_data(x)` *(wewn.)* | — |
+| `_prawdopodobienstwo(x)` *(wewn.)* | — |
+| `oczysc_zaklady(dane, notki, dzis)` | Zaklady z odpowiedzi modelu po kontroli kodu: numer notki z listy, tresc, daty w oknie, bez cen akcji, |
+| `_slowa(tekst)` *(wewn.)* | — |
+| `_podobienstwo(a, b)` *(wewn.)* | Jaccard slow co najmniej czteroliterowych (jak `eksperymenty.podobienstwo`, bez jego importow). |
+| `_id_zakladu(zaklad, dzien)` *(wewn.)* | — |
+| `wyciagnij(conn, run_id, grupa, dzis)` | Jedno wywolanie: zaklady z jednej grupy notek. Zapisuje zdarzenia `zaklad` i `wyciag` (nawet puste). |
+| `_adres(u)` *(wewn.)* | — |
+| `zaklady_do_sprawdzenia(dzis)` | Otwarte zaklady po `check_from`, nie pytane przez `MIN_ODSTEP_SPRAWDZEN_DNI`; najblizszy termin pierwszy. |
+| `sprawdz(conn, run_id, b, dzis)` | Jedno sprawdzenie zakladu wyszukiwarka. Zapisuje zdarzenie `sprawdzenie`, oddaje wynik zakladu. |
+| `zaklady_do_rozliczenia()` | Rozstrzygniete zaklady bez notki rozliczajacej, najstarsze rozstrzygniecie pierwsze. |
+| `_ostatnie_rozliczenie()` *(wewn.)* | — |
+| `napisz_rozliczenie(conn, run_id, b)` | Tekst notki rozliczajacej z dowodu zakladu; pusty, gdy model nic sensownego nie oddal. |
+| `kolejkuj_rozliczenie(b, tekst, run_id)` | Wpis ROZLICZENIE do kolejki notek serii (gotowy tekst; fakty = dowod i adresy zakladu). |
+| `obsluz(conn, run_id, na_serio, dzis)` | Wyciag -> sprawdzenia -> najwyzej jedno rozliczenie. Nigdy nie wywala przebiegu. |
+| `wilson(k, n, z)` | Przedzial Wilsona dla odsetka k z n (dobry takze przy malych n). |
+| `statystyki(lista)` | Liczby ksiegi: stany, odsetek trafien z przedzialem, Brier, kalibracja, rozliczenia. |
+| `tekst_statystyk(s)` | Sekcja raportu (linie markdown) — ta sama dla raportu tygodniowego i wywolania z linii polecen. |
+| `main()` | — |
+
 ### `eksperymenty.py` — pomiar zmian — odbiór notek w grupach względem tła tygodnia, 95% przedział i werdykt (lepiej / gorzej / brak dowodu / za mało danych)
 
 611 wierszy, 25 funkcji na poziomie modułu, 0 klas
@@ -1241,7 +1280,7 @@
 
 ### `artykul_z_puli.py` — artykuł bierze temat z tej samej puli, co notki
 
-3514 wierszy, 67 funkcji na poziomie modułu, 1 klas
+3532 wierszy, 68 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -1291,6 +1330,7 @@
 | `_seria_lekka_etap(conn, run_id, stan, zegar, sledztwo, na_serio)` *(wewn.)* | Seria jednym wywolaniem -> REKORD PRZED KOLEJKA -> kolejka (jak `_katy_serii`, bez poziomow). |
 | `_po_awarii(stan, sledztwo, na_serio, exc)` *(wewn.)* | Wyjatek w srodku sledztwa: stan, raport i — po oplaconym planie — rekord. |
 | `_nowy_stan(conn, run_id, na_serio)` *(wewn.)* | — |
+| `_zaklady_przy_okazji(conn, run_id)` *(wewn.)* | Ksiega zakladow (`zaklady.obsluz`) przy zegarowym przebiegu sledztwa: wyciag z notek, ktore wyszly, |
 | `_przebieg_sledztwa(conn, run_id)` *(wewn.)* | Sledztwo: wybor historii -> brief -> zrodla historii (PRZED planem) -> plan |
 | `_przebieg_rozkminy(conn, run_id)` *(wewn.)* | ROZKMINA (26.10.2026): okno katalizatorow z roznych historii -> lekki tor -> seria przekrojowa -> kolejka. |
 | `_wznow_sledztwo(conn, run_id, rid_tekst)` *(wewn.)* | `--z-sledztwa <run_id>`: zapisany stan -> etapy 15-17 (poziom, katy, rekord, |

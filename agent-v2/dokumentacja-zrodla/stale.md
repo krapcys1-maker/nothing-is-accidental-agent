@@ -150,6 +150,9 @@
 | `SLEDZTWO_TRYB` | `"lekkie"` | Ilu kandydatow generujemy. Dawniej bylo pieciu, potem trzech; dodatkowe warianty tego samego zdania niczego nie dokladaly, a placilismy za n |
 | `ROZKMINA_CO_DNI` | `3` | ROZKMINA (26.10.2026): przekrojowa seria o oknie dat z roznych historii. Co ile dni najwyzej i przy jakiej kolejce wolno ja zaczac (kolejka  |
 | `ROZKMINA_MAX_KOLEJKA` | `8` | — |
+| `ZAKLADY_WLACZONE` | `True` | KSIEGA ZAKLADOW (27.10.2026, `zaklady.py`): publiczne zgadywania z notek sa liczone i rozliczane. Wylacznik zatrzymuje caly obieg (wyciag, s |
+| `ZAKLADY_MAKS_Z_SERII` | `2` | Ile zakladow najwyzej z jednej grupy notek i jak daleko mozna ustawic termin (dni od dzis); stoja w configu, bo wchodza do promptu wyciagu j |
+| `ZAKLADY_MAKS_DNI_DO_TERMINU` | `150` | — |
 | `NOTE_CANDIDATES` | `1` | — |
 | `DZIEDZINY_CIEKAWOSTEK` | `( # --- co te systemy realnie robia i jak sa` | Ile ciekawostek szukamy naraz. Cztery z pięciu notek dziennie stoją na nich, a jedno szukanie kosztuje tyle co jedno — więc bierzemy zapas n |
 | `ILE_DZIEDZIN_NA_PRZEBIEG` | `5` | — |

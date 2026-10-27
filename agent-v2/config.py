@@ -447,6 +447,11 @@ MODEL_FOR = {
     "dokumenty_lekkie": DEEPSEEK,
     # HORYZONT: jedno wywolanie Flasha wybiera okno katalizatorow z naglowkow wielu historii.
     "rozkmina_wybor": DEEPSEEK,
+    # KSIEGA ZAKLADOW (27.10.2026, `zaklady.py`): wyciag zgadywan z opublikowanych notek, sprawdzenie zakladu
+    # wyszukiwarka i notka rozliczajaca — trzy tanie wywolania Flasha, bez Claude.
+    "zaklady_wyciag": DEEPSEEK,
+    "zaklady_sprawdzenie": DEEPSEEK,
+    "zaklady_notka": DEEPSEEK,
     # KATEGORIA HISTORII PRZY WYBORZE SLEDZTWA (25.10.2026, `sledztwo.wybierz_historie`):
     # jedno krotkie wywolanie na kilka-kilkanascie naglowkow, ulamek centa.
     "kategoria_historii": DEEPSEEK,
@@ -606,6 +611,8 @@ DEEPSEEK_MYSLENIE: dict[str, dict[str, str]] = {
     "seria_redakcja": {"type": "enabled"},
     "dokumenty_lekkie": {"type": "disabled"},
     "rozkmina_wybor": {"type": "enabled"},
+    "zaklady_wyciag": {"type": "enabled"},
+    "zaklady_notka": {"type": "enabled"},
     "kategoria_historii": {"type": "disabled"},
     "wielkie_historie": {"type": "disabled"},
     # SLEDZTWO — FALA 1 (25.10.2026, kontrakt). Zapasy Sonneta MYSLA, bo zastepuja
@@ -1054,6 +1061,8 @@ MODEL_DO_SZUKANIA: dict[str, str] = {}
 # Ten sam limit idzie do DeepSeeka przez endpoint zgodny z API Anthropic.
 MAX_SZUKAN_NA_ETAP = {"factcheck": 3, "curiosity": 3, "aktualne_modele": 4, "reply": 2,
                      "investigation_search": 3,
+                     # Sprawdzenie zakladu: jeden-dwa celne zapytania o to, co sie stalo (27.10.2026).
+                     "zaklady_sprawdzenie": 3,
                      # Jeden dokument pierwotny, jedno-dwa celne zapytania (25.10.2026,
                      # spec §2 etap 8): szukanie Flasha ok. 0,005 USD, cztery dokumenty.
                      "investigation_document": 2}
@@ -1825,6 +1834,9 @@ MAX_TOKENS = {
     "seria_redakcja": 6000,
     "dokumenty_lekkie": 3000,
     "rozkmina_wybor": 6000,
+    "zaklady_wyciag": 6000,
+    "zaklady_sprawdzenie": 8000,
+    "zaklady_notka": 4000,
     "kategoria_historii": 3000,
     "wielkie_historie": 4000,
     "pytania_ciekawosci": 8000,
@@ -1943,6 +1955,15 @@ SLEDZTWO_TRYB = "lekkie"
 # kolejce wolno ja zaczac (kolejka notek nie moze sie rozlewac: rozkmina dokleja 3-5 wpisow).
 ROZKMINA_CO_DNI = 3
 ROZKMINA_MAX_KOLEJKA = 8
+
+
+# KSIEGA ZAKLADOW (27.10.2026, `zaklady.py`): publiczne zgadywania z notek sa liczone i rozliczane. Wylacznik
+# zatrzymuje caly obieg (wyciag, sprawdzenia i notki rozliczajace); statystyki ksiegi dalej sie licza.
+ZAKLADY_WLACZONE = True
+# Ile zakladow najwyzej z jednej grupy notek i jak daleko mozna ustawic termin (dni od dzis); stoja w configu,
+# bo wchodza do promptu wyciagu jako NASZE wartosci (kotwica zaufania).
+ZAKLADY_MAKS_Z_SERII = 2
+ZAKLADY_MAKS_DNI_DO_TERMINU = 150
 
 
 def dzisiaj():

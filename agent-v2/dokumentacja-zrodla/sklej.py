@@ -65,6 +65,7 @@ MODULY = [
     ("glebia.py", "karta głębi — liczby, dokument pierwotny i odpowiedź z pełnego tekstu źródła, każdy cytat sprawdzony kodem"),
     ("sledztwo.py", "śledztwo — wybór największej historii, rdzeń (sedno) i kąty serii z jednej tabeli KATY, uczciwy hak sprawdzany kodem, poziom tematu (liczba notek), bramka nowości i kolejka notek"),
     ("sledztwo_plan.py", "plan redaktora śledztwa — 12 soczewek, pytania sprawdzane kodem (test podmiany), dokumenty pierwotne do znalezienia i starszy redaktor wskazujący luki"),
+    ("zaklady.py", "księga zakładów — publiczne zgadywania z notek serii liczone i rozliczane: wyciąg po publikacji, sprawdzenie wyszukiwarką (rozstrzygnięcie tylko z adresem z wyszukiwania), notka rozliczająca w kolejce serii, trafienia z przedziałem Wilsona i wynik Briera"),
     ("eksperymenty.py", "pomiar zmian — odbiór notek w grupach względem tła tygodnia, 95% przedział i werdykt (lepiej / gorzej / brak dowodu / za mało danych)"),
     ("obserwatorium.py", "obserwatorium obu kont — dane dnia (wzrost, lejek, działania, koszt), dziennik zmian z reflogu i rejestru, tempo wzrostu i skutek zmian"),
     ("laboratorium.py", "laboratorium — tygodniowy raport badawczy obu kont: prędkość przyrostu z przedziałami, dawka → skutek, notki tygodniami, atrybucja zapisów"),
