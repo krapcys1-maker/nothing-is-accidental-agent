@@ -121,15 +121,55 @@ werdykty (test ma na to kontrdowod). Werdykt dopiero od 6 serii na ramie, przedz
 czy byly zastrzezenia, czy sprawdzenie nie doszlo do skutku. Od 27.10.2026. Sprawdzenie faktow przy publikacji nadal jest logiem i naprawa, nie
 bramka — `fc` tylko pozwala policzyc, ile ono robi w praktyce (sekcja 6 raportu).
 
-## 5. Czego nie zrobiono (i dlaczego)
+## 5. Artykul tygodnia z lekkiego stanu i rozkminy (zgoda wlasciciela 27.10.2026)
 
-- **Tygodniowy artykul z najlepszej rozkminy** (co najmniej dwa niezalezne zrodla pod teza naglowka, ok. 1 USD): artykul pisze dzis zegar
-  tygodniowy ze stanu sledztwa; zmiana toru artykulu i jego kosztu wymaga osobnej zgody wlasciciela.
-- **Komentarze czytelnikow jako ziarna przeczuc rozkminy:** po tygodniu danych z `co_klika.jsonl` i pierwszych formatow — nie ma jeszcze sygnalu,
-  ktory komentarze naprawde niosa temat.
+Do tej pory artykul ze sledztwa pisal tylko ciezki tor (poziom L/XL, ksiega pytan, rekordy pierwotne), a lekki tor i rozkmina, ktore chodza
+codziennie, nie mialy jak go uniesc — tydzien szedl artykulem z puli. Teraz drugi stopien wyboru kandydata (`artykul_z_puli._kandydat_lekki`,
+po `_kandydat_ze_sledztwa`, przed pula; wylacznik `config.ARTYKUL_Z_LEKKIEGO`):
+
+1. **Stan** lekkiego sledztwa albo rozkminy z ostatnich 5 dni, produkcyjny (`--wyslij`, tryb nie-test), bez wczesniejszego artykulu, co najmniej
+   dwa katy, co najmniej 10 potwierdzonych twierdzen z 5 serwisow. Teze dostaje najwyzej 4 najnowsze stany (jedno tanie wywolanie na stan, ok. 0,005 USD).
+2. **Teza** (`sledztwo.teza_artykulu`, prompt `teza_artykulu.md`): jedno zdanie, NASZ pogląd, z numerami faktow ZA, PRZECIW, kontekstu, warunkiem
+   pomylki i tytulem roboczym. **KOD wymaga** co najmniej trzech faktow ZA od co najmniej DWOCH NIEZALEZNYCH wydawcow
+   (`sledztwo.wydawcy_niezalezni`), numerow z karty i warunku pomylki. Wydawca to domena rejestrowana, z wyjatkami po przegladzie nr 2: platformy
+   wielu autorow (substack.com, github.io, medium.com, blogspot.com ... = pelny host), serwisy kont (github.com/org, x.com/konto; twitter = x),
+   domeny jednego koncernu (google.com + blog.google + deepmind.google = jedno), agregatory (Yahoo Finance, feed Euronext) nie sa wydawca,
+   glosy i wpisy cennika nie liczą sie, wszystkie twierdzenia interesowanej strony (VENDOR_CLAIM) razem to jeden „aktor", a przedruk tego samego
+   fragmentu pod innym hostem (85% slow mniejszego tekstu w wiekszym) liczy sie raz. Prompt drukuje przy kazdym fakcie TEN SAM klucz wydawcy,
+   ktory liczy kod. Pusta teza modelu albo brak dwoch wydawcow = brak artykulu z tego
+   stanu (uczciwe „w tym tygodniu nie ma co argumentowac"), wraca pula.
+3. **Wybor:** rozkmina przed zwyklym sledztwem, potem liczba niezaleznych wydawcow pod teza, liczba faktow ZA, swiezosc.
+4. **Karta dla pisarza zawezona do tezy** (`_zawez_do_tezy`): zostaja fakty ZA, PRZECIW i kontekst, liczby z ich zrodel, zastrzezenia WSKAZANE PRZEZ MODEL TEZY
+   (pole `unsettled`, numery U1.. sprawdzane przez kod; filtr slow gubil wlasne i przepuszczal cudze), notki serii oparte na tych faktach i JEDNO
+   przeczucie najblizsze tezie (jako „our guess, not a fact"). Pierwsza proba z cala karta
+   rozlala artykul o czynszu za IPO Anthropic na PHP, Kimi i wybory — na pojedynczych zrodlach; zawezona karta dala artykul o jednej tezie z czterema
+   wydawcami (Reuters przez Euronext, TechCrunch, WSJ, Futurism), sprzeciwem (retencja 900%), warunkiem pomylki i scenariuszami z nazwanymi zalozeniami.
+   Prompt pisarza (`pisarz.md`) dostaje teze jako `investigation_finding` i pierwsza `editorial_hypotheses` z dowodami za, przeciw i „co obali".
+
+Pytanie badania w karcie pisarza to sama teza; hipotezy badania, mechanizmy rownolegle (`parallel_mechanisms`), wynik sprawdzenia karty
+(`sprawdzenie_karty`) i sciezka pliku nie przechodza, a daty zrodel (`source_dates`) sa liczone z twierdzen tezy. Przeglad nr 2 (27.10.2026, 4 kierunki +
+sceptycy) potwierdzil 11 znalezisk: 2 powazne (rozlew przez te pola i niezaleznosc liczona po domenie) i uwagi czytelnikow (przeczucie moglo stac na
+samych uwagach; temat uwagi byl rozstrzygany kontekstem NASZEGO tekstu). Wszystkie naprawione, 25 mutantow zabitych.
+
+Zmierzone na zywo (kopia danych, 27.10.2026): wybor tezy z trzech stanow 0,015 USD, artykul na Fable 0,48-0,75 USD (1700-2300 slow). Cadence bez zmian:
+najwyzej jeden artykul na ~6 dni (`ile_artykulow`), wiec pierwszy artykul z rozkminy wypada we wtorek 3.11.2026 14:10 UTC (dzisiejszy 27.10 omija limit, bo
+artykul z 25.10 jest sprzed dwoch dni).
+
+## 5b. Uwagi czytelnikow jako ziarna przeczuc rozkminy
+
+`sledztwo.uwagi_czytelnikow`: pula `pytania_czytelnikow.json` (zbierana od tygodni z odpowiedzi do nas, dotad tylko dla skauta bankowego) daje korpusowi
+rozkminy do trzech najswiezszych tresciwych uwag (8-70 slow, 21 dni), z kanalu „czytelnik" i znacznikiem „nie fakt". Filtr: bez adresow, wzmianek,
+cudzych polecen (`stages.bez_wstrzykniecia`), bez zaczepek do nas („co myslisz?", „probowales?"), bez uwag bez zwiazku z AI (skargi na platforme),
+bez autorow; do pozycji idzie tylko kontekst („said under our post: ..."). Prompt wyboru przeczuc mowi, ze to tylko iskra: nie cytat, nie odpowiedz,
+nie fakt, a przeczucie dalej wymaga co najmniej dwoch pozycji z roznych historii — sama uwaga go nie zalozy (kod liczy tylko pozycje spoza kanalu
+„czytelnik": przeczucie bez dwoch takich pozycji odpada, a prog trzech pozycji rozkminy tez ich nie liczy). Temat uwagi rozstrzyga jej WLASNY tekst:
+uwaga bez slowa o AI odpada nawet pod naszym tekstem o AI. Zmierzone na prawdziwej puli (28 wpisow):
+przechodza 1-3 uwagi, wiec to sygnal rzadki, ale darmowy.
+
+## 5c. Czego nie zrobiono (i dlaczego)
+
 - **Podlaczenie czujnika do wyboru tematu:** dopiero po 3-4 tygodniach dziennika `co_klika.jsonl` (ekstrapolacja z danych, nie z intuicji).
-- **Pieciu publikacji bez danych archiwum:** czujnik pomija je po cichu (awaria pojedynczej publikacji nie wywraca reszty); do naprawy po
-  sprawdzeniu, ktore to sa.
+- **Notka-zapowiedz artykulu z tezy:** artykul tygodnia ma juz swoje notki promujace (`typ` ARTYKUL); osobnej nie dodajemy.
 
 ## 6. Pliki
 

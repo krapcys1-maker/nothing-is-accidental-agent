@@ -764,7 +764,7 @@
 
 ### `sledztwo.py` — śledztwo — wybór największej historii, rdzeń (sedno) i kąty serii z jednej tabeli KATY, uczciwy hak sprawdzany kodem, poziom tematu (liczba notek), bramka nowości i kolejka notek
 
-3679 wierszy, 147 funkcji na poziomie modułu, 0 klas
+3809 wierszy, 155 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -880,7 +880,7 @@
 | `przeslania(conn, run_id, card, dossier, h, typ, ile, artykulowy, plan)` | Seria notek o jednej historii (spec §4, §5 „Angle choice", „Order and pacing", §9 pkt 7 i 12). |
 | `_bramka_hakow(conn, run_id, seria, wynik, card, h, naglowki)` *(wewn.)* | Pierwsze zdanie kazdego kata przez kontrakt haka, w kolejnosci serii; zbudowanie wyjscia. |
 | `ile_notek_lekko(card)` | Ile notek uniesie temat: z bogactwa karty, nie z reguly o poziomach. Malo faktow -> 2-3 notki. |
-| `_fakty_do_promptu(card)` *(wewn.)* | — |
+| `_fakty_do_promptu(card, etykieta)` *(wewn.)* | Numerowane fakty karty do promptu. `etykieta(c)` zastepuje domyslny host (prompt tezy drukuje klucz wydawcy, |
 | `_ostatnie_do_promptu(ile)` *(wewn.)* | — |
 | `ile_rozkmin(dni)` | Ile serii rozkminy w oknie (rekord niesie `rozkmina: true`). |
 | `uwagi_czytelnikow(dni, maks)` | Najswiezsze tresciwe uwagi czytelnikow jako pozycje korpusu rozkminy; pusta lista, gdy pliku nie ma. Nigdy nie rzuca. |
@@ -888,9 +888,17 @@
 | `_bez_powtorek(conn, run_id, notki)` *(wewn.)* | Jedno tanie wywolanie redaktora: notki, ktore powtarzaja teze innej, odpadaja (nigdy pierwsza, |
 | `_tytul_do_serii(h)` *(wewn.)* | Tytul historii dla promptu serii; przy rozkminie dochodza NASZE przeczucia (nie fakty) jako ziarna. |
 | `seria_lekka(conn, run_id, card, h, typ, ile)` | Seria notek JEDNYM wywolaniem: [{rodzaj, tekst, wniosek, fakty, wiedza, lead, ...}] — gotowe teksty |
-| `_domena(url)` *(wewn.)* | Domena rejestrowana wydawcy (example.co.uk, nie www.news.example.co.uk): „niezalezne zrodlo” to inny wydawca, |
+| `_domena(url)` *(wewn.)* | Klucz wydawcy adresu albo pusty ciag, gdy adres nie jest wydawca. Domena rejestrowana (example.co.uk, nie |
+| `_slowa_porownania(tekst)` *(wewn.)* | — |
+| `_ten_sam_fragment(a, b)` *(wewn.)* | Ten sam tekst pod dwoma hostami (przedruk depeszy): co najmniej 6 znaczacych slow i 85% mniejszego zbioru w wiekszym. |
+| `_wydawca_faktu(c)` *(wewn.)* | Kto stoi za faktem jako niezalezny wydawca: klucz domeny, „aktor” dla wszystkich twierdzen interesowanej strony razem, |
+| `wydawcy_niezalezni(fakty)` | Posortowane klucze NIEZALEZNYCH wydawcow faktow: bez glosow, cennikow i agregatorow, wszystkie twierdzenia |
+| `_etykieta_wydawcy(c)` *(wewn.)* | Co prompt tezy drukuje przy fakcie: klucz wydawcy z kodu. |
 | `_mysli_do_tezy(stan)` *(wewn.)* | Nasze notatki do wyboru tezy: przeczucia rozkminy i pierwsze zdania notek serii (nasze myslenie, nie fakty). |
-| `oczysc_teze(dane, tw)` | Teza z odpowiedzi modelu po kontroli kodu albo None: numery z karty, co najmniej `MIN_FAKTOW_POD_TEZA` faktow ZA |
+| `_tekst_zastrzezenia(x)` *(wewn.)* | — |
+| `zastrzezenia_karty(card)` | Nieustalone, sprzecznosci i watpliwosci karty jako (lista, numer w liscie, tekst), po kilka z kazdej listy. Model |
+| `_zastrzezenia_do_promptu(zastrz)` *(wewn.)* | — |
+| `oczysc_teze(dane, tw, zastrz)` | Teza z odpowiedzi modelu po kontroli kodu albo None: numery z karty, co najmniej `MIN_FAKTOW_POD_TEZA` faktow ZA |
 | `teza_artykulu(conn, run_id, stan)` | Teza artykulu tygodnia dla zapisanego stanu lekkiego sledztwa albo rozkminy; None, gdy karta nie niesie tezy z dwoma |
 | `zapisz_sledztwo(rekord)` | Jedna linia na sledztwo — pamiec dla bramki i limitow. Nigdy nie wywala. |
 | `oznacz_artykul(run_id)` | Artykul ze sledztwa z tego przebiegu wyszedl — liczy sie do limitu tygodnia. |
@@ -1337,7 +1345,7 @@
 
 ### `artykul_z_puli.py` — artykuł bierze temat z tej samej puli, co notki
 
-3671 wierszy, 72 funkcji na poziomie modułu, 1 klas
+3685 wierszy, 72 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|

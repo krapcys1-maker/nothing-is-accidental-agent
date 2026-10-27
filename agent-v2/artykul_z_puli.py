@@ -2556,19 +2556,33 @@ def _zawez_do_tezy(card: dict, stan: dict, teza: dict, przes: list) -> list:
     """Karta lekkiego stanu OPISUJE WSZYSTKIE historie rozkminy (trzy przeczucia = trzy tematy); artykul tygodnia argumentuje
     JEDNA teze. Pierwsza proba (27.10.2026) wziela cala karte i artykul o czynszu za IPO Anthropic w polowie byl o PHP, Kimi
     i wyborach — na pojedynczych zrodlach, bez dowodow pod naglowkiem. Zostaja fakty tezy (ZA, PRZECIW, kontekst), liczby
-    z ich zrodel, zastrzezenia o tych samych sprawach, notki serii oparte na tych faktach i JEDNO przeczucie najblizsze tezie.
-    Oddaje przefiltrowane katy serii."""
+    z ich zrodel, zastrzezenia wskazane przez model tezy, notki serii oparte na tych faktach i JEDNO przeczucie najblizsze
+    tezie. Pytanie badania to teza; hipotezy badania, mechanizmy rownolegle, wynik sprawdzenia karty i daty zrodel (z
+    twierdzen tezy, gdy je maja) nie przenosza cudzych historii. Oddaje przefiltrowane katy serii."""
     tw = _twierdzenia(card)[:getattr(config, "CARD_MAX_CONFIRMED_SLEDZTWO", 16)]
     idx = list(dict.fromkeys(list(teza.get("za") or []) + list(teza.get("przeciw") or []) + list(teza.get("kontekst") or [])))
     wybrane = [tw[i - 1] for i in idx if 1 <= i <= len(tw)]
     if not wybrane:
         return przes
-    baza = _slowa_tresci(teza.get("teza")) | set().union(*(_slowa_tresci(c.get("claim")) | _slowa_tresci(c.get("evidence")) for c in wybrane))
     urle = {c.get("url") for c in wybrane}
     card["confirmed_claims"] = wybrane
     card["citable_numbers"] = [n for n in card.get("citable_numbers") or [] if isinstance(n, dict) and n.get("url") in urle]
+    # Zastrzezenia: te, ktore model tezy wskazal (`unsettled`, numery sprawdzone przez kod); slownikowy filtr slow gubil
+    # wlasne zastrzezenia i przepuszczal cudze.
+    wskazane = [z for z in teza.get("zastrzezenia") or [] if isinstance(z, dict)]
     for klucz in ("contradictions", "uncertain_claims", "not_established"):
-        card[klucz] = [x for x in card.get(klucz) or [] if len(_slowa_tresci(x if isinstance(x, str) else x.get("claim")) & baza) >= 3]
+        stare = card.get(klucz) or []
+        card[klucz] = [stare[z["nr"]] for z in wskazane if z.get("lista") == klucz and isinstance(z.get("nr"), int) and 0 <= z["nr"] < len(stare)]
+    # Reszta karty tez opisuje WSZYSTKIE historie rozkminy: mechanizmy z innych dziedzin, wynik sprawdzenia kodem z adresami
+    # i odrzuconymi twierdzeniami wszystkich zrodel, pytania i hipotezy badania o kazdym przeczuciu, daty cudzych zrodel.
+    card["parallel_mechanisms"] = []
+    card.pop("sprawdzenie_karty", None)
+    if isinstance(card.get("investigation"), dict):
+        card["investigation"] = {"question": teza.get("teza") or "", **{k: card["investigation"][k] for k in ("created_at", "stop_reason", "cost_usd")
+                                                                          if k in card["investigation"]}}
+    daty_faktow = sorted(str(c.get("as_of") or "")[:10] for c in wybrane if re.match(r"^\d{4}-\d{2}-\d{2}", str(c.get("as_of") or "")))
+    if daty_faktow and isinstance(card.get("source_dates"), dict):
+        card["source_dates"] = dict(card["source_dates"], oldest=daty_faktow[0], newest=daty_faktow[-1])
     card["voices"] = [v for v in card.get("voices") or [] if not isinstance(v, dict) or v.get("url") in urle]
     card["working_thesis"] = teza.get("teza") or ""
     card["main_mechanism"] = teza.get("jak_zrodla_lacza") or ""

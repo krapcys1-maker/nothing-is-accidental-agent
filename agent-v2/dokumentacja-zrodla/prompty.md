@@ -419,14 +419,14 @@
 {{"pary": [{{"a": "<id, e.g. N1>", "b": "<id, e.g. P3>", "dlaczego": "<one clause>"}}]}}
 ```
 
-#### `teza_artykulu.md` (29 wierszy)
+#### `teza_artykulu.md` (30 wierszy)
 
 **Pola wejściowe:** `dzis`, `fakty`, `marka`, `mysli`, `nieustalone`
 
 **Kontrakt wyjścia:**
 
 ```json
-{{"thesis": "<one sentence, our view, or empty>", "title": "<working title>", "for": [<fact numbers>], "against": [<fact numbers>], "context": [<fact numbers>], "wrong_if": "<one sentence>", "how_sources_combine": "<one sentence>"}}
+{{"thesis": "<one sentence, our view, or empty>", "title": "<working title>", "for": [<fact numbers>], "against": [<fact numbers>], "context": [<fact numbers>], "unsettled": [<U numbers>], "wrong_if": "<one sentence>", "how_sources_combine": "<one sentence>"}}
 ```
 
 #### `warto_pisac.md` (29 wierszy)

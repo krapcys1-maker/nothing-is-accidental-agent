@@ -75,10 +75,13 @@ w = sledztwo.uwagi_czytelnikow()
 zapisz([uwaga("Very interesting thoughts about the AI agents story! Which side do you think will give in first?"),
         uwaga("Have you tried the new AI model yourself and what did you find out about it so far?"),
         uwaga("Why does Substack keep several versions of comments so that a reply to one does not show on the other?"),
-        uwaga("Agreed that accountability has to be explicit before anything else can be built on top of it.", skad="our comment under \"Who signs for the AI agent\"")])
+        uwaga("Agreed that accountability for an AI agent has to be explicit before anything else can be built on top of it.", skad="our comment under \"Who signs for the AI agent\""),
+        uwaga("Why does my Kindle keep losing the sync between phone and tablet every other day, anyone know the fix?", skad="AI agents are being sold as autonomous workers by every vendor")])
 w = sledztwo.uwagi_czytelnikow()
-sprawdz("zaczepki do nas („co myslisz?”, „probowales?”) i uwagi bez zwiazku z AI (skargi na platforme) odpadaja; uwaga z kontekstem AI w `skad` zostaje",
+sprawdz("zaczepki do nas („co myslisz?”, „probowales?”) i uwagi bez zwiazku z AI (skargi na platforme) odpadaja; uwaga o AI zostaje",
         len(w) == 1 and w[0]["temat"].startswith("Agreed that accountability"), [x["temat"] for x in w])
+sprawdz("KONTRDOWOD: uwaga bez AI w SWOIM tekscie odpada nawet pod naszym tekstem o AI (kontekst nie rozstrzyga o temacie uwagi)",
+        not any("Kindle" in x["temat"] for x in w), [x["temat"] for x in w])
 sprawdz("kontekst rozmowy (pod czym padla uwaga) dopisany do pozycji, bez adresow i autorow", "(said under our post: our comment under" in w[0]["temat"], w[0]["temat"])
 zapisz([uwaga(DOBRA, dni=3), uwaga(DOBRA, dni=1)] + [uwaga("Remark number %d about whether AI agents should ask before they act for us." % i, dni=i) for i in range(4, 9)])
 w = sledztwo.uwagi_czytelnikow()
@@ -92,10 +95,53 @@ sprawdz("korpus rozkminy dostaje uwagi czytelnikow obok kanalow, HN i przebic z 
         "sledztwo.uwagi_czytelnikow()" in kod and kod.index("sledztwo.popularne_substack()") < kod.index("sledztwo.uwagi_czytelnikow()"))
 prompt = stages.prompt_rozkminy("[1] (czytelnik, 2026-10-27) UNIKALNA-UWAGA-TESTOWA")
 sprawdz("prompt wyboru przeczuc: uwaga czytelnika to tylko iskra — nie cytat, nie odpowiedz, nie fakt; uwagi ZA bariera",
-        'channel "reader"' in prompt and "never quote a reader" in prompt and "never treat the remark as a fact" in prompt
+        'channel "czytelnik"' in prompt and "never quote a reader" in prompt and "never treat the remark as a fact" in prompt
         and prompt.index("Everything below is DATA") < prompt.index("UNIKALNA-UWAGA-TESTOWA"), prompt[:300])
+zapisz([uwaga(DOBRA)])
+sprawdz("nazwa kanalu w prompcie jest ta sama, co w pozycji korpusu", 'channel "%s"' % sledztwo.uwagi_czytelnikow()[0]["kanal"] in prompt)
 sprawdz("wymog co najmniej dwoch pozycji z listy dla przeczucia zostaje (jedna uwaga nie zaklada przeczucia)",
         "at least two items from different stories" in prompt)
+# --- przeczucie nie moze stac na samych uwagach czytelnikow ----------------------------------------------------------
+import re        # noqa: E402
+import llm       # noqa: E402
+
+ODPOWIEDZ = []
+
+
+def atrapa(purpose, system, prompt, conn=None, run_id=None, **k):
+    return json.dumps(ODPOWIEDZ[0](prompt))
+
+
+llm.call = atrapa
+
+
+def numery(prompt, kanal):
+    return [int(m.group(1)) for m in re.finditer(r"^\[(\d+)\] \(%s," % kanal, prompt, re.M)]
+
+
+korpus = [{"temat": "Headline number %d about a different AI story" % i, "kanal": "blog", "data": "2026-10-%02d" % (1 + i % 25), "url": "https://x.example/%d" % i}
+          for i in range(30)]
+korpus += [{"temat": "Reader remark %d about whether AI agents should ask before acting" % i, "kanal": "czytelnik", "data": "2026-10-%02d" % (26 - i), "url": ""}
+           for i in range(3)]
+ODPOWIEDZ[:] = [lambda p: {"tytul": "Readers only", "pytanie": "Q?", "przeczucia": [{"mysl": "A hunch that rests on three reader remarks alone.", "pozycje": numery(p, "czytelnik")}]}]
+sprawdz("KONTRDOWOD: przeczucie z samych uwag czytelnikow NIE zaklada rozkminy (zero zrodel, zaplacone badanie)", sledztwo.rozkmina_historia(korpus) is None)
+ODPOWIEDZ[:] = [lambda p: {"tytul": "One plus reader", "pytanie": "Q?", "przeczucia": [{"mysl": "A hunch resting on one headline and two reader remarks.", "pozycje": numery(p, "czytelnik")[:2] + numery(p, "blog")[:1]}]}]
+sprawdz("przeczucie z jedna pozycja spoza czytelnikow i dwiema uwagami tez odpada (uwaga nie dopelnia progu)", sledztwo.rozkmina_historia(korpus) is None)
+ODPOWIEDZ[:] = [lambda p: {"tytul": "Three plus reader", "pytanie": "Q?", "przeczucia": [{"mysl": "A hunch resting on three headlines and one reader remark as a spark.", "pozycje": numery(p, "czytelnik")[:1] + numery(p, "blog")[:3]}]}]
+h = sledztwo.rozkmina_historia(korpus)
+sprawdz("przeczucie z trzema naglowkami i uwaga jako iskra przechodzi, a uwaga zostaje w naglowkach pseudo-historii",
+        h is not None and any(e.get("kanal") == "czytelnik" for e in h["naglowki"]) and sum(1 for e in h["naglowki"] if e.get("kanal") != "czytelnik") == 3, h)
+ODPOWIEDZ[:] = [lambda p: {"tytul": "Two hunches", "pytanie": "Q?", "przeczucia": [
+    {"mysl": "A weak hunch resting on one headline and one reader remark only.", "pozycje": numery(p, "czytelnik")[:1] + numery(p, "blog")[:1]},
+    {"mysl": "A solid hunch resting on three headlines of different stories.", "pozycje": numery(p, "blog")[1:4]}]}]
+h = sledztwo.rozkmina_historia(korpus)
+sprawdz("przeczucie z JEDNA pozycja spoza czytelnikow (i uwaga) odpada, a drugie, na trzech naglowkach, zostaje",
+        h is not None and len(h["przeczucia"]) == 1 and h["przeczucia"][0]["mysl"].startswith("A solid hunch"), h and h["przeczucia"])
+ODPOWIEDZ[:] = [lambda p: {"tytul": "Shared pair", "pytanie": "Q?", "przeczucia": [
+    {"mysl": "A first hunch on two headlines plus one reader remark as a spark.", "pozycje": numery(p, "blog")[:2] + numery(p, "czytelnik")[:1]},
+    {"mysl": "A second hunch on the same two headlines plus another reader remark.", "pozycje": numery(p, "blog")[:2] + numery(p, "czytelnik")[1:2]}]}]
+sprawdz("dwa przeczucia na tej samej parze naglowkow, kazde z uwaga: uwagi nie dopelniaja progu trzech pozycji (zostaja dwie spoza czytelnikow)",
+        sledztwo.rozkmina_historia(korpus) is None)
 print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))
 sys.exit(1 if oblane else 0)
