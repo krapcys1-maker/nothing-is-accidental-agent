@@ -2877,13 +2877,13 @@ def ile_notek_lekko(card: dict[str, Any]) -> int:
 
 
 def _fakty_do_promptu(card: dict[str, Any], etykieta=None) -> str:
-    """Numerowane fakty karty do promptu. `etykieta(c)` zastepuje domyslny host (prompt tezy drukuje klucz wydawcy,
+    """Numerowane fakty karty do promptu. `etykieta(i, c)` zastepuje domyslny host (prompt tezy drukuje klucz wydawcy,
     ktory liczy kod, zeby regula „ten sam wydawca dwa razy liczy sie raz” byla dla modelu widoczna)."""
     wiersze = []
     for i, c in enumerate(_twierdzenia(card)[:getattr(config, "CARD_MAX_CONFIRMED_SLEDZTWO", 16)], 1):
         dowod = " ".join(str(c.get("evidence") or "").split())[:260]
         wiersze.append("[%d] (%s, %s) %s%s" % (
-            i, c.get("kind") or "FACT", (etykieta(c) if etykieta else _host(c.get("url"))) or "?", " ".join(str(c.get("claim")).split()),
+            i, c.get("kind") or "FACT", (etykieta(i, c) if etykieta else _host(c.get("url"))) or "?", " ".join(str(c.get("claim")).split()),
             ('\n    source text: "%s"' % dowod) if dowod else ""))
     return "\n".join(wiersze) or "(none)"
 
@@ -3014,12 +3014,14 @@ def rozkmina_historia(korpus: list[dict[str, Any]], conn=None, run_id=None) -> d
         if len(nr) < 2:
             continue            # przeczucie bez co najmniej dwoch pozycji z listy nie laczy niczego
         if sum(1 for i in nr if wpisy[i - 1].get("kanal") != "czytelnik") < 2:
+            print("  [rozkmina] przeczucie odrzucone: mniej niz dwie pozycje spoza uwag czytelnikow (%s)" % str(k["mysl"])[:80], flush=True)
             continue            # uwaga czytelnika to iskra: przeczucie musi stac na co najmniej dwoch pozycjach NIE-czytelnika
         przeczucia.append({"mysl": " ".join(str(k["mysl"]).split())[:300], "pozycje": nr})
         uzyte += [i for i in nr if i not in uzyte]
-    if not przeczucia or sum(1 for i in uzyte if wpisy[i - 1].get("kanal") != "czytelnik") < ROZKMINA_MIN_POZYCJI:
-        print("  [rozkmina] nic nie sklonilo do myslenia: %d przeczuc z pozycjami, %d pozycji (prog %d)"
-              % (len(przeczucia), len(uzyte), ROZKMINA_MIN_POZYCJI), flush=True)
+    spoza_czytelnikow = sum(1 for i in uzyte if wpisy[i - 1].get("kanal") != "czytelnik")
+    if not przeczucia or spoza_czytelnikow < ROZKMINA_MIN_POZYCJI:
+        print("  [rozkmina] nic nie sklonilo do myslenia: %d przeczuc z pozycjami, %d pozycji spoza uwag czytelnikow z %d (prog %d)"
+              % (len(przeczucia), spoza_czytelnikow, len(uzyte), ROZKMINA_MIN_POZYCJI), flush=True)
         return None
     naglowki = [wpisy[i - 1] for i in uzyte[:14]]
     tytul = " ".join(str(dane.get("tytul") or "").split())[:160] or "A thought across the week's AI news"
@@ -3176,7 +3178,7 @@ _DRUGI_POZIOM_DOMENY = frozenset({"co", "com", "org", "gov", "ac", "net", "edu",
 # substack.com to dwoch wydawcow, nie jeden).
 _HOSTING_AUTOROW = frozenset({"substack.com", "github.io", "medium.com", "blogspot.com", "wordpress.com", "ghost.io",
                               "beehiiv.com", "notion.site", "gitbook.io", "vercel.app", "netlify.app", "pages.dev",
-                              "hashnode.dev", "herokuapp.com", "web.app", "fly.dev", "streamlit.app"})
+                              "hashnode.dev", "herokuapp.com", "web.app", "fly.dev", "streamlit.app", "amazonaws.com"})
 # Serwisy, w ktorych wydawca to KONTO, wiec klucz ma pierwszy segment sciezki (github.com/org, x.com/konto, medium.com/@autor).
 _SERWISY_KONT = frozenset({"github.com", "gitlab.com", "x.com", "huggingface.co", "medium.com", "substack.com"})
 # Domeny jednego koncernu to jeden wydawca (blog firmy i jej strona produktu nie potwierdzaja sie nawzajem).
@@ -3188,10 +3190,18 @@ _RODZINY_DOMEN = {
     "anthropic": frozenset({"anthropic.com", "claude.ai", "claude.com"}),
     "microsoft": frozenset({"microsoft.com", "azure.com", "microsoft.ai"}),
     "xai": frozenset({"x.ai", "grok.com"}),
-    "amazon": frozenset({"amazon.com", "aboutamazon.com", "amazonaws.com"}),
+    "amazon": frozenset({"amazon.com", "aboutamazon.com"}),
 }
+# Pierwsze segmenty sciezki, ktore w serwisach kont sa SEKCJA serwisu, nie kontem (huggingface.co/blog, github.com/features).
+_SEKCJE_SERWISOW = frozenset({"blog", "docs", "papers", "features", "about", "pricing", "enterprise", "orgs", "topics", "collections",
+                              "trending", "explore", "marketplace", "sponsors", "settings", "login", "join", "home", "pulse", "search",
+                              "notifications", "apps", "solutions", "resources", "customers", "security", "readme", "new",
+                              "organizations", "learn", "tasks", "community", "changelog", "careers", "contact", "legal", "terms",
+                              "privacy", "i", "hashtag", "intent", "share", "status", "p", "models", "api", "support"})
+# W tych sekcjach konto jest drugim segmentem (huggingface.co/datasets/<konto>/<nazwa>).
+_SEKCJE_Z_KONTEM = frozenset({"datasets", "spaces"})
 # Agregatory i serwisy przedrukow: kopia cudzego tekstu, nie wydawca (nie liczy sie jako niezalezne zrodlo).
-_AGREGATORY = ("live.euronext.com", "finance.yahoo.com", "news.yahoo.com", "msn.com", "marketscreener.com",
+_AGREGATORY = ("live.euronext.com", "yahoo.com", "msn.com", "marketscreener.com",
                "news.google.com", "flipboard.com", "ground.news", "newsbreak.com", "smartnews.com", "feedly.com")
 PROG_PRZEDRUKU = 0.85
 
@@ -3221,9 +3231,11 @@ def _domena(url: Any) -> str:
     if rej in _HOSTING_AUTOROW and h != rej:
         return h
     if rej in _SERWISY_KONT:
-        return rej + ("/" + sciezka[0].lower() if sciezka else "")
+        if sciezka and sciezka[0].lower() in _SEKCJE_Z_KONTEM and len(sciezka) >= 2:
+            return rej + "/" + sciezka[1].lower()
+        return rej if not sciezka or sciezka[0].lower() in _SEKCJE_SERWISOW else rej + "/" + sciezka[0].lower()
     for nazwa, domeny in _RODZINY_DOMEN.items():
-        if rej in domeny:
+        if rej in domeny or rej.split(".")[0] == nazwa or (nazwa == "google" and rej.endswith(".google")):
             return nazwa
     return rej
 
@@ -3238,37 +3250,62 @@ def _ten_sam_fragment(a: frozenset, b: frozenset) -> bool:
     return mniejszy >= 6 and len(a & b) / mniejszy >= PROG_PRZEDRUKU
 
 
-def _wydawca_faktu(c: dict[str, Any]) -> str:
-    """Kto stoi za faktem jako niezalezny wydawca: klucz domeny, „aktor” dla wszystkich twierdzen interesowanej strony razem,
-    pusty ciag dla glosow, wpisow cennika i agregatorow (nie sa wydawca faktu)."""
-    rodzaj, klasa = _rodzaj_twierdzenia(c), _klasa(c)
-    if rodzaj in ("VOICE", "LISTING") or klasa in ("VOICE", "LISTING"):
-        return ""
-    return "aktor" if rodzaj == "VENDOR_CLAIM" else _domena(c.get("url"))
+def _rejestr_urzedowy(url: Any) -> bool:
+    """Rejestr, urzad albo repozytorium prac (sec.gov, arxiv.org): dokument pierwotny, ale NIE strona interesowanej firmy."""
+    try:
+        import stages
+        h = stages._host_adresu(url)
+        return bool(h) and (stages._host_w(h, stages.HOSTY_REJESTROW) or h.endswith(stages.KONCOWKI_REJESTROW))
+    except Exception:    # noqa: BLE001
+        return False
+
+
+def _glos_lub_cennik(c: dict[str, Any]) -> bool:
+    return _rodzaj_twierdzenia(c) in ("VOICE", "LISTING") or _klasa(c) in ("VOICE", "LISTING")
+
+
+def _strona_aktora(c: dict[str, Any]) -> bool:
+    """Twierdzenie interesowanej strony: jej wlasne slowa (VENDOR_CLAIM) albo dokument pierwotny jej domeny (klasa PRIMARY
+    nadana kodem, spoza rejestrow)."""
+    return _rodzaj_twierdzenia(c) == "VENDOR_CLAIM" or (_klasa(c) == "PRIMARY" and not _rejestr_urzedowy(c.get("url")))
+
+
+def _klucze_wydawcow(fakty: list[dict[str, Any]]) -> list[str]:
+    """Klucz niezaleznego wydawcy kazdego faktu (rownolegle do `fakty`; pusty = nie jest wydawca: glos, wpis cennika,
+    agregator). Wszystkie twierdzenia interesowanej strony to jeden „aktor” — chyba ze jej domena niesie tez fakty
+    neutralne (FACT bez klasy PRIMARY, np. depesza Reutera cytujaca firme): wtedy to ta sama strona i dostaje klucz domeny,
+    wiec jeden dokument nie rozpada sie na dwoch wydawcow."""
+    neutralne = {_domena(c.get("url")) for c in fakty if not _glos_lub_cennik(c) and not _strona_aktora(c)} - {""}
+    out: list[str] = []
+    for c in fakty:
+        if _glos_lub_cennik(c):
+            out.append("")
+            continue
+        d = _domena(c.get("url"))
+        out.append(d if (not _strona_aktora(c) or d in neutralne) else "aktor")
+    return out
 
 
 def wydawcy_niezalezni(fakty: list[dict[str, Any]]) -> list[str]:
-    """Posortowane klucze NIEZALEZNYCH wydawcow faktow: bez glosow, cennikow i agregatorow, wszystkie twierdzenia
-    interesowanej strony i domeny jednego koncernu jako jeden wydawca, a przedruk tego samego fragmentu pod innym hostem
-    liczy sie raz (regula „przedruk to jeden wydawca”, jak w `zasieg_historii`)."""
-    klucze: list[str] = []
+    """Posortowane klucze NIEZALEZNYCH wydawcow podanych faktow (w teze: fakty ZA): bez glosow, cennikow i agregatorow,
+    strona interesowanej firmy jako jeden „aktor”, domeny jednego koncernu jako jeden wydawca, a przedruk tego samego
+    fragmentu pod innym hostem liczy sie raz (regula „przedruk to jeden wydawca”, jak w `zasieg_historii`). Wynik nie zalezy
+    od kolejnosci faktow: dluzsze teksty sa porownywane pierwsze, krotszy cytat zawarty w dluzszym nie liczy sie osobno."""
+    klucze = _klucze_wydawcow(fakty)
+    wybrane = [(k, _slowa_porownania(c.get("evidence") or c.get("claim"))) for c, k in zip(fakty, klucze) if k]
+    wybrane.sort(key=lambda x: (-len(x[1]), x[0]))
+    out: set[str] = set()
     widziane: list[tuple[str, frozenset]] = []
-    for c in fakty:
-        k = _wydawca_faktu(c)
-        if not k:
-            continue
-        slowa = _slowa_porownania(c.get("evidence") or c.get("claim"))
+    for k, slowa in wybrane:
         if any(kk != k and (_ten_sam_fragment(slowa, ss) or _ten_sam_tytul(slowa, ss)) for kk, ss in widziane):
             continue
         widziane.append((k, slowa))
-        if k not in klucze:
-            klucze.append(k)
-    return sorted(klucze)
+        out.add(k)
+    return sorted(out)
 
 
-def _etykieta_wydawcy(c: dict[str, Any]) -> str:
+def _etykieta_klucza(k: str) -> str:
     """Co prompt tezy drukuje przy fakcie: klucz wydawcy z kodu."""
-    k = _wydawca_faktu(c)
     return "the actor's own account" if k == "aktor" else (k or "no independent publisher")
 
 
@@ -3284,12 +3321,12 @@ def _mysli_do_tezy(stan: dict[str, Any]) -> str:
     return "\n".join(out[:10]) or "(none)"
 
 
-_LISTY_ZASTRZEZEN = (("not_established", 6), ("contradictions", 3), ("uncertain_claims", 3))
+_LISTY_ZASTRZEZEN = (("not_established", 12), ("contradictions", 4), ("uncertain_claims", 6))
 
 
 def _tekst_zastrzezenia(x: Any) -> str:
     if isinstance(x, dict):
-        x = x.get("claim") or x.get("text") or x.get("point") or json.dumps(x, ensure_ascii=False, default=str)
+        x = x.get("claim") or x.get("text") or x.get("point") or (json.dumps(x, ensure_ascii=False, default=str) if any(x.values()) else "")
     return _jedna_linia(x)
 
 
@@ -3366,8 +3403,9 @@ def teza_artykulu(conn, run_id, stan: dict[str, Any]) -> dict[str, Any] | None:
         import llm
         import stages
         zastrz = zastrzezenia_karty(card)
+        klucze = _klucze_wydawcow(tw)
         prompt = stages.prompt_tezy_artykulu(
-            _mysli_do_tezy(stan), _fakty_do_promptu(card, etykieta=_etykieta_wydawcy), _zastrzezenia_do_promptu(zastrz))
+            _mysli_do_tezy(stan), _fakty_do_promptu(card, etykieta=lambda i, c: _etykieta_klucza(klucze[i - 1])), _zastrzezenia_do_promptu(zastrz))
         surowe = llm.call("teza_artykulu", TEZA_SYSTEM, prompt, conn=conn, run_id=run_id)
         dane = _json_odpowiedzi("teza_artykulu", surowe, KSZTALT_TEZY, conn, run_id)
     except _przerywaja():

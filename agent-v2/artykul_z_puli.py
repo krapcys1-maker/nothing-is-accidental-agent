@@ -2580,9 +2580,18 @@ def _zawez_do_tezy(card: dict, stan: dict, teza: dict, przes: list) -> list:
     if isinstance(card.get("investigation"), dict):
         card["investigation"] = {"question": teza.get("teza") or "", **{k: card["investigation"][k] for k in ("created_at", "stop_reason", "cost_usd")
                                                                           if k in card["investigation"]}}
-    daty_faktow = sorted(str(c.get("as_of") or "")[:10] for c in wybrane if re.match(r"^\d{4}-\d{2}-\d{2}", str(c.get("as_of") or "")))
-    if daty_faktow and isinstance(card.get("source_dates"), dict):
-        card["source_dates"] = dict(card["source_dates"], oldest=daty_faktow[0], newest=daty_faktow[-1], note="")   # uwaga o datach dotyczyla calej karty
+    # Daty calej karty (i uwaga o nich) dotycza WSZYSTKICH historii rozkminy. Z faktow tezy: przeliczone (bez dat z przyszlosci),
+    # a stare zrodla dostaja uwage z kodu; bez ani jednej daty przy faktach tezy pole znika (karta bez dat to uczciwe
+    # KARTA_BEZ_DAT i brak stopki, nie daty cudzych historii).
+    dzis = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    daty_faktow = sorted(d for d in (str(c.get("as_of") or "")[:10] for c in wybrane) if re.match(r"^\d{4}-\d{2}-\d{2}$", d) and d <= dzis)
+    if isinstance(card.get("source_dates"), dict):
+        if daty_faktow:
+            wiek = stages.wiek_zrodla_w_dniach(daty_faktow[-1])
+            uwaga = ("The newest dated source behind this thesis is from %s." % daty_faktow[-1]) if wiek is not None and wiek > config.MAKS_WIEK_ZRODLA_DNI else ""
+            card["source_dates"] = dict(card["source_dates"], oldest=daty_faktow[0], newest=daty_faktow[-1], note=uwaga)
+        else:
+            card.pop("source_dates")
     card["voices"] = [v for v in card.get("voices") or [] if not isinstance(v, dict) or v.get("url") in urle]
     card["working_thesis"] = teza.get("teza") or ""
     card["main_mechanism"] = teza.get("jak_zrodla_lacza") or ""

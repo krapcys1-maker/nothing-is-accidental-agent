@@ -140,8 +140,15 @@ sprawdz("przeczucie z JEDNA pozycja spoza czytelnikow (i uwaga) odpada, a drugie
 ODPOWIEDZ[:] = [lambda p: {"tytul": "Shared pair", "pytanie": "Q?", "przeczucia": [
     {"mysl": "A first hunch on two headlines plus one reader remark as a spark.", "pozycje": numery(p, "blog")[:2] + numery(p, "czytelnik")[:1]},
     {"mysl": "A second hunch on the same two headlines plus another reader remark.", "pozycje": numery(p, "blog")[:2] + numery(p, "czytelnik")[1:2]}]}]
+import contextlib   # noqa: E402
+import io            # noqa: E402
+
+_bufor = io.StringIO()
+with contextlib.redirect_stdout(_bufor):
+    _wynik = sledztwo.rozkmina_historia(korpus)
 sprawdz("dwa przeczucia na tej samej parze naglowkow, kazde z uwaga: uwagi nie dopelniaja progu trzech pozycji (zostaja dwie spoza czytelnikow)",
-        sledztwo.rozkmina_historia(korpus) is None)
+        _wynik is None)
+sprawdz("log odrzucenia podaje liczbe pozycji SPOZA czytelnikow (ta, ktora porownuje prog), nie liczbe z uwagami", "2 pozycji spoza uwag czytelnikow z 4" in _bufor.getvalue(), _bufor.getvalue())
 print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))
 sys.exit(1 if oblane else 0)

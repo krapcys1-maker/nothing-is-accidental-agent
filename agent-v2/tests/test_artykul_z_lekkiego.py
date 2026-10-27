@@ -73,10 +73,14 @@ HOSTY = ["404media.co", "www.reuters.com", "blog.openai.com", "news.ycombinator.
          "www.wired.com", "latent.space", "www.bbc.co.uk", "techcrunch.com", "www.ft.com", "sansec.io"]
 
 
+def _dni_temu(n):
+    return (datetime.now(timezone.utc) - timedelta(days=n)).strftime("%Y-%m-%d")
+
+
 def karta(n=12, hosty=None):
     hosty = hosty or HOSTY
     tw = [{"claim": "Claim number %d about the story, stated plainly." % i, "evidence": "Evidence text %d." % i,
-           "url": "https://%s/p/%d" % (hosty[(i - 1) % len(hosty)], i), "kind": "FACT", "as_of": "2026-10-%02d" % (10 + i)}
+           "url": "https://%s/p/%d" % (hosty[(i - 1) % len(hosty)], i), "kind": "FACT", "as_of": _dni_temu(14 - i)}
           for i in range(1, n + 1)]
     return {"confirmed_claims": tw,
             "citable_numbers": [{"value": "12%", "means": "number from claim 1", "url": tw[0]["url"]},
@@ -154,11 +158,62 @@ _tekst = "Customers account for most of the quarterly revenue, the filing says, 
 _bazowe = {"claim": "Concentration claim.", "evidence": _tekst}
 sprawdz("KONTRDOWOD: przedruk tego samego fragmentu pod drugim hostem (Reuters i kopia na Euronext/innej domenie) to JEDEN wydawca",
         sledztwo.wydawcy_niezalezni([dict(_bazowe, url="https://www.reuters.com/a"), dict(_bazowe, url="https://copy-site.example/b"),
-                                     dict(_bazowe, url="https://www.reuters.com/c")]) == ["reuters.com"])
+                                     dict(_bazowe, url="https://www.reuters.com/c")]) in (["reuters.com"], ["copy-site.example"]))
 sprawdz("KONTRDOWOD: przedruk z dopiskiem (ten sam fragment w dluzszym tekscie agregujacej strony) tez liczy sie raz",
         sledztwo.wydawcy_niezalezni([dict(_bazowe, url="https://www.reuters.com/a"),
                                      dict(_bazowe, evidence=_tekst + " plus a good deal of extra commentary words wrapped around the quote by the site that copied it, with more filler vocabulary besides",
-                                          url="https://copy-site.example/b")]) == ["reuters.com"])
+                                          url="https://copy-site.example/b")]).__len__() == 1)
+def fakt(url, tekst, **k):
+    return dict({"claim": tekst[:40], "evidence": tekst, "url": url, "kind": "FACT"}, **k)
+
+
+_F = ["Revenue figures for the quarter were disclosed in the annual filing today", "The company announced a new product line for enterprise customers this autumn",
+      "Analysts at the bank compared the valuation with listed software companies", "A spokesperson declined to comment on the pending regulatory review",
+      "Independent researchers reproduced the benchmark result on two separate machines"]
+sprawdz("KONTRDOWOD (przeglad 3): FACT + VENDOR_CLAIM + FACT z jednej domeny firmy to JEDEN wydawca -> brak tezy",
+        len(sledztwo.wydawcy_niezalezni([fakt("https://openai.com/a", _F[0]), fakt("https://openai.com/b", _F[1], kind="VENDOR_CLAIM"),
+                                         fakt("https://openai.com/c", _F[2])])) == 1)
+sprawdz("KONTRDOWOD: trzy twierdzenia z JEDNEGO adresu Reutersa (FACT, FACT, VENDOR_CLAIM) to jeden wydawca, nie „aktor” + reuters.com",
+        sledztwo.wydawcy_niezalezni([fakt("https://www.reuters.com/x", _F[0]), fakt("https://www.reuters.com/x", _F[1]),
+                                     fakt("https://www.reuters.com/x", _F[2], kind="VENDOR_CLAIM")]) == ["reuters.com"])
+sprawdz("KONTRDOWOD: trzy domeny jednej firmy z klasa PRIMARY (kimi.com, moonshot.ai, kimi.ai) to jeden „aktor”; rejestr (sec.gov) nim nie jest",
+        sledztwo.wydawcy_niezalezni([fakt("https://www.kimi.com/a", _F[0], **{"class": "PRIMARY"}), fakt("https://platform.moonshot.ai/b", _F[1], **{"class": "PRIMARY"}),
+                                     fakt("https://kimi.ai/c", _F[2], **{"class": "PRIMARY"})]) == ["aktor"]
+        and sledztwo.wydawcy_niezalezni([fakt("https://www.sec.gov/a", _F[0], **{"class": "PRIMARY"}), fakt("https://kimi.ai/c", _F[2], **{"class": "PRIMARY"})])
+        == ["aktor", "sec.gov"])
+sprawdz("wlasne slowa firmy plus dwa niezalezne raporty to TRZECH wydawcow (aktor, ft.com, reuters.com)",
+        sledztwo.wydawcy_niezalezni([fakt("https://vendor.example/a", _F[0], kind="VENDOR_CLAIM"), fakt("https://www.ft.com/b", _F[3]),
+                                     fakt("https://www.reuters.com/c", _F[4])]) == ["aktor", "ft.com", "reuters.com"])
+sprawdz("ta sama domena z VENDOR_CLAIM i FACT w ocenianym zestawie to jeden wydawca (klucz domeny), niezalezny od fact poza zestawem",
+        sledztwo.wydawcy_niezalezni([fakt("https://vendor.example/a", _F[0], kind="VENDOR_CLAIM"), fakt("https://vendor.example/b", _F[1]),
+                                     fakt("https://www.ft.com/c", _F[2])]) == ["ft.com", "vendor.example"]
+        and sledztwo.wydawcy_niezalezni([fakt("https://vendor.example/a", _F[0], kind="VENDOR_CLAIM"), fakt("https://www.ft.com/c", _F[2])]) == ["aktor", "ft.com"])
+import itertools
+_S = "Customers account for most of the quarterly revenue, the filing says"
+_dl = [fakt("https://paper-a.example/x", "Paper A writes that " + _S + " and adds a long analysis of the concentration risk for investors"),
+       fakt("https://paper-b.example/y", "Paper B notes that " + _S + " and then discusses a different angle on enterprise buyers entirely"),
+       fakt("https://wire.example/z", _S)]
+sprawdz("KONTRDOWOD (przeglad 3): wynik NIE zalezy od kolejnosci faktow (krotki cytat + dwa niezalezne dluzsze teksty: 6 permutacji, ten sam wynik, dwoch wydawcow)",
+        len({tuple(sledztwo.wydawcy_niezalezni(list(p))) for p in itertools.permutations(_dl)}) == 1
+        and len(sledztwo.wydawcy_niezalezni(_dl)) == 2, [sledztwo.wydawcy_niezalezni(list(p)) for p in itertools.permutations(_dl)])
+_w = "alpha bravo charlie delta echoo foxtrot golf hotel india julia".split()
+sprawdz("PROG PRZEDRUKU: ok. 60% wspolnych slow to DWOCH wydawcow, ok. 90% to JEDEN",
+        len(sledztwo.wydawcy_niezalezni([fakt("https://a.example/1", " ".join(_w)), fakt("https://b.example/1", " ".join(_w[:6] + ["kilos", "limaa", "mikee", "novem"]))])) == 2
+        and len(sledztwo.wydawcy_niezalezni([fakt("https://a.example/1", " ".join(_w)), fakt("https://b.example/1", " ".join(_w[:9] + ["kilos"]))])) == 1)
+sprawdz("glos oznaczony tylko KLASA (kind FACT, class VOICE) tez nie jest wydawca; uk.finance.yahoo.com to agregator",
+        sledztwo.wydawcy_niezalezni([fakt("https://forum.example/1", _F[0], **{"class": "VOICE"}), fakt("https://uk.finance.yahoo.com/n", _F[1])]) == [])
+sprawdz("KLUCZ WYDAWCY: port i kropka koncowa daja DOKLADNIE example.com (nie pusty ciag, ktory przeszedlby test jednakowosci)",
+        sledztwo._domena("https://example.com:8443/b") == "example.com" and sledztwo._domena("https://Example.COM./c") == "example.com")
+sprawdz("SEKCJE SERWISOW (przeglad 3): huggingface.co/blog, /docs, /papers to jeden wydawca (host), konta w /datasets/<konto>/ i /<konto>/ rozrozniaja sie",
+        len({sledztwo._domena(u) for u in ("https://huggingface.co/blog/x", "https://huggingface.co/docs/y", "https://huggingface.co/papers/z", "https://huggingface.co/")}) == 1
+        and sledztwo._domena("https://huggingface.co/datasets/acme/foo") != sledztwo._domena("https://huggingface.co/datasets/other/foo")
+        and sledztwo._domena("https://huggingface.co/acme/model") != sledztwo._domena("https://huggingface.co/other/model")
+        and sledztwo._domena("https://github.com/features/copilot") == "github.com")
+sprawdz("RODZINY (przeglad 3): gemini.google, labs.google, google.co.uk i blog.google to „google”; amazon.de to „amazon”; dwa buckety S3 to dwoch wydawcow; yahoo.com/news to agregator",
+        len({sledztwo._domena(u) for u in ("https://gemini.google/a", "https://labs.google/b", "https://www.google.co.uk/c", "https://blog.google/d")}) == 1
+        and sledztwo._domena("https://blog.google/d") == "google" and sledztwo._domena("https://www.amazon.de/x") == "amazon"
+        and sledztwo._domena("https://a.s3.amazonaws.com/x.pdf") != sledztwo._domena("https://b.s3.amazonaws.com/x.pdf")
+        and sledztwo._domena("https://www.yahoo.com/news/x") == "")
 sprawdz("rozne teksty pod dwoma hostami to dwoch wydawcow",
         len(sledztwo.wydawcy_niezalezni([dict(_bazowe, url="https://www.reuters.com/a"),
                                          {"claim": "Other.", "evidence": "A separate report on how the valuation compares with listed software companies this year", "url": "https://www.ft.com/b"}])) == 2)
@@ -306,12 +361,21 @@ s = stan(680)
 s["teza_artykulu"] = sledztwo.oczysc_teze(teza_surowa(unsettled=["U1", 3, "U4", 3]), sledztwo._twierdzenia(s["karta"]), sledztwo.zastrzezenia_karty(s["karta"]))
 sprawdz("`unsettled`: numery z listy zastrzezen (z „U” i bez), bez dubli i spoza listy; trafia tam tylko to, co wskazal model",
         s["teza_artykulu"]["zastrzezenia"] == [{"lista": "not_established", "nr": 0}, {"lista": "contradictions", "nr": 0}], s["teza_artykulu"]["zastrzezenia"])
-sprawdz("teza bez `unsettled` ma pusta liste zastrzezen (nic nie jest zgadywane slowami)", sledztwo.oczysc_teze(teza_surowa(), tw)["zastrzezenia"] == [])
-_z = sledztwo.zastrzezenia_karty({"not_established": ["Item %d is unsettled." % i for i in range(9)], "contradictions": ["C%d clash" % i for i in range(5)],
-                                  "uncertain_claims": [{"claim": "D%d doubt" % i} for i in range(5)] + [{}, ""]})
-sprawdz("`zastrzezenia_karty`: najwyzej 6 nieustalonych, 3 sprzecznosci i 3 watpliwosci (prompt nie puchnie); wpisy-slowniki czytane po `claim`; puste pomijane",
-        [x[0] for x in _z].count("not_established") == 6 and [x[0] for x in _z].count("contradictions") == 3
-        and [x[0] for x in _z].count("uncertain_claims") == 3 and _z[-1][2] == "D2 doubt", _z)
+_zk = sledztwo.zastrzezenia_karty(s["karta"])
+sprawdz("teza bez `unsettled` (albo z pustym) ma pusta liste zastrzezen, choc karta ma 3 zastrzezenia do wyboru (nic nie jest zgadywane slowami)",
+        len(_zk) == 3 and sledztwo.oczysc_teze(teza_surowa(), tw, _zk)["zastrzezenia"] == [] and sledztwo.oczysc_teze(teza_surowa(unsettled=[]), tw, _zk)["zastrzezenia"] == []
+        and sledztwo.oczysc_teze(teza_surowa(unsettled="U1"), tw, _zk)["zastrzezenia"] == [])
+_z = sledztwo.zastrzezenia_karty({"not_established": ["Item %d is unsettled." % i for i in range(15)], "contradictions": ["C%d clash" % i for i in range(6)],
+                                  "uncertain_claims": [{}, "", {"claim": ""}] + [{"claim": "D%d doubt" % i} for i in range(8)]})
+sprawdz("`zastrzezenia_karty`: najwyzej 12 nieustalonych, 4 sprzecznosci i 6 watpliwosci (prompt nie puchnie); wpisy-slowniki czytane po `claim`; puste na POCZATKU pomijane, a numer to indeks w ORYGINALNEJ liscie",
+        [x[0] for x in _z].count("not_established") == 12 and [x[0] for x in _z].count("contradictions") == 4
+        and [x[0] for x in _z].count("uncertain_claims") == 6 and _z[-1] == ("uncertain_claims", 8, "D5 doubt") and ("uncertain_claims", 3, "D0 doubt") in _z, _z)
+_pusty = sledztwo.zastrzezenia_karty({"not_established": ["", "Real caveat about the thesis."]})
+sprawdz("pusty wpis na poczatku listy nie przesuwa numeru: „Real caveat” ma nr 1, a `_zawez_do_tezy` zwraca wlasnie ten wpis",
+        _pusty == [("not_established", 1, "Real caveat about the thesis.")]
+        and azp._karta_artykulu(dict(stan(690), karta=dict(karta(), not_established=["", "Real caveat about the thesis."]),
+                                     teza_artykulu=dict(sledztwo.oczysc_teze(teza_surowa(unsettled=[1]), sledztwo._twierdzenia(karta()), _pusty))))[1]["not_established"]
+        == ["Real caveat about the thesis."], _pusty)
 brief, card = azp._karta_artykulu(s)
 sprawdz("teza idzie jako ustalenie (`investigation_finding`) z faktami ZA, a tytul roboczy zastepuje tytul briefu",
         card["investigation_finding"]["finding"].startswith("Anthropic's IPO prices") and card["investigation_finding"]["claims"]
@@ -342,10 +406,18 @@ sprawdz("KONTRDOWOD (rozlew): w karcie pisarza nie ma przeczuc ani hipotez badan
 sprawdz("pytanie badania w karcie to TEZA; parallel_mechanisms puste; sprawdzenie_karty usuniete",
         card["investigation"]["question"].startswith("Anthropic's IPO prices") and "assessment" not in card["investigation"] and card["parallel_mechanisms"] == []
         and "sprawdzenie_karty" not in card, (card.get("investigation"), card.get("parallel_mechanisms")))
-sprawdz("daty zrodel przeliczone z twierdzen tezy (1-5): najstarsze 2026-10-11, najnowsze 2026-10-15; notatka o datach CALEJ karty (o IPO) znika",
-        card["source_dates"]["oldest"] == "2026-10-11" and card["source_dates"]["newest"] == "2026-10-15" and card["source_dates"]["note"] == "", card["source_dates"])
+sprawdz("daty zrodel przeliczone z twierdzen tezy (1-5): najstarsze 13 dni temu, najnowsze 9 dni temu; notatka o datach CALEJ karty (o IPO) znika",
+        card["source_dates"]["oldest"] == _dni_temu(13) and card["source_dates"]["newest"] == _dni_temu(9) and card["source_dates"]["note"] == "", card["source_dates"])
 sprawdz("katy serii (`investigation_angles`) tylko z notek, ktore stoja na faktach tezy (dwie z trzech; trzecia o innej historii odpada)",
         len(card["investigation_angles"]) == 2 and all("third" not in str(a) for a in card["investigation_angles"]), card.get("investigation_angles"))
+_bez = dict(s, karta=dict(s["karta"], confirmed_claims=[{k: v for k, v in c.items() if k != "as_of"} for c in s["karta"]["confirmed_claims"]]))
+sprawdz("KONTRDOWOD (przeglad 3): fakty tezy bez zadnej daty -> pole `source_dates` ZNIKA (nie zostaja daty cudzych historii ani ich uwaga)",
+        "source_dates" not in azp._karta_artykulu(_bez)[1])
+_stare = dict(s, karta=dict(s["karta"], confirmed_claims=[dict(c, as_of="2024-01-%02d" % (i + 1)) for i, c in enumerate(s["karta"]["confirmed_claims"])]))
+_sd = azp._karta_artykulu(_stare)[1]["source_dates"]
+sprawdz("stare zrodla tezy (2024) dostaja uwage z kodu o wieku, a nie pusta notatke", _sd["newest"] == "2024-01-05" and "2024-01-05" in _sd["note"], _sd)
+_przyszle = dict(s, karta=dict(s["karta"], confirmed_claims=[dict(c, as_of="2031-01-01" if i == 0 else c["as_of"]) for i, c in enumerate(s["karta"]["confirmed_claims"])]))
+sprawdz("data z przyszlosci jest pomijana przy przeliczeniu (najnowsze nie moze byc z 2031)", azp._karta_artykulu(_przyszle)[1]["source_dates"]["newest"] == _dni_temu(9))
 s2 = stan(681, "sledztwo")
 brief2, card2 = azp._karta_artykulu(s2)
 sprawdz("stan bez tezy (ciezki tor) dostaje karte jak dotad: wszystkie 12 faktow, bez `investigation_finding` z tezy, bez hipotez THESIS i HUNCH",

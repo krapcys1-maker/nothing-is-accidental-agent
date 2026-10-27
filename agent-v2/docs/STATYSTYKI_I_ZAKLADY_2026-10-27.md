@@ -134,7 +134,10 @@ po `_kandydat_ze_sledztwa`, przed pula; wylacznik `config.ARTYKUL_Z_LEKKIEGO`):
    (`sledztwo.wydawcy_niezalezni`), numerow z karty i warunku pomylki. Wydawca to domena rejestrowana, z wyjatkami po przegladzie nr 2: platformy
    wielu autorow (substack.com, github.io, medium.com, blogspot.com ... = pelny host), serwisy kont (github.com/org, x.com/konto; twitter = x),
    domeny jednego koncernu (google.com + blog.google + deepmind.google = jedno), agregatory (Yahoo Finance, feed Euronext) nie sa wydawca,
-   glosy i wpisy cennika nie liczą sie, wszystkie twierdzenia interesowanej strony (VENDOR_CLAIM) razem to jeden „aktor", a przedruk tego samego
+   glosy i wpisy cennika nie liczą sie, wszystkie twierdzenia interesowanej strony razem (VENDOR_CLAIM albo klasa PRIMARY spoza rejestrow) to jeden „aktor” — chyba ze jej domena niesie
+   tez fakty neutralne w ocenianym zestawie (wtedy to ta sama strona i dostaje klucz domeny: FACT+VENDOR_CLAIM z jednego adresu to jeden wydawca),
+   sekcje serwisow kont (huggingface.co/blog, github.com/features) to host, nie konto, rodziny obejmuja google.* / amazon.* / *.google, hosting amazonaws.com
+   to pelny host, a wynik nie zalezy od kolejnosci faktow (dluzsze teksty porownywane pierwsze), a przedruk tego samego
    fragmentu pod innym hostem (85% slow mniejszego tekstu w wiekszym) liczy sie raz. Prompt drukuje przy kazdym fakcie TEN SAM klucz wydawcy,
    ktory liczy kod. Pusta teza modelu albo brak dwoch wydawcow = brak artykulu z tego
    stanu (uczciwe „w tym tygodniu nie ma co argumentowac"), wraca pula.
@@ -147,8 +150,11 @@ po `_kandydat_ze_sledztwa`, przed pula; wylacznik `config.ARTYKUL_Z_LEKKIEGO`):
    Prompt pisarza (`pisarz.md`) dostaje teze jako `investigation_finding` i pierwsza `editorial_hypotheses` z dowodami za, przeciw i „co obali".
 
 Pytanie badania w karcie pisarza to sama teza; hipotezy badania, mechanizmy rownolegle (`parallel_mechanisms`), wynik sprawdzenia karty
-(`sprawdzenie_karty`) i sciezka pliku nie przechodza, a daty zrodel (`source_dates`) sa liczone z twierdzen tezy. Przeglad nr 2 (27.10.2026, 4 kierunki +
-sceptycy) potwierdzil 11 znalezisk: 2 powazne (rozlew przez te pola i niezaleznosc liczona po domenie) i uwagi czytelnikow (przeczucie moglo stac na
+(`sprawdzenie_karty`) i sciezka pliku nie przechodza, a daty zrodel (`source_dates`) sa liczone z twierdzen tezy (bez dat z przyszlosci; stare zrodla
+dostaja uwage z kodu; gdy zaden fakt tezy nie ma daty, pole znika i artykul idzie bez stopki z data, a nie z datami cudzych historii). Zastrzezenia: model
+widzi do 12 nieustalonych, 4 sprzecznosci i 6 watpliwosci karty. Przeglad nr 2 (27.10.2026, 4 kierunki +
+sceptycy) potwierdzil 11 znalezisk, a przeglad nr 3 (poprawek, 48 agentow) kolejne 11 (m.in. firma rozbijana na „aktora” i domene, zaleznosc od kolejnosci
+faktow, sekcje serwisow jako konta, dziury w rodzinach domen): 2 powazne (rozlew przez te pola i niezaleznosc liczona po domenie) i uwagi czytelnikow (przeczucie moglo stac na
 samych uwagach; temat uwagi byl rozstrzygany kontekstem NASZEGO tekstu). Wszystkie naprawione, 25 mutantow zabitych.
 
 Zmierzone na zywo (kopia danych, 27.10.2026): wybor tezy z trzech stanow 0,015 USD, artykul na Fable 0,48-0,75 USD (1700-2300 slow). Cadence bez zmian:

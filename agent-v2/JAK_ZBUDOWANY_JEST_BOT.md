@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **40 plików**, 55 100 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **40 plików**, 55 147 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -114,7 +114,7 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
 się testować bez przeglądarki i bez pieniędzy**. 221 zestawów
-testów, 6348 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+testów, 6364 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -906,7 +906,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `sledztwo.py` — śledztwo — wybór największej historii, rdzeń (sedno) i kąty serii z jednej tabeli KATY, uczciwy hak sprawdzany kodem, poziom tematu (liczba notek), bramka nowości i kolejka notek
 
-3809 wierszy, 155 funkcji na poziomie modułu, 0 klas
+3847 wierszy, 158 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -1022,7 +1022,7 @@ wiec nie da sie go rozjechac z kodem.
 | `przeslania(conn, run_id, card, dossier, h, typ, ile, artykulowy, plan)` | Seria notek o jednej historii (spec §4, §5 „Angle choice", „Order and pacing", §9 pkt 7 i 12). |
 | `_bramka_hakow(conn, run_id, seria, wynik, card, h, naglowki)` *(wewn.)* | Pierwsze zdanie kazdego kata przez kontrakt haka, w kolejnosci serii; zbudowanie wyjscia. |
 | `ile_notek_lekko(card)` | Ile notek uniesie temat: z bogactwa karty, nie z reguly o poziomach. Malo faktow -> 2-3 notki. |
-| `_fakty_do_promptu(card, etykieta)` *(wewn.)* | Numerowane fakty karty do promptu. `etykieta(c)` zastepuje domyslny host (prompt tezy drukuje klucz wydawcy, |
+| `_fakty_do_promptu(card, etykieta)` *(wewn.)* | Numerowane fakty karty do promptu. `etykieta(i, c)` zastepuje domyslny host (prompt tezy drukuje klucz wydawcy, |
 | `_ostatnie_do_promptu(ile)` *(wewn.)* | — |
 | `ile_rozkmin(dni)` | Ile serii rozkminy w oknie (rekord niesie `rozkmina: true`). |
 | `uwagi_czytelnikow(dni, maks)` | Najswiezsze tresciwe uwagi czytelnikow jako pozycje korpusu rozkminy; pusta lista, gdy pliku nie ma. Nigdy nie rzuca. |
@@ -1033,9 +1033,12 @@ wiec nie da sie go rozjechac z kodem.
 | `_domena(url)` *(wewn.)* | Klucz wydawcy adresu albo pusty ciag, gdy adres nie jest wydawca. Domena rejestrowana (example.co.uk, nie |
 | `_slowa_porownania(tekst)` *(wewn.)* | — |
 | `_ten_sam_fragment(a, b)` *(wewn.)* | Ten sam tekst pod dwoma hostami (przedruk depeszy): co najmniej 6 znaczacych slow i 85% mniejszego zbioru w wiekszym. |
-| `_wydawca_faktu(c)` *(wewn.)* | Kto stoi za faktem jako niezalezny wydawca: klucz domeny, „aktor” dla wszystkich twierdzen interesowanej strony razem, |
-| `wydawcy_niezalezni(fakty)` | Posortowane klucze NIEZALEZNYCH wydawcow faktow: bez glosow, cennikow i agregatorow, wszystkie twierdzenia |
-| `_etykieta_wydawcy(c)` *(wewn.)* | Co prompt tezy drukuje przy fakcie: klucz wydawcy z kodu. |
+| `_rejestr_urzedowy(url)` *(wewn.)* | Rejestr, urzad albo repozytorium prac (sec.gov, arxiv.org): dokument pierwotny, ale NIE strona interesowanej firmy. |
+| `_glos_lub_cennik(c)` *(wewn.)* | — |
+| `_strona_aktora(c)` *(wewn.)* | Twierdzenie interesowanej strony: jej wlasne slowa (VENDOR_CLAIM) albo dokument pierwotny jej domeny (klasa PRIMARY |
+| `_klucze_wydawcow(fakty)` *(wewn.)* | Klucz niezaleznego wydawcy kazdego faktu (rownolegle do `fakty`; pusty = nie jest wydawca: glos, wpis cennika, |
+| `wydawcy_niezalezni(fakty)` | Posortowane klucze NIEZALEZNYCH wydawcow podanych faktow (w teze: fakty ZA): bez glosow, cennikow i agregatorow, |
+| `_etykieta_klucza(k)` *(wewn.)* | Co prompt tezy drukuje przy fakcie: klucz wydawcy z kodu. |
 | `_mysli_do_tezy(stan)` *(wewn.)* | Nasze notatki do wyboru tezy: przeczucia rozkminy i pierwsze zdania notek serii (nasze myslenie, nie fakty). |
 | `_tekst_zastrzezenia(x)` *(wewn.)* | — |
 | `zastrzezenia_karty(card)` | Nieustalone, sprzecznosci i watpliwosci karty jako (lista, numer w liscie, tekst), po kilka z kazdej listy. Model |
@@ -1487,7 +1490,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `artykul_z_puli.py` — artykuł bierze temat z tej samej puli, co notki
 
-3685 wierszy, 72 funkcji na poziomie modułu, 1 klas
+3694 wierszy, 72 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
