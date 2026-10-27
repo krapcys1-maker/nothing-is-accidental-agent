@@ -2924,6 +2924,9 @@ PLIK_UWAG_CZYTELNIKOW = "pytania_czytelnikow.json"
 UWAGI_CZYTELNIKOW_DNI = 21
 UWAGI_CZYTELNIKOW_MAKS = 3
 UWAGA_SLOW = (8, 70)
+# Rozmowa Z NAMI („co o tym myslisz?", „probowales?") to nie pomysl, tylko zaczepka bez tresci; nie karmi rozkminy.
+_ROZMOWA_DO_NAS = re.compile(r"\b(?:do|did|have|are|would|can|could|will) you\b|\byou think\b|\byour (?:post|article|note|take|piece|comment|thoughts)\b",
+                             re.I)
 
 
 def uwagi_czytelnikow(dni: int = UWAGI_CZYTELNIKOW_DNI, maks: int = UWAGI_CZYTELNIKOW_MAKS) -> list[dict[str, Any]]:
@@ -2939,15 +2942,20 @@ def uwagi_czytelnikow(dni: int = UWAGI_CZYTELNIKOW_DNI, maks: int = UWAGI_CZYTEL
         czysta = lambda t: stages.bez_wstrzykniecia(t)[0]    # noqa: E731
     except Exception:    # noqa: BLE001
         return []
+    import korpus_kanalow
     granica = (_teraz() - timedelta(days=dni)).isoformat()
     out, widziane = [], set()
     for p in sorted((x for x in dane if isinstance(x, dict)), key=lambda x: str(x.get("kiedy") or ""), reverse=True):
         tekst = _jedna_linia(p.get("tekst"))
+        kontekst = _jedna_linia(p.get("skad"))[:90]
         klucz = tekst.lower()[:80]
         if (not (UWAGA_SLOW[0] <= len(tekst.split()) <= UWAGA_SLOW[1]) or str(p.get("kiedy") or "") < granica or klucz in widziane
-                or "http" in tekst.lower() or "www." in tekst.lower() or "@" in tekst or not czysta(tekst)):
+                or "http" in tekst.lower() or "www." in tekst.lower() or "@" in tekst or not czysta(tekst)
+                or _ROZMOWA_DO_NAS.search(tekst) or not korpus_kanalow.O_AI.search(tekst + " " + kontekst)):
             continue
         widziane.add(klucz)
+        if kontekst and "http" not in kontekst.lower() and "@" not in kontekst and czysta(kontekst):
+            tekst = "%s (said under our post: %s)" % (tekst, kontekst)
         out.append({"temat": tekst, "surowy": tekst, "kanal": "czytelnik", "data": str(p.get("kiedy") or "")[:10], "url": "",
                     "sygnal": "reader remark: a hint of what puzzles people, not a fact", "styk": "branza",
                     "rola": "uwaga czytelnika, nie fakt"})

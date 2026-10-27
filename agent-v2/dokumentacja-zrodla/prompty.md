@@ -359,7 +359,7 @@
 {{"plan": [{{"surprising_fact": <fact number>, "point": "<the one thought of this note, one sentence>"}}], "notki": [{{"rodzaj": "<one angle tag from the list>", "openings": ["<candidate 1>", "<candidate 2>", "<candidate 3>"], "tekst": "<the finished note>", "fakty": [<numbers of the facts it uses>], "wiedza": ["<each background claim from your own knowledge that the note relies on>"]}}]}}
 ```
 
-#### `rozkmina_wybor.md` (22 wierszy)
+#### `rozkmina_wybor.md` (24 wierszy)
 
 **Pola wejściowe:** `dzis`, `marka`, `pozycje`
 
@@ -417,6 +417,16 @@
 
 ```json
 {{"pary": [{{"a": "<id, e.g. N1>", "b": "<id, e.g. P3>", "dlaczego": "<one clause>"}}]}}
+```
+
+#### `teza_artykulu.md` (29 wierszy)
+
+**Pola wejściowe:** `dzis`, `fakty`, `marka`, `mysli`, `nieustalone`
+
+**Kontrakt wyjścia:**
+
+```json
+{{"thesis": "<one sentence, our view, or empty>", "title": "<working title>", "for": [<fact numbers>], "against": [<fact numbers>], "context": [<fact numbers>], "wrong_if": "<one sentence>", "how_sources_combine": "<one sentence>"}}
 ```
 
 #### `warto_pisac.md` (29 wierszy)

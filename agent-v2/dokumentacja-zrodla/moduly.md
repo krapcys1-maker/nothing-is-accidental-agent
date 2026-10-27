@@ -48,7 +48,7 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-12714 wierszy, 238 funkcji na poziomie modułu, 0 klas
+12720 wierszy, 239 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -59,6 +59,7 @@
 | `prompt_rozkminy(pozycje)` | Prompt wyboru okna katalizatorow (`sledztwo.rozkmina_historia`). Naglowki z kanalow to CUDZA tresc |
 | `prompt_dokumentow_lekkich(tytul, pytanie, zrodla)` | Prompt nazywania dokumentow pierwotnych w lekkim torze. Naglowek, pytanie i wycinki zrodel to |
 | `prompt_redakcji_serii(notki)` | Prompt redaktora serii lekkiej (`sledztwo._bez_powtorek`). Notki to tekst napisany z cudzych |
+| `prompt_tezy_artykulu(mysli, fakty, nieustalone)` | Prompt wyboru tezy artykulu tygodnia (`sledztwo.teza_artykulu`). Fakty, nasze notatki z cudzych faktow i |
 | `prompt_zakladow_wyciag(notki)` | Prompt wyciagu zakladow z opublikowanych notek (`zaklady.wyciagnij`). Notki to tekst napisany z cudzych |
 | `prompt_zakladu_sprawdzenia(zaklad, obali, opublikowano, od, do)` | Prompt sprawdzenia zakladu wyszukiwarka (`zaklady.sprawdz`). Tresc zakladu i daty pochodza z odpowiedzi |
 | `prompt_zakladu_notki(zaklad, wynik, dowod, opublikowano, sprawdzono)` | Prompt notki rozliczajacej zaklad (`zaklady.napisz_rozliczenie`). Zaklad, wynik i dowod to tresc |
@@ -577,7 +578,7 @@
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-4319 wierszy, 49 funkcji na poziomie modułu, 0 klas
+4331 wierszy, 49 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -763,7 +764,7 @@
 
 ### `sledztwo.py` — śledztwo — wybór największej historii, rdzeń (sedno) i kąty serii z jednej tabeli KATY, uczciwy hak sprawdzany kodem, poziom tematu (liczba notek), bramka nowości i kolejka notek
 
-3530 wierszy, 142 funkcji na poziomie modułu, 0 klas
+3679 wierszy, 147 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -882,10 +883,15 @@
 | `_fakty_do_promptu(card)` *(wewn.)* | — |
 | `_ostatnie_do_promptu(ile)` *(wewn.)* | — |
 | `ile_rozkmin(dni)` | Ile serii rozkminy w oknie (rekord niesie `rozkmina: true`). |
+| `uwagi_czytelnikow(dni, maks)` | Najswiezsze tresciwe uwagi czytelnikow jako pozycje korpusu rozkminy; pusta lista, gdy pliku nie ma. Nigdy nie rzuca. |
 | `rozkmina_historia(korpus, conn, run_id)` | Pseudo-historia z przeczuc albo None, gdy nic nie skloniło do myslenia. Nigdy nie podnosi wyjatku poza |
 | `_bez_powtorek(conn, run_id, notki)` *(wewn.)* | Jedno tanie wywolanie redaktora: notki, ktore powtarzaja teze innej, odpadaja (nigdy pierwsza, |
 | `_tytul_do_serii(h)` *(wewn.)* | Tytul historii dla promptu serii; przy rozkminie dochodza NASZE przeczucia (nie fakty) jako ziarna. |
 | `seria_lekka(conn, run_id, card, h, typ, ile)` | Seria notek JEDNYM wywolaniem: [{rodzaj, tekst, wniosek, fakty, wiedza, lead, ...}] — gotowe teksty |
+| `_domena(url)` *(wewn.)* | Domena rejestrowana wydawcy (example.co.uk, nie www.news.example.co.uk): „niezalezne zrodlo” to inny wydawca, |
+| `_mysli_do_tezy(stan)` *(wewn.)* | Nasze notatki do wyboru tezy: przeczucia rozkminy i pierwsze zdania notek serii (nasze myslenie, nie fakty). |
+| `oczysc_teze(dane, tw)` | Teza z odpowiedzi modelu po kontroli kodu albo None: numery z karty, co najmniej `MIN_FAKTOW_POD_TEZA` faktow ZA |
+| `teza_artykulu(conn, run_id, stan)` | Teza artykulu tygodnia dla zapisanego stanu lekkiego sledztwa albo rozkminy; None, gdy karta nie niesie tezy z dwoma |
 | `zapisz_sledztwo(rekord)` | Jedna linia na sledztwo — pamiec dla bramki i limitow. Nigdy nie wywala. |
 | `oznacz_artykul(run_id)` | Artykul ze sledztwa z tego przebiegu wyszedl — liczy sie do limitu tygodnia. |
 | `_kolejka()` *(wewn.)* | — |
@@ -1331,7 +1337,7 @@
 
 ### `artykul_z_puli.py` — artykuł bierze temat z tej samej puli, co notki
 
-3532 wierszy, 68 funkcji na poziomie modułu, 1 klas
+3671 wierszy, 72 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -1392,6 +1398,10 @@
 | `_ocena_kandydata(stan, teraz, w_tescie, uzyte)` *(wewn.)* | (nadaje sie, czego brakuje, miary) — regula artykulu ze sledztwa (spec §5), |
 | `_uzyte_twierdzenia(sledztwo, stan)` *(wewn.)* | Twierdzenia, na ktorych staly WYDANE notki serii tej historii. None, gdy |
 | `_kandydat_ze_sledztwa(w_tescie)` *(wewn.)* | Najlepszy zapisany stan sledztwa na artykul tygodnia albo None. |
+| `_braki_stanu_lekkiego(stan, teraz)` *(wewn.)* | Czego brakuje lekkiemu stanowi, zeby w ogole dostac teze: produkcja, wiek, brak artykulu z tego stanu, katy i karta. |
+| `_kandydat_lekki(conn, run_id, teraz)` *(wewn.)* | Najlepszy stan lekkiego sledztwa albo rozkminy z ostatnich dni na artykul tygodnia, z TEZA (`stan["teza_artykulu"]`) |
+| `_slowa_tresci(x)` *(wewn.)* | — |
+| `_zawez_do_tezy(card, stan, teza, przes)` *(wewn.)* | Karta lekkiego stanu OPISUJE WSZYSTKIE historie rozkminy (trzy przeczucia = trzy tematy); artykul tygodnia argumentuje |
 | `_karta_artykulu(stan)` *(wewn.)* | (brief, karta dla pisarza) z zapisanego stanu sledztwa. |
 | `_artykul_ze_sledztwa(conn, run_id)` *(wewn.)* | Artykul tygodnia z zapisanego sledztwa; None = nie ma kandydata albo |
 | `_zakaz_artykulu(conn, run_id)` *(wewn.)* | Powod, dla ktorego artykulu NIE wolno pisac, albo pusty napis. |
