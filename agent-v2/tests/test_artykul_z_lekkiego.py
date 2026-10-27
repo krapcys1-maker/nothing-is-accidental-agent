@@ -75,18 +75,29 @@ HOSTY = ["404media.co", "www.reuters.com", "blog.openai.com", "news.ycombinator.
 
 def karta(n=12, hosty=None):
     hosty = hosty or HOSTY
-    return {"confirmed_claims": [{"claim": "Claim number %d about the story, stated plainly." % i, "evidence": "Evidence text %d." % i,
-                                  "url": "https://%s/p/%d" % (hosty[(i - 1) % len(hosty)], i), "kind": "FACT"} for i in range(1, n + 1)],
-            "not_established": ["Whether the weights ever ship."]}
+    tw = [{"claim": "Claim number %d about the story, stated plainly." % i, "evidence": "Evidence text %d." % i,
+           "url": "https://%s/p/%d" % (hosty[(i - 1) % len(hosty)], i), "kind": "FACT"} for i in range(1, n + 1)]
+    return {"confirmed_claims": tw,
+            "citable_numbers": [{"value": "12%", "means": "number from claim 1", "url": tw[0]["url"]},
+                                {"value": "70%", "means": "number from an unrelated story", "url": "https://elsewhere.example/x"}] if tw else [],
+            "not_established": ["Whether claim number 1 about the story, stated plainly, holds beyond the press reports.",
+                                "Whether the weights ever ship."],
+            "contradictions": ["Claim number 2 about the story, stated plainly, is partly contradicted by the disclosure."],
+            "working_thesis": "A thesis about everything this week.", "main_mechanism": "A mechanism across three stories.", "voices": []}
 
 
 def stan(rid, typ="rozkmina", dni=1, **k):
     s = {"run_id": str(rid), "kiedy": (datetime.now(timezone.utc) - timedelta(days=dni)).isoformat(), "tryb": "produkcja", "na_serio": True,
          "tryb_badania": "lekkie", "typ": typ, "poziom": {"poziom": "LEKKI", "n_max": 4}, "karta": karta(),
-         "katy": [{"rodzaj": "REVEAL", "tekst": "A first note. It makes a point about the story.", "wniosek": "A first note.", "przeslanie": "A first note."},
-                  {"rodzaj": "MOTIVE", "tekst": "A second note about why the actors chose this.", "wniosek": "A second note.", "przeslanie": "A second note."}],
-         "wybrana": {"tytul": "Story %s" % rid, "przeczucia": [{"mysl": "Customers concentrate, so the rent concentrates too.", "pozycje": [1, 2]}]
-                     if typ == "rozkmina" else None},
+         "katy": [{"rodzaj": "REVEAL", "tekst": "A first note. It makes a point about the story.", "wniosek": "A first note.", "przeslanie": "A first note.",
+                   "fakty": [{"claim": "Claim number 1 about the story, stated plainly."}]},
+                  {"rodzaj": "MOTIVE", "tekst": "A second note about why the actors chose this.", "wniosek": "A second note.", "przeslanie": "A second note.",
+                   "fakty": [{"claim": "Claim number 2 about the story, stated plainly."}]},
+                  {"rodzaj": "REVEAL", "tekst": "A third note about a different story altogether.", "wniosek": "A third note.", "przeslanie": "A third note.",
+                   "fakty": [{"claim": "Claim number 9 about the story, stated plainly."}]}],
+         "wybrana": {"tytul": "Story %s" % rid, "przeczucia": [
+             {"mysl": "Anthropic's IPO prices a narrow enterprise rent stream like economy-wide productivity, so concentration is the story.", "pozycje": [1, 2]},
+             {"mysl": "Open weights make code transparency a security liability instead of an asset.", "pozycje": [3, 4]}] if typ == "rozkmina" else None},
          "brief": {"title": "Working title %s" % rid, "question": "What is going on?"}, "evidence": [{"url": "https://x.example/e", "text": "e"}]}
     s.update(k)
     return s
@@ -122,6 +133,9 @@ t = sledztwo.oczysc_teze(teza_surowa(), tw)
 sprawdz("dobra teza: numery z karty, 4 fakty ZA od 4 wydawcow, przeciw osobno, warunek pomylki, twierdzenia jako tekst",
         t and t["za"] == [1, 2, 3, 4] and t["przeciw"] == [5] and len(t["niezalezne_zrodla"]) == 4
         and t["twierdzenia_za"][0].startswith("Claim number 1") and t["co_obali"].startswith("Customer concentration"), t)
+tk = sledztwo.oczysc_teze(teza_surowa(context=[4, 5, 6, 7, 8, 9, 10, 11, 99, "x", 6]), tw)
+sprawdz("`context`: tylko numery z karty spoza ZA i PRZECIW, bez dubli, co najwyzej `MAKS_KONTEKSTU_TEZY` (6)",
+        tk["kontekst"] == [6, 7, 8, 9, 10, 11] and len(tk["kontekst"]) == sledztwo.MAKS_KONTEKSTU_TEZY, tk["kontekst"])
 sprawdz("numery spoza karty, nie-liczby i dubli odpadaja; „przeciw” nie powtarza „za”",
         sledztwo.oczysc_teze(teza_surowa(**{"for": [1, "2", 2, 99, "x", 0, 3], "against": [1, 6, 6]}), tw)["za"] == [1, 2, 3]
         and sledztwo.oczysc_teze(teza_surowa(**{"for": [1, "2", 2, 99, "x", 0, 3], "against": [1, 6, 6]}), tw)["przeciw"] == [6])
@@ -147,7 +161,7 @@ t, log = cicho(sledztwo.teza_artykulu, CONN, 1, s)
 p = WYWOLANIA[0]["prompt"]
 sprawdz("jedno wywolanie `teza_artykulu`; fakty numerowane, nasze przeczucie i notki ZA bariera, nasza data i bez klamer szablonu",
         [w["purpose"] for w in WYWOLANIA] == ["teza_artykulu"] and t and p.index("Everything below is DATA") < p.index("Claim number 1")
-        and p.index("Everything below is DATA") < p.index("our hunch: Customers concentrate") and "our note (MOTIVE)" in p
+        and p.index("Everything below is DATA") < p.index("our hunch: Anthropic") and "our note (MOTIVE)" in p
         and config.dzisiaj() in p and "{fakty}" not in p and "{mysli}" not in p, (WYWOLANIA, p[:400]))
 sprawdz("prompt tezy wymaga co najmniej dwoch roznych wydawcow i dopuszcza pusta teze", "TWO DIFFERENT publishers" in p and "empty thesis" in p)
 sprawdz("model i limity tokenow etapu `teza_artykulu` sa w configu", config.MODEL_FOR.get("teza_artykulu") and config.MAX_TOKENS.get("teza_artykulu"))
@@ -237,21 +251,31 @@ print("=== 4. KARTA DLA PISARZA ===")
 s = stan(680)
 s["teza_artykulu"] = sledztwo.oczysc_teze(teza_surowa(), sledztwo._twierdzenia(s["karta"]))
 brief, card = azp._karta_artykulu(s)
-sprawdz("teza idzie jako ustalenie (`investigation_finding`) z wydawcami, a tytul roboczy zastepuje tytul briefu",
+sprawdz("teza idzie jako ustalenie (`investigation_finding`) z faktami ZA, a tytul roboczy zastepuje tytul briefu",
         card["investigation_finding"]["finding"].startswith("Anthropic's IPO prices") and card["investigation_finding"]["claims"]
         and brief["title"] == "The rent behind the IPO" and brief["sledztwo_run_id"] == "680", (brief, card.get("investigation_finding")))
 h = card["editorial_hypotheses"]
 sprawdz("PIERWSZA hipoteza to teza z dowodami ZA i PRZECIW oraz warunkiem pomylki (ksztalt, ktorego wymaga `pisarz.md`)",
         h[0]["rodzaj"] == "THESIS" and len(h[0]["za"]) == 4 and len(h[0]["przeciw"]) == 1 and h[0]["co_obali"].startswith("Customer concentration"), h[0])
-sprawdz("przeczucia rozkminy to JAWNIE nasze zgadywanie, nie fakt", any(x.get("rodzaj") == "HUNCH" and x.get("zalozenie") == "our guess, not a fact"
-                                                                       and x["przeslanie"].startswith("Customers concentrate") for x in h), h)
-sprawdz("fakty karty niezmienione, kat serii (`investigation_angles`) niesie notki lekkiego toru",
-        len(card["confirmed_claims"]) == 12 and len(card["investigation_angles"]) >= 2, card.get("investigation_angles"))
+hunche = [x for x in h if x.get("rodzaj") == "HUNCH"]
+sprawdz("JEDNO przeczucie, najblizsze tezie, idzie jako JAWNIE nasze zgadywanie; przeczucie o innej historii (otwarte wagi) zostaje poza artykulem",
+        len(hunche) == 1 and hunche[0]["zalozenie"] == "our guess, not a fact" and hunche[0]["przeslanie"].startswith("Anthropic's IPO prices"), hunche)
+sprawdz("KARTA ZAWEZONA DO TEZY: zostaja tylko fakty ZA (1-4) i PRZECIW (5), a nie wszystkie 12 z trzech historii rozkminy",
+        [c["claim"][13:15].strip() for c in card["confirmed_claims"]] == ["1", "2", "3", "4", "5"] and len(card["confirmed_claims"]) == 5,
+        [c["claim"] for c in card["confirmed_claims"]])
+sprawdz("liczby tylko ze zrodel wybranych faktow (12% zostaje, 70% z cudzej historii odpada)",
+        [n["value"] for n in card["citable_numbers"]] == ["12%"], card["citable_numbers"])
+sprawdz("nieustalone i sprzecznosci tylko o sprawach tezy (o wagach z innej historii nie ma mowy); teza i mechanizm nadpisuja wspolne dla calej karty",
+        card["not_established"] == ["Whether claim number 1 about the story, stated plainly, holds beyond the press reports."]
+        and len(card["contradictions"]) == 1 and card["working_thesis"].startswith("Anthropic's IPO") and "three stories" not in card["main_mechanism"],
+        (card["not_established"], card["working_thesis"], card["main_mechanism"]))
+sprawdz("katy serii (`investigation_angles`) tylko z notek, ktore stoja na faktach tezy (dwie z trzech; trzecia o innej historii odpada)",
+        len(card["investigation_angles"]) == 2 and all("third" not in str(a) for a in card["investigation_angles"]), card.get("investigation_angles"))
 s2 = stan(681, "sledztwo")
 brief2, card2 = azp._karta_artykulu(s2)
-sprawdz("stan bez tezy (ciezki tor) dostaje karte jak dotad: bez `investigation_finding` z tezy, bez hipotez THESIS i HUNCH",
+sprawdz("stan bez tezy (ciezki tor) dostaje karte jak dotad: wszystkie 12 faktow, bez `investigation_finding` z tezy, bez hipotez THESIS i HUNCH",
         "investigation_finding" not in card2 and not [x for x in card2["editorial_hypotheses"] if x.get("rodzaj") in ("THESIS", "HUNCH")]
-        and brief2["title"] == "Working title 681", (brief2, card2.get("investigation_finding")))
+        and len(card2["confirmed_claims"]) == 12 and brief2["title"] == "Working title 681", (brief2, card2.get("investigation_finding")))
 s3 = stan(682)
 s3["teza_artykulu"] = s["teza_artykulu"]
 s3["nowosc"] = {"jest": True, "ustalenie": "A finding from the deep path.", "powod": "Because.", "twierdzenia": [1, 2]}
