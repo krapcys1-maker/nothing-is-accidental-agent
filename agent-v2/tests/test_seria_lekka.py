@@ -346,13 +346,20 @@ print()
 print("=== 8. `skrot_weryfikacji`: CO SPRAWDZENIE FAKTOW ZROBILO Z NOTKA ===")
 czysty = {"weryfikacja": {"claims": [{"claim": "a", "status": "confirmed"}], "safe_to_post": True}}
 sprawdz("czysta notka: 1 twierdzenie, zero obalonych, bez naprawy i zastrzezen",
-        stages.skrot_weryfikacji(czysty) == {"twierdzen": 1, "obalonych": 0, "niepotwierdzonych": 0, "naprawiona": False,
+        stages.skrot_weryfikacji(czysty) == {"twierdzen": 1, "obalonych": 0, "obalonych_po": 0, "niepotwierdzonych": 0, "naprawiona": False,
                                               "zastrzezenia": False, "nie_sprawdzone": False}, stages.skrot_weryfikacji(czysty))
 naprawiona = {"weryfikacja": {"claims": [{"status": "REFUTED"}, {"status": "maybe"}, {"status": "outdated"}], "safe_to_post": False},
               "naprawa": {"tekst": "x"}}
 w = stages.skrot_weryfikacji(naprawiona)
 sprawdz("etykiety znormalizowane (wielkie litery = obalone, wymyslona = niepotwierdzone), naprawa i zastrzezenia widoczne",
         w["obalonych"] == 2 and w["niepotwierdzonych"] == 1 and w["naprawiona"] and w["zastrzezenia"], w)
+# PO UDANEJ NAPRAWIE `note` podmienia `weryfikacja` na audyt tekstu NAPRAWIONEGO (czysty), a liczbe z oryginalu niesie tylko
+# `naprawa["obalonych_przed"]` — bez niej kazda udana naprawa wygladalaby w statystykach jak notka bez zarzutu.
+po_naprawie = {"weryfikacja": {"claims": [{"claim": "a", "status": "confirmed"}], "safe_to_post": True},
+               "naprawa": {"tekst": "x", "naprawionych": 2, "nowych": 0, "obalonych_przed": 2, "obalonych_po": 0, "sprawdzona": True, "slow": 60}}
+wn = stages.skrot_weryfikacji(po_naprawie)
+sprawdz("KONTRDOWOD: po udanej naprawie dwoch obalonych twierdzen `obalonych` = 2 (z oryginalu), `obalonych_po` = 0, `naprawiona` = tak",
+        wn["obalonych"] == 2 and wn["obalonych_po"] == 0 and wn["naprawiona"] is True, wn)
 sprawdz("sprawdzenie bez JSON-a = `nie_sprawdzone`; brak weryfikacji albo smieci = nigdy wyjatek",
         stages.skrot_weryfikacji({"weryfikacja": {"bez_json": True, "safe_to_post": False}})["nie_sprawdzone"]
         and stages.skrot_weryfikacji({})["twierdzen"] == 0 and stages.skrot_weryfikacji({"weryfikacja": 5}) == {})

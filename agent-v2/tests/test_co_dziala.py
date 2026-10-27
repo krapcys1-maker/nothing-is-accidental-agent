@@ -15,6 +15,7 @@ BEZ PYTESTA. Uruchamiac z korzenia repozytorium:
 import json
 import pathlib
 import random
+import sqlite3
 import sys
 import tempfile
 from datetime import date, datetime, timedelta, timezone
@@ -177,6 +178,14 @@ sprawdz("10 serii na ramie, krotsze maja dwa razy wiekszy zasieg: „lepiej”, 
         ps["werdykt"] == "lepiej" and 1.4 < ps["stosunek"] < 2.8 and ps["przedzial_95"][0] > 1
         and ps["ramiona"]["on"]["serii"] == 10 and ps["ramiona"]["on"]["notek"] == 40 and ps["ramiona"]["on"]["mediana_slow"] == 45
         and ps["ramiona"]["off"]["mediana_slow"] == 90, ps)
+sprawdz("E22 PRZYPIETE: przedzial 95% i stosunek dla stalych danych (kwantyle bootstrapu 2,5% i 97,5%, ziarno stale)",
+        ps["przedzial_95"] == (2.047, 2.563) and ps["stosunek"] == 2.288, (ps["przedzial_95"], ps["stosunek"]))
+sprawdz("E22 PRZYPIETE: ramie on (krotsze, wiecej wyswietlen) bije tlo, off nie — znak i kierunek, a nie tylko „jest liczba”",
+        ps["ramiona"]["on"]["wzgl_tla"] == 1.59 and ps["ramiona"]["off"]["wzgl_tla"] == 0.69, ps["ramiona"])
+for opis, n_on, n_off in (("10 serii on i 3 off", 10, 3), ("3 serie on i 10 off", 3, 10)):
+    psn = cd.porownanie_po_seriach(cd.wiersze_epoki(dane_e22(20, 10, serii_on=n_on, serii_off=n_off), "2026-10-26"), "dlugosc_serii")
+    sprawdz("KONTRDOWOD: niezbalansowane ramiona (%s): „za malo serii” — wystarczy, ze JEDNO ramie jest za male" % opis,
+            psn["werdykt"].startswith("za malo serii") and psn["stosunek"] is None, psn)
 rows0 = cd.wiersze_epoki(dane_e22(10, 10), "2026-10-26")
 ps0 = cd.porownanie_po_seriach(rows0, "dlugosc_serii")
 sprawdz("te same rozklady: „brak dowodu roznicy”, przedzial obejmuje 1", ps0["werdykt"] == "brak dowodu roznicy" and ps0["przedzial_95"][0] < 1 < ps0["przedzial_95"][1], ps0)
@@ -188,13 +197,25 @@ sprawdz("brak notek w ramionach: puste ramiona i „za malo serii”, bez wyjatk
         cd.porownanie_po_seriach([], "dlugosc_serii")["werdykt"].startswith("za malo serii"))
 rows_k = cd.wiersze_epoki(dane_e22(10, 10, serii_on=12, serii_off=12, efekt_serii=0.7), "2026-10-26")
 po_seriach = cd.porownanie_po_seriach(rows_k, "dlugosc_serii")
-po_notkach = cd.tabela([x for x in rows_k if (x["wpis"].get("eksperymenty") or {}).get("dlugosc_serii") in ("on", "off")],
-                       __import__("eksperymenty")._grupujacy("eksperyment:dlugosc_serii"), "off")["grupy"]["on"]
+wiersze_ramion = [x for x in rows_k if (x["wpis"].get("eksperymenty") or {}).get("dlugosc_serii") in ("on", "off")]
+grupuj_ramie = __import__("eksperymenty")._grupujacy("eksperyment:dlugosc_serii")
+po_notkach = __import__("eksperymenty").porownaj(wiersze_ramion, grupuj_ramie, "off")["grupy"]["on"]
+po_klastrach = cd.tabela(wiersze_ramion, grupuj_ramie, "off")["grupy"]["on"]
 szer = lambda pr: pr[1] - pr[0]   # noqa: E731
-sprawdz("KONTRDOWOD: przy silnym efekcie serii bootstrap po NOTKACH dawalby wyraznie wezszy przedzial niz po seriach — "
-        "to wlasnie bylby falszywy werdykt, ktorego nie chcemy",
+sprawdz("KONTRDOWOD: przy silnym efekcie serii bootstrap po NOTKACH (`eksperymenty.porownaj`) daje wyraznie wezszy przedzial niz po "
+        "seriach — to wlasnie bylby falszywy werdykt, ktorego nie chcemy",
         szer(po_notkach["przedzial_95"]) < 0.7 * szer(po_seriach["przedzial_95"]), (po_notkach["przedzial_95"], po_seriach["przedzial_95"]))
+sprawdz("PRZYPIETE: przedzial po seriach (0,609-1,888) jest wyraznie szerszy niz po notkach (0,782-1,401) na tych samych danych",
+        po_seriach["przedzial_95"] == (0.609, 1.888) and po_notkach["przedzial_95"] == (0.782, 1.401), (po_seriach["przedzial_95"], po_notkach["przedzial_95"]))
+sprawdz("tabela() liczy przedzial po niezaleznych jednostkach: ten sam wynik co dedykowane porownanie po seriach (spojnosc dwoch drog)",
+        po_klastrach["przedzial_95"] == po_seriach["przedzial_95"] and po_klastrach["stosunek"] == po_seriach["stosunek"]
+        and po_klastrach["klastrow"] == 12, (po_klastrach, po_seriach))
+_ek_stare = config.EKSPERYMENTY
+config.EKSPERYMENTY = {"dlugosc_serii": {"udzial": 0.5, "od": "2026-10-29", "do": "2026-12-03"},
+                       "pora_notki": {"plan": ["on", "off"], "okres_dni": 1, "od": "2026-11-09", "do": "2026-12-06"},
+                       "krotka_notka": {"udzial": 0.5, "od": "2026-10-20", "do": "2026-10-25"}}
 we = cd.policz(dane_e22(20, 10), od="2026-10-26", dzis=date(2026, 11, 2))["eksperymenty"]
+config.EKSPERYMENTY = _ek_stare
 sprawdz("raport: `dlugosc_serii` ma status „trwa” i tabele po seriach; `pora_notki` jeszcze „zaplanowany”; zakonczone sa „zakonczony”",
         we["dlugosc_serii"]["status"] == "trwa" and "po_seriach" in we["dlugosc_serii"] and we["pora_notki"]["status"] == "zaplanowany"
         and we["krotka_notka"]["status"] == "zakonczony", {k: v["status"] for k, v in we.items()})
@@ -217,7 +238,8 @@ sprawdz("koszt wedlug grup w oknie: sortowany malejaco, poza oknem odpada", list
 dk = zbuduj({"seria": (30, 8), "rozkmina": (30, 8)})
 dk["koszty"] = {"run": {str(600 + k): 0.1 for k in range(2)} | {str(700 + k): 0.2 for k in range(2)}, "purpose": []}
 rk = cd.wiersze_epoki(dk, "2026-10-26")
-ks = cd.koszt_serii(dk, rk, {"700", "701", "702"}, "2026-10-26")
+TERAZ_PO = datetime(2027, 1, 1, tzinfo=timezone.utc)
+ks = cd.koszt_serii(dk, rk, {"700", "701", "702"}, "2026-10-26", TERAZ_PO)
 sprawdz("koszt serii: temat, notka i 1000 wyswietlen osobno dla serii i rozkminy; dzielony przez notki, ktore wyszly",
         ks["seria"]["tematow"] == 2 and ks["seria"]["koszt_razem"] == 0.2 and ks["rozkmina"]["koszt_razem"] == 0.4
         and ks["seria"]["notek_wydanych"] == 8 and ks["seria"]["koszt_notki"] == 0.025 and ks["seria"]["koszt_na_1000_wysw"] > 0, ks)
@@ -248,6 +270,91 @@ c = cd.czujnik(dc, datetime(2026, 11, 20, tzinfo=timezone.utc))
 sprawdz("czujnik: lacznie 2, z 7 dni 1, z 28 dni 1, 2 publikacje, najmocniejsze przebicie pierwsze",
         c["wszystkich"] == 2 and c["ostatnie_7"] == 1 and c["ostatnie_28"] == 1 and c["publikacji"] == 2 and c["top"][0]["przebicie"] == 3.1, c)
 sprawdz("wzrost bez dob z obserwatorium = puste (nie wyjatek)", cd.wzrost(dane_puste(), DZIS) == {})
+
+print()
+print("=== 4b. KUBELKI, SQL KOSZTOW, DOJRZALOSC, POTOK, WNIOSKI (wnioski z mutacji) ===")
+for godz, minuta, oczek in ((0, 0, "00-06 UTC"), (5, 59, "00-06 UTC"), (6, 0, "06-12 UTC"), (11, 59, "06-12 UTC"), (12, 30, "12-16 UTC"),
+                            (15, 59, "12-16 UTC"), (16, 5, "16-20 UTC"), (19, 59, "16-20 UTC"), (20, 15, "20-24 UTC"), (23, 59, "20-24 UTC")):
+    sprawdz("pora publikacji %02d:%02d UTC -> kubelek %s (godzina calkowita, brak przesuniecia do poprzedniego kubelka)" % (godz, minuta, oczek),
+            cd.grupowania(set(), {})["pora"][1]({"kiedy": "2026-11-02T%02d:%02d:00+00:00" % (godz, minuta)}) == oczek)
+sprawdz("dlugosc: granice kubelkow slow (50/51, 70/71, 110/111)",
+        [cd.grupowania(set(), {})["dlugosc"][1]({"slow": n}) for n in (50, 51, 70, 71, 110, 111)]
+        == ["do 50 slow", "51-70 slow", "51-70 slow", "71-90 slow", "91-110 slow", "ponad 110 slow"])
+
+# SQL kosztow na prawdziwej bazie o schemacie `db.py` (kolumny `calls.run_id/at/purpose/cost_usd`, `runs.id/tryb`)
+baza = pathlib.Path(tempfile.mkdtemp()) / "agent-v2.db"
+_c = sqlite3.connect(str(baza))
+_c.executescript("CREATE TABLE runs (id INTEGER PRIMARY KEY, tryb TEXT);"
+                 "CREATE TABLE calls (run_id INTEGER, at TEXT, purpose TEXT, cost_usd REAL);")
+_c.executemany("INSERT INTO runs VALUES (?, ?)", [(1, "produkcja"), (2, "test"), (3, None)])
+_c.executemany("INSERT INTO calls VALUES (?, ?, ?, ?)", [
+    (1, "2026-11-02T13:00:00", "seria_lekka", 0.08), (1, "2026-11-02T13:30:00", "zaklady_sprawdzenie", 0.03),
+    (1, "2026-11-02T13:31:00", "zaklady_notka", 0.01), (2, "2026-11-02T14:00:00", "seria_lekka", 0.50),
+    (3, "2026-11-03T13:00:00", "classify", 0.20), (None, "2026-11-03T15:00:00", "factcheck", 0.04)])
+_c.commit()
+_c.close()
+kb = cd.koszty_z_bazy(baza)
+sprawdz("SQL kosztow: koszt przebiegu = tylko tryb produkcja (NULL liczy sie jak produkcja), BEZ wywolan `zaklady_*`, bez trybu test",
+        kb["run"] == {"1": 0.08, "3": 0.2}, kb["run"])
+sprawdz("SQL kosztow: grupy etapow z doby liczone z `calls` produkcji, wywolanie bez przebiegu tez; `zaklady_*` to osobna grupa",
+        sorted(kb["purpose"]) == sorted([("2026-11-02", "seria_lekka", 0.08), ("2026-11-02", "zaklady_sprawdzenie", 0.03),
+                                         ("2026-11-02", "zaklady_notka", 0.01), ("2026-11-03", "classify", 0.2), ("2026-11-03", "factcheck", 0.04)])
+        and cd.koszt_wg_grup(kb, "2026-11-02", "2026-11-03")["zaklady"] == 0.04, kb["purpose"])
+sprawdz("brak bazy albo zepsuty plik = puste koszty, bez wyjatku",
+        cd.koszty_z_bazy(baza.parent / "nie-ma.db") == {"run": {}, "purpose": []})
+
+# koszt na 1000 wyswietlen tylko z serii DOJRZALYCH (druga ma notki sprzed 10 h i zero pomiaru)
+dm = dane_puste()
+TERAZ_M = datetime(2026, 11, 10, 12, 0, tzinfo=timezone.utc)
+for nr, (run, kiedy, wysw) in enumerate((("800", "2026-11-02T13:00:00+00:00", 200), ("800", "2026-11-02T14:00:00+00:00", 200),
+                                         ("801", "2026-11-10T02:00:00+00:00", None)), 1):
+    e = {"kiedy": kiedy, "rodzaj": "notka", "udane": True, "id": str(900 + nr), "slow": 80, "tekst": "x", "typ": "CIEKAWOSTKA",
+         "przeslanie_id": "202611011300-%s-%d-reveal" % (run, nr)}
+    dm["dziennik"].append(e)
+    if wysw:
+        dm["pomiary"][e["id"]] = stat(wysw)
+dm["koszty"] = {"run": {"800": 0.10, "801": 0.10}, "purpose": []}
+rm = cd.wiersze_epoki(dm, "2026-10-26")
+km = cd.koszt_serii(dm, rm, set(), "2026-10-26", TERAZ_M)["seria"]
+sprawdz("KONTRDOWOD: koszt na 1000 wyswietlen z serii DOJRZALYCH (0,10 USD / 400 wysw. = 0,25), a nie z kosztem niedojrzalej serii (0,50)",
+        km["koszt_na_1000_wysw"] == 0.25 and km["tematow"] == 2 and km["tematow_dojrzalych"] == 1 and km["koszt_razem"] == 0.2, km)
+dm["dziennik"].append({"kiedy": "2026-11-02T15:00:00+00:00", "rodzaj": "notka", "udane": True, "id": "950", "slow": 60, "tekst": "x",
+                       "przeslanie_id": "202611011300-800-1-rozliczenie"})
+sprawdz("notka rozliczajaca z tym samym numerem przebiegu NIE jest notka serii: nie zwieksza liczby notek ani kosztu notki",
+        cd._run_z_przeslania({"przeslanie_id": "202611011300-800-1-rozliczenie"}) == ""
+        and cd.koszt_serii(dm, rm, set(), "2026-10-26", TERAZ_M)["seria"]["notek_wydanych"] == 3
+        and cd.format_notki({"przeslanie_id": "202611011300-800-1-rozliczenie"}, set()) == "rozliczenie")
+
+dp2 = dane_puste()
+dp2["sledztwa"] = [{"run_id": "800", "przeslania": ["A", "B", "C", "D", "E"], "kiedy": "2026-11-01T13:00:00+00:00"}]
+dp2["dziennik"] = [{"kiedy": "2026-11-02T13:00:00+00:00", "rodzaj": "notka", "udane": True, "id": "1", "przeslanie_id": "202611011300-800-1-reveal"},
+                   {"kiedy": "2026-11-02T15:00:00+00:00", "rodzaj": "notka", "udane": True, "id": "2", "przeslanie_id": "202611011300-800-1-rozliczenie"}]
+TERAZ_P = datetime(2026, 11, 20, 12, 0, tzinfo=timezone.utc)
+dp2["kolejka"] = [
+    {"id": "202611011300-800-2-a", "wazny_do": "2026-11-05T00:00:00+00:00", "pominiety": True},             # pominiety I wygasly: liczy sie raz
+    {"id": "202611011300-800-3-b", "wazny_do": "2026-12-30T00:00:00+00:00", "proby": 2},                    # po 2 probach = pominiety
+    {"id": "202611011300-800-4-c", "wazny_do": "2026-11-20T15:00:00+00:00"},                                 # wazny jeszcze 3 h od „teraz” = czeka
+    {"id": "202611011300-800-5-d", "wazny_do": "2026-11-20T09:00:00+00:00"}]                                 # wygasl 3 h temu
+pk = cd.potok(dp2, set(), "2026-10-26", TERAZ_P)
+sprawdz("potok: trzy ROZLACZNE stany (pominiety albo po probach / wygasly / czeka) liczone od PRAWDZIWEGO teraz, notka rozliczajaca nie liczy sie do serii",
+        pk["kolejka_pominietych"] == 2 and pk["kolejka_wygaslo"] == 1 and pk["kolejka_czeka"] == 1 and pk["notek_wyszlo"] == 1
+        and pk["notek_wyprodukowanych"] == 5, pk)
+
+w_ost = {"formaty": {"odniesienie": "zwykla", "grupy": {
+    "zwykla": {"n": 30, "klastrow": 25, "werdykt": ""},
+    "rozliczenie": {"n": 12, "klastrow": 8, "stosunek": 1.31, "przedzial_95": (1.1, 1.6),
+                    "werdykt": "lepiej — OSTROZNIE: grupy z roznych okresow"},
+    "seria": {"n": 12, "klastrow": 6, "stosunek": 1.5, "przedzial_95": (1.2, 1.9), "werdykt": "lepiej (nic nie dodaje)"}}},
+    "eksperymenty": {}, "zaklady": {}, "zero_wyswietlen": 0}
+wn = " ".join(cd.wnioski(w_ost))
+sprawdz("KONTRDOWOD: ostrzezenie „grupy z roznych okresow” NIE ginie: wniosek jest WSKAZANIEM, nie „PISAC CZESCIEJ”; czysty werdykt dalej jest twardy",
+        "WSKAZANIE (nie dowod" in wn and "PISAC CZESCIEJ: rozliczenie" not in wn and "PISAC CZESCIEJ: seria" in wn
+        and "8 i 25 niezaleznych jednostek" in wn and "6 i 25 niezaleznych jednostek" in wn, wn)
+dk6 = zbuduj({"zwykla": (10, 24), "seria": (30, 12)})
+wk = cd.policz(dk6, od="2026-10-26", dzis=DZIS)["formaty"]["grupy"]["seria"]
+sprawdz("KONTRDOWOD: 12 notek serii z TRZECH serii (wiecej niz 10 notek, ale 3 niezalezne jednostki): „za malo danych” zamiast werdyktu z szumu",
+        wk["n"] == 12 and wk["klastrow"] == 3 and wk["werdykt"].startswith("za malo danych") and "niezaleznych jednostek" in wk["werdykt"]
+        and wk["przedzial_95"] is None, wk)
 
 print()
 print("=== 5. CALY RAPORT: PUSTE I PELNE DANE, ZAPIS, HISTORIA ===")

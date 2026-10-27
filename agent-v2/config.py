@@ -1969,7 +1969,7 @@ ZAKLADY_WLACZONE = True
 # Ile zakladow najwyzej z jednej grupy notek i jak daleko mozna ustawic termin (dni od dzis); stoja w configu,
 # bo wchodza do promptu wyciagu jako NASZE wartosci (kotwica zaufania).
 ZAKLADY_MAKS_Z_SERII = 2
-ZAKLADY_MAKS_DNI_DO_TERMINU = 150
+ZAKLADY_MAKS_DNI_DO_TERMINU = 400
 
 
 def dzisiaj():

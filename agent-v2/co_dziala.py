@@ -56,7 +56,9 @@ import eksperymenty as ek
 EPOKA_OD = "2026-10-26"      # od tego dnia sledczy pisze serie obok banku (fala 1 i lekki tor)
 TLO_OD = "2026-09-28"        # tlo tygodnia liczymy ze wszystkich notek od startu pomiaru 72 h
 MIN_W_GRUPIE = 3             # mniejsze grupy tabel nazywa „za malo"
-MIN_SERII_NA_RAMIE = 6       # ponizej tylu serii na ramie eksperyment po seriach nie wydaje werdyktu
+MIN_KLASTROW = 6             # ponizej tylu NIEZALEZNYCH jednostek (serii, dob) w grupie nie ma werdyktu
+MIN_SERII_NA_RAMIE = MIN_KLASTROW   # to samo dla eksperymentu po seriach (E22)
+DOJRZALOSC_H = 72            # notka jest „dojrzala", gdy od publikacji minely trzy doby
 LOSOWAN = ek.LOSOWAN
 ZIARNO = ek.ZIARNO
 PLIK_HISTORII = "co_dziala.jsonl"
@@ -69,7 +71,8 @@ OPIS_FORMATOW = {
 
 DLUGOSCI = (("do 50 slow", 0, 50), ("51-70 slow", 51, 70), ("71-90 slow", 71, 90), ("91-110 slow", 91, 110),
             ("ponad 110 slow", 111, 10 ** 6))
-PORY = (("00-06 UTC", 0, 6), ("06-12 UTC", 6, 12), ("12-16 UTC", 12, 16), ("16-20 UTC", 16, 20), ("20-24 UTC", 20, 24))
+# Godziny CALKOWITE, wiec zakresy domkniete: 12:30 UTC to godzina 12, czyli kubelek 12-16 (nie 06-12).
+PORY = (("00-06 UTC", 0, 5), ("06-12 UTC", 6, 11), ("12-16 UTC", 12, 15), ("16-20 UTC", 16, 19), ("20-24 UTC", 20, 23))
 DNI_TYGODNIA = ("pon", "wt", "sr", "czw", "pt", "sob", "nd")
 
 # Etapy z tabeli `calls.purpose` -> grupa kosztu (pierwsza pasujaca: nazwa dokladna albo przedrostek). Reszta to „inne" —
@@ -145,11 +148,12 @@ def koszty_z_bazy(baza: Path) -> dict[str, Any]:
     if not baza.exists():
         return {"run": {}, "purpose": []}
     try:
-        conn = sqlite3.connect("file:%s?mode=ro&immutable=1" % baza, uri=True)
+        conn = sqlite3.connect(Path(baza).resolve().as_uri() + "?mode=ro&immutable=1", uri=True)   # `as_uri`: dziala tez z dyskiem Windows
         try:
             run = {str(r): float(u) for r, u in conn.execute(
                 "SELECT c.run_id, SUM(c.cost_usd) FROM calls c JOIN runs r ON r.id = c.run_id "
-                "WHERE COALESCE(r.tryb, 'produkcja') = 'produkcja' AND c.run_id IS NOT NULL GROUP BY c.run_id")}
+                "WHERE COALESCE(r.tryb, 'produkcja') = 'produkcja' AND c.run_id IS NOT NULL "
+                "AND substr(c.purpose, 1, 8) != 'zaklady_' GROUP BY c.run_id")}
             purpose = [(str(d), str(p), float(u)) for d, p, u in conn.execute(
                 "SELECT substr(c.at, 1, 10), c.purpose, SUM(c.cost_usd) FROM calls c LEFT JOIN runs r ON r.id = c.run_id "
                 "WHERE COALESCE(r.tryb, 'produkcja') = 'produkcja' GROUP BY 1, 2")]
@@ -165,7 +169,10 @@ def koszty_z_bazy(baza: Path) -> dict[str, Any]:
 def _run_z_przeslania(e: dict[str, Any]) -> str:
     """Numer przebiegu sledztwa z `przeslanie_id`: „202610251853-499-3-power_shift" (od 25.10.2026) albo starszy
     „202610091321-394-motyw"; pusty, gdy to nie seria."""
-    czesci = str(e.get("przeslanie_id") or "").split("-")
+    pid = str(e.get("przeslanie_id") or "")
+    if pid.endswith("-rozliczenie"):
+        return ""          # wpis ROZLICZENIE dzieli numer przebiegu ze sledztwem, w ktorym go dodano — to nie jest jego notka
+    czesci = pid.split("-")
     return czesci[1] if len(czesci) >= 3 and czesci[1].isdigit() else ""
 
 
@@ -275,14 +282,56 @@ def _mediana(v: list[float]) -> float | None:
     return round(statistics.median(v), 1) if v else None
 
 
+def _klaster(x: dict[str, Any]) -> str:
+    """Niezalezna jednostka notki: seria (cztery notki jednej historii nie sa niezalezne), a poza seria — doba publikacji
+    (notki jednej doby dziela tlo i los eksperymentow losowanych na dobe, jak `pora_notki`)."""
+    run = _run_z_przeslania(x["wpis"])
+    return ("s" + run) if run else ("d" + str(x["dzien"]))
+
+
+def _po_klastrach(rows: list[dict[str, Any]]) -> list[list[float]]:
+    """Lista klastrow, kazdy jako lista `lr` jego notek."""
+    k: dict[str, list[float]] = defaultdict(list)
+    for x in rows:
+        k[_klaster(x)].append(x["lr"])
+    return list(k.values())
+
+
+def _sr(klastry: list[list[float]]) -> float:
+    return sum(sum(k) for k in klastry) / sum(len(k) for k in klastry)
+
+
+def ci_klastrow(a: list[list[float]], b: list[list[float]]) -> tuple[float, float, float]:
+    """(stosunek, dolny, gorny) grupy `a` do `b`: bootstrap 95% po KLASTRACH (losujemy cale serie/doby z powtorzeniami,
+    srednia liczona po notkach wylosowanych klastrow), to samo ziarno co `eksperymenty`. Notki jednej serii nie sa
+    niezalezne, wiec bootstrap po notkach dawalby przedzial za waski i falszywe werdykty (test ma na to kontrdowod)."""
+    rnd = random.Random(ZIARNO)
+    losy = sorted(math.exp(_sr([rnd.choice(a) for _ in a]) - _sr([rnd.choice(b) for _ in b])) for _ in range(LOSOWAN))
+    return (math.exp(_sr(a) - _sr(b)), losy[int(0.025 * LOSOWAN)], losy[int(0.975 * LOSOWAN) - 1])
+
+
+def _wykrywalny(a: list[list[float]], b: list[list[float]], wszystkie: list[list[float]]) -> float | None:
+    """Najmniejszy wykrywalny efekt (moc 80%, 5%) przy tej liczbie niezaleznych jednostek."""
+    srednie = [sum(k) / len(k) for k in wszystkie]
+    if len(srednie) < 2:
+        return None
+    sd = statistics.stdev(srednie)
+    return math.exp(2.8 * sd * math.sqrt(1 / len(a) + 1 / len(b))) - 1 if sd else None
+
+
 def tabela(rows: list[dict[str, Any]], grupa: Callable[[dict], str], odniesienie: str | None = None) -> dict[str, Any]:
-    """`eksperymenty.porownaj` + kolumny, ktorych tam nie ma: mediana wyswietlen, odsetek notek z odwiedzinami, zapisy."""
+    """`eksperymenty.porownaj` (opis grup, wybor odniesienia) + kolumny, ktorych tam nie ma, + WERDYKT z bootstrapu po
+    niezaleznych jednostkach (`ci_klastrow`): `stosunek`, `przedzial_95`, `wykrywalny_efekt` i `werdykt` z `porownaj`
+    sa nadpisane wersja po klastrach, a ostrzezenie „grupy z roznych okresow” zostaje."""
     if not rows:
         return {"grupy": {}, "odniesienie": None, "n": 0}
     w = ek.porownaj(rows, grupa, odniesienie)
     po_grupach: dict[str, list[dict]] = defaultdict(list)
     for x in rows:
         po_grupach[grupa(x["wpis"])].append(x)
+    klastry = {nazwa: _po_klastrach(r) for nazwa, r in po_grupach.items()}
+    wszystkie = _po_klastrach(rows)
+    ref = w.get("odniesienie")
     for nazwa, g in w["grupy"].items():
         r = po_grupach[nazwa]
         g["mediana_wysw"] = _mediana([x["w"] for x in r])
@@ -290,6 +339,22 @@ def tabela(rows: list[dict[str, Any]], grupa: Callable[[dict], str], odniesienie
         g["zapisy"] = sum(x["zap"] for x in r)
         g["odwiedziny"] = sum(x["odw"] for x in r)
         g["za_malo"] = len(r) < MIN_W_GRUPIE
+        g["klastrow"] = len(klastry[nazwa])
+        if nazwa == ref:
+            continue
+        a, b = klastry[nazwa], klastry[ref]
+        ostrzezenie = " — OSTROZNIE: grupy z roznych okresow" if ek._rozne_okresy(r, po_grupach[ref]) else ""
+        g["wykrywalny_efekt"] = (round(_wykrywalny(a, b, wszystkie), 2) if _wykrywalny(a, b, wszystkie) is not None else None)
+        if len(a) < MIN_KLASTROW or len(b) < MIN_KLASTROW:
+            g["przedzial_95"] = None
+            g["werdykt"] = "za malo danych (%d i %d niezaleznych jednostek — serii lub dob; trzeba co najmniej %d)%s" % (
+                len(a), len(b), MIN_KLASTROW, ostrzezenie)
+            continue
+        stosunek, lo, hi = ci_klastrow(a, b)
+        g["stosunek"] = round(stosunek, 3)
+        g["przedzial_95"] = (round(lo, 3), round(hi, 3))
+        g["werdykt"] = ("lepiej" if lo > 1 else "gorzej" if hi < 1 else "brak dowodu roznicy (wykrylibysmy dopiero ok. %+d%%)" % round(
+            100 * (g["wykrywalny_efekt"] or 0))) + ostrzezenie
     w["n"] = len(rows)
     return w
 
@@ -314,17 +379,15 @@ def porownanie_po_seriach(rows: list[dict[str, Any]], nazwa: str) -> dict[str, A
             "mediana_wysw": _mediana([w for s in r for w in s["w"]]),
             "mediana_slow": _mediana([sl for s in r for sl in s["slow"]]),
             "wzgl_tla": round(math.exp(statistics.mean(statistics.mean(s["lr"]) for s in r)), 2) if r else None}
-    on = [statistics.mean(s["lr"]) for s in serie.values() if s["ramie"] == "on"]
-    off = [statistics.mean(s["lr"]) for s in serie.values() if s["ramie"] == "off"]
+    on = [s for s in serie.values() if s["ramie"] == "on"]
+    off = [s for s in serie.values() if s["ramie"] == "off"]
     if len(on) < MIN_SERII_NA_RAMIE or len(off) < MIN_SERII_NA_RAMIE:
         wynik["werdykt"] = "za malo serii (%d i %d, trzeba co najmniej %d na ramie)" % (len(on), len(off), MIN_SERII_NA_RAMIE)
         wynik["stosunek"] = None
         return wynik
-    rnd = random.Random(ZIARNO)
-    losy = sorted(math.exp(statistics.mean(rnd.choice(on) for _ in on) - statistics.mean(rnd.choice(off) for _ in off))
-                  for _ in range(LOSOWAN))
-    dolny, gorny = losy[int(0.025 * LOSOWAN)], losy[int(0.975 * LOSOWAN) - 1]
-    wynik["stosunek"] = round(math.exp(statistics.mean(on) - statistics.mean(off)), 3)
+    stosunek, dolny, gorny = ci_klastrow([s["lr"] for s in serie.values() if s["ramie"] == "on"],
+                                         [s["lr"] for s in serie.values() if s["ramie"] == "off"])
+    wynik["stosunek"] = round(stosunek, 3)
     wynik["przedzial_95"] = (round(dolny, 3), round(gorny, 3))
     wynik["werdykt"] = "lepiej" if dolny > 1 else "gorzej" if gorny < 1 else "brak dowodu roznicy"
     return wynik
@@ -347,16 +410,25 @@ def koszt_wg_grup(koszty: dict[str, Any], od: str, do: str) -> dict[str, float]:
     return {k: round(v, 3) for k, v in sorted(out.items(), key=lambda kv: -kv[1])}
 
 
-def koszt_serii(dane: dict[str, Any], rows: list[dict[str, Any]], rozkminy: set[str], od: str) -> dict[str, dict[str, Any]]:
+def koszt_serii(dane: dict[str, Any], rows: list[dict[str, Any]], rozkminy: set[str], od: str,
+                teraz: datetime | None = None) -> dict[str, dict[str, Any]]:
     """Koszt tematu sledztwa i notki wedlug formatu (seria / rozkmina) oraz koszt na 1000 wyswietlen po 72 h.
 
-    Koszt tematu = suma `calls` przebiegu sledztwa (zrodla, badanie, seria, redaktor, zapas). Dzielimy go przez
-    liczbe notek, ktore z tej serii REALNIE wyszly — koszt serii, ktorej polowa wygasla w kolejce, ma isc na to,
-    co wyszlo."""
+    Koszt tematu = suma `calls` przebiegu sledztwa BEZ wywolan ksiegi zakladow (te dotycza starszych notek, a chodza pod
+    numerem przebiegu sledztwa; patrz `koszty_z_bazy`). Dzielimy go przez liczbe notek, ktore z tej serii REALNIE wyszly.
+    KOSZT NA 1000 WYSWIETLEN liczymy tylko z serii DOJRZALYCH (wszystkie wydane notki maja 72 h): inaczej koszt serii,
+    ktorej notki jeszcze zbieraja zasieg, dzielilby sie przez czesc wyswietlen i zawyzal wynik."""
+    teraz = teraz or datetime.now(timezone.utc)
+    granica = teraz - timedelta(hours=DOJRZALOSC_H)
     wydane: dict[str, int] = defaultdict(int)
+    mlode: set[str] = set()
     for e in dane["dziennik"]:
         if e.get("rodzaj") == "notka" and e.get("udane") and str(e.get("kiedy") or "")[:10] >= od and _run_z_przeslania(e):
-            wydane[_run_z_przeslania(e)] += 1
+            run = _run_z_przeslania(e)
+            wydane[run] += 1
+            t = _kiedy(e)
+            if t is None or t > granica:
+                mlode.add(run)
     wysw: dict[str, int] = defaultdict(int)
     for x in rows:
         if _run_z_przeslania(x["wpis"]):
@@ -368,10 +440,13 @@ def koszt_serii(dane: dict[str, Any], rows: list[dict[str, Any]], rozkminy: set[
             continue
         usd = [dane["koszty"]["run"][r] for r in runy]
         notek = sum(wydane[r] for r in runy)
-        w = sum(wysw[r] for r in runy)
+        dojrzale = [r for r in runy if r not in mlode]
+        usd_d = sum(dane["koszty"]["run"][r] for r in dojrzale)
+        w = sum(wysw[r] for r in dojrzale)
         out[fmt] = {"tematow": len(runy), "koszt_tematu_mediana": round(statistics.median(usd), 3), "koszt_razem": round(sum(usd), 3),
                     "notek_wydanych": notek, "koszt_notki": round(sum(usd) / notek, 4) if notek else None,
-                    "wysw_72h": w, "koszt_na_1000_wysw": round(1000 * sum(usd) / w, 2) if w else None}
+                    "tematow_dojrzalych": len(dojrzale), "wysw_72h": w,
+                    "koszt_na_1000_wysw": round(1000 * usd_d / w, 2) if w else None}
     return out
 
 
@@ -410,12 +485,24 @@ def potok(dane: dict[str, Any], rozkminy: set[str], od: str, teraz: datetime) ->
                 wydane[_run_z_przeslania(e)].append(t)
     kolejka = [p for p in dane["kolejka"] if isinstance(p, dict)]
     iso = teraz.isoformat()
-    # kat wygasl, gdy jego identyfikator nie wyszedl w dzienniku, a termin minal
     opublikowane = {str(e.get("przeslanie_id")) for e in dane["dziennik"] if e.get("przeslanie_id") and e.get("udane")}
-    wygaslo = sum(1 for p in kolejka if str(p.get("wazny_do") or "") < iso and str(p.get("id")) not in opublikowane)
-    czeka = sum(1 for p in kolejka if str(p.get("wazny_do") or "") >= iso and str(p.get("id")) not in opublikowane
-                and not p.get("pominiety"))
-    pominiete = sum(1 for p in kolejka if p.get("pominiety") and str(p.get("id")) not in opublikowane)
+    # ROZLACZNE trzy stany nieopublikowanego wpisu, jak `sledztwo._do_wydania`: pominiety (flaga albo po `MAKS_PROB`
+    # nieudanych probach), wygasly (termin minal) i czekajacy (reszta).
+    try:
+        import sledztwo
+        maks_prob = sledztwo.MAKS_PROB
+    except Exception:   # noqa: BLE001
+        maks_prob = 2
+    czeka = wygaslo = pominiete = 0
+    for p in kolejka:
+        if str(p.get("id")) in opublikowane:
+            continue
+        if p.get("pominiety") or int(p.get("proby") or 0) >= maks_prob:
+            pominiete += 1
+        elif str(p.get("wazny_do") or "") < iso:
+            wygaslo += 1
+        else:
+            czeka += 1
     opoznienia = []
     for r in rekordy:
         try:
@@ -463,7 +550,10 @@ def wzrost(dane: dict[str, Any], dzis: date) -> dict[str, Any]:
 def policz(dane: dict[str, Any] | None = None, od: str = EPOKA_OD, dzis: date | None = None) -> dict[str, Any]:
     dane = dane if dane is not None else zbierz_dane()
     dzis = dzis or datetime.now(timezone.utc).date()
-    teraz = datetime.combine(dzis, datetime.max.time(), tzinfo=timezone.utc)
+    # „Teraz" do porownan z terminami kolejki i dojrzaloscia notek: prawdziwa chwila, gdy raport jest z dzisiaj
+    # (zegar obserwatorium 03:40 UTC), a koniec doby, gdy ktos prosi o inny dzien (testy, odtworzenie).
+    teraz = (datetime.now(timezone.utc) if dzis == datetime.now(timezone.utc).date()
+             else datetime.combine(dzis, datetime.max.time(), tzinfo=timezone.utc))
     rozkminy = {str(r.get("run_id")) for r in dane["sledztwa"] if r.get("rozkmina")}
     kategorie = {str(r.get("run_id")): str(r.get("kategoria")) for r in dane["sledztwa"] if r.get("kategoria")}
     rows = wiersze_epoki(dane, od)
@@ -500,9 +590,10 @@ def policz(dane: dict[str, Any] | None = None, od: str = EPOKA_OD, dzis: date | 
             wpis["tabela"] = tabela(arm_rows, ek._grupujacy("eksperyment:" + nazwa), "off")
         aktywne[nazwa] = wpis
     w["eksperymenty"] = aktywne
-    w["koszt_serii"] = koszt_serii(dane, rows, rozkminy, od)
-    w["koszt_grup_7"] = koszt_wg_grup(dane["koszty"], (dzis - timedelta(days=7)).isoformat(), dzis.isoformat())
-    w["koszt_grup_28"] = koszt_wg_grup(dane["koszty"], (dzis - timedelta(days=28)).isoformat(), dzis.isoformat())
+    w["koszt_serii"] = koszt_serii(dane, rows, rozkminy, od, teraz)
+    # PELNE DOBY DO WCZORAJ (jak okna `obserwatorium.tempo`): dzisiejsza doba jest niepelna i zanizalaby tempo.
+    w["koszt_grup_7"] = koszt_wg_grup(dane["koszty"], (dzis - timedelta(days=7)).isoformat(), (dzis - timedelta(days=1)).isoformat())
+    w["koszt_grup_28"] = koszt_wg_grup(dane["koszty"], (dzis - timedelta(days=28)).isoformat(), (dzis - timedelta(days=1)).isoformat())
     w["fc"] = sprawdzenie_faktow(dane, rozkminy, od)
     w["potok"] = potok(dane, rozkminy, od, teraz)
     w["wzrost"] = wzrost(dane, dzis)
@@ -535,13 +626,19 @@ def wnioski(w: dict[str, Any]) -> list[str]:
     for nazwa, g in formaty.items():
         if nazwa == odn:
             continue
+        ostrzez = "OSTROZNIE: grupy z roznych okresow" in g.get("werdykt", "")
+        przedrostek = "WSKAZANIE (nie dowod — grupy z roznych okresow): " if ostrzez else ""
         if g.get("werdykt", "").startswith("lepiej"):
-            out.append("PISAC CZESCIEJ: %s bije zwykla notke (x%.2f wzgledem tla, przedzial %s)." % (nazwa, g["stosunek"], g["przedzial_95"]))
+            out.append("%s%s: %s bije zwykla notke (x%.2f wzgledem tla, przedzial %s, %d i %d niezaleznych jednostek)." % (
+                przedrostek, "PISAC CZESCIEJ" if not ostrzez else "wiecej", nazwa, g["stosunek"], g["przedzial_95"], g["klastrow"],
+                formaty[odn]["klastrow"]))
         elif g.get("werdykt", "").startswith("gorzej"):
-            out.append("PISAC RZADZIEJ: %s przegrywa ze zwykla notka (x%.2f, przedzial %s)." % (nazwa, g["stosunek"], g["przedzial_95"]))
+            out.append("%s%s: %s przegrywa ze zwykla notka (x%.2f, przedzial %s, %d i %d niezaleznych jednostek)." % (
+                przedrostek, "PISAC RZADZIEJ" if not ostrzez else "mniej", nazwa, g["stosunek"], g["przedzial_95"], g["klastrow"],
+                formaty[odn]["klastrow"]))
         elif g.get("werdykt", "").startswith("za malo"):
-            out.append("BRAK DOWODU: %s ma %d notek z pomiarem (trzeba co najmniej %d w grupie i w odniesieniu)." % (
-                nazwa, g["n"], ek.MIN_NOTEK))
+            out.append("BRAK DOWODU: %s ma %d notek z pomiarem i %d niezaleznych jednostek (trzeba co najmniej %d w grupie i w "
+                       "odniesieniu)." % (nazwa, g["n"], g["klastrow"], MIN_KLASTROW))
         else:
             out.append("BRAK DOWODU: %s nie odroznia sie od zwyklej notki — %s." % (nazwa, g.get("werdykt")))
     e22 = ((w.get("eksperymenty") or {}).get("dlugosc_serii") or {}).get("po_seriach") or {}

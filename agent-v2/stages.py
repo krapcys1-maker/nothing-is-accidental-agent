@@ -7490,17 +7490,23 @@ def _weryfikacja_bez_jsonu(conn: sqlite3.Connection, run_id: int, raw: Any, prom
 def skrot_weryfikacji(kandydat: dict[str, Any]) -> dict[str, Any]:
     """Co sprawdzenie faktow zrobilo z tekstem notki — krotko, do dziennika (statystyki `co_dziala.py`).
 
-    `obalonych` = twierdzenia `refuted`/`outdated` PRZED naprawa (naprawa trzyma audyt oryginalu w
-    `naprawa`), `naprawiona` = tekst zmieniony przez `napraw_obalone`, `zastrzezenia` = werdykt nie byl
-    czysty (notka i tak wyszla), `nie_sprawdzone` = sprawdzenie nie doszlo do skutku. Nigdy nie rzuca.
+    `obalonych` = twierdzenia `refuted`/`outdated` w tekscie PRZED naprawa: po przyjetej naprawie
+    `kandydat["weryfikacja"]` jest audytem tekstu NAPRAWIONEGO (`note` podmienia go na `poprawka["audyt"]`),
+    a liczbe z oryginalu niesie tylko `naprawa["obalonych_przed"]` — bez niej kazda udana naprawa wygladalaby
+    w statystykach jak notka bez zarzutu. `obalonych_po` = zarzuty, ktore zostaly w tekscie wystawionym.
+    `naprawiona` = tekst zmieniony przez `napraw_obalone`, `zastrzezenia` = werdykt nie byl czysty (notka i tak
+    wyszla), `nie_sprawdzone` = sprawdzenie nie doszlo do skutku. Nigdy nie rzuca.
     """
     try:
         audyt = kandydat.get("weryfikacja") or {}
+        naprawa = kandydat.get("naprawa") or {}
         statusy = [_status_twierdzenia(c) for c in (audyt.get("claims") or []) if isinstance(c, dict)]
+        w_tekscie = sum(1 for s in statusy if s in ("refuted", "outdated"))
         return {"twierdzen": len(statusy),
-                "obalonych": sum(1 for s in statusy if s in ("refuted", "outdated")),
+                "obalonych": int(naprawa["obalonych_przed"]) if naprawa and "obalonych_przed" in naprawa else w_tekscie,
+                "obalonych_po": w_tekscie,
                 "niepotwierdzonych": sum(1 for s in statusy if s == "unverified"),
-                "naprawiona": bool(kandydat.get("naprawa")),
+                "naprawiona": bool(naprawa),
                 "zastrzezenia": not audyt.get("safe_to_post", True),
                 "nie_sprawdzone": bool(audyt.get("nie_sprawdzone") or audyt.get("bez_json"))}
     except Exception:                                           # noqa: BLE001

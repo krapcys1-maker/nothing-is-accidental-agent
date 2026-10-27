@@ -367,13 +367,13 @@ def popularne_hn(dni: int = HN_POPULARNE_DNI, min_punktow: int = HN_POPULARNE_MI
 # nie z intuicji; sedziowie-LLM nie przewiduja zasiegu — patrz pomiar 28.09).
 SUBSTACKI_SYGNAL = (
     "www.oneusefulthing.org", "www.interconnects.ai", "thezvi.substack.com", "www.aisnakeoil.com",
-    "garymarcus.substack.com", "importai.substack.com", "www.latent.space", "www.understandingai.org",
+    "garymarcus.substack.com", "importai.substack.com", "magazine.sebastianraschka.com", "www.understandingai.org",
     "www.exponentialview.co", "newsletter.semianalysis.com", "www.ai-supremacy.com",
     "thealgorithmicbridge.substack.com", "epochai.substack.com", "www.dwarkesh.com",
     "aiguide.substack.com", "www.transformernews.ai", "www.chinatalk.media",
-    "artificialintelligencemadesimple.substack.com", "thesequence.substack.com", "www.platformer.news",
+    "artificialintelligencemadesimple.substack.com", "thesequence.substack.com", "www.aitidbits.ai",
     "www.noahpinion.blog", "www.astralcodexten.com", "www.lennysnewsletter.com", "www.bensbites.com",
-    "jack-clark.net", "www.normaltech.ai", "simonwillison.substack.com", "www.aiweirdness.com",
+    "simonw.substack.com", "www.normaltech.ai", "newsletter.maartengrootendorst.com", "aligned.substack.com",
     "newsletter.pragmaticengineer.com",
 )
 PLIK_CO_KLIKA = "co_klika.jsonl"

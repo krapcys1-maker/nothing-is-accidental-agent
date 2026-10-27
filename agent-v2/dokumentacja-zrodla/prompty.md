@@ -489,12 +489,12 @@
 {{"result": "yes|no|not_yet|unclear", "evidence": "<what you found>", "sources": ["<url>"]}}
 ```
 
-#### `zaklady_wyciag.md` (28 wierszy)
+#### `zaklady_wyciag.md` (29 wierszy)
 
 **Pola wejściowe:** `dzis`, `marka`, `max_dni`, `n_max`, `notki`
 
 **Kontrakt wyjścia:**
 
 ```json
-{{"bets": [{{"note": <number>, "bet": "<one sentence>", "wrong_if": "<one sentence>", "check_from": "<YYYY-MM-DD>", "check_by": "<YYYY-MM-DD>", "probability": <number>}}]}}
+{{"bets": [{{"note": <number>, "quote": "<copied from the note>", "bet": "<one sentence>", "wrong_if": "<one sentence>", "check_from": "<YYYY-MM-DD>", "check_by": "<YYYY-MM-DD>", "probability": <number>}}]}}
 ```

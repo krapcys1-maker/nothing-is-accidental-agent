@@ -491,6 +491,8 @@ def swiat_dnia(slad, st):
         tekst_faktu=lambda x: (x.get("fact") if isinstance(x, dict)
                                else str(x or "")),
         oznacz_uzyty=lambda fakt, id_notki=None: 0,
+        # DOLOZONE 27 pazdziernika 2026: `run.py` zapisuje w dzienniku notki pole `fc` (co zrobilo sprawdzenie faktow).
+        skrot_weryfikacji=lambda kandydat: {},
         odhacz_promocje=lambda url, tekst="": None,
         zakwestionuj_promocje=lambda url, powod: None,
         wybierz_cele=lambda conn, run_id, lista: list(lista),

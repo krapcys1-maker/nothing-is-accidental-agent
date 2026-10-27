@@ -48,7 +48,7 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-12708 wierszy, 238 funkcji na poziomie modułu, 0 klas
+12714 wierszy, 238 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -980,7 +980,7 @@
 
 ### `zaklady.py` — księga zakładów — publiczne zgadywania z notek serii liczone i rozliczane: wyciąg po publikacji, sprawdzenie wyszukiwarką (rozstrzygnięcie tylko z adresem z wyszukiwania), notka rozliczająca w kolejce serii, trafienia z przedziałem Wilsona i wynik Briera
 
-549 wierszy, 29 funkcji na poziomie modułu, 0 klas
+689 wierszy, 32 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -989,28 +989,31 @@
 | `_przerywaja()` *(wewn.)* | Wyjatki, ktore przechodza przez kazdy etap (budzet, wylacznik) — jak `sledztwo._przerywaja`. |
 | `zdarzenia()` | Wszystkie zdarzenia ksiegi, w kolejnosci zapisu. Brak pliku = pusta ksiega. |
 | `dopisz(z)` | Dopisuje zdarzenie. False, gdy sie nie udalo — ksiega nigdy nie wywala przebiegu. |
-| `stan_zakladow(lista)` | Zaklady zlozone ze zdarzen: {id: zaklad + wynik, sprawdzen, dowod, zrodla, w_kolejce}. |
+| `stan_zakladow(lista)` | Zaklady zlozone ze zdarzen: {id: zaklad + wynik, sprawdzen, bledow, dowod, zrodla, w_kolejce, ...}. |
 | `_notki_dziennika()` *(wewn.)* | — |
 | `_klucz_grupy(w)` *(wewn.)* | Notki jednej serii maja wspolny poczatek `przeslanie_id` (czas-przebieg); MYSL — doba. |
-| `grupy_do_wyciagu(dzis)` | Grupy opublikowanych notek, z ktorych jeszcze nie wyciagnelismy zakladow. |
+| `grupy_do_wyciagu(teraz)` | Grupy opublikowanych notek, z ktorych jeszcze nie wyciagnelismy zakladow. |
 | `_jedna_linia(x, dl)` *(wewn.)* | — |
 | `_data(x)` *(wewn.)* | — |
 | `_prawdopodobienstwo(x)` *(wewn.)* | — |
-| `oczysc_zaklady(dane, notki, dzis)` | Zaklady z odpowiedzi modelu po kontroli kodu: numer notki z listy, tresc, daty w oknie, bez cen akcji, |
-| `_slowa(tekst)` *(wewn.)* | — |
-| `_podobienstwo(a, b)` *(wewn.)* | Jaccard slow co najmniej czteroliterowych (jak `eksperymenty.podobienstwo`, bez jego importow). |
+| `_slowa(tekst)` *(wewn.)* | Slowa tresci (>= 3 znaki, takze „xAI", „GPT"), bez szkieletu zdania, ktory narzuca prompt. |
+| `_encje(tekst)` *(wewn.)* | Nazwy wlasne: slowa z wielkiej litery lub z cyfra wsrod liter (OpenAI, GPT-6, xAI), bez „We", miesiecy, dni tygodnia |
+| `_podobne(a, b)` *(wewn.)* | Czy to ten sam zaklad: te same nazwy wlasne (jesli sa) I te same slowa tresci. „OpenAI wyda GPT-6 przed |
+| `_cytat_w_notce(cytat, tekst)` *(wewn.)* | Czy cytat z modelu stoi w notce (>= `PROG_CYTATU` jego slow, co najmniej piec slow). |
+| `oczysc_zaklady(dane, notki, dzis)` | Zaklady z odpowiedzi modelu po kontroli kodu: numer notki z listy, tresc, ZAKLAD WYNIKA Z NOTKI (cytat i nazwy |
 | `_id_zakladu(zaklad, dzien)` *(wewn.)* | — |
-| `wyciagnij(conn, run_id, grupa, dzis)` | Jedno wywolanie: zaklady z jednej grupy notek. Zapisuje zdarzenia `zaklad` i `wyciag` (nawet puste). |
-| `_adres(u)` *(wewn.)* | — |
-| `zaklady_do_sprawdzenia(dzis)` | Otwarte zaklady po `check_from`, nie pytane przez `MIN_ODSTEP_SPRAWDZEN_DNI`; najblizszy termin pierwszy. |
-| `sprawdz(conn, run_id, b, dzis)` | Jedno sprawdzenie zakladu wyszukiwarka. Zapisuje zdarzenie `sprawdzenie`, oddaje wynik zakladu. |
-| `zaklady_do_rozliczenia()` | Rozstrzygniete zaklady bez notki rozliczajacej, najstarsze rozstrzygniecie pierwsze. |
+| `wyciagnij(conn, run_id, grupa, dzis)` | Jedno wywolanie: zaklady z jednej grupy notek. Zapisuje zdarzenia `zaklad` i `wyciag` (nawet puste); |
+| `_adres(u)` *(wewn.)* | Adres do porownania (bez kotwicy, bez koncowego ukosnika, male litery); pusty, gdy to nie jest adres http(s). |
+| `zaklady_do_sprawdzenia(dzis)` | Otwarte zaklady po `check_from`, nie pytane przez `MIN_ODSTEP_SPRAWDZEN_DNI` (takze po bledzie); najblizszy |
+| `sprawdz(conn, run_id, b, dzis)` | Jedno sprawdzenie zakladu wyszukiwarka. Zapisuje zdarzenie `sprawdzenie` ZAWSZE (takze przy bledzie), oddaje wynik. |
+| `zaklady_do_rozliczenia(dzis)` | Rozstrzygniete zaklady bez notki rozliczajacej, najstarsze rozstrzygniecie pierwsze. Zaklad, przy ktorym |
 | `_ostatnie_rozliczenie()` *(wewn.)* | — |
-| `napisz_rozliczenie(conn, run_id, b)` | Tekst notki rozliczajacej z dowodu zakladu; pusty, gdy model nic sensownego nie oddal. |
+| `_tekst_rozliczenia_ok(tekst)` *(wewn.)* | Pusty napis, gdy tekst nadaje sie do publikacji; inaczej powod. Zapora wstrzykniec jak przy kazdej notce serii |
+| `napisz_rozliczenie(conn, run_id, b)` | Tekst notki rozliczajacej z dowodu zakladu; pusty (i zdarzenie `rozliczenie_blad`), gdy model nic sensownego |
 | `kolejkuj_rozliczenie(b, tekst, run_id)` | Wpis ROZLICZENIE do kolejki notek serii (gotowy tekst; fakty = dowod i adresy zakladu). |
-| `obsluz(conn, run_id, na_serio, dzis)` | Wyciag -> sprawdzenia -> najwyzej jedno rozliczenie. Nigdy nie wywala przebiegu. |
+| `obsluz(conn, run_id, na_serio)` | Wyciag -> sprawdzenia -> najwyzej jedno rozliczenie. Nigdy nie wywala przebiegu; czas z `_teraz()`. |
 | `wilson(k, n, z)` | Przedzial Wilsona dla odsetka k z n (dobry takze przy malych n). |
-| `statystyki(lista)` | Liczby ksiegi: stany, odsetek trafien z przedzialem, Brier, kalibracja, rozliczenia. |
+| `statystyki(lista)` | Liczby ksiegi: stany, odsetek trafien z przedzialem (takze z wygaslymi jako chybionymi), Brier, kalibracja. |
 | `tekst_statystyk(s)` | Sekcja raportu (linie markdown) — ta sama dla raportu tygodniowego i wywolania z linii polecen. |
 | `main()` | — |
 
@@ -1134,7 +1137,7 @@
 
 ### `co_dziala.py` — co działa — statystyki NIE jako produktu: formaty notek, wymiary (kąt, długość, pora, model...), eksperymenty także po seriach, koszt tematu i notki, sprawdzenie faktów, potok, wzrost, zakłady i czujnik; werdykt tylko z przedziałem 95%, grupa poniżej progu to „za mało danych”
 
-712 wierszy, 32 funkcji na poziomie modułu, 0 klas
+809 wierszy, 37 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -1152,11 +1155,16 @@
 | `wiersze_epoki(dane, od, do)` | Notki z pomiarem po 72 h od `od` z tlem policzonym na WSZYSTKICH notkach od `TLO_OD`. |
 | `zero_wyswietlen(dane, od)` | Notki epoki z dojrzalym pomiarem i zerem wyswietlen (poza porownaniem `eksperymenty.wiersze`). |
 | `_mediana(v)` *(wewn.)* | — |
-| `tabela(rows, grupa, odniesienie)` | `eksperymenty.porownaj` + kolumny, ktorych tam nie ma: mediana wyswietlen, odsetek notek z odwiedzinami, zapisy. |
+| `_klaster(x)` *(wewn.)* | Niezalezna jednostka notki: seria (cztery notki jednej historii nie sa niezalezne), a poza seria — doba publikacji |
+| `_po_klastrach(rows)` *(wewn.)* | Lista klastrow, kazdy jako lista `lr` jego notek. |
+| `_sr(klastry)` *(wewn.)* | — |
+| `ci_klastrow(a, b)` | (stosunek, dolny, gorny) grupy `a` do `b`: bootstrap 95% po KLASTRACH (losujemy cale serie/doby z powtorzeniami, |
+| `_wykrywalny(a, b, wszystkie)` *(wewn.)* | Najmniejszy wykrywalny efekt (moc 80%, 5%) przy tej liczbie niezaleznych jednostek. |
+| `tabela(rows, grupa, odniesienie)` | `eksperymenty.porownaj` (opis grup, wybor odniesienia) + kolumny, ktorych tam nie ma, + WERDYKT z bootstrapu po |
 | `porownanie_po_seriach(rows, nazwa)` | Eksperyment, w ktorym ramie dostaje CALA SERIA (E22): notki jednej serii nie sa niezalezne, wiec bootstrap |
 | `grupa_kosztu(purpose)` | — |
 | `koszt_wg_grup(koszty, od, do)` | — |
-| `koszt_serii(dane, rows, rozkminy, od)` | Koszt tematu sledztwa i notki wedlug formatu (seria / rozkmina) oraz koszt na 1000 wyswietlen po 72 h. |
+| `koszt_serii(dane, rows, rozkminy, od, teraz)` | Koszt tematu sledztwa i notki wedlug formatu (seria / rozkmina) oraz koszt na 1000 wyswietlen po 72 h. |
 | `sprawdzenie_faktow(dane, rozkminy, od)` | Pole `fc` (od 27.10.2026): ile notek mialo obalone twierdzenie, ile naprawiono, ile zastrzezen, ile bez sprawdzenia. |
 | `potok(dane, rozkminy, od, teraz)` | Ile sledztw, ile notek z nich powstalo, wyszlo i wygaslo w kolejce; ile dni od sledztwa do pierwszej notki. |
 | `czujnik(dane, teraz)` | — |
