@@ -2914,6 +2914,48 @@ def ile_rozkmin(dni: int = 3) -> int:
     return sum(1 for r in _rekordy(dni) if r.get("rozkmina"))
 
 
+# --- UWAGI CZYTELNIKOW JAKO ZIARNA (27.10.2026) ---------------------------------------------------------------
+# Pula `pytania_czytelnikow.json` zbiera od tygodni to, co ludzie piszą w odpowiedziach do nas (`stages.zbierz_pytania`),
+# a dotad sluzyla tylko skautowi bankowemu. Rozkmina myslala wylacznie z naglowkow i z tego, co klika w cudzych
+# publikacjach; tu dochodzi trzeci glos: co ZASTANAWIA ludzi, ktorzy z nami rozmawiali. Pozycja idzie do korpusu jak kazda
+# inna (kanal „czytelnik”), z jawnym znacznikiem, ze to uwaga, nie fakt; wybor przeczuc wymaga co najmniej dwoch pozycji
+# z roznych historii, wiec sama uwaga nie moze zalozyc przeczucia. Bez autorow, bez adresow, najwyzej trzy, tylko tresciwe.
+PLIK_UWAG_CZYTELNIKOW = "pytania_czytelnikow.json"
+UWAGI_CZYTELNIKOW_DNI = 21
+UWAGI_CZYTELNIKOW_MAKS = 3
+UWAGA_SLOW = (8, 70)
+
+
+def uwagi_czytelnikow(dni: int = UWAGI_CZYTELNIKOW_DNI, maks: int = UWAGI_CZYTELNIKOW_MAKS) -> list[dict[str, Any]]:
+    """Najswiezsze tresciwe uwagi czytelnikow jako pozycje korpusu rozkminy; pusta lista, gdy pliku nie ma. Nigdy nie rzuca."""
+    try:
+        dane = json.loads((config.DATA_DIR / PLIK_UWAG_CZYTELNIKOW).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    if not isinstance(dane, list):
+        return []
+    try:
+        import stages
+        czysta = lambda t: stages.bez_wstrzykniecia(t)[0]    # noqa: E731
+    except Exception:    # noqa: BLE001
+        return []
+    granica = (_teraz() - timedelta(days=dni)).isoformat()
+    out, widziane = [], set()
+    for p in sorted((x for x in dane if isinstance(x, dict)), key=lambda x: str(x.get("kiedy") or ""), reverse=True):
+        tekst = _jedna_linia(p.get("tekst"))
+        klucz = tekst.lower()[:80]
+        if (not (UWAGA_SLOW[0] <= len(tekst.split()) <= UWAGA_SLOW[1]) or str(p.get("kiedy") or "") < granica or klucz in widziane
+                or "http" in tekst.lower() or "www." in tekst.lower() or "@" in tekst or not czysta(tekst)):
+            continue
+        widziane.add(klucz)
+        out.append({"temat": tekst, "surowy": tekst, "kanal": "czytelnik", "data": str(p.get("kiedy") or "")[:10], "url": "",
+                    "sygnal": "reader remark: a hint of what puzzles people, not a fact", "styk": "branza",
+                    "rola": "uwaga czytelnika, nie fakt"})
+        if len(out) >= maks:
+            break
+    return out
+
+
 def rozkmina_historia(korpus: list[dict[str, Any]], conn=None, run_id=None) -> dict[str, Any] | None:
     """Pseudo-historia z przeczuc albo None, gdy nic nie skloniło do myslenia. Nigdy nie podnosi wyjatku poza
     budzetem i wylacznikiem."""

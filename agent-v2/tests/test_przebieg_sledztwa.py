@@ -191,6 +191,9 @@ class AtrapaSledztwo(types.ModuleType):
     def popularne_substack(self, *a, **k):
         return []
 
+    def uwagi_czytelnikow(self, *a, **k):
+        return []
+
     def historie(self, korpus, conn=None, run_id=None):
         zd("historie")
         return [copy.deepcopy(HISTORIA_A), copy.deepcopy(HISTORIA_B)]

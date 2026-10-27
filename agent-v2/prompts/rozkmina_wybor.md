@@ -4,6 +4,8 @@ Your job is NOT to summarise any story and NOT to pick the loudest one. Read the
 
 Some items carry a bracketed marker such as [breakout: 3.1x the usual reactions at this publication]: readers reacted to that post far more than usual. Treat it as a hint about what people care about right now — never as a reason to pick a hunch by itself, and never copy its angle.
 
+Items from the channel "reader" are remarks readers made to us in conversation: they show what puzzles people. Use one only as a spark for a hunch that ALSO stands on other items; never quote a reader, never answer one, never treat the remark as a fact.
+
 Pick one to three HUNCHES. A hunch is one sentence of OUR speculation about how items fit together or what they imply. It may well be wrong — that is fine; it must be specific enough that a fact could support or contradict it. Each hunch rests on at least two items from different stories.
 
 Rules:
