@@ -91,7 +91,7 @@ def karta(n=12, hosty=None):
             "investigation": {"question": "Q about everything. Hunches to ground or test: PHP hunch; Kimi weights hunch; IPO hunch.",
                               "path": "C:/secret/path.json", "created_at": "2026-10-26", "stop_reason": "done", "cost_usd": 0.5,
                               "assessment": {"hypotheses": [{"h": "A Kimi weights hypothesis from another story."}]}},
-            "source_dates": {"newest": "2026-10-26", "oldest": "2026-10-01", "note": ""}}
+            "source_dates": {"newest": "2026-10-26", "oldest": "2026-10-01", "note": "Dated sources run Oct. 1-26; IPO figures are press reports."}}
 
 
 def stan(rid, typ="rozkmina", dni=1, **k):
@@ -342,8 +342,8 @@ sprawdz("KONTRDOWOD (rozlew): w karcie pisarza nie ma przeczuc ani hipotez badan
 sprawdz("pytanie badania w karcie to TEZA; parallel_mechanisms puste; sprawdzenie_karty usuniete",
         card["investigation"]["question"].startswith("Anthropic's IPO prices") and "assessment" not in card["investigation"] and card["parallel_mechanisms"] == []
         and "sprawdzenie_karty" not in card, (card.get("investigation"), card.get("parallel_mechanisms")))
-sprawdz("daty zrodel przeliczone z twierdzen tezy (1-5): najstarsze 2026-10-11, najnowsze 2026-10-15; notatka o wieku zostaje",
-        card["source_dates"]["oldest"] == "2026-10-11" and card["source_dates"]["newest"] == "2026-10-15" and "note" in card["source_dates"], card["source_dates"])
+sprawdz("daty zrodel przeliczone z twierdzen tezy (1-5): najstarsze 2026-10-11, najnowsze 2026-10-15; notatka o datach CALEJ karty (o IPO) znika",
+        card["source_dates"]["oldest"] == "2026-10-11" and card["source_dates"]["newest"] == "2026-10-15" and card["source_dates"]["note"] == "", card["source_dates"])
 sprawdz("katy serii (`investigation_angles`) tylko z notek, ktore stoja na faktach tezy (dwie z trzech; trzecia o innej historii odpada)",
         len(card["investigation_angles"]) == 2 and all("third" not in str(a) for a in card["investigation_angles"]), card.get("investigation_angles"))
 s2 = stan(681, "sledztwo")

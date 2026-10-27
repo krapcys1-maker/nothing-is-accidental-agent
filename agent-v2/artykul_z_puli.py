@@ -2582,7 +2582,7 @@ def _zawez_do_tezy(card: dict, stan: dict, teza: dict, przes: list) -> list:
                                                                           if k in card["investigation"]}}
     daty_faktow = sorted(str(c.get("as_of") or "")[:10] for c in wybrane if re.match(r"^\d{4}-\d{2}-\d{2}", str(c.get("as_of") or "")))
     if daty_faktow and isinstance(card.get("source_dates"), dict):
-        card["source_dates"] = dict(card["source_dates"], oldest=daty_faktow[0], newest=daty_faktow[-1])
+        card["source_dates"] = dict(card["source_dates"], oldest=daty_faktow[0], newest=daty_faktow[-1], note="")   # uwaga o datach dotyczyla calej karty
     card["voices"] = [v for v in card.get("voices") or [] if not isinstance(v, dict) or v.get("url") in urle]
     card["working_thesis"] = teza.get("teza") or ""
     card["main_mechanism"] = teza.get("jak_zrodla_lacza") or ""
