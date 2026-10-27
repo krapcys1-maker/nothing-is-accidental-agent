@@ -256,10 +256,16 @@ podnosza czulosc na subtelnej do ok. 3/4 za ok. 0,006 USD. **Wniosek: wyrazna sp
 — to granica tej metody, nie blad.** Jedyny raz, gdy Flash znalazl subtelna pare, Opus ocenil ja trafnie (CONTRADICTION, NEITHER).
 
 **Koszt (zmierzony na zywo 27.10).** Flash wykrywanie 0,0005-0,0035 USD za wywolanie (`low`), `medium` ok. 0,003 USD; Opus 5.5 0,012-0,020 USD za potwierdzenie (ok. 1,3 tys.
-tokenow wejscia, 0,3-0,75 tys. wyjscia), tylko gdy cytaty przejda krok 3. Typowa notka bez znalezisk: dwa przebiegi Flasha, ok. 0,006 USD. Najgorszy przypadek (cytaty OK,
-Opus odmawia, naprawa, ponowne sprawdzenia): ok. 9 platnych wywolan, z czego realny koszt to Flash, jedna naprawa i potwierdzenie; odmowy Opusa ksieguja sie po 0 USD, a po
-pierwszej odmowie kolejne potwierdzenia przebiegu ida od razu do zapasu. Do 90 notek serii miesiecznie: ok. 0,5-1 USD (Flash) plus Opus przy kilku przypadkach. Etapy ida do
-grupy kosztu „sprawdzenie faktow i naprawa” w `co_dziala`.
+tokenow wejscia, 0,3-0,75 tys. wyjscia; 0,02-0,04 USD przy 12 kandydatach i pelnym materiale), tylko gdy cytaty przejda krok 3. `medium` na pelnej sciezce kosztuje
+0,003-0,006 USD za wywolanie (do ok. 10 tys. tokenow wyjscia). Typowa notka bez znalezisk: dwa przebiegi Flasha, ok. 0,01 USD. Najgorszy przypadek (cytaty OK, Opus odmawia,
+naprawa, ponowne sprawdzenia): ok. 9 platnych wywolan; odmowy Opusa ksieguja sie po 0 USD, a po pierwszej odmowie kolejne potwierdzenia przebiegu ida od razu do zapasu.
+Do 90 notek serii miesiecznie: ok. 1 USD (Flash) plus Opus przy kilku przypadkach. Etapy ida do grupy kosztu „sprawdzenie faktow i naprawa” w `co_dziala`.
+
+**Proba koncowa na zywo (27.10 wieczorem, cala sciezka `stages.note`, oryginal 506-2, prawdziwy material z kolejki i dziennik z kopii danych; 0,11 USD).** Flash
+znalazl 3 pary (2 przebiegi), Opus 5.5 potwierdzil jedna: „The vulnerabilities were known for years” kontra nasza notka z 25.10 („the flaw had been found in August”),
+material popiera wczesniejsza (siec tez obalila to zdanie). Sprzecznosc poszla razem z obalonymi faktami do jednej naprawy; ponowne sprawdzenie znalazlo kolejna sprzecznosc
+(„the bottleneck is not discovery” kontra nasze „made practical in hours”), naprawa zostala (poprawiala tez fakt z sieci), a notka wyszla z zastrzezeniem w logu —
+zgodnie z zalozeniem „nie bramka”. Koszt: potwierdzenia Opusa 0,062 USD, wykrywanie (4 wywolania) 0,025, sprawdzenie faktow w sieci 0,023, naprawa 0,002.
 
 **Czego to NIE lapie.** (a) Bledu rozumowania w obrebie jednej notki (prawdziwe fakty, zly wniosek — 506-3). (b) Sprzecznosci z notka spoza okna kandydatow
 (starszej niz 21 dni albo o innym temacie slowami; prog to wspolne slowa i liczby, nie znaczenie). (c) Sprzecznosci z naszymi ARTYKULAMI (dziennik trzyma tylko
