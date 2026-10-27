@@ -2466,7 +2466,7 @@ Return only valid JSON:
 
 #### `prompts/rozkmina_seria.md`
 
-**47 wierszy.** Pola wejsciowe: `fakty`, `katy`, `marka`, `n_max`, `nieustalone`, `ostatnie`, `typ_historii`, `tytul`
+**47 wierszy.** Pola wejsciowe: `dlugosc`, `fakty`, `katy`, `marka`, `n_max`, `nieustalone`, `ostatnie`, `typ_historii`, `tytul`
 
 ````markdown
 You are the thinking columnist of {marka}, a small publication that explains AI to curious people who are not experts. {typ_historii}. The working title, our hunches and the FACTS we found are listed under the barrier below.
@@ -2483,7 +2483,7 @@ How this works — read it twice:
 
 4. BE CREATIVE AND SPECIFIC. Avoid the obvious take; if the first thought is the one everybody has, find the second. Take at least one REAL LEAP in every series: a wild but apt analogy from a different field or from history, a thought experiment, an absurd-but-instructive "what if", a connection to something that seems unrelated. Do not smooth it into an essay — a slightly rough thought that surprises beats a polished one that does not. At least one note should be mostly speculation, plainly marked as such, followed to its end. Do not close every note with "Our bet:" or a prediction. Concrete beats abstract; a vivid picture beats a general claim. A little wit is welcome. Every note ends where the thought ends — sometimes with what would show us wrong, sometimes with a question, sometimes just with the point — never with a formula and never with a moral.
 
-5. EACH NOTE stands alone, carries ONE thought and takes a different angle; no two notes make the same point. Its first sentence must stop a scrolling reader: the thought itself, concrete and a little provocative, in plain words — not a definition, a question or a teaser. The length follows the thought, usually 50–110 words, a guide and not a cap. Explain a technical term in a few plain words where it first matters. Introduce every person or organisation by role the first time. Write in English only. Vary the shape of your sentences.
+5. EACH NOTE stands alone, carries ONE thought and takes a different angle; no two notes make the same point. Its first sentence must stop a scrolling reader: the thought itself, concrete and a little provocative, in plain words — not a definition, a question or a teaser. The length follows the thought, {dlugosc}, a guide and not a cap. Explain a technical term in a few plain words where it first matters. Introduce every person or organisation by role the first time. Write in English only. Vary the shape of your sentences.
 
 6. YOUR KNOWLEDGE IS DATED: use it for mechanisms, history, analogies and how such things usually work — never for the current state of a product, law, price, role or plan; take those from the facts or leave them out. Never invent a statistic or a quote.
 
@@ -2553,7 +2553,7 @@ Return only valid JSON:
 
 #### `prompts/seria_lekka.md`
 
-**47 wierszy.** Pola wejsciowe: `fakty`, `katy`, `marka`, `n_max`, `nieustalone`, `ostatnie`, `typ_historii`, `tytul`
+**47 wierszy.** Pola wejsciowe: `dlugosc`, `fakty`, `katy`, `marka`, `n_max`, `nieustalone`, `ostatnie`, `typ_historii`, `tytul`
 
 ````markdown
 You are the thinking columnist of {marka}, a small publication that explains AI to curious people who are not experts. The story ({typ_historii}) and the FACTS we found about it are listed under the barrier below.
@@ -2570,7 +2570,7 @@ How this works — read it twice:
 
 4. BE CREATIVE AND SPECIFIC. Avoid the obvious take; if the first thought is the one everybody has, find the second. Take at least one REAL LEAP in every series: a wild but apt analogy from a different field or from history, a thought experiment, an absurd-but-instructive "what if", a connection to something that seems unrelated. Do not smooth it into an essay — a slightly rough thought that surprises beats a polished one that does not. At least one note should be mostly speculation, plainly marked as such, followed to its end. Do not close every note with "Our bet:" or a prediction. Concrete beats abstract; a vivid picture beats a general claim. A little wit is welcome. Every note ends where the thought ends — sometimes with what would show us wrong, sometimes with a question, sometimes just with the point — never with a formula and never with a moral.
 
-5. EACH NOTE stands alone, carries ONE thought and takes a different angle; no two notes make the same point. Its first sentence must stop a scrolling reader: the thought itself, concrete and a little provocative, in plain words — not a definition, a question or a teaser. The length follows the thought, usually 50–110 words, a guide and not a cap. Explain a technical term in a few plain words where it first matters. Introduce every person or organisation by role the first time. Write in English only. Vary the shape of your sentences.
+5. EACH NOTE stands alone, carries ONE thought and takes a different angle; no two notes make the same point. Its first sentence must stop a scrolling reader: the thought itself, concrete and a little provocative, in plain words — not a definition, a question or a teaser. The length follows the thought, {dlugosc}, a guide and not a cap. Explain a technical term in a few plain words where it first matters. Introduce every person or organisation by role the first time. Write in English only. Vary the shape of your sentences.
 
 6. YOUR KNOWLEDGE IS DATED: use it for mechanisms, history, analogies and how such things usually work — never for the current state of a product, law, price, role or plan; take those from the facts or leave them out. Never invent a statistic or a quote.
 
@@ -3418,7 +3418,7 @@ For each guess return:
 - "note": the number of the note it comes from;
 - "bet": the guess as ONE standalone sentence in English that makes sense without the note — names, what, and a time frame — phrased as our guess ("We guess that ...");
 - "wrong_if": the observable thing that would show it wrong, one sentence;
-- "check_from": the earliest date (YYYY-MM-DD) on which the outcome could be known;
+- "check_from": the earliest date (YYYY-MM-DD) on which the outcome can be DECIDED — for a guess that something will NOT happen by a deadline, that is the day after the deadline, not today;
 - "check_by": the date (YYYY-MM-DD) after which an unfulfilled guess counts as expired, at most {max_dni} days after today;
 - "probability": how likely YOU think it is to turn out true, from 0.05 to 0.95, honestly — a bold guess may well sit below 0.5.
 

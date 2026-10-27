@@ -69,6 +69,7 @@ MODULY = [
     ("eksperymenty.py", "pomiar zmian — odbiór notek w grupach względem tła tygodnia, 95% przedział i werdykt (lepiej / gorzej / brak dowodu / za mało danych)"),
     ("obserwatorium.py", "obserwatorium obu kont — dane dnia (wzrost, lejek, działania, koszt), dziennik zmian z reflogu i rejestru, tempo wzrostu i skutek zmian"),
     ("laboratorium.py", "laboratorium — tygodniowy raport badawczy obu kont: prędkość przyrostu z przedziałami, dawka → skutek, notki tygodniami, atrybucja zapisów"),
+    ("co_dziala.py", "co działa — statystyki NIE jako produktu: formaty notek, wymiary (kąt, długość, pora, model...), eksperymenty także po seriach, koszt tematu i notki, sprawdzenie faktów, potok, wzrost, zakłady i czujnik; werdykt tylko z przedziałem 95%, grupa poniżej progu to „za mało danych”"),
     ("aktualne_modele.py", "jakie modele istnieją DZIŚ; pytane na żywo, nie z pamięci"),
     ("nowe_modele.py", "nowe modele wchodzą same: w tej samej rodzinie i dopiero po próbie"),
     ("model_registry.py", "rodzina modelu dla każdej roli i porównywanie wersji — wspólne dla `nowe_modele` i wczytania wyboru"),

@@ -1,7 +1,7 @@
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-3774 wierszy, 40 funkcji na poziomie modułu, 2 klas
+3777 wierszy, 40 funkcji na poziomie modułu, 2 klas
 
 | funkcja | co robi |
 |---|---|
@@ -48,14 +48,14 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-12686 wierszy, 237 funkcji na poziomie modułu, 0 klas
+12708 wierszy, 238 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
 | `_na_kanal(nazwa)` *(wewn.)* | Wszystko, co ta funkcja zaplaci, ksieguje sie na kanal `nazwa`. |
 | `_prompt(name, **fields)` *(wewn.)* | Render a task prompt and prepend the shared public voice once. |
 | `_katy_serii_opis()` *(wewn.)* | Tabela katow dla serii lekkiej — NASZ tekst (stala `sledztwo.KATY`), bez argumentow. |
-| `prompt_serii_lekkiej(tytul, fakty, nieustalone, ostatnie, typ, n_max)` | Prompt serii lekkiej (`sledztwo.seria_lekka`). Naglowek historii, fakty, nieustalone i ostatnie |
+| `prompt_serii_lekkiej(tytul, fakty, nieustalone, ostatnie, typ, n_max, ramie_dlugosci)` | Prompt serii lekkiej (`sledztwo.seria_lekka`). Naglowek historii, fakty, nieustalone i ostatnie |
 | `prompt_rozkminy(pozycje)` | Prompt wyboru okna katalizatorow (`sledztwo.rozkmina_historia`). Naglowki z kanalow to CUDZA tresc |
 | `prompt_dokumentow_lekkich(tytul, pytanie, zrodla)` | Prompt nazywania dokumentow pierwotnych w lekkim torze. Naglowek, pytanie i wycinki zrodel to |
 | `prompt_redakcji_serii(notki)` | Prompt redaktora serii lekkiej (`sledztwo._bez_powtorek`). Notki to tekst napisany z cudzych |
@@ -204,6 +204,7 @@
 | `popraw_bez_pokrycia(conn, run_id, body, card, bez_pokrycia)` | (poprawiony tekst, log). Nigdy nie podnosi wyjatku — awaria = tekst jak byl. |
 | `_json_weryfikacji(raw)` *(wewn.)* | Obiekt weryfikacji z odpowiedzi albo None, gdy JSON-u w niej nie ma. |
 | `_weryfikacja_bez_jsonu(conn, run_id, raw, prompt, szukaj)` *(wewn.)* | Druga szansa dla weryfikacji, ktora oddala proze. Nigdy nie oddaje `safe_to_post` |
+| `skrot_weryfikacji(kandydat)` | Co sprawdzenie faktow zrobilo z tekstem notki — krotko, do dziennika (statystyki `co_dziala.py`). |
 | `zweryfikuj(conn, run_id, tekst, kontekst, szukaj)` | Sprawdza to, co model NAPISAŁ — nie to, czego szukał przed pisaniem. |
 | `_zapora_notki(tekst)` *(wewn.)* | Pusty napis, gdy tekst notki przechodzi zapory. Inaczej powod. |
 | `_zapora_komentarza(tekst)` *(wewn.)* | To samo dla komentarza — ale komentarz ma zapore o jedna wiecej. |
@@ -576,7 +577,7 @@
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-4303 wierszy, 48 funkcji na poziomie modułu, 0 klas
+4319 wierszy, 49 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -608,6 +609,7 @@
 | `zakres_slow(forma)` | Ile slow wolno tej formie. JEDNO ZRODLO dla promptu, pomiaru i naprawy. |
 | `dzisiaj()` | Dzisiejsza data UTC (ISO) do promptow — NASZA wartosc (kotwica zaufania). |
 | `opis_typu_historii(typ)` | Rodzaj historii w prompcie serii lekkiej — NASZA stala (kotwica zaufania), nie tresc zrodel. |
+| `dlugosc_serii(ramie)` | Wskazowka dlugosci dla ramienia E22; nieznane albo puste ramie = zwykla (off). |
 | `liczba_notek_serii(n)` | Ile notek najwyzej prosi seria lekka: 2-6, zawsze nasza liczba (kotwica zaufania). |
 | `losowa_postawa()` | Ktora postawa dla TEGO komentarza. Wagi, nie rownomiernie. |
 | `losowe_otwarcie()` | — |
@@ -761,7 +763,7 @@
 
 ### `sledztwo.py` — śledztwo — wybór największej historii, rdzeń (sedno) i kąty serii z jednej tabeli KATY, uczciwy hak sprawdzany kodem, poziom tematu (liczba notek), bramka nowości i kolejka notek
 
-3525 wierszy, 142 funkcji na poziomie modułu, 0 klas
+3530 wierszy, 142 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -1046,7 +1048,7 @@
 
 ### `obserwatorium.py` — obserwatorium obu kont — dane dnia (wzrost, lejek, działania, koszt), dziennik zmian z reflogu i rejestru, tempo wzrostu i skutek zmian
 
-1298 wierszy, 54 funkcji na poziomie modułu, 0 klas
+1305 wierszy, 54 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -1129,6 +1131,45 @@
 | `_rho(z)` *(wewn.)* | — |
 | `tekst(w)` | — |
 | `zapisz()` | — |
+
+### `co_dziala.py` — co działa — statystyki NIE jako produktu: formaty notek, wymiary (kąt, długość, pora, model...), eksperymenty także po seriach, koszt tematu i notki, sprawdzenie faktów, potok, wzrost, zakłady i czujnik; werdykt tylko z przedziałem 95%, grupa poniżej progu to „za mało danych”
+
+712 wierszy, 32 funkcji na poziomie modułu, 0 klas
+
+| funkcja | co robi |
+|---|---|
+| `_jsonl(plik)` *(wewn.)* | — |
+| `_json(plik, domyslnie)` *(wewn.)* | — |
+| `zbierz_dane()` | Wszystko, czego raport potrzebuje, z plikow NIE (`config.DATA_DIR`). Tylko odczyt. |
+| `_wczytaj_dni()` *(wewn.)* | Doby konta NIE policzone przez obserwatorium (`zbierz`); brak pliku = pusto. |
+| `koszty_z_bazy(baza)` | Koszt wywolan z `calls` (produkcja): {'run': {run_id: usd}, 'purpose': [(doba, purpose, usd)]}. Pusto, gdy brak bazy. |
+| `_run_z_przeslania(e)` *(wewn.)* | Numer przebiegu sledztwa z `przeslanie_id`: „202610251853-499-3-power_shift" (od 25.10.2026) albo starszy |
+| `format_notki(e, rozkminy)` | Format notki z wpisu dziennika. `przeslanie_id` wygrywa z `typ`: MYSL i promocje nie maja przeslania. |
+| `_slow(e)` *(wewn.)* | — |
+| `_kubelek(x, kubelki)` *(wewn.)* | — |
+| `_kiedy(e)` *(wewn.)* | — |
+| `grupowania(rozkminy, kategorie)` | Wymiary tabel: {klucz: (tytul, funkcja wpis -> grupa, filtr wpisow)}. Filtr zaweza do notek, o ktorych wymiar mowi. |
+| `wiersze_epoki(dane, od, do)` | Notki z pomiarem po 72 h od `od` z tlem policzonym na WSZYSTKICH notkach od `TLO_OD`. |
+| `zero_wyswietlen(dane, od)` | Notki epoki z dojrzalym pomiarem i zerem wyswietlen (poza porownaniem `eksperymenty.wiersze`). |
+| `_mediana(v)` *(wewn.)* | — |
+| `tabela(rows, grupa, odniesienie)` | `eksperymenty.porownaj` + kolumny, ktorych tam nie ma: mediana wyswietlen, odsetek notek z odwiedzinami, zapisy. |
+| `porownanie_po_seriach(rows, nazwa)` | Eksperyment, w ktorym ramie dostaje CALA SERIA (E22): notki jednej serii nie sa niezalezne, wiec bootstrap |
+| `grupa_kosztu(purpose)` | — |
+| `koszt_wg_grup(koszty, od, do)` | — |
+| `koszt_serii(dane, rows, rozkminy, od)` | Koszt tematu sledztwa i notki wedlug formatu (seria / rozkmina) oraz koszt na 1000 wyswietlen po 72 h. |
+| `sprawdzenie_faktow(dane, rozkminy, od)` | Pole `fc` (od 27.10.2026): ile notek mialo obalone twierdzenie, ile naprawiono, ile zastrzezen, ile bez sprawdzenia. |
+| `potok(dane, rozkminy, od, teraz)` | Ile sledztw, ile notek z nich powstalo, wyszlo i wygaslo w kolejce; ile dni od sledztwa do pierwszej notki. |
+| `czujnik(dane, teraz)` | — |
+| `wzrost(dane, dzis)` | Tempo i lejek konta z obserwatorium (`dni_NIE.json`); brak pliku = puste. |
+| `policz(dane, od, dzis)` | — |
+| `od_dzis(s)` | — |
+| `_zaklady()` *(wewn.)* | — |
+| `wnioski(w)` | Wnioski z liczb, bez zgadywania: co jest dowiedzione, czego brakuje i ile notek potrzeba. |
+| `_p(x, jednostka)` *(wewn.)* | — |
+| `_wiersz_tabeli(nazwa, g, odn)` *(wewn.)* | — |
+| `tekst(w)` | — |
+| `zapisz(od)` | `obserwatorium/co_dziala.md` i `.json` + jedna linia na dobe w `co_dziala.jsonl` (historia do trendow). |
+| `main(argv)` | — |
 
 ### `aktualne_modele.py` — jakie modele istnieją DZIŚ; pytane na żywo, nie z pamięci
 

@@ -351,7 +351,7 @@
 
 #### `rozkmina_seria.md` (47 wierszy)
 
-**Pola wejściowe:** `fakty`, `katy`, `marka`, `n_max`, `nieustalone`, `ostatnie`, `typ_historii`, `tytul`
+**Pola wejściowe:** `dlugosc`, `fakty`, `katy`, `marka`, `n_max`, `nieustalone`, `ostatnie`, `typ_historii`, `tytul`
 
 **Kontrakt wyjścia:**
 
@@ -371,7 +371,7 @@
 
 #### `seria_lekka.md` (47 wierszy)
 
-**Pola wejściowe:** `fakty`, `katy`, `marka`, `n_max`, `nieustalone`, `ostatnie`, `typ_historii`, `tytul`
+**Pola wejściowe:** `dlugosc`, `fakty`, `katy`, `marka`, `n_max`, `nieustalone`, `ostatnie`, `typ_historii`, `tytul`
 
 **Kontrakt wyjścia:**
 

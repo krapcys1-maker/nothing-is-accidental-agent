@@ -153,6 +153,7 @@
 | `ZAKLADY_WLACZONE` | `True` | KSIEGA ZAKLADOW (27.10.2026, `zaklady.py`): publiczne zgadywania z notek sa liczone i rozliczane. Wylacznik zatrzymuje caly obieg (wyciag, s |
 | `ZAKLADY_MAKS_Z_SERII` | `2` | Ile zakladow najwyzej z jednej grupy notek i jak daleko mozna ustawic termin (dni od dzis); stoja w configu, bo wchodza do promptu wyciagu j |
 | `ZAKLADY_MAKS_DNI_DO_TERMINU` | `150` | — |
+| `DLUGOSC_SERII` | `{"on": "usually 30–60 words", "off": "usuall` | Wskazowka dlugosci notki serii w promptach (E22, `EKSPERYMENTY["dlugosc_serii"]`). NASZA stala: do promptu idzie przez `dlugosc_serii(ramie) |
 | `NOTE_CANDIDATES` | `1` | — |
 | `DZIEDZINY_CIEKAWOSTEK` | `( # --- co te systemy realnie robia i jak sa` | Ile ciekawostek szukamy naraz. Cztery z pięciu notek dziennie stoją na nich, a jedno szukanie kosztuje tyle co jedno — więc bierzemy zapas n |
 | `ILE_DZIEDZIN_NA_PRZEBIEG` | `5` | — |

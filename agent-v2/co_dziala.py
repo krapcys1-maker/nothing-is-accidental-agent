@@ -72,16 +72,21 @@ DLUGOSCI = (("do 50 slow", 0, 50), ("51-70 slow", 51, 70), ("71-90 slow", 71, 90
 PORY = (("00-06 UTC", 0, 6), ("06-12 UTC", 6, 12), ("12-16 UTC", 12, 16), ("16-20 UTC", 16, 20), ("20-24 UTC", 20, 24))
 DNI_TYGODNIA = ("pon", "wt", "sr", "czw", "pt", "sob", "nd")
 
-# Etapy z tabeli `calls.purpose` -> grupa kosztu. Reguly po fragmencie nazwy, pierwsza pasujaca; reszta to „inne".
+# Etapy z tabeli `calls.purpose` -> grupa kosztu (pierwsza pasujaca: nazwa dokladna albo przedrostek). Reszta to „inne" —
+# raport pokazuje je jawnie, wiec nowy etap bez wpisu tutaj nie ginie, tylko widac go na liscie.
 GRUPY_KOSZTU = (
-    ("zaklady", ("zaklady",)),
-    ("sledztwo i rozkmina", ("seria_lekka", "seria_redakcja", "dokumenty_lekkie", "rozkmina", "investigation", "ksiega",
-                             "przeslania", "kategoria_historii", "wielkie_historie", "nowosc", "plan", "katy", "naglowek",
-                             "ten_sam_punkt", "wiernosc", "notka_przeslania", "pytania_ciekawosci", "deepen", "synthesis")),
-    ("sprawdzenie faktow i naprawa", ("factcheck", "naprawa")),
-    ("notki z banku, radar i glebia", ("note", "bank", "curiosity", "radar", "glebia", "wniosek", "discovery", "cele")),
-    ("komentarze, odpowiedzi, restacki", ("comment", "reply", "restack", "odpowiedz", "komentarz")),
-    ("artykul", ("article", "artykul", "pisarz", "recenzja", "okladka", "obraz")),
+    ("zaklady", (), ("zaklady",)),
+    ("sledztwo i rozkmina", ("classify", "synthesis", "deepen", "nowosc", "przeslania", "przeslania_zapas", "notka_przeslania",
+                             "notka_przeslania_fakt", "ksiega", "katy", "plan", "kategoria_historii", "wielkie_historie",
+                             "pytania_ciekawosci", "dokumenty_lekkie", "seria_redakcja", "naglowek_naprawa", "ten_sam_punkt",
+                             "wiernosc_notki"), ("seria_lekka", "rozkmina", "investigation")),
+    ("sprawdzenie faktow i naprawa", ("factcheck", "naprawa", "naprawa_komentarza", "naprawa_artykulu"), ()),
+    ("artykul (pisanie, recenzja, okladka)", ("write", "review", "obraz", "grafika", "warto_pisac", "wybor", "bibliotekarz"),
+     ("article", "artykul")),
+    ("komentarze, odpowiedzi, restacki", ("cele", "comment", "reply", "restack", "restack_opus"), ("odpowiedz", "komentarz")),
+    ("notki z banku (szukanie, rozbior, pisanie)", ("curiosity", "discovery", "bank", "note", "note_mimo", "note_tani", "rozbior",
+                                                      "wniosek", "forma", "radar", "glebia", "parowanie", "powtorka"), ()),
+    ("rejestr modeli", ("aktualne_modele", "nowe_modele"), ()),
 )
 
 
@@ -158,9 +163,10 @@ def koszty_z_bazy(baza: Path) -> dict[str, Any]:
 # --- klasyfikacja notek ---------------------------------------------------------------------------
 
 def _run_z_przeslania(e: dict[str, Any]) -> str:
-    """Numer przebiegu sledztwa z `przeslanie_id` („202610251853-499-3-power_shift"); pusty, gdy to nie seria."""
+    """Numer przebiegu sledztwa z `przeslanie_id`: „202610251853-499-3-power_shift" (od 25.10.2026) albo starszy
+    „202610091321-394-motyw"; pusty, gdy to nie seria."""
     czesci = str(e.get("przeslanie_id") or "").split("-")
-    return czesci[1] if len(czesci) >= 4 else ""
+    return czesci[1] if len(czesci) >= 3 and czesci[1].isdigit() else ""
 
 
 def format_notki(e: dict[str, Any], rozkminy: set[str]) -> str:
@@ -327,8 +333,8 @@ def porownanie_po_seriach(rows: list[dict[str, Any]], nazwa: str) -> dict[str, A
 # --- koszt ----------------------------------------------------------------------------------------
 
 def grupa_kosztu(purpose: str) -> str:
-    for nazwa, fragmenty in GRUPY_KOSZTU:
-        if any(f in purpose for f in fragmenty):
+    for nazwa, dokladne, przedrostki in GRUPY_KOSZTU:
+        if purpose in dokladne or any(purpose.startswith(p) for p in przedrostki):
             return nazwa
     return "inne"
 
@@ -537,7 +543,7 @@ def wnioski(w: dict[str, Any]) -> list[str]:
             out.append("BRAK DOWODU: %s ma %d notek z pomiarem (trzeba co najmniej %d w grupie i w odniesieniu)." % (
                 nazwa, g["n"], ek.MIN_NOTEK))
         else:
-            out.append("BRAK DOWODU: %s nie odroznia sie od zwyklej notki (%s)." % (nazwa, g.get("werdykt")))
+            out.append("BRAK DOWODU: %s nie odroznia sie od zwyklej notki — %s." % (nazwa, g.get("werdykt")))
     e22 = ((w.get("eksperymenty") or {}).get("dlugosc_serii") or {}).get("po_seriach") or {}
     if e22.get("werdykt") in ("lepiej", "gorzej"):
         out.append("DLUGOSC SERII (E22): krotsze notki (30-60 slow) wypadaja %s niz domyslne 50-110 (x%.2f, przedzial %s)." % (
@@ -574,7 +580,7 @@ NAGLOWEK_TABELI = ("| grupa | notek | mediana wysw. 72 h | wobec tla tygodnia | 
 
 def tekst(w: dict[str, Any]) -> str:
     L = ["# Co dziala — Nothing Is Accidental, %s" % w["dzis"], "",
-         "Epoka od %s (seria sledcza obok banku). Zasieg po 72 h wzgledem tla tygodnia, odbior = odwiedziny profilu + 5 x zapisy "
+         "Epoka od %s (domyslnie: od startu serii sledczej obok banku). Zasieg po 72 h wzgledem tla tygodnia, odbior = odwiedziny profilu + 5 x zapisy "
          "przypisane na 100 wyswietlen. Werdykt tylko, gdy przedzial 95%% bootstrapu nie obejmuje 1; w grupie ponizej %d notek "
          "nie pada zaden." % (w["od"], ek.MIN_NOTEK), "",
          "Notek wydanych w epoce: %d, z dojrzalym pomiarem 72 h: %d (zero wyswietlen poza porownaniem: %d). Mediana wyswietlen "

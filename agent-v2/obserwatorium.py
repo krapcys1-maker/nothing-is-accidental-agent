@@ -1272,6 +1272,13 @@ def main(argv: list[str] | None = None) -> int:
                 print("laboratorium:", laboratorium.zapisz(), flush=True)
             except Exception as exc:
                 print("laboratorium: nie policzone (%s: %s)" % (type(exc).__name__, exc), flush=True)
+            # CO DZIALA (27.10.2026) — statystyki NIE jako produktu: formaty, wymiary notki, eksperymenty, koszt, zaklady.
+            # Dotyczy tylko NIE (`config.DATA_DIR`), wiec w obserwatorium drugiego bota go nie ma.
+            try:
+                import co_dziala
+                print("co dziala:", co_dziala.zapisz(), flush=True)
+            except Exception as exc:
+                print("co dziala: nie policzone (%s: %s)" % (type(exc).__name__, exc), flush=True)
     elif a.cmd == "laboratorium":
         import laboratorium
         print(laboratorium.zapisz().read_text(encoding="utf-8"))
