@@ -758,7 +758,7 @@
 
 ### `sledztwo.py` — śledztwo — wybór największej historii, rdzeń (sedno) i kąty serii z jednej tabeli KATY, uczciwy hak sprawdzany kodem, poziom tematu (liczba notek), bramka nowości i kolejka notek
 
-3424 wierszy, 140 funkcji na poziomie modułu, 0 klas
+3525 wierszy, 142 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -768,6 +768,8 @@
 | `historie(korpus, conn, run_id, ile)` | Grupy naglowkow z radaru: najlepszy naglowek na poczatku, potem warianty. |
 | `wielkie_historie(korpus, conn, run_id, ile)` | Najwieksze historie z korpusu ostatnich `DNI_WIELKICH` dni — niezaleznie od radaru. |
 | `popularne_hn(dni, min_punktow, http)` | Najpopularniejsze watki AI z Hacker News z ostatnich dni — jako pozycje korpusu. |
+| `_archiwum_substack(host, ile)` *(wewn.)* | Najnowsze wpisy publicznego archiwum Substacka (tytul, data, reakcje...). Awaria = pusta lista. |
+| `popularne_substack(dni, min_przebicie, min_reakcji, maks, archiwum)` | Przebicia z ostatnich `dni` w czolowych AI-Substackach jako pozycje korpusu (z `sygnal` i `przebicie`). |
 | `scal_historie(radarowe, wielkie)` | Radar + detektor duzych historii bez dubli: historia detektora, ktora dzieli adres |
 | `zrodla_historii(h)` | Adresy historii do pobrania, w ksztalcie `stages.fetch` — bez powtorek. |
 | `_rekordy(dni)` *(wewn.)* | — |

@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **38 plików**, 52 885 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **38 plików**, 52 986 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -113,8 +113,8 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 > w głównej ścieżce artykułu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
-się testować bez przeglądarki i bez pieniędzy**. 216 zestawów
-testów, 6086 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+się testować bez przeglądarki i bez pieniędzy**. 217 zestawów
+testów, 6103 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -900,7 +900,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `sledztwo.py` — śledztwo — wybór największej historii, rdzeń (sedno) i kąty serii z jednej tabeli KATY, uczciwy hak sprawdzany kodem, poziom tematu (liczba notek), bramka nowości i kolejka notek
 
-3424 wierszy, 140 funkcji na poziomie modułu, 0 klas
+3525 wierszy, 142 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -910,6 +910,8 @@ wiec nie da sie go rozjechac z kodem.
 | `historie(korpus, conn, run_id, ile)` | Grupy naglowkow z radaru: najlepszy naglowek na poczatku, potem warianty. |
 | `wielkie_historie(korpus, conn, run_id, ile)` | Najwieksze historie z korpusu ostatnich `DNI_WIELKICH` dni — niezaleznie od radaru. |
 | `popularne_hn(dni, min_punktow, http)` | Najpopularniejsze watki AI z Hacker News z ostatnich dni — jako pozycje korpusu. |
+| `_archiwum_substack(host, ile)` *(wewn.)* | Najnowsze wpisy publicznego archiwum Substacka (tytul, data, reakcje...). Awaria = pusta lista. |
+| `popularne_substack(dni, min_przebicie, min_reakcji, maks, archiwum)` | Przebicia z ostatnich `dni` w czolowych AI-Substackach jako pozycje korpusu (z `sygnal` i `przebicie`). |
 | `scal_historie(radarowe, wielkie)` | Radar + detektor duzych historii bez dubli: historia detektora, ktora dzieli adres |
 | `zrodla_historii(h)` | Adresy historii do pobrania, w ksztalcie `stages.fetch` — bez powtorek. |
 | `_rekordy(dni)` *(wewn.)* | — |
@@ -11935,12 +11937,14 @@ Return only valid JSON, no text outside it:
 
 #### `prompts/rozkmina_wybor.md`
 
-**20 wierszy.** Pola wejsciowe: `dzis`, `marka`, `pozycje`
+**22 wierszy.** Pola wejsciowe: `dzis`, `marka`, `pozycje`
 
 ````markdown
 You are the thinking editor of {marka}. Today is {dzis}. Below are numbered headlines and snippets from the last days of AI news, from many different stories.
 
 Your job is NOT to summarise any story and NOT to pick the loudest one. Read the whole list the way a curious, well-read person does and notice what makes YOU think: a connection between two stories that nobody has connected, a tension or contradiction, a pattern that repeats, a second-order effect, a quiet incentive, a coincidence that may not be one, a boring explanation hiding behind an exciting one, a question the stories raise together and none answers. Anything counts. It does not have to be about dates, money, safety or any particular theme — follow what is genuinely interesting in THIS list, and be original: if the first thought you have is the obvious one, look for the second.
+
+Some items carry a bracketed marker such as [breakout: 3.1x the usual reactions at this publication]: readers reacted to that post far more than usual. Treat it as a hint about what people care about right now — never as a reason to pick a hunch by itself, and never copy its angle.
 
 Pick one to three HUNCHES. A hunch is one sentence of OUR speculation about how items fit together or what they imply. It may well be wrong — that is fine; it must be specific enough that a fact could support or contradict it. Each hunch rests on at least two items from different stories.
 

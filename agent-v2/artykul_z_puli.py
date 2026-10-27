@@ -2203,7 +2203,7 @@ def _przebieg_rozkminy(conn, run_id: int) -> int:
     stan = _nowy_stan(conn, run_id, na_serio)
     stan["tryb_badania"] = "lekkie"
     zegar = _Zegar(conn, run_id)
-    korpus = korpus_kanalow.korpus_kanalow(400) + sledztwo.popularne_hn()
+    korpus = korpus_kanalow.korpus_kanalow(400) + sledztwo.popularne_hn() + sledztwo.popularne_substack()
     wybrana = sledztwo.rozkmina_historia(korpus, conn=conn, run_id=run_id)
     if wybrana is None:
         print(">> nic nie sklonilo do myslenia — rozkminy dzis nie ma", flush=True)

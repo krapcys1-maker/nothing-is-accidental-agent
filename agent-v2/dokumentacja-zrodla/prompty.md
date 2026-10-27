@@ -359,7 +359,7 @@
 {{"plan": [{{"surprising_fact": <fact number>, "point": "<the one thought of this note, one sentence>"}}], "notki": [{{"rodzaj": "<one angle tag from the list>", "openings": ["<candidate 1>", "<candidate 2>", "<candidate 3>"], "tekst": "<the finished note>", "fakty": [<numbers of the facts it uses>], "wiedza": ["<each background claim from your own knowledge that the note relies on>"]}}]}}
 ```
 
-#### `rozkmina_wybor.md` (20 wierszy)
+#### `rozkmina_wybor.md` (22 wierszy)
 
 **Pola wejściowe:** `dzis`, `marka`, `pozycje`
 

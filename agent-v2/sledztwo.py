@@ -43,6 +43,8 @@ from __future__ import annotations
 import json
 import os
 import re
+import statistics
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Any
 from urllib.parse import urlparse
@@ -353,6 +355,104 @@ def popularne_hn(dni: int = HN_POPULARNE_DNI, min_punktow: int = HN_POPULARNE_MI
     print("  [hn] popularne watki o AI: %d (z %d powyzej %d punktow)" % (len(out), len(trafienia), min_punktow),
           flush=True)
     return out
+
+
+# --- CO KLIKA TERAZ (27.10.2026) ------------------------------------------------------------
+# Badanie z 25.10 (`robocze/klikalnosc_ai_25_10.py`) dalo wagi KATEGORII z archiwow czolowych AI-Substackow. Tu jest jego
+# zywy odpowiednik: wpisy z ostatnich dni, ktore zebraly WIELOKROTNIE wiecej reakcji niz zwykle w swojej publikacji
+# (przebicie = reakcje / mediana z ostatnich 30 wpisow tej publikacji — duze publikacje nie zagluszaja malych).
+# Idzie do rozkminy jako zwykle pozycje korpusu ze znacznikiem „przebicie”; wybor przeczuc moze to traktowac jako
+# wskazowke, co ludzi teraz rusza, ale nie jako powod do tematu samego w sobie. Dziennik `co_klika.jsonl` zbiera
+# przebicia, zeby po kilku tygodniach policzyc, jakie ramy tematu i ruchy mysli przebijaja (ekstrapolacja z danych,
+# nie z intuicji; sedziowie-LLM nie przewiduja zasiegu — patrz pomiar 28.09).
+SUBSTACKI_SYGNAL = (
+    "www.oneusefulthing.org", "www.interconnects.ai", "thezvi.substack.com", "www.aisnakeoil.com",
+    "garymarcus.substack.com", "importai.substack.com", "www.latent.space", "www.understandingai.org",
+    "www.exponentialview.co", "newsletter.semianalysis.com", "www.ai-supremacy.com",
+    "thealgorithmicbridge.substack.com", "epochai.substack.com", "www.dwarkesh.com",
+    "aiguide.substack.com", "www.transformernews.ai", "www.chinatalk.media",
+    "artificialintelligencemadesimple.substack.com", "thesequence.substack.com", "www.platformer.news",
+    "www.noahpinion.blog", "www.astralcodexten.com", "www.lennysnewsletter.com", "www.bensbites.com",
+    "jack-clark.net", "www.normaltech.ai", "simonwillison.substack.com", "www.aiweirdness.com",
+    "newsletter.pragmaticengineer.com",
+)
+PLIK_CO_KLIKA = "co_klika.jsonl"
+PLIK_CO_KLIKA_ZAPAS = "co_klika_zapas.json"
+CO_KLIKA_ZAPAS_GODZIN = 12
+
+
+def _archiwum_substack(host: str, ile: int = 30) -> list[dict[str, Any]]:
+    """Najnowsze wpisy publicznego archiwum Substacka (tytul, data, reakcje...). Awaria = pusta lista."""
+    import httpx
+    r = httpx.get("https://%s/api/v1/archive" % host, params={"sort": "new", "search": "", "offset": 0, "limit": ile},
+                  headers={"User-Agent": "Mozilla/5.0 (research; read-only)"}, timeout=15, follow_redirects=True)
+    dane = r.json() if r.status_code == 200 else []
+    return [p for p in dane if isinstance(p, dict)] if isinstance(dane, list) else []
+
+
+def popularne_substack(dni: int = 14, min_przebicie: float = 1.5, min_reakcji: int = 40, maks: int = 12,
+                       archiwum=None) -> list[dict[str, Any]]:
+    """Przebicia z ostatnich `dni` w czolowych AI-Substackach jako pozycje korpusu (z `sygnal` i `przebicie`).
+    Zapas 12 h, wiec kilka przebiegow dziennie nie pyta publikacji za kazdym razem. Nigdy nie rzuca."""
+    zapas = config.DATA_DIR / PLIK_CO_KLIKA_ZAPAS
+    try:
+        if zapas.exists() and (time.time() - zapas.stat().st_mtime) < CO_KLIKA_ZAPAS_GODZIN * 3600:
+            wpisy = json.loads(zapas.read_text(encoding="utf-8"))
+            if isinstance(wpisy, list):
+                print("  [co klika] z zapasu: %d przebic" % len(wpisy), flush=True)
+                return [w for w in wpisy if isinstance(w, dict)]
+    except (OSError, ValueError):
+        pass
+    try:
+        import korpus_kanalow
+        pobierz = archiwum or _archiwum_substack
+        granica = (_teraz() - timedelta(days=dni)).date().isoformat()
+        znalezione = []
+        for host in SUBSTACKI_SYGNAL:
+            try:
+                posty = pobierz(host)
+            except Exception:
+                continue
+            reakcje = sorted(int(p.get("reaction_count") or 0) for p in posty)
+            if len(reakcje) < 8:
+                continue
+            mediana = max(1.0, float(statistics.median(reakcje)))
+            for p in posty:
+                data = str(p.get("post_date") or "")[:10]
+                r = int(p.get("reaction_count") or 0)
+                tytul = " ".join(str(p.get("title") or "").split())
+                if (not tytul or data < granica or r < min_reakcji or r / mediana < min_przebicie
+                        or p.get("audience") == "only_paid"):
+                    continue
+                if not korpus_kanalow.O_AI.search(tytul + " " + str(p.get("subtitle") or "")):
+                    continue
+                przebicie = round(r / mediana, 1)
+                znalezione.append({
+                    "temat": tytul, "surowy": tytul, "kanal": "Substack " + host.replace("www.", "").split(".")[0],
+                    "data": data, "url": p.get("canonical_url") or "https://%s/p/%s" % (host, p.get("slug")),
+                    "reakcje": r, "mediana": mediana, "przebicie": przebicie, "komentarze": int(p.get("comment_count") or 0),
+                    "sygnal": "breakout: %.1fx the usual reactions at this publication (%d)" % (przebicie, r),
+                    "styk": "branza", "rola": "zdarzenie do sprawdzenia; naglowka nie kopiujemy"})
+            time.sleep(0.0 if archiwum else 0.4)
+        znalezione.sort(key=lambda w: -(w["reakcje"] / w["mediana"]))
+        wynik = znalezione[:maks]
+        try:
+            zapas.write_text(json.dumps(wynik, ensure_ascii=False), encoding="utf-8")
+            plik = config.DATA_DIR / PLIK_CO_KLIKA
+            znane = set()
+            if plik.exists():
+                znane = {json.loads(l).get("url") for l in plik.read_text(encoding="utf-8").splitlines() if l.strip()}
+            with plik.open("a", encoding="utf-8") as f:
+                for w in wynik:
+                    if w["url"] not in znane:
+                        f.write(json.dumps(dict(w, wykryto=_teraz().isoformat()), ensure_ascii=False) + "\n")
+        except OSError as exc:
+            print("  [co klika] nie zapisalem zapasu/dziennika (%s)" % exc, flush=True)
+        print("  [co klika] przebicia w AI-Substackach z ostatnich %d dni: %d" % (dni, len(wynik)), flush=True)
+        return wynik
+    except Exception as exc:
+        print("  [co klika] czujnik niedostepny (%s)" % type(exc).__name__, flush=True)
+        return []
 
 
 def scal_historie(radarowe: list[dict[str, Any]], wielkie: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -2831,7 +2931,8 @@ def rozkmina_historia(korpus: list[dict[str, Any]], conn=None, run_id=None) -> d
         print("  [rozkmina] za malo pozycji w korpusie (%d)" % len(wpisy), flush=True)
         return None
     lista = "\n".join("[%d] (%s, %s) %s" % (i, e.get("kanal") or "?", str(e.get("data") or "?")[:10],
-                                           " ".join(str(e.get("temat")).split())[:200])
+                                           " ".join(str(e.get("temat")).split())[:200]
+                                           + ((" [%s]" % e["sygnal"]) if e.get("sygnal") else ""))
                       for i, e in enumerate(wpisy, 1))
     try:
         import llm
