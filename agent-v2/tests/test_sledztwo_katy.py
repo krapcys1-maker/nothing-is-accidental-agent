@@ -44,6 +44,9 @@ def sprawdz(nazwa, warunek, szczegol=""):
 
 
 TERAZ = datetime.now(timezone.utc)
+# Liczba 55 jako CALA liczba: id kata niesie czas przebiegu (np. 202610271559), a „55” jako podciag cyfr tam wypada co godzine
+# o :55-:59 i robilo z tych dwoch asercji test zalezny od zegara (27.10.2026 15:59 UTC).
+_LICZBA_55 = re.compile(r"(?<!\d)55(?!\d)")
 _prawdziwy_call = llm.call
 CONN = sqlite3.connect(":memory:")
 
@@ -681,7 +684,7 @@ sprawdz("oznacz_probe na nieznanym kacie nie wywala", True)
 _p4 = sledztwo.wez_przeslanie()
 _fakt, _mat = sledztwo.material_notki(_p4)
 sprawdz("material notki: bez tezy sledztwa, linia kata jako first_line, tylko twierdzenia kata",
-        "thesis" not in _mat["investigation"] and "55" not in json.dumps(_mat)
+        "thesis" not in _mat["investigation"] and not _LICZBA_55.search(json.dumps(_mat))
         and _mat["investigation"]["first_line"] == _p4["linia"]
         and [c["nr"] for c in _mat["investigation"]["supporting_claims"]] == [c["nr"] for c in _p4["fakty"]]
         and _mat["investigation"]["position"] == "4/6", _mat["investigation"])
@@ -712,7 +715,7 @@ dziennik()
 _ps = sledztwo.wez_przeslanie()
 _fs, _ms = sledztwo.material_notki(_ps)
 sprawdz("stary wpis (KURIOZUM) wychodzi, typ notki ze wpisu, bez tezy i bez niesprawdzonego naglowka",
-        _ps["rodzaj"] == "KURIOZUM" and _ps["typ_notki"] == "CIEKAWOSTKA" and "55" not in json.dumps(_ms)
+        _ps["rodzaj"] == "KURIOZUM" and _ps["typ_notki"] == "CIEKAWOSTKA" and not _LICZBA_55.search(json.dumps(_ms))
         and _ms["perspective"]["naglowek"] == "" and _ms["perspective"]["przeslanie"] == "Old message 0"
         and _fs["url"] == "https://old.example/x", (_ps, _ms))
 dziennik({"kiedy": TERAZ.isoformat(), "przeslanie_id": STARY[0]["id"]})
