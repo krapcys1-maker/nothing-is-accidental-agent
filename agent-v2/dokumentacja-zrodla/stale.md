@@ -269,6 +269,11 @@
 | `WOLNO_TKNAC_PRODUKCYJNA_BAZE` | `not W_TESCIE` | Trzecia zapora tej samej rodziny: darmowy test nie ma prawa OTWORZYC produkcyjnej bazy. Patrz `uzyj_katalogu_danych` i `db.connect`. |
 | `NAPRAWA_OBALONYCH` | `True` | --- naprawa zamiast blokady i zamiast ciecia -------------------------------- 1 wrzesnia 2026 o 19:46 poszla notka z liczba, ktora nasze wla |
 | `NAPRAW_NA_PRZEBIEG` | `4` | Ile napraw najwyzej w jednym przebiegu. Kazda to dwa platne wywolania (przepisanie plus PONOWNE sprawdzenie), wiec bez sufitu zly dzien potr |
+| `SPOJNOSC_Z_DZIENNIKIEM` | `True` | SPOJNOSC NOTKI SERII Z DZIENNIKIEM (27.10.2026, `spojnosc.py`, wlasciciel: „ok niech tak bedzie”). Notki serii leza w kolejce kilka dni, a p |
+| `SPOJNOSC_OKNO_DNI` | `21` | — |
+| `SPOJNOSC_KANDYDATOW` | `12` | — |
+| `SPOJNOSC_MIN_WSPOLNYCH` | `3` | — |
+| `SPOJNOSC_MAKS_PAR` | `3` | — |
 | `RUCHY_KONCOWE` | `{ "DO_SPRAWDZENIA": ( "Close by handing the ` | --- ruch koncowy i szerokosc drugiego aktu -------------------------------- Dwa artykuly napisane PO naprawie szamponu (0017 "The Gas You Di |
 | `RUCH_KONCOWY_MIX` | `("DO_SPRAWDZENIA", "KTO_NA_TYM_STOI", "POWRO` | — |
 | `ILE_PARALELI_WAGI` | `{1: 4, 2: 4, 3: 3}` | Ile paraleli w drugim akcie. Trzy wyliczone po kolei czytaja sie jak lista; jedna rozwinieta na dwa akapity czyta sie jak mysl. Chcemy obu,  |

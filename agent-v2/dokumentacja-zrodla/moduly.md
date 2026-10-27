@@ -48,7 +48,7 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-12720 wierszy, 239 funkcji na poziomie modułu, 0 klas
+12796 wierszy, 239 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -157,7 +157,7 @@
 | `wiernosc_notki(conn, run_id, tekst, twierdzenia)` | Czy notka serii mowi to samo, co twierdzenia, na ktorych stoi (spec §6 „Verification chain" 6). |
 | `_problemy_bramki(conn, run_id, tekst, bramka, twierdzenia_kata, data)` *(wewn.)* | Najpierw darmowe reguly kodu; wiernosc (platna) tylko dla tekstu, ktory je przeszedl. |
 | `_przez_bramke_notki(conn, run_id, etap, prompt, data, bramka, twierdzenia_kata, wariant)` *(wewn.)* | Notka po regulach: przeszla, przeszla po JEDNEJ poprawce, albo `bramka_odrzucila`. |
-| `note(conn, run_id, note_type, evidence, link, note_form, etap, seria, wariant, bramka, twierdzenia_kata, bez_rozbioru, pierwsze_zdanie, gotowy_tekst)` | Jedna notka danego typu i danej FORMY — do szuflady. |
+| `note(conn, run_id, note_type, evidence, link, note_form, etap, seria, wariant, bramka, twierdzenia_kata, bez_rozbioru, pierwsze_zdanie, gotowy_tekst, sprawdz_spojnosc)` | Jedna notka danego typu i danej FORMY — do szuflady. |
 | `_host_adresu(url)` *(wewn.)* | — |
 | `_adres_bez_ogona(url)` *(wewn.)* | — |
 | `styk_ze_zrodla(fakt, tresci)` | (styk, skad): `skad` to `adres`, `host`, `rejestr` albo `brak`. |
@@ -578,7 +578,7 @@
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-4331 wierszy, 49 funkcji na poziomie modułu, 0 klas
+4362 wierszy, 49 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -997,6 +997,27 @@
 | `krytyk(conn, run_id, h, plan, ksiega, karta)` | Starszy redaktor (spec §2 etap 11, §3 „Senior editor"). |
 | `_krytyk(conn, run_id, h, plan, ksiega, karta)` *(wewn.)* | — |
 
+### `spojnosc.py` — spójność notki serii z tym, co już wyszło — przy publikacji kod wybiera z dziennika z 21 dni powiązane notki, Flash wskazuje sprzeczności z cytatami, kod sprawdza cytaty dosłownie, Opus potwierdza (zapas: Flash), potwierdzona sprzeczność idzie do tej samej naprawy co obalony fakt i jest sprawdzana ponownie; nie jest bramką
+
+359 wierszy, 14 funkcji na poziomie modułu, 0 klas
+
+| funkcja | co robi |
+|---|---|
+| `_norm(tekst)` *(wewn.)* | Tekst do porownan doslownych: male litery, zwykle cudzyslowy i myslniki, jedna spacja. |
+| `_jedna_linia(tekst)` *(wewn.)* | — |
+| `_liczby(tekst)` *(wewn.)* | Liczby z tekstu bez separatorow; jednocyfrowe odpadaja (numeracja, „1 of 5”). |
+| `_slowa(tekst)` *(wewn.)* | — |
+| `_czas(wartosc)` *(wewn.)* | — |
+| `wczesniejsze_notki(tekst)` | Opublikowane notki z okna dni, najbardziej zwiazane z `tekst`, od najstarszej (E1, E2...). |
+| `_cytat_w_tekscie(zrodlo, cytat)` *(wewn.)* | Cytat modelu, gdy stoi w `zrodlo` doslownie (z dokladnoscia do wielkosci liter, cudzyslowow |
+| `material_z_audytu(audyt, kontekst)` | Material dla potwierdzenia: NAJPIERW to, co sprawdzenie w sieci powiedzialo o nowej notce |
+| `_wykryj(conn, run_id, tekst, kandydaci, dzis)` *(wewn.)* | (znaleziska z cytatami potwierdzonymi kodem, ile odrzucono za cytat spoza tekstu). |
+| `_oceny(dane, ile)` *(wewn.)* | Oceny w kolejnosci par. Rzuca `ValueError`, gdy odpowiedz jest bezuzyteczna: brak listy `pairs`, |
+| `_potwierdz(conn, run_id, tekst, znalezione, dowod, dzis)` *(wewn.)* | (oceny w kolejnosci znalezisk, kto ocenial: „opus” albo „zapas”). Rzuca, gdy zawiodly oba. |
+| `sprawdz(conn, run_id, tekst, dowod)` | Wynik sprawdzenia `tekst` wobec dziennika. NIGDY nie rzuca, poza stanem konta (`PRZERYWAJA`). |
+| `jako_zarzuty(sprzecznosci)` | Sprzecznosci w ksztalcie zarzutow sprawdzenia faktow — material dla `stages.napraw_obalone`. |
+| `skrot(sp)` | Zapis do dziennika (`fc.spojnosc`): liczby i znaczniki plus, gdy cos znaleziono, krotkie |
+
 ### `zaklady.py` — księga zakładów — publiczne zgadywania z notek serii liczone i rozliczane: wyciąg po publikacji, sprawdzenie wyszukiwarką (rozstrzygnięcie tylko z adresem z wyszukiwania), notka rozliczająca w kolejce serii, trafienia z przedziałem Wilsona i wynik Briera
 
 689 wierszy, 32 funkcji na poziomie modułu, 0 klas
@@ -1156,7 +1177,7 @@
 
 ### `co_dziala.py` — co działa — statystyki NIE jako produktu: formaty notek, wymiary (kąt, długość, pora, model...), eksperymenty także po seriach, koszt tematu i notki, sprawdzenie faktów, potok, wzrost, zakłady i czujnik; werdykt tylko z przedziałem 95%, grupa poniżej progu to „za mało danych”
 
-856 wierszy, 39 funkcji na poziomie modułu, 0 klas
+857 wierszy, 39 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|

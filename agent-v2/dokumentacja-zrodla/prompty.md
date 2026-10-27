@@ -399,6 +399,26 @@
 {{"topics": [<topic objects>], "ranking": {{"most_written_about": [<3 zero-based indices>], "least_written_about": [<3 zero-based indices>], "richest": [<3 zero-based indices>], "thinnest": [<3 zero-based indices>]}}}}
 ```
 
+#### `spojnosc.md` (37 wierszy)
+
+**Pola wejściowe:** `dzis`, `maks`, `nowa`, `wczesniejsze`
+
+**Kontrakt wyjścia:**
+
+```json
+{{"findings": [{{"id": "E3", "new_quote": "...", "earlier_quote": "...", "why": "..."}}]}}
+```
+
+#### `spojnosc_potwierdz.md` (32 wierszy)
+
+**Pola wejściowe:** `dowod`, `dzis`, `nowa`, `pary`
+
+**Kontrakt wyjścia:**
+
+```json
+{{"pairs": [{{"n": 1, "verdict": "CONTRADICTION|UPDATE|CONSISTENT", "supported_by": "NEW|EARLIER|NEITHER", "why": "<one clause>"}}]}}
+```
+
 #### `synteza.md` (128 wierszy)
 
 **Pola wejściowe:** `evidence_json`, `max_claim_chars`, `max_confirmed`, `max_contradictions`, `max_numbers`, `max_uncertain`, `min_confirmed`, `min_numbers`, `question`, `tryb_sledczy`

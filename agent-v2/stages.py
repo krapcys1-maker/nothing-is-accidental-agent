@@ -4394,8 +4394,13 @@ def note(
     bez_rozbioru: bool = False,
     pierwsze_zdanie: str = "",
     gotowy_tekst: str = "",
+    sprawdz_spojnosc: bool = False,
 ) -> dict[str, Any]:
     """Jedna notka danego typu i danej FORMY — do szuflady.
+
+    `sprawdz_spojnosc` (27.10.2026, `spojnosc.py`): notka serii jest po sprawdzeniu faktow porownana
+    z naszymi opublikowanymi z ostatnich 21 dni; potwierdzona sprzecznosc idzie do tej samej naprawy
+    co obalony fakt. Podaje je `notki_dnia` TYLKO notkom z przeslania (seria, rozkmina).
 
     `gotowy_tekst` (25.10.2026, seria lekka — `sledztwo.seria_lekka`): notka napisana
     wczesniej, razem z cala seria, jednym wywolaniem. Omija pisarza (bez wywolania modelu),
@@ -4870,6 +4875,23 @@ def note(
         sufiks = ogon if (ogon and text.endswith(ogon)) else ""
         proza = text[: -len(sufiks)] if sufiks else text
 
+        # SPOJNOSC Z NASZYMI OPUBLIKOWANYMI (27.10.2026, `spojnosc.py`) — tylko notki z przeslania.
+        # Pytamy DZIENNIKA, nie sieci: notka z kolejki mogla powstac, zanim wyszly te, ktorym przeczy.
+        # Nie jest to bramka: potwierdzona sprzecznosc dolacza do zarzutow naprawy ponizej.
+        spojnosc: dict[str, Any] | None = None
+        if sprawdz_spojnosc and note_type != "MYSL":
+            import spojnosc as _spojnosc
+            spojnosc = _spojnosc.sprawdz(conn, run_id, proza, _spojnosc.material_z_audytu(audyt, kontekst))
+            data["spojnosc"] = spojnosc
+        zarzuty_spojnosci = (_spojnosc.jako_zarzuty(spojnosc["sprzecznosci"])
+                             if spojnosc and spojnosc.get("sprzecznosci") else [])
+        zarzuty_sieci = [c for c in (audyt.get("zarzuty") or [])
+                         if _status_twierdzenia(c) in ("refuted", "outdated")]
+        audyt_do_naprawy = audyt
+        if zarzuty_spojnosci:
+            audyt_do_naprawy = dict(audyt, zarzuty=list(audyt.get("zarzuty") or []) + zarzuty_spojnosci)
+            spojnosc["do_naprawy"] = len(zarzuty_spojnosci)
+
         # NAPRAWA POMIJA MYSL — Q4 z audytu, potwierdzone u nas.
         #
         # `weryfikacja.md` kaze oznaczyc KAZDA liczbe w MYSL jako `refuted`, bo
@@ -4882,7 +4904,7 @@ def note(
         # Wlasciwa reakcja to przepisanie bez liczby, czego `naprawa.md` wprost
         # zabrania. Wiec nie naprawiamy — zastrzezenie zostaje w logu.
         poprawka = None if note_type == "MYSL" else napraw_obalone(
-            conn, run_id, proza, audyt,
+            conn, run_id, proza, audyt_do_naprawy,
             kontekst=kontekst,
             min_slow=_min_slow,
             max_slow=_maks_slow,
@@ -4894,6 +4916,47 @@ def note(
                                                                     ze_wszystkimi=True))}
                if twierdzenia_kata else {}),
         )
+        if poprawka and zarzuty_spojnosci:
+            # NAPRAWA SPRZECZNOSCI JEST SPRAWDZANA TAK SAMO JAK NAPRAWA FAKTU: nowy tekst to swieze
+            # wyjscie modelu.
+            #
+            # 1. TEKST CZYSTY W SIECI NIE MOZE ZOSTAC ZAMIENIONY NA OBALONY. `napraw_obalone` przyjmuje
+            # naprawe mimo nowych zarzutow, bo zaklada, ze oryginal byl obalony w sieci („tekst i tak lepszy
+            # od obalonego oryginalu”) — a przy samej sprzecznosci z dziennikiem oryginal obalony NIE byl
+            # (przeglad 27.10: swieza, poprawna wartosc przepisana na przestarzala). Gdy siec obala
+            # naprawiony tekst albo nie dala rady go sprawdzic, a oryginal nie mial zarzutow z sieci,
+            # wychodzi oryginal.
+            # 2. Stoi dalej jakakolwiek potwierdzona sprzecznosc, a naprawa nie poprawiala faktu z sieci —
+            # wychodzi oryginal (naprawa tylko przemieszczala wade); gdy poprawiala tez obalony fakt, zostaje,
+            # bo falsz z sieci jest gorszy, a zapis mowi, co stoi.
+            audyt_po = poprawka.get("audyt") or {}
+            siec_zla = [c for c in (audyt_po.get("zarzuty") or [])
+                        if _status_twierdzenia(c) in ("refuted", "outdated")]
+            if not zarzuty_sieci and (siec_zla or audyt_po.get("nie_sprawdzone")):
+                spojnosc["stoi"] = spojnosc["naprawa_odrzucona"] = True
+                spojnosc["powod_odrzucenia"] = "siec" if siec_zla else "siec_nie_sprawdzona"
+                print("    [spojnosc] naprawa ODRZUCONA: %s — zostaje oryginal, czysty w sieci"
+                      % ("siec obala naprawiony tekst" if siec_zla else "naprawy nie udalo sie sprawdzic w sieci"),
+                      flush=True)
+                poprawka = None
+            else:
+                ponownie = _spojnosc.sprawdz(conn, run_id, poprawka["tekst"],
+                                             _spojnosc.material_z_audytu(audyt_po, kontekst))
+                if ponownie.get("sprzecznosci"):
+                    if zarzuty_sieci:
+                        spojnosc["stoi"] = True
+                        print("    [spojnosc] naprawa zostaje (poprawia tez fakt), ale sprzecznosc stoi dalej",
+                              flush=True)
+                    else:
+                        spojnosc["stoi"] = spojnosc["naprawa_odrzucona"] = True
+                        spojnosc["powod_odrzucenia"] = "dziennik"
+                        print("    [spojnosc] naprawa ODRZUCONA: sprzecznosc stoi dalej — zostaje oryginal",
+                              flush=True)
+                        poprawka = None
+                else:
+                    spojnosc["naprawiona"] = ponownie.get("stan") != "nie_sprawdzone"
+        elif spojnosc and spojnosc.get("sprzecznosci"):
+            spojnosc["stoi"] = True        # naprawy nie bylo (sufit, wylaczona, model nie zmienil tekstu)
         if poprawka:
             # Zapis trzyma OBIE wersje. Bez tego nie da sie pozniej sprawdzic,
             # czy naprawy poprawiaja, czy tylko przemieszczaja falsz.
@@ -6399,7 +6462,7 @@ def notki_dnia(
             # wobec twierdzen — notka serii idzie jak kazda inna, a jedynym sprawdzeniem jest
             # sprawdzenie faktow w sieci z naprawa obalonego zdania (`zweryfikuj`). Fakty o TEJ
             # sprawie maja stac na karcie, reszta to wiedza i osad modelu.
-            _bramki = {"bez_rozbioru": True}
+            _bramki = {"bez_rozbioru": True, "sprawdz_spojnosc": True}
             if _przes.get("gotowy_tekst"):
                 _bramki["gotowy_tekst"] = _przes["gotowy_tekst"]
         elif typ == "MYSL":
@@ -7508,13 +7571,26 @@ def skrot_weryfikacji(kandydat: dict[str, Any]) -> dict[str, Any]:
         naprawa = kandydat.get("naprawa") or {}
         statusy = [_status_twierdzenia(c) for c in (audyt.get("claims") or []) if isinstance(c, dict)]
         w_tekscie = sum(1 for s in statusy if s in ("refuted", "outdated"))
-        return {"twierdzen": len(statusy),
-                "obalonych": int(naprawa["obalonych_przed"]) if naprawa and "obalonych_przed" in naprawa else w_tekscie,
-                "obalonych_po": w_tekscie,
-                "niepotwierdzonych": sum(1 for s in statusy if s == "unverified"),
-                "naprawiona": bool(naprawa),
-                "zastrzezenia": not audyt.get("safe_to_post", True),
-                "nie_sprawdzone": bool(audyt.get("nie_sprawdzone") or audyt.get("bez_json"))}
+        sp = kandydat.get("spojnosc")
+        obalonych = int(naprawa["obalonych_przed"]) if naprawa and "obalonych_przed" in naprawa else w_tekscie
+        do_sp = int(sp.get("do_naprawy") or 0) if isinstance(sp, dict) and naprawa else 0
+        if naprawa and "obalonych_przed" in naprawa:
+            # Naprawa liczyla razem zarzuty z sieci i sprzecznosci z dziennikiem; `obalonych` zostaje
+            # miara FAKTOW (statystyki `co_dziala` liczą z niej, jak czesto sieć obala nasz tekst).
+            obalonych = max(0, obalonych - do_sp)
+        out = {"twierdzen": len(statusy),
+               "obalonych": obalonych,
+               "obalonych_po": w_tekscie,
+               "niepotwierdzonych": sum(1 for s in statusy if s == "unverified"),
+               # Naprawa SAMEJ sprzecznosci z dziennikiem nie jest naprawa faktu: `co_dziala` liczy
+               # „naprawionych” jako podzbior „z obalonym”, a ona ma wlasne pole `spojnosc.naprawiona`.
+               "naprawiona": bool(naprawa) and not (do_sp and obalonych == 0),
+               "zastrzezenia": not audyt.get("safe_to_post", True),
+               "nie_sprawdzone": bool(audyt.get("nie_sprawdzone") or audyt.get("bez_json"))}
+        if isinstance(sp, dict) and sp:
+            import spojnosc as _spojnosc
+            out["spojnosc"] = _spojnosc.skrot(sp)
+        return out
     except Exception:                                           # noqa: BLE001
         return {}
 

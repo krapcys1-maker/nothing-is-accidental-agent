@@ -509,6 +509,12 @@ MODEL_FOR = {
     # z ostatnimi 14 dniami — praca na gotowych zdaniach, bez rozumowania.
     "naglowek_naprawa": DEEPSEEK,
     "ten_sam_punkt": DEEPSEEK,
+    # SPOJNOSC NOTKI SERII Z TYM, CO JUZ WYSZLO (27.10.2026, `spojnosc.py`): Flash z myslenie szuka sprzecznosci
+    # miedzy nowa notka a naszymi opublikowanymi z ostatnich 21 dni; Opus 5.5 potwierdza tylko to, co Flash
+    # wskazal (cytaty sprawdza kod), a przy odmowie Opusa (klasyfikatory „cyber") robi to Flash z myslenie.
+    "spojnosc": DEEPSEEK,
+    "spojnosc_potwierdz": CLAUDE,
+    "spojnosc_potwierdz_zapas": DEEPSEEK,
     # NOTKI SERII Z KATOW FAKTOW TEZ PISZE OPUS 5.5 (decyzja D1 kontraktu,
     # 25.10.2026). Spec chciala tu Flasha z rozumowaniem, ale reczne czytanie prob
     # z 25.10 pokazalo, ze Flash bez rozumowania mial bledy wiernosci, ktorych
@@ -574,6 +580,9 @@ DEEPSEEK_EFFORT_FOR: dict[str, str] = {
     # zamiast 0,012-0,016). Bez rozumowania trojka rozjechala sie calkiem
     # (0 wspolnych, 0,55) — dlatego `low`, nie wylaczenie.
     "bank": "low",
+    # SPOJNOSC (27.10.2026): porownanie notki z kilkunastoma innymi to rozumowanie, ale domyslna glebokosc
+    # Flasha to 10-26 tys. tokenow wyjscia (pomiar sedziego banku wyzej) — `low` trzyma koszt przy kilku groszach.
+    "spojnosc": "low", "spojnosc_potwierdz_zapas": "low",
 }
 
 # Pamiec brzmienia z juz potwierdzonych publikacji, bez dodatkowego modelu.
@@ -636,6 +645,10 @@ DEEPSEEK_MYSLENIE: dict[str, dict[str, str]] = {
     "investigation_document": {"type": "disabled"},
     "naglowek_naprawa": {"type": "disabled"},
     "ten_sam_punkt": {"type": "disabled"},
+    # Sprzecznosc to ROZUMOWANIE o dwoch tekstach, nie wyciaganie — wiec myslenie wlaczone.
+    "spojnosc": {"type": "enabled"},
+    "spojnosc_potwierdz": {"type": "enabled"},
+    "spojnosc_potwierdz_zapas": {"type": "enabled"},
     "wiernosc_notki": {"type": "disabled"},
     # Jak `naprawa` notek: trzeba zwazyc zdanie wobec dowodow.
     "naprawa_artykulu": {"type": "enabled"},
@@ -1726,6 +1739,7 @@ EFFORT = {
     "pytania_ciekawosci": "medium",
     # SLEDZTWO — FALA 1 (25.10.2026, kontrakt): starszy redaktor jak plan,
     "krytyk_sledztwa": "medium",
+    "spojnosc_potwierdz": "medium",
     # PONIZEJ: piec wpisow, ktore NIC NIE ROBIA — wszystkie te etapy chodza na
     # DeepSeeku, ktory tego pokretla nie czyta. Zostaja jako zapis intencji na
     # wypadek przepiecia etapu na Claude, i `llm.call` mowi raz na proces,
@@ -1856,6 +1870,11 @@ MAX_TOKENS = {
     "pytania_ciekawosci_zapas": 8000,
     "krytyk_sledztwa": 4000,
     "krytyk_sledztwa_zapas": 4000,
+    # Spojnosc: do trzech znalezisk po dwa cytaty i zdanie uzasadnienia (ok. 600 tokenow tresci),
+    # a rozumowanie ma osobno `THINKING_HEADROOM_TOKENS` doliczane nizej.
+    "spojnosc": 4000,
+    "spojnosc_potwierdz": 3000,
+    "spojnosc_potwierdz_zapas": 3000,
     # Do szesciu zdan, kazde jedno zdanie odpowiedzi.
     "naprawa_artykulu": 6000,
     # Trzy wnioski po kilka krotkich pol.
@@ -4007,6 +4026,18 @@ NAPRAWA_OBALONYCH = True
 # (przepisanie plus PONOWNE sprawdzenie), wiec bez sufitu zly dzien potrafi
 # dolozyc do rachunku wiecej niz caly etap, ktory naprawia.
 NAPRAW_NA_PRZEBIEG = 4
+
+# SPOJNOSC NOTKI SERII Z DZIENNIKIEM (27.10.2026, `spojnosc.py`, wlasciciel: „ok niech tak bedzie”).
+# Notki serii leza w kolejce kilka dni, a pisarz widzi tylko karte swojego sledztwa — nie to, co w tym czasie
+# wyszlo pod naszym nazwiskiem. 506-2 przeczyla 499-1 i 499-4, i nikt tego nie zlapal, bo sprawdzenie faktow
+# szuka w SIECI, nie w naszym dzienniku. Sprawdzenie dzieje sie przy publikacji, na aktualnym dzienniku.
+# To NIE jest bramka: potwierdzona sprzecznosc idzie do tej samej naprawy co obalony fakt (jedna proba,
+# ponowne sprawdzenie), a gdy naprawa sie nie uda, notka wychodzi, z zapisem w dzienniku.
+SPOJNOSC_Z_DZIENNIKIEM = True
+SPOJNOSC_OKNO_DNI = 21          # jak daleko wstecz szukamy naszych notek
+SPOJNOSC_KANDYDATOW = 12        # ile najbardziej powiazanych notek idzie do porownania
+SPOJNOSC_MIN_WSPOLNYCH = 3      # ile wspolnych slow tresci (liczba liczy sie za dwa), zeby notka byla kandydatem
+SPOJNOSC_MAKS_PAR = 3           # ile znalezisk bierze potwierdzenie
 
 # --- bramki jakości ----------------------------------------------------------
 # NIC NIE BLOKUJE. Bramki są zgłaszane właścicielowi jako uwagi do przeczytania;

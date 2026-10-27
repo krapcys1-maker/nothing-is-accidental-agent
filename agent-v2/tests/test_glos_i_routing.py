@@ -54,9 +54,16 @@ class VoiceRoutingTest(unittest.TestCase):
         # `notka_przeslania_fakt` — notka kata faktow od 25.10 wieczorem tez na Flashu z myslenie.
         self.assertEqual(config.MODEL_FOR["krytyk_sledztwa"], config.SONNET)
         self.assertEqual(config.MODEL_FOR["notka_przeslania_fakt"], config.DEEPSEEK)
+        # `spojnosc_potwierdz` — potwierdzenie sprzecznosci z dziennikiem na Opusie (27.10.2026, to osad:
+        # czy dwa zdania naprawde sie wykluczaja i ktora strone popiera material); wykrywanie i zapas
+        # (przy odmowie Opusa) ida na Flashu z myslenie.
+        self.assertEqual(config.MODEL_FOR["spojnosc_potwierdz"], config.CLAUDE)
+        self.assertEqual(config.MODEL_FOR["spojnosc"], config.DEEPSEEK)
+        self.assertEqual(config.MODEL_FOR["spojnosc_potwierdz_zapas"], config.DEEPSEEK)
         for purpose, model in config.MODEL_FOR.items():
             if purpose not in {"write", "obraz", "przeslania", "note_mimo",
-                               "restack_opus", "pytania_ciekawosci", "krytyk_sledztwa"}:
+                               "restack_opus", "pytania_ciekawosci", "krytyk_sledztwa",
+                               "spojnosc_potwierdz"}:
                 with self.subTest(purpose=purpose):
                     self.assertEqual(model, config.DEEPSEEK)
 

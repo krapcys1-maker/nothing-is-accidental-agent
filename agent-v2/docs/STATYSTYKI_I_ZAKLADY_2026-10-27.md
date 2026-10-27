@@ -206,6 +206,62 @@ przechodza 1-3 uwagi, wiec to sygnal rzadki, ale darmowy.
   zdaniu, i sprzecznosc 506-2 z naszymi opublikowanymi 499-1 i 499-4. Teksty przepisano recznie (zachowano glos i dlugosc), sprawdzilo je dwoch
   sceptykow na notke; oryginaly leza w polu `redakcja_reczna.oryginal` wpisu kolejki, kopia pliku w `data/przeslania.json.przed-redakcja-27-10`.
 
+## 5e. Spojnosc notki serii z naszymi opublikowanymi (27.10.2026 wieczorem, zgoda wlasciciela: „ok niech tak bedzie”)
+
+**Po co.** Notki serii leza w kolejce kilka dni, a pisarz widzi tylko karte swojego sledztwa. Sprawdzenie faktow szuka w SIECI, wiec tez nie widzi tego, co
+w miedzyczasie wyszlo pod naszym nazwiskiem. 506-2 przeczyla opublikowanym 499-1 i 499-4 i zadna bramka tego nie mogla zlapac. Nowy modul
+`agent-v2/spojnosc.py` pyta DZIENNIKA, w chwili publikacji, na aktualnym stanie. Wlaczone dla notek z przeslania (seria lekka, gleboki tor, rozkmina);
+zwykle notki z banku i MYSL jej nie dostaja (`stages.note(sprawdz_spojnosc=...)`, ustawia `notki_dnia`). Przelacznik `config.SPOJNOSC_Z_DZIENNIKIEM`.
+
+**Kolejnosc krokow, kazdy tanszy od nastepnego:**
+1. **Kod** wybiera z dziennika z ostatnich 21 dni udane notki powiazane z nowa (wspolne slowa tresci, wspolna liczba liczy sie za dwa, prog 3), najwyzej 12;
+   restacki, nieudane, duplikaty i ta sama tresc odpadaja. Dziennik czytany po `\n` i z `errors="replace"` (U+2028 w notce albo jeden zly bajt nie
+   wylaczaja sprawdzenia). Brak kandydatow = ZERO wywolan modelu.
+2. **Flash z myslenie** (`spojnosc`, wysilek `low`) wskazuje najwyzej 3 pary i CYTUJE obie strony. Odpowiedz bez listy `findings` to NIE „nic nie ma”, tylko brak
+   odpowiedzi (`nie_sprawdzone`); pusta lista jest uczciwym `czysto`. Powtorzona para zajmuje jedno miejsce.
+3. **Kod sprawdza cytaty doslownie** (wielkosc liter, cudzyslowy i spacje bez znaczenia, 3-40 slow). Cytat spoza tekstu zabija znalezisko PRZED platnym
+   potwierdzeniem — model, ktory wymysli sprzecznosc, jest tu zlapany bez kosztu.
+4. **Opus 5.5** (`spojnosc_potwierdz`) dostaje PELNE obie notki (bez uzasadnienia pierwszego czytelnika — zakotwiczenie), dzisiejsza date, material z jakiego
+   powstala nowa notka (rekord) i — na poczatku — to, co sprawdzenie w sieci powiedzialo o niej przed chwila; ocenia CONTRADICTION / UPDATE / CONSISTENT oraz
+   ktora strone popiera material (NEW / EARLIER / NEITHER). Fakt zmienny w czasie (liczba, cena, status) rozni sie od starszej notki = UPDATE, nie sprzecznosc.
+   Odpowiedz o zlym ksztalcie (brak `pairs`, para bez oceny, numeracja od zera, werdykt spoza trzech) = brak odpowiedzi. Przy odmowie Opusa (klasyfikatory „cyber”,
+   nasze historie bywaja o lukach), zlym JSON-ie, zlym ksztalcie albo awarii potwierdza Flash z myslenie (`spojnosc_potwierdz_zapas`); po PIERWSZEJ odmowie
+   kolejne potwierdzenia tego przebiegu ida od razu do zapasu. Gdy zawiodly oba, stan to `nie_sprawdzone`, nigdy `czysto`.
+
+**Co z wynikiem (nie jest bramka — decyzja wlasciciela, nic nie blokuje publikacji).**
+- CONTRADICTION i material popiera wczesniejsza notke albo nie rozstrzyga → zarzut `refuted` „nasza wlasna notka z <data> mowi: ...” idzie do TEJ SAMEJ naprawy co
+  obalony fakt (`stages.napraw_obalone`, jedna proba, wspolny sufit przebiegu, `naprawa.md`: popraw zdanie tak, zeby zgadzalo sie z tym, co juz wyszlo).
+- **Tekst czysty w sieci nie moze zostac zamieniony na obalony.** `napraw_obalone` przyjmuje naprawe mimo nowych zarzutow z sieci, bo zaklada, ze oryginal byl
+  obalony; przy samej sprzecznosci tak nie jest. Dlatego, gdy oryginal nie mial zarzutow z sieci, a siec obala naprawiony tekst albo nie dala rady go sprawdzic,
+  naprawa jest ODRZUCONA i wychodzi oryginal (`fc.spojnosc.powod_odrzucenia`: `siec` / `siec_nie_sprawdzona`).
+- Potem naprawiony tekst jest sprawdzany PONOWNIE wobec dziennika (Flash, Opus tylko jesli cos wskaze). Sprzecznosc stoi dalej i naprawa nie poprawiala faktu z sieci
+  → naprawa ODRZUCONA (`powod_odrzucenia`: `dziennik`), wychodzi oryginal. Poprawiala tez obalony fakt z sieci → zostaje (falsz z sieci jest gorszy), a zapis mowi, ze
+  sprzecznosc stoi.
+- CONTRADICTION, ale REKORD popiera NOWA notke → bez naprawy (nie przepisujemy tekstu wbrew zrodlom), tylko zapis `nowa_lepsza`. To bylaby kandydatka do
+  sprostowania wczesniejszej notki — swiadomie poza ta zmiana.
+- UPDATE i CONSISTENT → `czysto`.
+
+**Zapis.** `fc.spojnosc` w dzienniku notek serii: `stan` (wylaczone / brak_kandydatow / czysto / nowa_lepsza / sprzecznosc / nie_sprawdzone), liczba kandydatow,
+znalezisk i sprzecznosci, `naprawiona`, `stoi`, `naprawa_odrzucona`, `powod_odrzucenia`, kto potwierdzil oraz — gdy cos znaleziono — `szczegoly` (do trzech cytatow
+po 160 znakow: co sie zderzylo, z notka z jakiego dnia, i czy materialem wygral nowy czy stary). `fc.obalonych` zostaje miara FAKTOW z sieci, a `fc.naprawiona` NIE
+liczy naprawy samej sprzecznosci (ta ma `fc.spojnosc.naprawiona`) — `co_dziala` liczy „naprawionych” jako podzbior „z obalonym”.
+
+**Koszt (oszacowany z ksiegi, NIE zmierzony na produkcji — pierwsze przebiegi dadza liczby).** Flash z myslenie (`low`; domyslna glebokosc to 10-26 tys. tokenow
+wyjscia, `low` ok. polowy) rzedu 0,003-0,01 USD na sprawdzenie; Opus 5.5 ok. 0,05 USD tylko gdy cytaty przejda krok 3. Najgorszy przypadek na jedna notke (cytaty OK,
+Opus odmawia, naprawa, ponowne sprawdzenia): ok. 9 platnych wywolan, z czego tylko Flash i jedna naprawa to realny koszt, a odmowy Opusa ksieguja sie po 0 USD.
+Do 90 notek serii miesiecznie: rzad 0,3-1 USD (Flash) plus Opus przy kilku przypadkach. Etapy ida do grupy kosztu „sprawdzenie faktow i naprawa” w `co_dziala`.
+
+**Czego to NIE lapie.** (a) Bledu rozumowania w obrebie jednej notki (prawdziwe fakty, zly wniosek — 506-3). (b) Sprzecznosci z notka spoza okna kandydatow
+(starszej niz 21 dni albo o innym temacie slowami; prog to wspolne slowa i liczby, nie znaczenie). (c) Sprzecznosci z naszymi ARTYKULAMI (dziennik trzyma tylko
+tytul). (d) Sprzecznosci miedzy dwiema notkami z tej samej, jeszcze niewydanej serii — pierwsza wydana staje sie punktem odniesienia dla nastepnych. (e) Gdy
+nowa notka ma racje, a wczesniejsza byla bledna — tylko zapis, bez sprostowania. (f) Naprawa SAMEGO faktu z sieci (bez sprzecznosci w oryginale) nie jest
+ponownie porownywana z dziennikiem, wiec `fc.spojnosc.stan` opisuje tekst sprzed tej naprawy. (g) Ponowne sprawdzenie po naprawie to swieze, losowe wykrycie:
+potwierdzona KAZDA pozostala sprzecznosc (takze inna niz pierwotna) odrzuca naprawe, co moze zostawic oryginal ze sprzecznoscia — skutek lagodny (to samo, co brak sprawdzenia).
+
+**Testy.** `tests/test_spojnosc.py` (135 asercji, bez sieci), 99 mutantow (`robocze/mutacje_spojnosc.py`, poza repozytorium): 98 zabitych, 1 rownowazny (jawne sprawdzenie
+„`pairs` jest lista” dubluje „kazda para ma ocene”). Przeglad niezalezny 27.10 (6 kierunkow, 34 znaleziska, 16 zweryfikowanych sceptykami) znalazl m.in. odpowiedzi o zlym
+ksztalcie liczone jako `czysto`, naprawe przyjmowana mimo ze siec obala nowy tekst, czerwony `tests/test_glos_i_routing.py` i zaniezony koszt myslenia Flasha — wszystko poprawione.
+
 ## 6. Pliki
 
 - `agent-v2/zaklady.py`, `agent-v2/co_dziala.py`; prompty `agent-v2/prompts/zaklady_*.md`; budowniczowie w `stages.py`
