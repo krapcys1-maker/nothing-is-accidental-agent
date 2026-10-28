@@ -127,6 +127,8 @@ def runda(ile, nadwyzka_, odwiedzone, przydzial_notki=2):
           "kanal": SimpleNamespace(notki_z_kanalu=lambda: [dict(n) for n in NOTKI], szukaj_nowych=lambda: []),
           "_sito_celow": lambda kanal, cele, limit, notki: cele,
           "_zywe_najpierw": lambda kanal, cele: cele,
+          "_wedlug_odpowiadalnosci": lambda kanal, cele, notki: cele,
+          "dane_maniery": lambda cel, tekst, dzien=None: {},
           "limit_autorow": SimpleNamespace(odsiej=lambda c: c, zapisz=lambda c: None),
           "stages": SimpleNamespace(
               wybierz_cele=lambda conn, run_id, cele: cele,

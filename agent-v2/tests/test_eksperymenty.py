@@ -221,11 +221,13 @@ sprawdz("E10 zatwierdzone przez wlasciciela 27.09: wniosek 70/30, 28.09-25.10 (b
         config.EKSPERYMENTY.get("wniosek") == {"udzial": 0.7, "od": "2026-09-28", "do": "2026-10-25"},
         config.EKSPERYMENTY)
 sprawdz("E11 na polecenie wlasciciela 28.09: pisarz MiMo 50/50, to samo okno; obok tylko E12-E18"
-        " zatwierdzone tego samego dnia i E22 (dlugosc serii, 27.10; okna pilnuje test_eksperymenty_e12_e20)",
+        " zatwierdzone tego samego dnia, E22 (dlugosc serii, 27.10) i E23 (maniera komentarza, 28.10;"
+        " okna pilnuje test_eksperymenty_e12_e20 i test_maniera_komentarza)",
         config.EKSPERYMENTY.get("pisarz") == {"udzial": 0.5, "od": "2026-09-28", "do": "2026-10-25"}
         and set(config.EKSPERYMENTY) == {"wniosek", "pisarz", "restacki_norma", "pisarz_restackow",
                                          "cel_komentarza", "swiezosc_celu", "pora_notki",
-                                         "krotka_notka", "pytanie_na_koncu", "pamiec_rozmowcy", "dlugosc_serii"},
+                                         "krotka_notka", "pytanie_na_koncu", "pamiec_rozmowcy", "dlugosc_serii",
+                                         "maniera_komentarza"},
         config.EKSPERYMENTY)
 # NIEZALEZNE LOSOWANIE: ramiona E10 i E11 w tych samych slotach nie moga sie
 # pokrywac systematycznie (osobny klucz = osobny hash), inaczej jeden

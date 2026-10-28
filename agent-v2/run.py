@@ -205,6 +205,12 @@ def _zywe_najpierw(kanal: Any, cele: list) -> list:
     return f(cele) if callable(f) else cele
 
 
+def _wedlug_odpowiadalnosci(kanal: Any, cele: list, notki: bool) -> list:
+    """`kanal.wedlug_odpowiadalnosci` — atrapa bez tej funkcji zostawia kolejnosc (i nie dotyka sieci)."""
+    f = getattr(kanal, "wedlug_odpowiadalnosci", None)
+    return f(cele, notki) if callable(f) else cele
+
+
 def _ramie(nazwa: str, miejsce: Any, dzien: str | None = None) -> str:
     """Ramie eksperymentu z `stages.ramie` — a atrapa `stages` bez tej funkcji
     znaczy „eksperyment nie trwa".
@@ -342,7 +348,80 @@ def ramiona_komentarza(cel: dict, pod: str, e14: bool) -> dict[str, Any]:
     e21 = cel.get("_e21")
     if (e21 or {}).get("ramie"):
         ekspe["pamiec_rozmowcy"] = e21["ramie"]
-    return {"pod": pod, **pola_pamieci(e21), **({"eksperymenty": ekspe} if ekspe else {})}
+    # E23 — MANIERA KOMENTARZA: ramie w `eksperymenty`, reszta (pytanie, wpisy historii, pamiec rozmowcy
+    # wymuszona w ramieniu „on") jako pola obok, tylko gdy cel je ma.
+    if cel.get("_maniera"):
+        ekspe["maniera_komentarza"] = cel["_maniera"]
+    return {"pod": pod, **pola_pamieci(e21), **pola_maniery(cel), **pola_odpowiadalnosci(cel),
+            **({"eksperymenty": ekspe} if ekspe else {})}
+
+
+def pola_maniery(cel: dict) -> dict[str, Any]:
+    """Pola dziennika E23 poza ramieniem: pytanie na koncu (tak/nie), ile wpisow historii, pamiec rozmowcy."""
+    out: dict[str, Any] = {}
+    if "_maniera_pytanie" in cel:
+        out["maniera_pytanie"] = bool(cel["_maniera_pytanie"])
+    if "_historia_n" in cel:
+        out["historia_n"] = int(cel["_historia_n"] or 0)
+    if cel.get("_pamiec_b"):
+        out["pamiec_b_wymian"] = int(cel["_pamiec_b"])
+    return out
+
+
+def pola_odpowiadalnosci(cel: dict) -> dict[str, Any]:
+    """Pola dziennika: jak bardzo autor odpowiadal komentujacym, gdy wybieralismy cel (`odpowiadalnosc.py`)."""
+    try:
+        import odpowiadalnosc
+        return odpowiadalnosc.pola_dziennika(cel)
+    except Exception:                   # noqa: BLE001 — pole pomocnicze, nie wolno zatrzymac zapisu komentarza
+        return {}
+
+
+def dane_maniery(cel: dict, tekst_celu: str, dzien: str | None = None) -> dict[str, Any]:
+    """E23 (`maniera_komentarza`): ramie celu i to, co ramie „on" dopisuje do wywolania `comment_on`.
+
+    Ramie losuje `stages.ramie` po adresie celu (1:1, stale dla celu). Zapisuje je w `cel["_maniera"]`
+    (stad `ramiona_komentarza` bierze je do dziennika). W ramieniu „off" i poza eksperymentem oddaje {} —
+    `comment_on` pisze wtedy dokladnie jak dotad. W ramieniu „on" oddaje:
+      - `maniera`: "on" (wybiera `komentarz_b.md`),
+      - `pytanie`: czy TEN komentarz ma sie konczyc pytaniem (czestosc ustala kod, `MANIERA_PYTANIE_UDZIAL`),
+      - `historia`: blok „co to konto juz mowilo" z wlasnego dziennika (`historia_konta.blok`),
+      - `pamiec`: pamiec rozmowcy, gdy E21 jej nie dala (E21 skonczyl sie 27.10; ramie „on" ma ja zawsze).
+    Awaria historii lub pamieci nie zatrzymuje komentarza: piszemy bez niej.
+    """
+    klucz = cel.get("url") or cel.get("id") or ""
+    r = _ramie("maniera_komentarza", klucz, dzien)
+    cel["_maniera"] = r
+    if r != "on":
+        return {}
+    out: dict[str, Any] = {"maniera": "on"}
+    los = getattr(stages, "los_stale", None)
+    cel["_maniera_pytanie"] = bool(callable(los) and los("maniera_pytanie", klucz) < config.MANIERA_PYTANIE_UDZIAL)
+    out["pytanie"] = cel["_maniera_pytanie"]
+    try:
+        import historia_konta
+        blok, n = historia_konta.blok(tekst_celu)
+    except Exception as exc:            # noqa: BLE001
+        print("  [historia] nie zbudowalem (%s) — pisze bez niej" % type(exc).__name__, flush=True)
+        blok, n = "", 0
+    cel["_historia_n"] = n
+    if blok:
+        out["historia"] = blok
+    if not (cel.get("_e21") or {}).get("tekst") and cel.get("uchwyt"):
+        f = getattr(stages, "pamiec_rozmowcy", None)
+        if callable(f):
+            try:
+                pam = f(cel["uchwyt"]) or {}
+            except Exception as exc:    # noqa: BLE001
+                print("  [pamiec] nie zbudowalem (%s) — pisze bez niej" % type(exc).__name__, flush=True)
+                pam = {}
+            if pam.get("tekst"):
+                out["pamiec"] = pam["tekst"]
+                cel["_pamiec_b"] = int(pam.get("wymian") or 0)
+    print("  [maniera] E23 on — pytanie na koncu: %s, wpisow historii: %d%s"
+          % ("tak" if cel["_maniera_pytanie"] else "nie", n,
+             (", pamiec rozmowcy: %d" % cel["_pamiec_b"]) if cel.get("_pamiec_b") else ""), flush=True)
+    return out
 
 
 def ramiona_odpowiedzi(c: dict, e21: dict | None) -> dict[str, Any]:
@@ -2064,6 +2143,9 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
                   % (rundy, len(cele)), flush=True)
         # Rundy oceniaja partie osobno, wiec ten sam autor moze wrocic z dwoch.
         cele = limit_autorow.odsiej(cele)
+        # CZY AUTOR ODPOWIADA KOMENTUJACYM (28.10.2026, `odpowiadalnosc.py`): autorzy, ktorzy nikomu nie
+        # odpisuja, na koniec kolejki (nie wykluczeni; czesc bez kary).
+        cele = _wedlug_odpowiadalnosci(kanal, cele, notki=False)
 
         # E15 — swiezy cel na wylosowanych miejscach (`uloz_wedlug_swiezosci`).
         cele = uloz_wedlug_swiezosci(cele, "%s-artykuly" % run_id)
@@ -2094,7 +2176,9 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
             out = stages.comment_on(
                 conn, run_id,
                 {**strony[0], "co_dodamy": cel.get("co_dodamy", ""),
-                 "pamiec": cel["_e21"]["tekst"]})
+                 "pamiec": cel["_e21"]["tekst"],
+                 # E23 — MANIERA KOMENTARZA (`dane_maniery`): ramie po adresie celu.
+                 **dane_maniery(cel, "%s %s" % (strony[0].get("title", ""), strony[0].get("text", "")))})
             dobre = [k for k in out["candidates"]
                      if k.get("comment") and k.get("safe_to_post")]
             if not dobre:
@@ -2245,6 +2329,8 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
         # idzie tylko jako uzupelnienie. Zmierzone: NIA pisze pod notkami z
         # mediana 8 reakcji i 2 komentarzy (48% z reakcja), NIE pisala pod 3 i 0 (8%).
         cele = _zywe_najpierw(kanal, limit_autorow.odsiej(cele))
+        # CZY AUTOR ODPOWIADA KOMENTUJACYM (28.10.2026) — jak w bloku pod artykulami.
+        cele = _wedlug_odpowiadalnosci(kanal, cele, notki=True)
         # E15 — swiezy cel na wylosowanych miejscach (`uloz_wedlug_swiezosci`).
         cele = uloz_wedlug_swiezosci(cele, "%s-notki" % run_id)
         for cel in cele[:miejsca]:
@@ -2263,7 +2349,9 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
                 {"title": cel.get("tytul", ""), "text": cel.get("opis", ""),
                  "author": cel.get("pub", ""), "url": cel.get("url", ""),
                  "co_dodamy": cel.get("co_dodamy", ""),
-                 "pamiec": cel["_e21"]["tekst"]})
+                 "pamiec": cel["_e21"]["tekst"],
+                 # E23 — MANIERA KOMENTARZA (`dane_maniery`): ramie po adresie notki.
+                 **dane_maniery(cel, cel.get("opis", ""))})
             dobre = [k for k in out["candidates"]
                      if k.get("comment") and k.get("safe_to_post")]
             if not dobre:

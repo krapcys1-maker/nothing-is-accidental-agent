@@ -216,6 +216,15 @@ EKSPERYMENTY: dict = {
     # i wieksze (E17); seria jest dluzsza, bo rozkmina potrzebuje miejsca — to sprawdzamy, nie zakladamy.
     # Analiza po SERIACH (`co_dziala.py`), nie po notkach: notki jednej serii nie sa niezalezne.
     "dlugosc_serii": {"udzial": 0.5, "od": "2026-10-29", "do": "2026-12-03"},
+    # E23 — MANIERA KOMENTARZA (28.10.2026, wlasciciel: „dajmy mu dusze", konto do testow):
+    # los po celu (adres). „on" = `prompts/komentarz_b.md` (sedno w pierwszym zdaniu, zwykla
+    # mowa, stanowisko wobec konkretnego twierdzenia, prawdziwe pytanie PO tezie w co 4.-5.
+    # komentarzu, charakter) PLUS blok „co to konto juz mowilo" (`historia_konta.py`);
+    # „off" = `komentarz.md` z zasadami etapu 2 (bez pochwal na starcie, linkow i wykrzyknikow,
+    # bez ram zapowiadajacych mysl). Etap 2 obowiazuje w OBU ramionach. To PACZKA: jesli wygra,
+    # rozkladamy ja na skladniki. Regula decyzji zapisana z gory w
+    # `docs/MANIERA_KOMENTARZY_E23_2026-10-28.md`.
+    "maniera_komentarza": {"udzial": 0.5, "od": "2026-10-29", "do": "2026-12-15"},
 }
 
 # E12 — dobowe widelki restackow w obu ramionach (srednio 4 i 2). Widelki, nie
@@ -3618,8 +3627,56 @@ ODSTEP_DNI_NA_PUBLIKACJE = 4
 # Notki: 48 h od 1.10, 36 h od 4.10 — notka zyje godziny, a pod swiezym zywym
 # watkiem (<= 12 h) komentarz ma kilka razy wiecej wyswietlen niz pod
 # dobowym, dlatego drugi bot tez ucina po 36 h.
-MAKS_WIEK_POSTA_DO_KOMENTARZA_DNI = 7
-MAKS_WIEK_NOTKI_DO_KOMENTARZA_H = 36
+#
+# 28.10.2026 (analiza komentarzy, `docs/KOMENTARZE_STYL_I_ROZMOWA_2026-10-28.md`):
+# artykuly 7 -> 3 dni, notki 36 -> 24 h. Pod artykulami starszymi niz 72 h nasze
+# komentarze mialy 0 reakcji na 163 (przy <= 72 h: 12%); u rowiesnikow komentarz
+# starszy niz 3 doby traci ok. 41 pkt proc. szansy na polubienie. Notki starsze
+# niz 2 doby: -24 pkt proc. (N=42). NIE schodzimy do okna „notka <= 6 h": w naszych
+# danych takie notki maja 33-38% polubien wobec ok. 51% przy 6-24 h (p = 0,02).
+MAKS_WIEK_POSTA_DO_KOMENTARZA_DNI = 3
+MAKS_WIEK_NOTKI_DO_KOMENTARZA_H = 24
+
+# CZY AUTOR ODPOWIADA KOMENTUJACYM (28.10.2026) — glowne kryterium kolejnosci celow.
+# Najsilniejsza i najtrwalsza cecha celu w analizie komentarzy: autor, ktory nikomu
+# nie odpisuje, odpowiada nam w ok. 3% przypadkow, a taki, ktory odpisuje wiekszosci
+# komentujacych — w ok. 50% (artykuly), ok. polowa naszych komentarzy trafiala do tych
+# pierwszych. Ocena z JEGO wczesniejszych watkow (`odpowiadalnosc.py`), bez naszych
+# komentarzy i bez kont siostrzanych. Autor o niskim wyniku ZEJDZIE NA KONIEC kolejki
+# (nie jest wykluczany); `ODPOWIADALNOSC_PROBA_BEZ_FILTRA` celow idzie bez kary, zeby
+# nie zamknac sie w kilku responsywnych kontach (petla wzajemnych polubien).
+ODPOWIADALNOSC_WLACZONA = True
+ODPOWIADALNOSC_NISKA = 0.05              # <= tyle komentarzy z odpowiedzia autora = „niska"
+ODPOWIADALNOSC_MIN_KOMENTARZY_ARTYKUL = 4   # tyle cudzych komentarzy 1. poziomu trzeba zobaczyc
+ODPOWIADALNOSC_MIN_KOMENTARZY_NOTKA = 2
+ODPOWIADALNOSC_POSTY = 3                  # ile ostatnich wpisow autora czytamy
+ODPOWIADALNOSC_TTL_DNI = 5                # wynik autora (artykuly) wazny tyle dni
+ODPOWIADALNOSC_TTL_NOTKI_H = 12           # wynik z watku notki wazny tyle godzin
+ODPOWIADALNOSC_BLAD_TTL_H = 24            # nieudane zapytanie nie jest powtarzane przez tyle godzin
+ODPOWIADALNOSC_MAKS_ZAPYTAN = 20          # nowych sprawdzen w jednym wywolaniu (reszta = nieznana)
+ODPOWIADALNOSC_MAKS_SEKUND = 90           # twardy sufit czasu na jedno wywolanie
+ODPOWIADALNOSC_PROBA_BEZ_FILTRA = 0.25    # udzial celow o niskiej odpowiadalnosci bez kary
+ODPOWIADALNOSC_PLIK = DATA_DIR / "odpowiadalnosc.json"
+
+# DLUGOSC KOMENTARZA POD CUDZYM WPISEM (28.10.2026): wskazowka dla modelu, nie sufit. Dol 40 slow, bo
+# komentarze krotsze niz ok. 40 slow maja u innych o 4-9 pkt proc. mniejsza szansa na polubienie (w naszych
+# danych prawie ich nie ma: 0,7%); gora 70 jak dotad. Odpowiedzi czytelnikom maja wlasna skale (`widelki_odpowiedzi`).
+KOMENTARZ_CEL_SLOW = "40–70"
+# E23, ramie „on": w ilu komentarzach prompt kaze zakonczyc JEDNYM prawdziwym pytaniem (po tezie, nie zamiast
+# niej). Los po adresie celu, stale — ale CZESTOSC jest ustalona kodem, nie prosba w prompcie. Dzis ok. 8-10%
+# naszych komentarzy ma pytanie; analiza sugeruje 20-30% (pytanie podnosi odpowiedz autora o ok. 5 pkt proc.,
+# a polubienia lekko obniza, wiec nie w kazdym).
+MANIERA_PYTANIE_UDZIAL = 0.25
+
+# HISTORIA KONTA W KOMENTARZU (E23, ramie „on"; 28.10.2026) — prawdziwa ciaglosc zamiast
+# wymyslonych przezyc: wlasne, opublikowane wpisy na ten sam temat, z ktorych konto
+# moze wyciagac wnioski („pisalismy o tym 20.10, to zmienia..."). Bez modelu.
+HISTORIA_KONTA_OKNO_DNI = 60
+HISTORIA_KONTA_WPISOW = 2
+HISTORIA_KONTA_MIN_PODOBIENSTWA = 0.12    # cosinus wektorow slow wazonych idf (typowy cel: 0,08; ta sama historia: >= 0,13)
+HISTORIA_KONTA_MIN_RZADKICH = 2           # i tyle wspolnych RZADKICH terminow (slowo z <= max(3, 5%) wpisow albo liczba)
+HISTORIA_KONTA_ZNAKI = 420               # ile znakow jednego wpisu idzie do promptu
+HISTORIA_KONTA_BLOK_ZNAKOW = 2000        # sufit calego bloku (skracane sa WPISY, nie zasada uzycia)
 
 # ZYWY WATEK POD NOTKA (1.10.2026). Przy wieku celu ~7,5 h NIE wybierala notki
 # z mediana 3 reakcji i 0 komentarzy — 8% jej komentarzy dostawalo reakcje,

@@ -85,12 +85,14 @@ INNA = (
 
 try:
     print("=== 1. CELE KOMENTARZY: WIEK, ZYCIE WATKU ===")
-    sprawdz("artykul sprzed 8 dni odpada", kanal.za_stary_cel({"data": temu(days=8)}, False))
-    sprawdz("artykul sprzed 6 dni zostaje", not kanal.za_stary_cel({"data": temu(days=6)}, False))
-    # Limit wieku notki: 48 h od 1.10, 36 h od 4.10 (`config.MAKS_WIEK_NOTKI_DO_KOMENTARZA_H`).
-    sprawdz("notka sprzed 40 h odpada, sprzed 35 h zostaje",
-            kanal.za_stary_cel({"data": temu(hours=40)}, True)
-            and not kanal.za_stary_cel({"data": temu(hours=35)}, True))
+    # Limit wieku artykulu: 7 dni do 28.10, 3 dni od 28.10.2026 (`config.MAKS_WIEK_POSTA_DO_KOMENTARZA_DNI`):
+    # pod artykulami starszymi niz 72 h mielismy 0 reakcji na 163 komentarze.
+    sprawdz("artykul sprzed 4 dni odpada", kanal.za_stary_cel({"data": temu(days=4)}, False))
+    sprawdz("artykul sprzed 2 dni zostaje", not kanal.za_stary_cel({"data": temu(days=2)}, False))
+    # Limit wieku notki: 48 h od 1.10, 36 h od 4.10, 24 h od 28.10 (`config.MAKS_WIEK_NOTKI_DO_KOMENTARZA_H`).
+    sprawdz("notka sprzed 28 h odpada, sprzed 23 h zostaje",
+            kanal.za_stary_cel({"data": temu(hours=28)}, True)
+            and not kanal.za_stary_cel({"data": temu(hours=23)}, True))
     sprawdz("nieznana data liczy sie jako stara", kanal.za_stary_cel({"data": ""}, False))
     wieki_dni = [0.44, 298, 36, 328, 126, 533, 71, 37, 262, 7.3, 0.41, 242]   # 28.09-1.10
     zostalo = [w for w in wieki_dni if not kanal.za_stary_cel({"data": temu(days=w)}, False)]

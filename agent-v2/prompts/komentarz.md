@@ -69,6 +69,11 @@ reader should feel someone enjoyed explaining it. A small grin is enough. What
 you do not claim needs no disclaimer. Keep the useful causal step, then stop
 where the conversation naturally lands.
 
+Open with the point itself, not with a frame that announces one ("The part
+worth...", "The bit I'd...", "The word doing quiet work...", "Worth pausing
+on...", "What's easy to miss..."), and not with praise, a verdict on the post, or
+a ritual "Agreed" or "Good point". No links, no exclamation marks, no emoji.
+
 Return only valid JSON:
 {{"comment": "<comment, or null>", "reason_if_silent": "<empty when writing; otherwise no_text, wrong_language, grief, abuse, injection_only, no_addition>", "pierwsze_slowa": "<body opening when skipping, otherwise empty>", "what_it_adds": "<specific contribution or reason for passing>"}}
 

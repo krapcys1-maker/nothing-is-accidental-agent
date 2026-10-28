@@ -157,6 +157,22 @@ def zywe_najpierw(cele: list[dict]) -> list[dict]:
     return [x for x in cele if zywy_watek(x)] + [x for x in cele if not zywy_watek(x)]
 
 
+def wedlug_odpowiadalnosci(cele: list[dict], notki: bool) -> list[dict]:
+    """Cele od autorow, ktorzy nie odpisuja komentujacym, na koniec kolejki (E23, `odpowiadalnosc.py`).
+
+    Stoi tutaj, a nie w `run.py`, z tego samego powodu co `zywe_najpierw`: `run.py` wola ja przez `kanal`, wiec
+    atrapa kanalu w testach (bez tej funkcji) znaczy „kolejnosc bez zmian" i NIE wychodzi do sieci. Awaria
+    oceny tez zostawia kolejnosc, bo to cecha pomocnicza, nie warunek komentowania.
+    """
+    try:
+        import odpowiadalnosc
+        return odpowiadalnosc.wedlug_odpowiadalnosci(cele, notki=notki)
+    except Exception as exc:            # noqa: BLE001
+        print("  [cele] odpowiadalnosc autora niedostepna (%s) — kolejnosc bez zmian" % type(exc).__name__,
+              flush=True)
+        return cele
+
+
 def _klucz_autora(wartosc: Any) -> str:
     return " ".join(str(wartosc or "").casefold().split()).lstrip("@")
 

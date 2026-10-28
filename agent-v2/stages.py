@@ -216,7 +216,7 @@ def prompt_zakladu_notki(zaklad: str, wynik: str, dowod: str, opublikowano: str,
 
 def pamiec_glosu(prompt: str) -> str:
     """Kilka potwierdzonych wypowiedzi do unikania powtorek, bez wywolan API."""
-    rodzaje = {"komentarz.md": "komentarz", "odpowiedz.md": "odpowiedz",
+    rodzaje = {"komentarz.md": "komentarz", "komentarz_b.md": "komentarz", "odpowiedz.md": "odpowiedz",
                "restack.md": "restack"}
     # Notki maja juz pamiec otwarc, zakonczen i calych tekstow.
     # Naprawa koryguje gotowy tekst, wiec nie powinna zmieniac jego stylu.
@@ -274,7 +274,7 @@ def pamiec_glosu(prompt: str) -> str:
 # Nazwa pliku zachowana dla zgodnosci; glos obejmuje takze artykuly.
 Z_PO_LUDZKU = frozenset()  # legacy fragment no longer injected
 Z_GLOSEM_KROTKICH = frozenset({
-    "pisarz.md", "notka.md", "komentarz.md", "odpowiedz.md", "restack.md", "naprawa.md",
+    "pisarz.md", "notka.md", "komentarz.md", "komentarz_b.md", "odpowiedz.md", "restack.md", "naprawa.md",
     "seria_lekka.md",
 })
 
@@ -8225,6 +8225,61 @@ def pamiec_rozmowcy(uchwyt: str, teraz: Any = None) -> dict[str, Any]:
     return {"wymian": len(wpisy), "tekst": tekst[:PAMIEC_BLOK_ZNAKOW]}
 
 
+# E23 — reguly o pytaniu na koncu komentarza (ramie „on"); wchodza w miejsce znacznika `[[QUESTION_RULE]]`
+# w `prompts/komentarz_b.md`. Ktora z dwoch — decyduje kod (`config.MANIERA_PYTANIE_UDZIAL`), nie model.
+MANIERA_PYTANIE_TAK = (
+    "This time, end with one real question: something the author or a reader could settle in a sentence "
+    "or two, tied to a specific figure, term or step that the post leaves open. Put it AFTER your point, "
+    "never instead of it. One question, never a list, never rhetorical. If the post leaves nothing open "
+    "that you would genuinely like answered, end on the point instead.")
+MANIERA_PYTANIE_NIE = "This time, end on your point: don't finish with a question."
+
+
+def los_stale(nazwa: str, klucz: Any) -> float:
+    """Liczba z [0, 1) stala dla pary (nazwa, klucz) — ten sam cel zawsze dostaje to samo losowanie."""
+    return int(hashlib.sha256(("%s|%s" % (nazwa, klucz)).encode()).hexdigest()[:8], 16) / 0x100000000
+
+
+_PO_PRZYWITANIU = re.compile(
+    r"^\W*(great|good|nice|excellent|fair|sharp|brilliant|fantastic|amazing|interesting|love|loved|"
+    r"well said|spot on|thanks|thank you|this is (a )?(good|great|excellent|important|interesting)|"
+    r"agreed|exactly|absolutely|indeed|right|yes|true)\b[\s,.:;—–-]", re.IGNORECASE)
+_RAMY_OTWARCIA = (
+    re.compile(r"^\W*the (part|bit|word|thing|line|detail|piece|gap|catch)\b.{0,48}"
+               r"\b(worth|doing|i'd|i would|that i|nobody|everyone|most|isn't|is the|is what)\b", re.IGNORECASE),
+    re.compile(r"^\W*worth (pausing|noting|adding|saying|a second|reading|flagging|remembering)", re.IGNORECASE),
+    re.compile(r"^\W*what(?:'s| is) (easy|hard) to (miss|see)", re.IGNORECASE),
+    re.compile(r"^\W*(one thing|something) (i'd|worth|to) (add|note|flag|say)", re.IGNORECASE),
+    re.compile(r"^\W*what (stands out|surprises|catches|strikes) (me|is)", re.IGNORECASE),
+)
+_LINK = re.compile(r"https?://|\bwww\.|\b[a-z0-9-]+\.(?:com|org|net|io|ai|substack\.com)/", re.IGNORECASE)
+_EMOJI = re.compile("[\U0001F300-\U0001FAFF☀-➿]")
+
+
+def zasady_stylu(tekst: str) -> list[str]:
+    """Ktore z zasad stylu z 28.10.2026 komentarz lamie. Bez modelu; LOG, nie bramka.
+
+    `pochwala_na_start` (takze rytualne „Agreed"/„Right" na poczatku), `rama_otwarcia` (rama zapowiadajaca
+    mysl: „The part worth...", „Worth pausing on..."), `link`, `wykrzyknik`, `emoji`, `za_krotki` (< 35 slow).
+    Pusta lista = komentarz zgodny ze wszystkimi.
+    """
+    t = " ".join(str(tekst or "").split())
+    out = []
+    if _PO_PRZYWITANIU.search(t):
+        out.append("pochwala_na_start")
+    if any(r.search(t) for r in _RAMY_OTWARCIA):
+        out.append("rama_otwarcia")
+    if _LINK.search(t):
+        out.append("link")
+    if "!" in t:
+        out.append("wykrzyknik")
+    if _EMOJI.search(t):
+        out.append("emoji")
+    if t and len(t.split()) < 35:
+        out.append("za_krotki")
+    return out
+
+
 def comment_on(
     conn: sqlite3.Connection, run_id: int, post: dict[str, Any],
     fakty: list[dict[str, Any]] | None = None,
@@ -8290,19 +8345,43 @@ def comment_on(
     otwarcie = "Z_TRESCI"
     postawa = "Z_TRESCI"
     zajete_otwarcia = set(ostatnie_otwarcia("komentarz"))
-    prompt = _prompt(
-        "komentarz.md",
-        cel_slow="20–70",
-        language=config.ARTICLE_LANGUAGE,
-        author=post.get("author", ""),
-        title=post.get("title", ""),
-        body=post.get("text", "")[:12000],
-    )
+    # E23 — MANIERA KOMENTARZA (`maniera_komentarza`, 28.10.2026): ramie „on" pisze z `komentarz_b.md`
+    # (sedno w pierwszym zdaniu, zwykla mowa, stanowisko, charakter) i dostaje blok historii konta; ramie
+    # „off" — z `komentarz.md`. Decyduje `run.dane_maniery`; bez pola `maniera` wszystko jak dotad.
+    b = post.get("maniera") == "on"
+    # DWA WYWOLANIA Z NAZWA PLIKU WPROST, nie jedno z warunkiem w nazwie: `test_bariera_wstrzykniecia` ustala
+    # po nazwie, ktore pola promptu niosa cudza tresc, i nie rozumie nazwy liczonej w locie.
+    if b:
+        prompt = _prompt(
+            "komentarz_b.md",
+            cel_slow=config.KOMENTARZ_CEL_SLOW,
+            language=config.ARTICLE_LANGUAGE,
+            author=post.get("author", ""),
+            title=post.get("title", ""),
+            body=post.get("text", "")[:12000],
+        )
+        # CZESTOSC PYTANIA USTALA KOD, nie prosba o „mniej wiecej co czwarty" — model nie liczy swoich
+        # komentarzy. Regula stoi PRZED bariera danych (nasz tekst), wiec wchodzi przez znacznik, nie pole.
+        prompt = prompt.replace(
+            "[[QUESTION_RULE]]", MANIERA_PYTANIE_TAK if post.get("pytanie") else MANIERA_PYTANIE_NIE)
+    else:
+        prompt = _prompt(
+            "komentarz.md",
+            cel_slow=config.KOMENTARZ_CEL_SLOW,
+            language=config.ARTICLE_LANGUAGE,
+            author=post.get("author", ""),
+            title=post.get("title", ""),
+            body=post.get("text", "")[:12000],
+        )
     # E21 — PAMIEC ROZMOWCY (`pamiec_rozmowcy`): osobny blok PO tekscie autora,
     # nie w nim — to nasz wlasny zapis, nie czesc cudzego posta. Tylko w ramieniu
     # „on" (decyduje `run.pamiec_do_celu`).
     if post.get("pamiec"):
         prompt += "\n\n" + str(post["pamiec"])[:PAMIEC_BLOK_ZNAKOW]
+    # E23 — HISTORIA KONTA (`historia_konta.blok`): wlasne, opublikowane wpisy na ten temat. Tez NASZ zapis,
+    # wiec stoi PO tekscie autora, jak pamiec rozmowcy. Tylko w ramieniu „on".
+    if b and post.get("historia"):
+        prompt += "\n\n" + str(post["historia"])[:config.HISTORIA_KONTA_BLOK_ZNAKOW]
     candidates: list[dict[str, Any]] = []
     for i in range(config.COMMENT_CANDIDATES):
         try:
@@ -8391,6 +8470,13 @@ def comment_on(
             # LOG, NIE BRAMKA. Ta sama decyzja wlasciciela z 9 wrzesnia 2026.
             data["podloga"] = podloga
             print("    UWAGA: %s (komentarz i tak idzie)" % podloga, flush=True)
+        # ZASADY STYLU Z 28.10.2026 (pochwala na starcie, rama zapowiadajaca mysl, link, wykrzyknik, emoji,
+        # za krotki) — tez LOG: licza sie w wyniku (`zasady_stylu`), wiec widac, czy prompt ich slucha,
+        # a komentarz wychodzi taki, jaki napisal model. To jest tez test manipulacji dla E23.
+        naruszenia = zasady_stylu(text)
+        if naruszenia:
+            data["zasady_stylu"] = naruszenia
+            print("    UWAGA: zasady stylu: %s (komentarz i tak idzie)" % ", ".join(naruszenia), flush=True)
         # WYLACZNIK — patrz `config.SPRAWDZANIE_FAKTOW_KOMENTARZY` (decyzja
         # wlasciciela 28.09.2026). Zapory wyzej juz zadzialaly; znika tylko
         # platne sprawdzenie i naprawa. `nie_sprawdzone` JAWNIE, tak jak przy

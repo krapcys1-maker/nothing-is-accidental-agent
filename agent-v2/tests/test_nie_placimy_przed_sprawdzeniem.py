@@ -174,6 +174,7 @@ def ocenione_partie(druga, historia):
         # Sito wieku i autora (1.10.2026) — tu przezroczyste: test mierzy sita platne.
         _sito_celow=lambda kanal, cele, limit, notki: cele,
         _zywe_najpierw=lambda kanal, cele: cele,
+        _wedlug_odpowiadalnosci=lambda kanal, cele, notki: cele,
         limit_autorow=SimpleNamespace(odsiej=lambda cele: list(cele), zapisz=lambda x: None,
                                       wolno=lambda x: True),
     )
