@@ -230,11 +230,15 @@ def pamiec_glosu(prompt: str) -> str:
             f.seek(start)
             if start:
                 f.readline()  # pierwszy rekord moze byc uciety
-            linie = f.read().decode("utf-8", errors="replace").splitlines()
+            linie = f.read().decode("utf-8", errors="replace").split("\n")
     except OSError:
         return ""
     teksty: list[str] = []
     pytania: list[bool] = []
+    # E23: pamiec glosu NIE miesza ramion. Prompt B widzi tylko wlasne ostatnie komentarze (ramie „on"), prompt A —
+    # wszystkie poza ramieniem „on". Inaczej A widzialby brzmienie B i odwrotnie (przeciek miedzy ramionami, przeglad
+    # 28.10), a wpisy sprzed eksperymentu (bez pola ramienia) naleza do A.
+    ramie_promptu = {"komentarz_b.md": "on", "komentarz.md": "off"}.get(prompt)
     for linia in reversed(linie):
         try:
             w = json.loads(linia)
@@ -242,6 +246,10 @@ def pamiec_glosu(prompt: str) -> str:
             continue
         if not isinstance(w, dict) or w.get("rodzaj") != rodzaj or w.get("udane") is not True:
             continue
+        if ramie_promptu:
+            ich = (w.get("eksperymenty") or {}).get("maniera_komentarza") == "on"
+            if ich != (ramie_promptu == "on"):
+                continue
         tekst = w.get("tekst")
         if not isinstance(tekst, str) or not tekst.strip():
             continue
@@ -258,7 +266,9 @@ def pamiec_glosu(prompt: str) -> str:
     # pytan ani kolejny platny recenzent. Nie mieszamy kanalow i nie uczymy
     # glosu na szkicach, ktore nigdy nie zostaly opublikowane.
     rytm = ""
-    if len(pytania) >= 2 and all(pytania[:2]):
+    # W ramieniu B czestosc pytania ustala KOD (`MANIERA_PYTANIE_*`); „Delivery feedback" mowiacy co innego byl
+    # sprzecznym poleceniem w jednym prompcie.
+    if len(pytania) >= 2 and all(pytania[:2]) and prompt != "komentarz_b.md":
         rytm = ("## Delivery feedback\n"
                 "Your last two published contributions in this format contained "
                 "questions. Prefer a supported observation or a clear judgment "
@@ -992,6 +1002,13 @@ def reply_to(
                 data["zapora_wstrzykniecia"] = powod
                 print(f"  [odpowiedź {i + 1}] UWAGA: zapora wstrzykniecia widzi"
                       f" {powod[:70]} (odpowiedz i tak idzie)", flush=True)
+            # ZASADY STYLU Z 28.10.2026 w odpowiedziach (rytualna zgoda na starcie, rama, link, wykrzyknik, emoji):
+            # LOG, jak w komentarzu — bez „za_krotki" (krotka odpowiedz czytelnikowi jest w porzadku).
+            naruszenia = zasady_stylu(text, min_slow=0)
+            if naruszenia:
+                data["zasady_stylu"] = naruszenia
+                print(f"  [odpowiedź {i + 1}] UWAGA: zasady stylu: {', '.join(naruszenia)} (odpowiedz i tak idzie)",
+                      flush=True)
         print(
             f"  [odpowiedź {i + 1}] "
             + (f"{len(text.split())} słów [{data.get('kind')}] {text[:70]}"
@@ -8240,32 +8257,67 @@ def los_stale(nazwa: str, klucz: Any) -> float:
     return int(hashlib.sha256(("%s|%s" % (nazwa, klucz)).encode()).hexdigest()[:8], 16) / 0x100000000
 
 
+def ramie_stale(nazwa: str, klucz: Any, dzien: str | None = None) -> str:
+    """Jak `ramie`, ale BEZ daty w losowaniu: ten sam klucz zawsze to samo ramie, a okno dat nadal obowiazuje.
+
+    `ramie` miesza do hasza date UTC (`nazwa|dzien|miejsce`), wiec ten sam adres celu dostawal inne ramie innego
+    dnia (przeglad 28.10: ok. 49% adresow zmienia ramie miedzy kolejnymi dobami). Dla E23 to bylo by zrodlem
+    bledu: cel, z ktorego komentarz nie wyszedl w jednym ramieniu, wracal nastepnego dnia do drugiego.
+    Eksperymenty z planem kalendarzowym (`plan`) nie maja tu sensu i dostaja zwykle `ramie`.
+    """
+    okno = ramie(nazwa, klucz, dzien)
+    if not okno:
+        return ""
+    ustaw = (getattr(config, "EKSPERYMENTY", None) or {}).get(nazwa)
+    if isinstance(ustaw, dict) and ustaw.get("plan"):
+        return okno
+    udzial = float(ustaw.get("udzial", 0.5)) if isinstance(ustaw, dict) else float(ustaw)
+    return "on" if los_stale(nazwa, klucz) < udzial else "off"
+
+
+# POCHWALA / WERDYKT / RYTUALNA ZGODA na starcie. Dwie grupy, bo „Right now..." i „Exactly 3 of the 40..." to zwykle
+# zdania, a „Right, ..." i „Exactly." to rytualna zgoda: slowa niejednoznaczne licza sie TYLKO z interpunkcja po nich.
 _PO_PRZYWITANIU = re.compile(
-    r"^\W*(great|good|nice|excellent|fair|sharp|brilliant|fantastic|amazing|interesting|love|loved|"
-    r"well said|spot on|thanks|thank you|this is (a )?(good|great|excellent|important|interesting)|"
-    r"agreed|exactly|absolutely|indeed|right|yes|true)\b[\s,.:;—–-]", re.IGNORECASE)
+    r"^\W*(?:great (?:post|piece|point|read|article|work|thread)|good (?:point|push|call|catch|question|piece|read|one)|"
+    r"nice (?:post|piece|point|one|work)|excellent (?:post|piece|point|article)|fair (?:point|enough)|"
+    r"sharp (?:point|take|observation)|well said|spot on|thanks for|thank you|love this|loved this|"
+    r"brilliant (?:post|piece|point)|interesting (?:point|take|piece|post|read|article)|"
+    r"this is (?:a )?(?:good|great|excellent|important|interesting|fantastic) )", re.IGNORECASE)
+_RYTUALNA_ZGODA = re.compile(
+    r"^\W*(?:agreed|exactly|absolutely|indeed|right|yes|true|totally|definitely)\s*[,.:;!—–-]", re.IGNORECASE)
 _RAMY_OTWARCIA = (
-    re.compile(r"^\W*the (part|bit|word|thing|line|detail|piece|gap|catch)\b.{0,48}"
-               r"\b(worth|doing|i'd|i would|that i|nobody|everyone|most|isn't|is the|is what)\b", re.IGNORECASE),
-    re.compile(r"^\W*worth (pausing|noting|adding|saying|a second|reading|flagging|remembering)", re.IGNORECASE),
-    re.compile(r"^\W*what(?:'s| is) (easy|hard) to (miss|see)", re.IGNORECASE),
-    re.compile(r"^\W*(one thing|something) (i'd|worth|to) (add|note|flag|say)", re.IGNORECASE),
-    re.compile(r"^\W*what (stands out|surprises|catches|strikes) (me|is)", re.IGNORECASE),
+    re.compile(r"^\W*the (?:part|bit|piece|detail|line|word|thing|gap|catch)\b[^.?!]{0,40}?"
+               r"\b(?:worth (?:noting|flagging|pausing|adding|a second)|doing (?:the )?quiet work|i'd (?:add|flag|want|note|mark)|"
+               r"i would (?:add|flag|want|note)|most (?:people|readers) (?:skip|miss)|nobody (?:says|mentions|talks))", re.IGNORECASE),
+    re.compile(r"^\W*worth (?:pausing|noting|adding|saying|a second|reading|flagging|remembering)", re.IGNORECASE),
+    re.compile(r"^\W*what(?: is|'s) (?:easy|hard) to (?:miss|see)", re.IGNORECASE),
+    re.compile(r"^\W*(?:one thing|something) (?:i'd|worth|to) (?:add|note|flag|say)", re.IGNORECASE),
+    re.compile(r"^\W*what (?:stands out|surprises me|catches me|strikes me|surprised me)\b", re.IGNORECASE),
+    re.compile(r"^\W*(?:the interesting part|the real (?:question|issue|story)) is\b", re.IGNORECASE),
+    re.compile(r"^\W*it'?s worth (?:noting|saying|mentioning|flagging)\b", re.IGNORECASE),
 )
+# „We wrote/said/tried/tested..." — twierdzenie o NASZEJ przeszlosci. Z blokiem historii bywa prawdziwe (konto
+# naprawde to napisalo); bez niego (`historia_n` = 0) jest wymyslona ciaglosc. `_podloga_z_pamieci` lapie tylko „I ...",
+# wiec to jest osobna miara do testu manipulacji E23 — ocenia sie ja RAZEM z `historia_n`.
+_MY_W_PRZESZLOSCI = re.compile(
+    r"\b(?:as )?we (?:wrote|said|noted|argued|covered|reported|tried|tested|saw|ran|found|measured|talked to|asked|"
+    r"noticed|went through|checked|looked at)\b", re.IGNORECASE)
 _LINK = re.compile(r"https?://|\bwww\.|\b[a-z0-9-]+\.(?:com|org|net|io|ai|substack\.com)/", re.IGNORECASE)
 _EMOJI = re.compile("[\U0001F300-\U0001FAFF☀-➿]")
 
 
-def zasady_stylu(tekst: str) -> list[str]:
+def zasady_stylu(tekst: str, min_slow: int = 35) -> list[str]:
     """Ktore z zasad stylu z 28.10.2026 komentarz lamie. Bez modelu; LOG, nie bramka.
 
-    `pochwala_na_start` (takze rytualne „Agreed"/„Right" na poczatku), `rama_otwarcia` (rama zapowiadajaca
-    mysl: „The part worth...", „Worth pausing on..."), `link`, `wykrzyknik`, `emoji`, `za_krotki` (< 35 slow).
-    Pusta lista = komentarz zgodny ze wszystkimi.
+    `pochwala_na_start` (pochwala/werdykt albo rytualne „Agreed,"/„Right," na poczatku — NIE zwykle zdanie od
+    slowa „Right now..."), `rama_otwarcia` (rama zapowiadajaca mysl: „The part worth...", „Worth pausing on...",
+    „What surprised me..."), `link`, `wykrzyknik`, `emoji`, `za_krotki` (< `min_slow` slow; odpowiedzi czytelnikom
+    podaja 0, bo krotka odpowiedz jest tam w porzadku) oraz `my_w_przeszlosci` (twierdzenie „we wrote/tried/tested...";
+    patrz `_MY_W_PRZESZLOSCI`: oceniac razem z historia_n). Pusta lista = komentarz zgodny ze wszystkimi.
     """
-    t = " ".join(str(tekst or "").split())
+    t = " ".join(str(tekst or "").replace("’", "'").replace("‘", "'").split())
     out = []
-    if _PO_PRZYWITANIU.search(t):
+    if _PO_PRZYWITANIU.search(t) or _RYTUALNA_ZGODA.search(t):
         out.append("pochwala_na_start")
     if any(r.search(t) for r in _RAMY_OTWARCIA):
         out.append("rama_otwarcia")
@@ -8275,9 +8327,20 @@ def zasady_stylu(tekst: str) -> list[str]:
         out.append("wykrzyknik")
     if _EMOJI.search(t):
         out.append("emoji")
-    if t and len(t.split()) < 35:
+    if t and min_slow and len(t.split()) < min_slow:
         out.append("za_krotki")
+    if _MY_W_PRZESZLOSCI.search(t):
+        out.append("my_w_przeszlosci")
     return out
+
+
+# Cudzy tekst moze udawac nasze bloki danych (nazwa bloku z naszego promptu) i podszyc sie pod „zapis konta":
+# nazwy tych blokow zastepujemy w tytule, autorze i tresci celu. Blok historii i pamieci stoi PO tekscie celu.
+_PODROBIONE_BLOKI = re.compile(r"what this account has already said|earlier contact with this person", re.IGNORECASE)
+
+
+def _bez_podrobionych_blokow(tekst: Any) -> str:
+    return _PODROBIONE_BLOKI.sub("[removed]", str(tekst or ""))
 
 
 def comment_on(
@@ -8356,9 +8419,9 @@ def comment_on(
             "komentarz_b.md",
             cel_slow=config.KOMENTARZ_CEL_SLOW,
             language=config.ARTICLE_LANGUAGE,
-            author=post.get("author", ""),
-            title=post.get("title", ""),
-            body=post.get("text", "")[:12000],
+            author=_bez_podrobionych_blokow(post.get("author", "")),
+            title=_bez_podrobionych_blokow(post.get("title", "")),
+            body=_bez_podrobionych_blokow(post.get("text", "")[:12000]),
         )
         # CZESTOSC PYTANIA USTALA KOD, nie prosba o „mniej wiecej co czwarty" — model nie liczy swoich
         # komentarzy. Regula stoi PRZED bariera danych (nasz tekst), wiec wchodzi przez znacznik, nie pole.
@@ -8369,9 +8432,9 @@ def comment_on(
             "komentarz.md",
             cel_slow=config.KOMENTARZ_CEL_SLOW,
             language=config.ARTICLE_LANGUAGE,
-            author=post.get("author", ""),
-            title=post.get("title", ""),
-            body=post.get("text", "")[:12000],
+            author=_bez_podrobionych_blokow(post.get("author", "")),
+            title=_bez_podrobionych_blokow(post.get("title", "")),
+            body=_bez_podrobionych_blokow(post.get("text", "")[:12000]),
         )
     # E21 — PAMIEC ROZMOWCY (`pamiec_rozmowcy`): osobny blok PO tekscie autora,
     # nie w nim — to nasz wlasny zapis, nie czesc cudzego posta. Tylko w ramieniu

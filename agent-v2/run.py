@@ -211,6 +211,12 @@ def _wedlug_odpowiadalnosci(kanal: Any, cele: list, notki: bool) -> list:
     return f(cele, notki) if callable(f) else cele
 
 
+def _ramie_stale(nazwa: str, miejsce: Any, dzien: str | None = None) -> str:
+    """`stages.ramie_stale` (bez daty w losowaniu) — a atrapa `stages` bez niej schodzi do zwyklego `_ramie`."""
+    f = getattr(stages, "ramie_stale", None)
+    return f(nazwa, miejsce, dzien) if callable(f) else _ramie(nazwa, miejsce, dzien)
+
+
 def _ramie(nazwa: str, miejsce: Any, dzien: str | None = None) -> str:
     """Ramie eksperymentu z `stages.ramie` — a atrapa `stages` bez tej funkcji
     znaczy „eksperyment nie trwa".
@@ -365,7 +371,37 @@ def pola_maniery(cel: dict) -> dict[str, Any]:
         out["historia_n"] = int(cel["_historia_n"] or 0)
     if cel.get("_pamiec_b"):
         out["pamiec_b_wymian"] = int(cel["_pamiec_b"])
+    if cel.get("_historia_blad"):
+        out["historia_blad"] = True          # awaria budowy historii ≠ brak powiazanych wpisow (historia_n = 0)
+    # Oceny tekstu, ktory FAKTYCZNIE wyszedl (oba ramiona): zasady stylu i podloga wymyslonego przezycia. Dzieki nim
+    # test manipulacji E23 i stop bezpieczenstwa liczy sie z dziennika, nie z logu konsoli.
+    if cel.get("_zasady_stylu"):
+        out["zasady_stylu"] = [str(x) for x in cel["_zasady_stylu"]]
+    if cel.get("_podloga"):
+        out["podloga"] = str(cel["_podloga"])[:80]
     return out
+
+
+def zapisz_cisze(cel: dict, pod: str, out: dict, e14: bool) -> None:
+    """Slad celu, pod ktorym NIE powstal komentarz (cisza modelu albo zapora) — z ramieniem E23.
+
+    Bez tego ocena z dziennika to analiza tylko tych celow, z ktorych komentarz wyszedl, a ramiona moga rozni sie
+    czestoscia ciszy (prompt B ma ostrzejsza regule „bez wymyslania wady"). Osobny plik, nie dziennik: nowy
+    `rodzaj` w dzienniku moglby zmienic liczniki innych modulow. Awaria zapisu nie zatrzymuje przebiegu.
+    """
+    try:
+        from datetime import datetime, timezone
+        kand = out.get("candidates") or []
+        wpis = {"kiedy": datetime.now(timezone.utc).isoformat(), "pod": pod,
+                "gdzie": str(cel.get("url") or cel.get("id") or "")[:200],
+                "kandydatow": len(kand), "cisza": sum(1 for k in kand if not k.get("comment")),
+                "zapora": sum(1 for k in kand if k.get("comment") and not k.get("safe_to_post")),
+                "powody": [str(k.get("reason_if_silent") or "")[:40] for k in kand if not k.get("comment")],
+                **ramiona_komentarza(cel, pod, e14)}
+        with (config.DATA_DIR / "cele_bez_komentarza.jsonl").open("a", encoding="utf-8") as f:
+            f.write(json.dumps(wpis, ensure_ascii=True) + chr(10))
+    except Exception:                   # noqa: BLE001
+        pass
 
 
 def pola_odpowiadalnosci(cel: dict) -> dict[str, Any]:
@@ -390,9 +426,11 @@ def dane_maniery(cel: dict, tekst_celu: str, dzien: str | None = None) -> dict[s
     Awaria historii lub pamieci nie zatrzymuje komentarza: piszemy bez niej.
     """
     klucz = cel.get("url") or cel.get("id") or ""
-    r = _ramie("maniera_komentarza", klucz, dzien)
+    r = _ramie_stale("maniera_komentarza", klucz, dzien)
     cel["_maniera"] = r
     if r != "on":
+        if r == "off":
+            print("  [maniera] E23 off", flush=True)
         return {}
     out: dict[str, Any] = {"maniera": "on"}
     los = getattr(stages, "los_stale", None)
@@ -404,7 +442,9 @@ def dane_maniery(cel: dict, tekst_celu: str, dzien: str | None = None) -> dict[s
     except Exception as exc:            # noqa: BLE001
         print("  [historia] nie zbudowalem (%s) — pisze bez niej" % type(exc).__name__, flush=True)
         blok, n = "", 0
-    cel["_historia_n"] = n
+        cel["_historia_blad"] = True
+    if not cel.get("_historia_blad"):
+        cel["_historia_n"] = n
     if blok:
         out["historia"] = blok
     if not (cel.get("_e21") or {}).get("tekst") and cel.get("uchwyt"):
@@ -418,8 +458,8 @@ def dane_maniery(cel: dict, tekst_celu: str, dzien: str | None = None) -> dict[s
             if pam.get("tekst"):
                 out["pamiec"] = pam["tekst"]
                 cel["_pamiec_b"] = int(pam.get("wymian") or 0)
-    print("  [maniera] E23 on — pytanie na koncu: %s, wpisow historii: %d%s"
-          % ("tak" if cel["_maniera_pytanie"] else "nie", n,
+    print("  [maniera] E23 on — pytanie na koncu: %s, wpisow historii: %s%s"
+          % ("tak" if cel["_maniera_pytanie"] else "nie", "BLAD" if cel.get("_historia_blad") else n,
              (", pamiec rozmowcy: %d" % cel["_pamiec_b"]) if cel.get("_pamiec_b") else ""), flush=True)
     return out
 
@@ -2191,7 +2231,11 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
                 print("  CEL BEZ KOMENTARZA — %d z %d milczalo, %d zdjela zapora"
                       % (cisze, len(out["candidates"]),
                          len(out["candidates"]) - cisze), flush=True)
+                zapisz_cisze(cel, "artykul", out, przydzial["e14"])
                 continue
+            # Oceny tekstu, ktory wychodzi (zasady stylu, podloga), do dziennika razem z ramieniem — `pola_maniery`.
+            cel["_zasady_stylu"] = dobre[0].get("zasady_stylu") or []
+            cel["_podloga"] = dobre[0].get("podloga") or ""
             if wyslij:
                 if not rytm("komentarz", "komentarze", rytm_stanu):
                     return
@@ -2294,7 +2338,10 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
             {"id": x.get("id"), "tekst": x.get("opis") or x.get("tytul") or "",
              "autor": x.get("pub") or "", "reakcje": x.get("reakcje") or 0,
              "odpowiedzi": x.get("komentarze") or 0, "url": x.get("url") or "",
-             "data": x.get("data") or "", "skad": x.get("skad") or ""}
+             "data": x.get("data") or "", "skad": x.get("skad") or "",
+             # Wyszukiwarka oddaje uchwyt autora jako `uchwyt` (kanal ma `handle`); bez tego pamiec rozmowcy i `komu`
+             # w dzienniku byly puste dla notek z wyszukiwarki (przeglad 28.10).
+             "handle": x.get("uchwyt") or ""}
             for x in kanal.szukaj_nowych() if x.get("rodzaj") == "notka"]
         notki = [n for n in notki
                  if n.get("id") and str(n["id"]) not in odwiedzone_notki]
@@ -2360,7 +2407,10 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
                 print("  CEL BEZ KOMENTARZA — %d z %d milczalo, %d zdjela zapora"
                       % (cisze, len(out["candidates"]),
                          len(out["candidates"]) - cisze), flush=True)
+                zapisz_cisze(cel, "notka", out, przydzial["e14"])
                 continue
+            cel["_zasady_stylu"] = dobre[0].get("zasady_stylu") or []
+            cel["_podloga"] = dobre[0].get("podloga") or ""
             if wyslij:
                 if not rytm("komentarz", "dyskusje", rytm_stanu):
                     return

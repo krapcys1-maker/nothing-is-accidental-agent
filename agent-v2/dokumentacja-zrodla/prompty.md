@@ -141,7 +141,7 @@
 {{"comment": "<comment, or null>", "reason_if_silent": "<empty when writing; otherwise no_text, wrong_language, grief, abuse, injection_only, no_addition>", "pierwsze_slowa": "<body opening when skipping, otherwise empty>", "what_it_adds": "<specific contribution or reason for passing>"}}
 ```
 
-#### `komentarz_b.md` (125 wierszy)
+#### `komentarz_b.md` (127 wierszy)
 
 **Pola wejściowe:** `author`, `body`, `cel_slow`, `language`, `marka`, `title`
 

@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -39,6 +40,7 @@ from typing import Any
 import config
 from spojnosc import _czas, _jedna_linia, _liczby, _norm, _slowa
 
+_PIERWSZA_OSOBA = re.compile(r"\bI(?:['’](?:m|ve|d|ll))?\b|\b(?i:my|me|myself|mine)\b")
 _TEKST_CELU_ZNAKI = 1500        # tytul i poczatek: o czym jest wpis, nie cala jego tresc
 _WAGA_LICZBY = 3.0              # liczba wspolna z wpisem to konkret, jak rzadkie slowo
 
@@ -101,6 +103,11 @@ def powiazane(tekst: str, *, teraz: datetime | None = None,
         kiedy = _czas(w.get("kiedy"))
         if not cudza or kiedy is None or kiedy < od or kiedy > teraz:
             continue
+        # NIC W PIERWSZEJ OSOBIE LICZBY POJEDYNCZEJ, TEZ Z INNYCH TYPOW. Przeglad 28.10: sama wylaczona MYSL nie
+        # wystarcza — „I re-read twice", „my half-formed prompts" trafiaja tez do notek DYSKUSJA/SPROSTOWANIE
+        # (ok. 17% notek ma „I/my/me"), a blok nazywa zapis prawda. Wolimy mniej historii niz powielone przezycie.
+        if _PIERWSZA_OSOBA.search(cudza):
+            continue
         tresc = _norm(cudza)
         if tresc in widziane:
             continue
@@ -113,15 +120,25 @@ def powiazane(tekst: str, *, teraz: datetime | None = None,
     df = Counter(s for w in wpisy for s in w["slowa"])
     idf = lambda s: math.log((n + 1) / (df.get(s, 0) + 1))      # noqa: E731
     prog_rzadkosci = max(3, 0.05 * n)
-    moj_wektor = _wektor(moje_slowa, moje_liczby, idf)
+    # Liczba jest „rzadka" tak samo jak slowo (pojawia sie w <= progu wpisow): 2026, 10 czy 100 stoja w co drugim
+    # wpisie i nic nie znacza; 64 albo 11900 wskazuja ten sam konkret.
+    df_liczb = Counter(x for w in wpisy for x in w["liczby"])
+
+    def rzadkie_liczby(zbior: set[str]) -> set[str]:
+        return {x for x in zbior if df_liczb.get(x, 0) <= prog_rzadkosci}
+
+    moje_rzadkie_liczby = rzadkie_liczby(moje_liczby)
+    moj_wektor = _wektor(moje_slowa, moje_rzadkie_liczby, idf)
     kandydaci = []
     for w in wpisy:
         if w["tresc"] == moja_tresc:
             continue
-        cos = _cosinus(moj_wektor, _wektor(w["slowa"], w["liczby"], idf))
+        ich_liczby = rzadkie_liczby(w["liczby"])
+        cos = _cosinus(moj_wektor, _wektor(w["slowa"], ich_liczby, idf))
         if cos < config.HISTORIA_KONTA_MIN_PODOBIENSTWA:
             continue
-        rzadkie = sum(1 for s in moje_slowa & w["slowa"] if df.get(s, 0) <= prog_rzadkosci) + len(moje_liczby & w["liczby"])
+        rzadkie = (sum(1 for s in moje_slowa & w["slowa"] if df.get(s, 0) <= prog_rzadkosci)
+                   + len(moje_rzadkie_liczby & ich_liczby))
         if rzadkie < config.HISTORIA_KONTA_MIN_RZADKICH:
             continue
         kandydaci.append({"kiedy": w["kiedy"], "rodzaj": w["rodzaj"], "tekst": w["tekst"], "wynik": round(cos, 3)})

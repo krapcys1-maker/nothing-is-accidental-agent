@@ -58,9 +58,18 @@ def _pobierz(url: str) -> Any:
 
 def _czas(napis: Any) -> datetime | None:
     try:
-        return datetime.fromisoformat(str(napis).replace("Z", "+00:00"))
+        t = datetime.fromisoformat(str(napis).replace("Z", "+00:00"))
     except ValueError:
         return None
+    return t if t.tzinfo else t.replace(tzinfo=timezone.utc)
+
+
+def _dojrzaly(c: dict[str, Any], teraz: datetime | None, min_wiek_h: float) -> bool:
+    """Czy komentarz mial juz czas na odpowiedz autora. Bez daty (albo bez ograniczenia) — tak."""
+    if not min_wiek_h or teraz is None:
+        return True
+    t = _czas(c.get("date"))
+    return t is None or (teraz - t) >= timedelta(hours=min_wiek_h)
 
 
 def _wlasne_uchwyty() -> set[str]:
@@ -73,7 +82,8 @@ def _cudzy(c: dict[str, Any], uid_autorow: set[Any]) -> bool:
     uid = c.get("user_id")
     if c.get("deleted") or uid is None:
         return False
-    if uid in uid_autorow or uid in getattr(config, "KONTA_SIOSTRZANE", frozenset()):
+    if (uid in uid_autorow or uid in getattr(config, "KONTA_SIOSTRZANE", frozenset())
+            or uid in getattr(config, "KONTO_WLASNE_UID", frozenset())):
         return False
     if str((c.get("handle") or "")).lower().lstrip("@") in _wlasne_uchwyty():
         return False
@@ -85,11 +95,17 @@ def _od_autora(c: dict[str, Any], uid_autorow: set[Any]) -> bool:
             and (c.get("user_id") in uid_autorow or bool((c.get("metadata") or {}).get("is_author"))))
 
 
-def policz_artykul(komentarze: list[dict[str, Any]], uid_autorow: set[Any]) -> tuple[int, int]:
-    """(komentarze 1. poziomu od innych, z nich z BEZPOSREDNIA odpowiedzia autora)."""
+def policz_artykul(komentarze: list[dict[str, Any]], uid_autorow: set[Any], *,
+                   teraz: datetime | None = None, min_wiek_h: float = 0) -> tuple[int, int]:
+    """(komentarze 1. poziomu od innych, z nich z BEZPOSREDNIA odpowiedzia autora).
+
+    Z `teraz` i `min_wiek_h` liczy tylko komentarze starsze niz `min_wiek_h` godzin: autor, ktory jeszcze nie
+    zajrzal, nie jest autorem, ktory nie odpisuje (przeglad 28.10: bez tego 44% „niskich" z pierwszej godziny
+    watku bylo w pelnym watku „ok").
+    """
     ile = odp = 0
     for c in komentarze or []:
-        if not isinstance(c, dict) or not _cudzy(c, uid_autorow):
+        if not isinstance(c, dict) or not _cudzy(c, uid_autorow) or not _dojrzaly(c, teraz, min_wiek_h):
             continue
         ile += 1
         if any(isinstance(d, dict) and _od_autora(d, uid_autorow) for d in (c.get("children") or [])):
@@ -104,8 +120,13 @@ def _rozpakuj(x: Any) -> dict[str, Any]:
     return x if isinstance(x, dict) else {}
 
 
-def policz_notke(watek: dict[str, Any]) -> tuple[int, int]:
-    """To samo dla watku notki (`reader/comment/<id>/replies`): galezie = komentarze 1. poziomu."""
+def policz_notke(watek: dict[str, Any], *, teraz: datetime | None = None,
+                 min_wiek_h: float = 0) -> tuple[int, int]:
+    """To samo dla watku notki (`reader/comment/<id>/replies`): galezie = komentarze 1. poziomu.
+
+    Odpowiedzia autora jest KAZDY jego komentarz w galezi (nie tylko bezposredni), bo API oddaje potomkow
+    splaszczonych — odrobine hojniej niz w artykulach, gdzie liczy sie bezposrednie dziecko.
+    """
     korzen = watek.get("rootComment") or {}
     uid_autorow = {korzen.get("user_id")} - {None}
     if not uid_autorow:
@@ -113,7 +134,7 @@ def policz_notke(watek: dict[str, Any]) -> tuple[int, int]:
     ile = odp = 0
     for g in watek.get("commentBranches") or []:
         glowny = _rozpakuj(g.get("comment") if isinstance(g, dict) else None)
-        if not glowny or not _cudzy(glowny, uid_autorow):
+        if not glowny or not _cudzy(glowny, uid_autorow) or not _dojrzaly(glowny, teraz, min_wiek_h):
             continue
         ile += 1
         if any(_od_autora(_rozpakuj(d), uid_autorow) for d in (g.get("descendantComments") or [])):
@@ -131,23 +152,29 @@ def _klasa(wynik: float | None) -> str:
     return "niska" if wynik <= config.ODPOWIADALNOSC_NISKA else "ok"
 
 
-def _artykul(host: str, wyklucz_slug: str, pobierz: Callable[[str], Any]) -> dict[str, Any]:
+def _artykul(host: str, wyklucz_slug: str, pobierz: Callable[[str], Any],
+             teraz: datetime | None = None) -> dict[str, Any]:
     """Wynik autora z jego ostatnich wpisow (bez wpisu, ktory wlasnie rozwazamy)."""
+    teraz = teraz or datetime.now(timezone.utc)
+    min_wiek = config.ODPOWIADALNOSC_MIN_WIEK_KOMENTARZA_H
     lista = pobierz("https://%s/api/v1/archive?sort=new&search=&offset=0&limit=8" % host)
     if not isinstance(lista, list):
         return {"blad": True}
-    od = datetime.now(timezone.utc) - timedelta(days=90)
+    od = teraz - timedelta(days=90)
     kand = [p for p in lista if isinstance(p, dict) and p.get("id")
             and p.get("slug") != wyklucz_slug and int(p.get("comment_count") or 0) >= 4
             and ((_czas(p.get("post_date")) or od) >= od)]
-    ile = odp = 0
+    ile = odp = nieudane = 0
     for p in kand[:config.ODPOWIADALNOSC_POSTY]:
         uid = {b.get("id") for b in (p.get("publishedBylines") or []) if isinstance(b, dict)} - {None}
         k = pobierz("https://%s/api/v1/post/%s/comments?token=&all_comments=true&sort=best_first"
                     % (host, p["id"]))
-        if not isinstance(k, dict) or not uid:
+        if not isinstance(k, dict):
+            nieudane += 1
             continue
-        a, b = policz_artykul(k.get("comments") or [], uid)
+        if not uid:
+            continue
+        a, b = policz_artykul(k.get("comments") or [], uid, teraz=teraz, min_wiek_h=min_wiek)
         ile, odp = ile + a, odp + b
     # ZA MALO Z POPRZEDNICH WPISOW (mala publikacja, malo komentarzy): dolicz watek wpisu, ktory wlasnie
     # rozwazamy. To tez zachowanie autora — odpowiada albo nie — a bez tego trzy czwarte malych publikacji
@@ -158,17 +185,26 @@ def _artykul(host: str, wyklucz_slug: str, pobierz: Callable[[str], Any]) -> dic
             uid = {b.get("id") for b in (p.get("publishedBylines") or []) if isinstance(b, dict)} - {None}
             k = pobierz("https://%s/api/v1/post/%s/comments?token=&all_comments=true&sort=best_first" % (host, p["id"]))
             if isinstance(k, dict) and uid:
-                a, b = policz_artykul(k.get("comments") or [], uid)
+                a, b = policz_artykul(k.get("comments") or [], uid, teraz=teraz, min_wiek_h=min_wiek)
                 ile, odp = ile + a, odp + b
-    return {"n": ile, "odp": odp, "wynik": _wynik(ile, odp, config.ODPOWIADALNOSC_MIN_KOMENTARZY_ARTYKUL)}
+            elif not isinstance(k, dict):
+                nieudane += 1
+        elif not isinstance(p, dict):
+            nieudane += 1
+    wynik = _wynik(ile, odp, config.ODPOWIADALNOSC_MIN_KOMENTARZY_ARTYKUL)
+    # Brak wyniku PRZEZ NIEUDANE POBRANIA to blad (krotki TTL), nie „autor ma za malo komentarzy" (dlugi TTL).
+    if wynik is None and nieudane:
+        return {"blad": True}
+    return {"n": ile, "odp": odp, "wynik": wynik}
 
 
-def _notka(nid: Any, pobierz: Callable[[str], Any]) -> dict[str, Any]:
+def _notka(nid: Any, pobierz: Callable[[str], Any], teraz: datetime | None = None) -> dict[str, Any]:
     d = pobierz("https://substack.com/api/v1/reader/comment/%s/replies?comment_id=%s"
                 % (quote(str(nid)), quote(str(nid))))
     if not isinstance(d, dict):
         return {"blad": True}
-    ile, odp = policz_notke(d)
+    ile, odp = policz_notke(d, teraz=teraz or datetime.now(timezone.utc),
+                            min_wiek_h=config.ODPOWIADALNOSC_MIN_WIEK_KOMENTARZA_H)
     return {"n": ile, "odp": odp, "wynik": _wynik(ile, odp, config.ODPOWIADALNOSC_MIN_KOMENTARZY_NOTKA)}
 
 
@@ -235,8 +271,8 @@ def ocen(cele: list[dict[str, Any]], *, notki: bool, teraz: datetime | None = No
             continue
         zapytan += 1
         try:
-            nowy = _notka(cel.get("id"), pobierz) if notki else _artykul(
-                urlparse(str(cel.get("url") or "")).netloc, _slug(str(cel.get("url") or "")), pobierz)
+            nowy = _notka(cel.get("id"), pobierz, teraz) if notki else _artykul(
+                urlparse(str(cel.get("url") or "")).netloc, _slug(str(cel.get("url") or "")), pobierz, teraz)
         except Exception:               # noqa: BLE001 — to jest cecha pomocnicza, nie moze zatrzymac przebiegu
             nowy = {"blad": True}
         nowy["t"] = teraz.isoformat()

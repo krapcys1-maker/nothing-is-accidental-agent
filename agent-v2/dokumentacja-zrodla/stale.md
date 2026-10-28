@@ -254,6 +254,8 @@
 | `ODPOWIADALNOSC_BLAD_TTL_H` | `24` | — |
 | `ODPOWIADALNOSC_MAKS_ZAPYTAN` | `20` | — |
 | `ODPOWIADALNOSC_MAKS_SEKUND` | `90` | — |
+| `ODPOWIADALNOSC_MIN_WIEK_KOMENTARZA_H` | `6` | Liczymy tylko komentarze, ktore mialy czas na odpowiedz autora. Bez tego swiezy watek (autor jeszcze nie zajrzal) wygladalby jak autor, ktor |
+| `KONTO_WLASNE_UID` | `frozenset( int(x) for x in _env("KONTO_WLASN` | Numer uzytkownika naszego konta na Substacku (komentarze w watkach notek nie niosa uchwytu, tylko `user_id`); razem z `KONTA_SIOSTRZANE` nie |
 | `ODPOWIADALNOSC_PROBA_BEZ_FILTRA` | `0.25` | — |
 | `ODPOWIADALNOSC_PLIK` | `DATA_DIR / "odpowiadalnosc.json"` | — |
 | `KOMENTARZ_CEL_SLOW` | `"40–70"` | DLUGOSC KOMENTARZA POD CUDZYM WPISEM (28.10.2026): wskazowka dla modelu, nie sufit. Dol 40 slow, bo komentarze krotsze niz ok. 40 slow maja  |
@@ -262,8 +264,8 @@
 | `HISTORIA_KONTA_WPISOW` | `2` | — |
 | `HISTORIA_KONTA_MIN_PODOBIENSTWA` | `0.13` | — |
 | `HISTORIA_KONTA_MIN_RZADKICH` | `2` | — |
-| `HISTORIA_KONTA_ZNAKI` | `420` | — |
-| `HISTORIA_KONTA_BLOK_ZNAKOW` | `2000` | — |
+| `HISTORIA_KONTA_ZNAKI` | `650` | — |
+| `HISTORIA_KONTA_BLOK_ZNAKOW` | `2500` | — |
 | `ZYWY_WATEK_KOMENTARZY` | `2` | ZYWY WATEK POD NOTKA (1.10.2026). Przy wieku celu ~7,5 h NIE wybierala notki z mediana 3 reakcji i 0 komentarzy — 8% jej komentarzy dostawal |
 | `ZYWY_WATEK_REAKCJI` | `5` | — |
 | `MIN_REAKCJI_CELU_NOTKI` | `5` | SLABA NOTKA ODPADA, NIE TYLKO CICHA (19.10.2026, decyzja wlasciciela). Zmierzone na komentarzach z 28.09-16.10 (pomiar po 72 h): pod notkami |

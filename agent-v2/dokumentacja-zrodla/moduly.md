@@ -1,7 +1,7 @@
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-3865 wierszy, 44 funkcji na poziomie modułu, 2 klas
+3915 wierszy, 46 funkcji na poziomie modułu, 2 klas
 
 | funkcja | co robi |
 |---|---|
@@ -14,6 +14,7 @@
 | `_sito_celow(kanal, cele, limit, notki)` *(wewn.)* | `kanal.odsiej_cele` — atrapa bez tej funkcji znaczy „bez sita". |
 | `_zywe_najpierw(kanal, cele)` *(wewn.)* | `kanal.zywe_najpierw` — atrapa bez tej funkcji zostawia kolejnosc. |
 | `_wedlug_odpowiadalnosci(kanal, cele, notki)` *(wewn.)* | `kanal.wedlug_odpowiadalnosci` — atrapa bez tej funkcji zostawia kolejnosc (i nie dotyka sieci). |
+| `_ramie_stale(nazwa, miejsce, dzien)` *(wewn.)* | `stages.ramie_stale` (bez daty w losowaniu) — a atrapa `stages` bez niej schodzi do zwyklego `_ramie`. |
 | `_ramie(nazwa, miejsce, dzien)` *(wewn.)* | Ramie eksperymentu z `stages.ramie` — a atrapa `stages` bez tej funkcji |
 | `przydzial_komentarzy(n, klucz, dzien)` | Ile miejsc na komentarz dostaje blok pod ARTYKULAMI, a ile pod NOTKAMI. |
 | `uloz_wedlug_swiezosci(cele, klucz, dzien)` | E15 (`swiezosc_celu`): kolejnosc celow, kazdy z ramieniem w polu `_e15`. |
@@ -22,6 +23,7 @@
 | `pola_pamieci(e21)` | Pola dziennika E21: ile wczesniejszych rozmow i ile znakow pamieci poszlo. |
 | `ramiona_komentarza(cel, pod, e14)` | Pola dziennika komentarza: rodzaj celu, ramiona E14/E15/E21, pamiec (E21). |
 | `pola_maniery(cel)` | Pola dziennika E23 poza ramieniem: pytanie na koncu (tak/nie), ile wpisow historii, pamiec rozmowcy. |
+| `zapisz_cisze(cel, pod, out, e14)` | Slad celu, pod ktorym NIE powstal komentarz (cisza modelu albo zapora) — z ramieniem E23. |
 | `pola_odpowiadalnosci(cel)` | Pola dziennika: jak bardzo autor odpowiadal komentujacym, gdy wybieralismy cel (`odpowiadalnosc.py`). |
 | `dane_maniery(cel, tekst_celu, dzien)` | E23 (`maniera_komentarza`): ramie celu i to, co ramie „on" dopisuje do wywolania `comment_on`. |
 | `ramiona_odpowiedzi(c, e21)` | Pola dziennika odpowiedzi: uchwyt rozmowcy i E21. |
@@ -52,7 +54,7 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-12887 wierszy, 241 funkcji na poziomie modułu, 0 klas
+12950 wierszy, 243 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -226,7 +228,9 @@
 | `_uchwyt_wpisu(w)` *(wewn.)* | — |
 | `pamiec_rozmowcy(uchwyt, teraz)` | Co wlasny dziennik wie o wczesniejszych rozmowach z ta osoba (E21). |
 | `los_stale(nazwa, klucz)` | Liczba z [0, 1) stala dla pary (nazwa, klucz) — ten sam cel zawsze dostaje to samo losowanie. |
-| `zasady_stylu(tekst)` | Ktore z zasad stylu z 28.10.2026 komentarz lamie. Bez modelu; LOG, nie bramka. |
+| `ramie_stale(nazwa, klucz, dzien)` | Jak `ramie`, ale BEZ daty w losowaniu: ten sam klucz zawsze to samo ramie, a okno dat nadal obowiazuje. |
+| `zasady_stylu(tekst, min_slow)` | Ktore z zasad stylu z 28.10.2026 komentarz lamie. Bez modelu; LOG, nie bramka. |
+| `_bez_podrobionych_blokow(tekst)` *(wewn.)* | — |
 | `comment_on(conn, run_id, post, fakty)` | Komentarz do cudzego posta — do szuflady. |
 | `fallback_card(question, evidence)` | Karta złożona z dowodów bez modelu — gdy synteza padnie. |
 | `_slot_twierdzenia(c)` *(wewn.)* | — |
@@ -585,7 +589,7 @@
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-4422 wierszy, 49 funkcji na poziomie modułu, 0 klas
+4432 wierszy, 49 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -1026,14 +1030,15 @@
 | `jako_zarzuty(sprzecznosci)` | Sprzecznosci w ksztalcie zarzutow sprawdzenia faktow — material dla `stages.napraw_obalone`. |
 | `skrot(sp)` | Zapis do dziennika (`fc.spojnosc`): liczby i znaczniki plus, gdy cos znaleziono, krotkie |
 
-### `odpowiadalnosc.py` — czy autor wpisu odpowiada komentującym — ocena z jego poprzednich wątków (artykuły) albo z samego wątku (notki), publiczne API, cache na dysku, limity zapytań i czasu; cele o niskiej odpowiadalności idą na koniec kolejki (nie są wykluczane, część bez kary), niewiedza jest neutralna (E23)
+### `odpowiadalnosc.py` — czy autor wpisu odpowiada komentującym — ocena z jego poprzednich wątków (artykuły; gdy ich brak — z wątku rozważanego wpisu) albo z samego wątku (notki), liczą się tylko komentarze starsze niż 6 h, publiczne API, cache na dysku, limity zapytań i czasu; cele o niskiej odpowiadalności idą na koniec kolejki (nie są wykluczane, część bez kary), niewiedza jest neutralna (E23)
 
-279 wierszy, 21 funkcji na poziomie modułu, 0 klas
+326 wierszy, 22 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
 | `_pobierz(url)` *(wewn.)* | JSON z publicznego adresu albo None (kazdy blad, takze 403/404/429, to „nie wiem"). |
 | `_czas(napis)` *(wewn.)* | — |
+| `_dojrzaly(c, teraz, min_wiek_h)` *(wewn.)* | Czy komentarz mial juz czas na odpowiedz autora. Bez daty (albo bez ograniczenia) — tak. |
 | `_wlasne_uchwyty()` *(wewn.)* | — |
 | `_cudzy(c, uid_autorow)` *(wewn.)* | Komentarz od osoby spoza nas, kont siostrzanych i autora wpisu. |
 | `_od_autora(c, uid_autorow)` *(wewn.)* | — |
@@ -1042,8 +1047,8 @@
 | `policz_notke(watek)` | To samo dla watku notki (`reader/comment/<id>/replies`): galezie = komentarze 1. poziomu. |
 | `_wynik(ile, odp, minimum)` *(wewn.)* | — |
 | `_klasa(wynik)` *(wewn.)* | — |
-| `_artykul(host, wyklucz_slug, pobierz)` *(wewn.)* | Wynik autora z jego ostatnich wpisow (bez wpisu, ktory wlasnie rozwazamy). |
-| `_notka(nid, pobierz)` *(wewn.)* | — |
+| `_artykul(host, wyklucz_slug, pobierz, teraz)` *(wewn.)* | Wynik autora z jego ostatnich wpisow (bez wpisu, ktory wlasnie rozwazamy). |
+| `_notka(nid, pobierz, teraz)` *(wewn.)* | — |
 | `_klucz(cel, notki)` *(wewn.)* | Klucz cache: host publikacji (artykuly) albo numer notki; pusty, gdy cel nie ma ani jednego. |
 | `_slug(url)` *(wewn.)* | — |
 | `_wczytaj(plik)` *(wewn.)* | — |
@@ -1054,9 +1059,9 @@
 | `wedlug_odpowiadalnosci(cele, **kw)` | Cele o niskiej odpowiadalnosci autora na koniec; reszta (i probka bez kary) w dotychczasowej kolejnosci. |
 | `pola_dziennika(cel)` | Pola do dziennika komentarza; brak oceny = brak pol (stare wpisy i atrapy bez zmian). |
 
-### `historia_konta.py` — co to konto już powiedziało na ten temat — z własnego dziennika do dwóch opublikowanych wpisów (notki bez typu MYSL, tytuły artykułów) o podobieństwie cosinusowym ważonym rzadkością słów, blok do promptu komentarza w ramieniu B (E23); prawdziwa ciągłość zamiast wymyślonych przeżyć
+### `historia_konta.py` — co to konto już powiedziało na ten temat — z własnego dziennika do dwóch opublikowanych wpisów (notki bez typu MYSL i bez „I/my/me”, tytuły artykułów) o podobieństwie cosinusowym ważonym rzadkością słów, blok do promptu komentarza w ramieniu B (E23); prawdziwa ciągłość zamiast wymyślonych przeżyć
 
-167 wierszy, 5 funkcji na poziomie modułu, 0 klas
+184 wierszy, 5 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|

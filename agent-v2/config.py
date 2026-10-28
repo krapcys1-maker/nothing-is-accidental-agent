@@ -224,7 +224,7 @@ EKSPERYMENTY: dict = {
     # bez ram zapowiadajacych mysl). Etap 2 obowiazuje w OBU ramionach. To PACZKA: jesli wygra,
     # rozkladamy ja na skladniki. Regula decyzji zapisana z gory w
     # `docs/MANIERA_KOMENTARZY_E23_2026-10-28.md`.
-    "maniera_komentarza": {"udzial": 0.5, "od": "2026-10-29", "do": "2026-12-15"},
+    "maniera_komentarza": {"udzial": 0.5, "od": "2026-10-29", "do": "2027-02-10"},
 }
 
 # E12 — dobowe widelki restackow w obu ramionach (srednio 4 i 2). Widelki, nie
@@ -3629,8 +3629,9 @@ ODSTEP_DNI_NA_PUBLIKACJE = 4
 # dobowym, dlatego drugi bot tez ucina po 36 h.
 #
 # 28.10.2026 (analiza komentarzy, `docs/KOMENTARZE_STYL_I_ROZMOWA_2026-10-28.md`):
-# artykuly 7 -> 3 dni, notki 36 -> 24 h. Pod artykulami starszymi niz 72 h nasze
-# komentarze mialy 0 reakcji na 163 (przy <= 72 h: 12%); u rowiesnikow komentarz
+# artykuly 7 -> 3 dni, notki 36 -> 24 h. Pod artykulami starszymi niz 72 h nie mielismy
+# ANI JEDNEGO komentarza z >= 2 polubieniami lub odpowiedzia postronnego (0 na 163; przy
+# <= 72 h: 12%; „jakakolwiek reakcja" bywa i tam: 19%); u rowiesnikow komentarz
 # starszy niz 3 doby traci ok. 41 pkt proc. szansy na polubienie. Notki starsze
 # niz 2 doby: -24 pkt proc. (N=42). NIE schodzimy do okna „notka <= 6 h": w naszych
 # danych takie notki maja 33-38% polubien wobec ok. 51% przy 6-24 h (p = 0,02).
@@ -3655,6 +3656,15 @@ ODPOWIADALNOSC_TTL_NOTKI_H = 12           # wynik z watku notki wazny tyle godzi
 ODPOWIADALNOSC_BLAD_TTL_H = 24            # nieudane zapytanie nie jest powtarzane przez tyle godzin
 ODPOWIADALNOSC_MAKS_ZAPYTAN = 20          # nowych sprawdzen w jednym wywolaniu (reszta = nieznana)
 ODPOWIADALNOSC_MAKS_SEKUND = 90           # twardy sufit czasu na jedno wywolanie
+# Liczymy tylko komentarze, ktore mialy czas na odpowiedz autora. Bez tego swiezy watek (autor jeszcze nie
+# zajrzal) wygladalby jak autor, ktory nie odpisuje: na probce 377 watkow notek 44% klas „niska" z pierwszej
+# godziny bylo w pelnym watku „ok" (przeglad 28.10). Komentarz bez daty liczy sie jako dojrzaly.
+ODPOWIADALNOSC_MIN_WIEK_KOMENTARZA_H = 6
+# Numer uzytkownika naszego konta na Substacku (komentarze w watkach notek nie niosa uchwytu, tylko `user_id`);
+# razem z `KONTA_SIOSTRZANE` nie liczymy ich jako „cudzych".
+KONTO_WLASNE_UID = frozenset(
+    int(x) for x in _env("KONTO_WLASNE_UID", "528224862").replace(";", ",").split(",")
+    if x.strip().isdigit())
 ODPOWIADALNOSC_PROBA_BEZ_FILTRA = 0.25    # udzial celow o niskiej odpowiadalnosci bez kary
 ODPOWIADALNOSC_PLIK = DATA_DIR / "odpowiadalnosc.json"
 
@@ -3675,8 +3685,8 @@ HISTORIA_KONTA_OKNO_DNI = 60
 HISTORIA_KONTA_WPISOW = 2
 HISTORIA_KONTA_MIN_PODOBIENSTWA = 0.13    # cosinus wektorow slow wazonych idf (typowy cel: 0,08; ta sama historia: >= 0,13; 0,12 przepuszczalo luzne skojarzenia)
 HISTORIA_KONTA_MIN_RZADKICH = 2           # i tyle wspolnych RZADKICH terminow (slowo z <= max(3, 5%) wpisow albo liczba)
-HISTORIA_KONTA_ZNAKI = 420               # ile znakow jednego wpisu idzie do promptu
-HISTORIA_KONTA_BLOK_ZNAKOW = 2000        # sufit calego bloku (skracane sa WPISY, nie zasada uzycia)
+HISTORIA_KONTA_ZNAKI = 650               # ile znakow jednego wpisu idzie do promptu (mediana notki: 571; stanowisko stoi na koncu)
+HISTORIA_KONTA_BLOK_ZNAKOW = 2500        # sufit calego bloku (skracane sa WPISY, nie zasada uzycia)
 
 # ZYWY WATEK POD NOTKA (1.10.2026). Przy wieku celu ~7,5 h NIE wybierala notki
 # z mediana 3 reakcji i 0 komentarzy — 8% jej komentarzy dostawalo reakcje,

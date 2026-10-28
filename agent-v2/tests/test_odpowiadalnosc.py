@@ -164,7 +164,7 @@ sprawdz("mala publikacja bez poprzednich wpisow: ocena z watku rozwazanego wpisu
         [c["_odp_autora"]["klasa"] for c in wynik_m[:2]] == ["niska", "ok"] and wynik_m[0]["_odp_autora"]["n"] == 5, [c["_odp_autora"] for c in wynik_m])
 sprawdz("a gdy i wpisu nie da sie pobrac — nieznana, bez wyjatku", wynik_m[2]["_odp_autora"]["klasa"] == "nieznana")
 n1 = len(ZAPYTANIA)
-wynik2, _ = cicho(O.ocen, cele, notki=False, teraz=TERAZ + timedelta(days=1), plik=plik, pobierz=pobierz)
+wynik2, _ = cicho(O.ocen, cele, notki=False, teraz=TERAZ + timedelta(hours=12), plik=plik, pobierz=pobierz)
 sprawdz("drugie wywolanie w TTL nie pyta sieci (cache z dysku)", len(ZAPYTANIA) == n1, (n1, len(ZAPYTANIA)))
 sprawdz("a wynik jest ten sam", [c["_odp_autora"] for c in wynik2] == [c["_odp_autora"] for c in wynik])
 wynik3, _ = cicho(O.ocen, cele[:1], notki=False, teraz=TERAZ + timedelta(days=config.ODPOWIADALNOSC_TTL_DNI + 1), plik=plik, pobierz=pobierz)
@@ -242,6 +242,65 @@ config.ODPOWIADALNOSC_WLACZONA = False
 sprawdz("wylacznik oddaje ta sama liste bez zapytan", O.wedlug_odpowiadalnosci(cele, notki=False, pobierz=rzuca) is cele)
 config.ODPOWIADALNOSC_WLACZONA = True
 sprawdz("pusta lista", O.wedlug_odpowiadalnosci([], notki=False) == [])
+
+print("=== 7b. DOJRZALOSC KOMENTARZY, NASZE KONTO, BLAD VS NIEZNANA (przeglad 28.10) ===")
+
+
+def kiedy(godz):
+    return (TERAZ - timedelta(hours=godz)).isoformat()
+
+
+sprawdz("artykul: komentarze mlodsze niz 6 h nie liczą sie (autor nie mial czasu), starsze i bez daty tak",
+        O.policz_artykul([kom(201, date=kiedy(1)), kom(202, date=kiedy(7)), kom(203), kom(204, date=kiedy(40))], {AUTOR}, teraz=TERAZ, min_wiek_h=6) == (3, 0)
+        and O.policz_artykul([kom(201, date=kiedy(1))], {AUTOR}) == (1, 0))
+sprawdz("granica dojrzalosci jest literalna: dokladnie 6 h liczy sie, 5 h 59 min nie",
+        O.policz_artykul([kom(201, date=kiedy(6))], {AUTOR}, teraz=TERAZ, min_wiek_h=6) == (1, 0)
+        and O.policz_artykul([kom(201, date=(TERAZ - timedelta(hours=5, minutes=59)).isoformat())], {AUTOR}, teraz=TERAZ, min_wiek_h=6) == (0, 0))
+sprawdz("data z 'Z' i bez strefy czasowej nie wywraca porownania",
+        O.policz_artykul([kom(201, date="2026-10-20T10:00:00.000Z"), kom(202, date="2026-10-20T10:00:00")], {AUTOR}, teraz=TERAZ, min_wiek_h=6) == (2, 0))
+sprawdz("notka: swieza galaz bez odpowiedzi autora NIE robi z niego niskiej; dojrzala bez odpowiedzi tak",
+        O.policz_notke({"rootComment": {"user_id": AUTOR}, "commentBranches": [
+            {"comment": kom(201, date=kiedy(1)), "descendantComments": []}, {"comment": kom(202, date=kiedy(1)), "descendantComments": []}]},
+            teraz=TERAZ, min_wiek_h=6) == (0, 0)
+        and O.policz_notke({"rootComment": {"user_id": AUTOR}, "commentBranches": [
+            {"comment": kom(201, date=kiedy(9)), "descendantComments": []}, {"comment": kom(202, date=kiedy(9)), "descendantComments": []}]},
+            teraz=TERAZ, min_wiek_h=6) == (2, 0))
+SRODOWISKO.clear()
+SRODOWISKO["https://substack.com/api/v1/reader/comment/555/replies?comment_id=555"] = {
+    "rootComment": {"user_id": AUTOR},
+    "commentBranches": [{"comment": kom(201, date=kiedy(2)), "descendantComments": []}, {"comment": kom(202, date=kiedy(2)), "descendantComments": []},
+                        {"comment": kom(203, date=kiedy(2)), "descendantComments": []}]}
+w_swiezy, _ = cicho(O.ocen, [{"id": 555}], notki=True, teraz=TERAZ, plik=KAT / "odp9.json", pobierz=pobierz)
+sprawdz("swiezy watek notki (3 komentarze sprzed 2 h, autor jeszcze milczy) → nieznana, nie niska",
+        w_swiezy[0]["_odp_autora"]["klasa"] == "nieznana" and w_swiezy[0]["_odp_autora"]["wynik"] is None, w_swiezy[0]["_odp_autora"])
+w_pozniej, _ = cicho(O.ocen, [{"id": 555}], notki=True, teraz=TERAZ + timedelta(hours=13), plik=KAT / "odp9.json", pobierz=pobierz)
+sprawdz("a po 13 h (TTL notki 12 h minal, komentarze dojrzaly) ten sam watek jest ocenany: niska", w_pozniej[0]["_odp_autora"]["klasa"] == "niska", w_pozniej[0]["_odp_autora"])
+sprawdz("nasz wlasny uzytkownik (KONTO_WLASNE_UID) nie liczy sie jako cudzy, nawet bez uchwytu",
+        O.policz_notke({"rootComment": {"user_id": AUTOR}, "commentBranches": [
+            {"comment": {"id": 1, "user_id": 528224862}, "descendantComments": [{"type": "comment", "comment": kom(AUTOR)}]},
+            {"comment": kom(201), "descendantComments": []}, {"comment": kom(202), "descendantComments": []}]}) == (2, 0)
+        and 528224862 in config.KONTO_WLASNE_UID, config.KONTO_WLASNE_UID)
+# archiwum OK, ale pobieranie komentarzy pada → to BLAD (24 h), nie „za malo komentarzy" (5 dni)
+SRODOWISKO.clear()
+archiwum("padl.example", [post(31, "a"), post(32, "b")])
+wyn_p, _ = cicho(O.ocen, [{"url": "https://padl.example/p/x"}], notki=False, teraz=TERAZ, plik=KAT / "odp10.json", pobierz=pobierz)
+wpis_p = json.loads((KAT / "odp10.json").read_text("utf-8"))["art:padl.example"]
+sprawdz("nieudane pobranie komentarzy po udanym archiwum → wpis z flaga blad (krotki TTL)", wpis_p.get("blad") is True and wyn_p[0]["_odp_autora"]["klasa"] == "nieznana", wpis_p)
+komentarze("padl.example", 31, [kom(u) for u in OBCY])
+komentarze("padl.example", 32, [kom(u) for u in OBCY])
+wyn_p2, _ = cicho(O.ocen, [{"url": "https://padl.example/p/x"}], notki=False,
+                  teraz=TERAZ + timedelta(hours=config.ODPOWIADALNOSC_BLAD_TTL_H + 1), plik=KAT / "odp10.json", pobierz=pobierz)
+sprawdz("po 24 h probuje ponownie i ocenia (nie czeka 5 dni)", wyn_p2[0]["_odp_autora"]["klasa"] == "niska", wyn_p2[0]["_odp_autora"])
+# okno 90 dni liczone od wstrzyknietego `teraz`, nie od zegara systemowego: `teraz` jest 30 dni PO TERAZ, wiec wpis sprzed
+# 65 dni (od TERAZ) ma wtedy 95 dni i odpada, choc wzgledem zegara (≈ TERAZ) mialby 65 i wszedlby
+SRODOWISKO.clear()
+TERAZ_POZNIEJ = TERAZ + timedelta(days=30)
+archiwum("stary.example", [post(41, "a", data=(TERAZ - timedelta(days=65)).isoformat()), post(42, "b", data=(TERAZ - timedelta(days=10)).isoformat())])
+komentarze("stary.example", 41, [kom(u, [kom(AUTOR)]) for u in OBCY])      # 95 dni wzgledem `teraz`: nie wchodzi
+komentarze("stary.example", 42, [kom(u) for u in OBCY])
+w_st, _ = cicho(O.ocen, [{"url": "https://stary.example/p/x"}], notki=False, teraz=TERAZ_POZNIEJ, plik=KAT / "odp11.json", pobierz=pobierz)
+sprawdz("wpis starszy niz 90 dni WZGLEDEM WSTRZYKNIETEGO `teraz` nie wchodzi do oceny autora",
+        w_st[0]["_odp_autora"]["wynik"] == 0.0 and w_st[0]["_odp_autora"]["n"] == 5, w_st[0]["_odp_autora"])
 
 print("=== 8. POLA DO DZIENNIKA ===")
 sprawdz("bez oceny — zadnych pol (stare wpisy, atrapy)", O.pola_dziennika({"url": "x"}) == {})
