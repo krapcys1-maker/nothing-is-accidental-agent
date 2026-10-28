@@ -65,6 +65,8 @@ sprawdz("usuniety komentarz nie liczy sie, usunieta odpowiedz autora tez nie",
         O.policz_artykul([kom(201, [kom(AUTOR, deleted=True)]), kom(202, deleted=True)], {AUTOR}) == (1, 0))
 sprawdz("metadata.is_author w odpowiedzi liczy sie jako autor, nawet bez zgodnego uid",
         O.policz_artykul([kom(201, [kom(777, metadata={"is_author": True})])], {AUTOR}) == (1, 1))
+sprawdz("komentarz pierwszego poziomu z metadata.is_author (autor pod innym uid) nie jest od innych",
+        O.policz_artykul([kom(777, metadata={"is_author": True}), kom(201)], {AUTOR}) == (1, 0))
 sprawdz("smieci na wejsciu nie wywracaja liczenia", O.policz_artykul([None, "x", {}, {"children": None, "user_id": 5}], {AUTOR}) == (1, 0),
         O.policz_artykul([None, "x", {}, {"children": None, "user_id": 5}], {AUTOR}))
 
@@ -123,6 +125,12 @@ archiwum("gada.example", [post(3, "c")])
 komentarze("gada.example", 3, [kom(201, [kom(AUTOR)]), kom(202, [kom(AUTOR)]), kom(203, [kom(AUTOR)]), kom(204)])
 # host 'pusty': za malo komentarzy → nieznana
 archiwum("pusty.example", [post(4, "d", ile=2)])
+komentarze("pusty.example", 4, [kom(u) for u in OBCY])                       # gdyby ktos go czytal, bylaby to „niska"
+# host 'wielu': cztery kwalifikujace sie wpisy, czyta sie tylko ostatnie trzy (ODPOWIADALNOSC_POSTY)
+archiwum("wielu.example", [post(11, "p1"), post(12, "p2"), post(13, "p3"), post(14, "p4")])
+for _i in (11, 12, 13):
+    komentarze("wielu.example", _i, [kom(u) for u in OBCY[:3]])
+komentarze("wielu.example", 14, [kom(u, [kom(AUTOR)]) for u in OBCY])      # czwarty wpis: wszyscy z odpowiedzia
 # wpis, ktory wlasnie rozwazamy, nie liczy sie do oceny autora
 archiwum("wyklucz.example", [post(5, "ten-wpis"), post(6, "inny")])
 komentarze("wyklucz.example", 5, [kom(201, [kom(AUTOR)]) for _ in range(5)])
@@ -130,15 +138,31 @@ komentarze("wyklucz.example", 6, [kom(u) for u in OBCY[:4]])
 
 plik = KAT / "odp1.json"
 cele = [{"url": "https://milczy.example/p/x", "id": "x"}, {"url": "https://gada.example/p/y"},
-        {"url": "https://pusty.example/p/z"}, {"url": "https://wyklucz.example/p/ten-wpis"}]
+        {"url": "https://pusty.example/p/z"}, {"url": "https://wyklucz.example/p/ten-wpis"},
+        {"url": "https://wielu.example/p/q"}]
 wynik, _ = cicho(O.ocen, cele, notki=False, teraz=TERAZ, plik=plik, pobierz=pobierz)
 kl = {c["url"].split("/")[2]: c["_odp_autora"] for c in wynik}
 sprawdz("milczacy autor: wynik 0,0 i klasa niska", kl["milczy.example"]["wynik"] == 0.0 and kl["milczy.example"]["klasa"] == "niska", kl["milczy.example"])
 sprawdz("odpisujacy autor: 3/4 i klasa ok", kl["gada.example"]["wynik"] == 0.75 and kl["gada.example"]["klasa"] == "ok", kl["gada.example"])
 sprawdz("za malo komentarzy: nieznana, bez kary", kl["pusty.example"]["klasa"] == "nieznana" and kl["pusty.example"]["wynik"] is None)
+sprawdz("wpis z mniej niz 4 komentarzami wedlug archiwum nie jest czytany (nawet gdyby mial ich wiecej)", kl["pusty.example"]["n"] == 0, kl["pusty.example"])
+sprawdz("czyta sie najwyzej ODPOWIADALNOSC_POSTY (3) ostatnich wpisow: czwarty, z samymi odpowiedziami, nie zmienia oceny",
+        kl["wielu.example"]["n"] == 9 and kl["wielu.example"]["wynik"] == 0.0 and kl["wielu.example"]["klasa"] == "niska", kl["wielu.example"])
 sprawdz("rozwazany wpis jest pominiety w ocenie autora (liczy sie tylko drugi, bez odpowiedzi)",
         kl["wyklucz.example"]["wynik"] == 0.0 and kl["wyklucz.example"]["n"] == 4, kl["wyklucz.example"])
 sprawdz("ocen() nie zmienia wejsciowych slownikow", all("_odp_autora" not in c for c in cele))
+sprawdz("gdy poprzednie wpisy wystarczaja, watek rozwazanego wpisu NIE jest czytany",
+        not any("/api/v1/posts/" in u and "gada.example" in u for u in ZAPYTANIA), [u for u in ZAPYTANIA if "gada.example" in u])
+# mala publikacja: w archiwum tylko rozwazany wpis → ocena z jego wlasnego watku (zeby nie zostawac „nieznana")
+for _host, _id, _odp in (("maly.example", 21, False), ("malyok.example", 22, True)):
+    archiwum(_host, [post(_id, "ten")])
+    SRODOWISKO["https://%s/api/v1/posts/ten" % _host] = {"id": _id, "publishedBylines": [{"id": AUTOR}]}
+    komentarze(_host, _id, [kom(u, [kom(AUTOR)] if _odp else []) for u in OBCY])
+wynik_m, _ = cicho(O.ocen, [{"url": "https://maly.example/p/ten"}, {"url": "https://malyok.example/p/ten"},
+                            {"url": "https://nieistnieje.example/p/ten"}], notki=False, teraz=TERAZ, plik=KAT / "odp_maly.json", pobierz=pobierz)
+sprawdz("mala publikacja bez poprzednich wpisow: ocena z watku rozwazanego wpisu (milczacy = niska, odpisujacy = ok)",
+        [c["_odp_autora"]["klasa"] for c in wynik_m[:2]] == ["niska", "ok"] and wynik_m[0]["_odp_autora"]["n"] == 5, [c["_odp_autora"] for c in wynik_m])
+sprawdz("a gdy i wpisu nie da sie pobrac — nieznana, bez wyjatku", wynik_m[2]["_odp_autora"]["klasa"] == "nieznana")
 n1 = len(ZAPYTANIA)
 wynik2, _ = cicho(O.ocen, cele, notki=False, teraz=TERAZ + timedelta(days=1), plik=plik, pobierz=pobierz)
 sprawdz("drugie wywolanie w TTL nie pyta sieci (cache z dysku)", len(ZAPYTANIA) == n1, (n1, len(ZAPYTANIA)))
@@ -173,10 +197,12 @@ sprawdz("uszkodzony plik cache jest ignorowany i nadpisywany", wynik[0]["_odp_au
 stare = config.ODPOWIADALNOSC_MAKS_ZAPYTAN
 config.ODPOWIADALNOSC_MAKS_ZAPYTAN = 2
 SRODOWISKO.clear()
-archiwum("h1.example", [post(1, "a")]); komentarze("h1.example", 1, [kom(u) for u in OBCY[:4]])
+for _i in range(1, 6):
+    archiwum("h%d.example" % _i, [post(_i, "a")])
+    komentarze("h%d.example" % _i, _i, [kom(u) for u in OBCY[:4]])
 wynik, _ = cicho(O.ocen, [{"url": "https://h%d.example/p/q" % i} for i in range(1, 6)], notki=False, teraz=TERAZ, plik=KAT / "odp5.json", pobierz=pobierz)
 config.ODPOWIADALNOSC_MAKS_ZAPYTAN = stare
-sprawdz("limit nowych sprawdzen: po nim reszta jest nieznana", [c["_odp_autora"]["klasa"] for c in wynik][2:] == ["nieznana"] * 3,
+sprawdz("limit nowych sprawdzen: dokladnie 2 oceny, reszta nieznana", [c["_odp_autora"]["klasa"] for c in wynik] == ["niska"] * 2 + ["nieznana"] * 3,
         [c["_odp_autora"]["klasa"] for c in wynik])
 sprawdz("cel bez adresu i bez numeru nie wywraca oceny", cicho(O.ocen, [{}], notki=False, teraz=TERAZ, plik=KAT / "odp6.json", pobierz=pobierz)[0][0]["_odp_autora"]["klasa"] == "nieznana")
 

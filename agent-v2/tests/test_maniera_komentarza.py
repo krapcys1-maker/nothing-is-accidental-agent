@@ -144,6 +144,8 @@ for nazwa, tekst in (("rama The part worth", "The part worth noting is that " + 
                      ("rama The word doing quiet work", "The word doing quiet work here is hosts. " + CZYSTO)):
     sprawdz(nazwa, "rama_otwarcia" in stages.zasady_stylu(tekst), stages.zasady_stylu(tekst))
 sprawdz("zwykle The $1.3 million... NIE jest rama (zakazana jest rama, nie slowo The)", "rama_otwarcia" not in stages.zasady_stylu(CZYSTO))
+sprawdz("za_krotki: 34 slowa tak, 35 slow nie (prog literalnie)", "za_krotki" in stages.zasady_stylu(" ".join(["word"] * 34))
+        and "za_krotki" not in stages.zasady_stylu(" ".join(["word"] * 35)))
 sprawdz("link, wykrzyknik, emoji, za krotki", set(stages.zasady_stylu("See https://a.example/x now! \U0001F680")) == {"link", "wykrzyknik", "emoji", "za_krotki"},
         stages.zasady_stylu("See https://a.example/x now! \U0001F680"))
 ODP["comment"] = ("Good point! " + CZYSTO + " If that number is right, the headline saving shrinks by about a fifth before "
@@ -199,11 +201,11 @@ dlugi = "Moonshot Kimi K3.1 weights November cyber index Artificial Analysis ope
 dz2 = KAT / "dziennik_dlugi.jsonl"
 dz2.write_bytes(("\n".join(json.dumps(wpis(i + 1, tekst=dlugi), ensure_ascii=False) for i in range(3))).encode())
 stare = (config.HISTORIA_KONTA_ZNAKI, config.HISTORIA_KONTA_BLOK_ZNAKOW)
-config.HISTORIA_KONTA_BLOK_ZNAKOW = 1300
+config.HISTORIA_KONTA_BLOK_ZNAKOW = 1100
 bd, nd = historia_konta.blok(CEL, teraz=TERAZ, plik=dz2)
 config.HISTORIA_KONTA_ZNAKI, config.HISTORIA_KONTA_BLOK_ZNAKOW = stare
 sprawdz("dlugie wpisy skracane, a zasada uzycia ZOSTAJE (skracamy wpisy, nie caly blok)",
-        bd.rstrip().endswith("Don't quote the record at length.") and len(bd) <= 1300 + 60 and "…" in bd, (len(bd), bd[-120:]))
+        bd.rstrip().endswith("Don't quote the record at length.") and len(bd) <= 1100 and "…" in bd, (len(bd), bd[-120:]))
 dz3 = KAT / "dziennik_u2028.jsonl"
 linia = json.dumps(wpis(3, tekst="Kimi K3.1 weights  arrive 4 November and the cyber index is 64% on Artificial Analysis."), ensure_ascii=False)
 dz3.write_bytes(linia.encode("utf-8") + b"\n" + b"\xff\xfe zly bajt\n"
@@ -257,6 +259,46 @@ sprawdz("notki typu MYSL (rozwazania w 1. osobie, wymyslone nawyki) NIE wchodza 
 bl, nn = historia_konta.blok(CEL_PRAWDZIWY, teraz=TERAZ, plik=dz4)
 sprawdz("blok podaje dzisiejsza date i kaze odwolywac sie do dat wpisow (nie last week na slowo)",
         "Today is 2026-10-28." in bl and "never as \"last week\" unless it was" in bl and nn == 1, bl[-420:])
+
+print("=== 4c. WYBOR WPISOW: KAZDY WARUNEK OSOBNO (mutacje) ===")
+FILLER = [wpis(1 + (i % 40), tekst="Housing rent caps and zoning rule number %d in Lisbon and Porto apply to landlords." % i) for i in range(30)]
+
+
+def dziennik(nazwa, *wiersze):
+    pl = KAT / nazwa
+    pl.write_bytes(("\n".join(json.dumps(w, ensure_ascii=False) for w in FILLER + list(wiersze)) + "\n").encode("utf-8"))
+    return pl
+
+
+def wybrane(plik, cel=CEL_PRAWDZIWY):
+    return historia_konta.powiazane(cel, teraz=TERAZ, plik=plik)
+
+
+sprawdz("kontrola: jeden wpis w oknie wchodzi", len(wybrane(dziennik("h_ok.jsonl", wpis(3, tekst=PRAWDZIWA)))) == 1)
+sprawdz("wpis starszy niz 60 dni nie wchodzi", wybrane(dziennik("h_stary.jsonl", wpis(70, tekst=PRAWDZIWA))) == [])
+sprawdz("wpis z przyszlosci nie wchodzi", wybrane(dziennik("h_przyszly.jsonl", wpis(-2, tekst=PRAWDZIWA))) == [])
+sprawdz("nieudana publikacja nie wchodzi", wybrane(dziennik("h_nieudany.jsonl", wpis(3, tekst=PRAWDZIWA, udane=False))) == [])
+sprawdz("ten sam tekst dwa razy (dwie daty) to jeden wpis",
+        len(wybrane(dziennik("h_dubel.jsonl", wpis(3, tekst=PRAWDZIWA), wpis(5, tekst=PRAWDZIWA)))) == 1)
+SREDNIA = "Anthropic told police about a Florida woman and her Claude chats, which she treated like a diary."
+dz_dwa = dziennik("h_dwa.jsonl", wpis(3, tekst=PRAWDZIWA), wpis(5, tekst=SREDNIA))
+stare_w = config.HISTORIA_KONTA_WPISOW
+config.HISTORIA_KONTA_WPISOW = 1
+wyb1 = wybrane(dz_dwa)
+config.HISTORIA_KONTA_WPISOW = 3
+wyb3 = wybrane(dz_dwa)
+config.HISTORIA_KONTA_WPISOW = stare_w
+sprawdz("przy limicie 1 wygrywa wpis NAJBARDZIEJ podobny, nie najmniej", len(wyb1) == 1 and wyb1[0]["tekst"].startswith("Police in Florida")
+        and wyb1[0]["wynik"] == max(w["wynik"] for w in wyb3), [(w["wynik"], w["tekst"][:30]) for w in wyb3])
+sprawdz("limit wpisow jest limitem: przy 3 wchodza oba dostepne, przy 1 tylko jeden", len(wyb3) == 2 and len(wyb1) == 1)
+dl = []
+orig_slowa = historia_konta._slowa
+historia_konta._slowa = lambda tekst_: (dl.append(len(str(tekst_))), orig_slowa(tekst_))[1]
+wybrane(dz_dwa, cel="x " * 2000 + CEL_PRAWDZIWY)
+historia_konta._slowa = orig_slowa
+sprawdz("z tekstu celu liczy sie tylko poczatek (tytul i wstep: 1500 znakow)", dl and dl[0] <= 1500, dl[:2])
+sprawdz("dziennik czytany po znaku nowego wiersza, nie splitlines: wpis z U+2028 nie ginie",
+        len(wybrane(dziennik("h_u2028.jsonl", wpis(3, tekst=PRAWDZIWA.replace("Claude diary", "Claude diary"))))) == 1)
 
 print("=== 5. run.dane_maniery ===")
 ORYG = dict(config.EKSPERYMENTY)

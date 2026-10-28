@@ -149,6 +149,17 @@ def _artykul(host: str, wyklucz_slug: str, pobierz: Callable[[str], Any]) -> dic
             continue
         a, b = policz_artykul(k.get("comments") or [], uid)
         ile, odp = ile + a, odp + b
+    # ZA MALO Z POPRZEDNICH WPISOW (mala publikacja, malo komentarzy): dolicz watek wpisu, ktory wlasnie
+    # rozwazamy. To tez zachowanie autora — odpowiada albo nie — a bez tego trzy czwarte malych publikacji
+    # zostawaloby „nieznane" (proba na zywo 28.10: 3 z 4 artykulow). Kosztuje dwa zapytania, tylko w tym przypadku.
+    if ile < config.ODPOWIADALNOSC_MIN_KOMENTARZY_ARTYKUL and wyklucz_slug:
+        p = pobierz("https://%s/api/v1/posts/%s" % (host, quote(wyklucz_slug)))
+        if isinstance(p, dict) and p.get("id"):
+            uid = {b.get("id") for b in (p.get("publishedBylines") or []) if isinstance(b, dict)} - {None}
+            k = pobierz("https://%s/api/v1/post/%s/comments?token=&all_comments=true&sort=best_first" % (host, p["id"]))
+            if isinstance(k, dict) and uid:
+                a, b = policz_artykul(k.get("comments") or [], uid)
+                ile, odp = ile + a, odp + b
     return {"n": ile, "odp": odp, "wynik": _wynik(ile, odp, config.ODPOWIADALNOSC_MIN_KOMENTARZY_ARTYKUL)}
 
 
