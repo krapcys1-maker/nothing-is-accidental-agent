@@ -8302,6 +8302,11 @@ _RAMY_OTWARCIA = (
 _MY_W_PRZESZLOSCI = re.compile(
     r"\b(?:as )?we (?:wrote|said|noted|argued|covered|reported|tried|tested|saw|ran|found|measured|talked to|asked|"
     r"noticed|went through|checked|looked at)\b", re.IGNORECASE)
+# Osobisty nawyk/metoda w pierwszej osobie („my test is...", „I always...", „when I..."): opinia z „I'd..." jest w porzadku,
+# nawyk to wymyslone przezycie, ktorego `_podloga_z_pamieci` (tylko „I tried/saw/asked...") nie widzi.
+_JA_NAWYK = re.compile(
+    r"\bmy (?:test|rule|habit|routine|approach|method|workflow|trick|checklist|process)\b|"
+    r"\bI (?:always|usually|never|tend to|often|normally|typically)\b|\bwhen I\b|\bevery time I\b", re.IGNORECASE)
 _LINK = re.compile(r"https?://|\bwww\.|\b[a-z0-9-]+\.(?:com|org|net|io|ai|substack\.com)/", re.IGNORECASE)
 _EMOJI = re.compile("[\U0001F300-\U0001FAFF☀-➿]")
 
@@ -8331,6 +8336,8 @@ def zasady_stylu(tekst: str, min_slow: int = 35) -> list[str]:
         out.append("za_krotki")
     if _MY_W_PRZESZLOSCI.search(t):
         out.append("my_w_przeszlosci")
+    if _JA_NAWYK.search(t):
+        out.append("ja_nawyk")
     return out
 
 

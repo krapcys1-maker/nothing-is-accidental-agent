@@ -455,6 +455,12 @@ for tekst_zle, tag in (("Right, but the cost still lands on the hospital." + DLU
                        ("We wrote last week that the diary metaphor breaks down." + DLUGI, "my_w_przeszlosci"),
                        ("As we said earlier, the number is a floor." + DLUGI, "my_w_przeszlosci")):
     sprawdz("trafienie: " + tekst_zle[:40], tag in stages.zasady_stylu(tekst_zle), stages.zasady_stylu(tekst_zle))
+for tekst_nawyk in ("My test is whether I'd have picked the same thing with nothing on screen." + DLUGI,
+                    "I always read the footnotes first." + DLUGI, "When I check a filing I start with the cash flow." + DLUGI):
+    sprawdz("ja_nawyk: " + tekst_nawyk[:40], "ja_nawyk" in stages.zasady_stylu(tekst_nawyk), stages.zasady_stylu(tekst_nawyk))
+sprawdz("opinia z I'd (bez nawyku) NIE jest ja_nawyk", "ja_nawyk" not in stages.zasady_stylu("I'd take the small models, with a hard check before anything sends." + DLUGI))
+sprawdz("prompt B pozwala na opinie z I, ale zakazuje osobistego nawyku", 'An opinion may use "I"' in " ".join(czytaj("komentarz_b.md").split())
+        and '"my test", "I always"' in " ".join(czytaj("komentarz_b.md").split()))
 sprawdz("min_slow=0 (odpowiedzi): krotki tekst nie jest za_krotki; domyslnie jest", "za_krotki" not in stages.zasady_stylu("Fine.", min_slow=0) and "za_krotki" in stages.zasady_stylu("Fine."))
 
 # 8e. pamiec glosu nie miesza ramion; w B nie ma „Delivery feedback"

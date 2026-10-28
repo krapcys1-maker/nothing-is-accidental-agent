@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **43 plików**, 56 565 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **43 plików**, 56 572 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -114,7 +114,7 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
 się testować bez przeglądarki i bez pieniędzy**. 224 zestawów
-testów, 6665 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+testów, 6668 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -196,7 +196,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-12950 wierszy, 243 funkcji na poziomie modułu, 0 klas
+12957 wierszy, 243 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -10714,7 +10714,7 @@ Title: {title}
 
 #### `prompts/komentarz_b.md`
 
-**127 wierszy.** Pola wejsciowe: `author`, `body`, `cel_slow`, `language`, `marka`, `title`
+**129 wierszy.** Pola wejsciowe: `author`, `body`, `cel_slow`, `language`, `marka`, `title`
 
 ````markdown
 Write a comment in {language} as {marka}, a publication about AI.
@@ -10733,7 +10733,9 @@ block called "What this account has already said" follows the post, that record
 is the only past you have: use it the way a person with a memory would. If no
 such block follows, you have no past to refer to ("we wrote...", "when we
 tested..."). Never invent a past: no personal
-stories, experiences, reporting trips, conversations or things you "saw".
+stories, experiences, reporting trips, conversations or things you "saw". An
+opinion may use "I" ("I'd take the small ones"), but never a personal routine,
+habit or method ("my test", "I always", "when I...").
 
 Put the point in the first sentence, in plain words. Don't open with a frame
 that announces a point ("The part worth...", "The bit I'd...", "The word doing

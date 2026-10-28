@@ -64,7 +64,7 @@ paczka nie działa. To świadomy wybór pod polecenie właściciela („dajmy mu
 ## Co jest zapisywane
 **Dziennik (komentarz):** `eksperymenty.maniera_komentarza` = `on`/`off`; `maniera_pytanie`, `historia_n` (0 = sprawdzono, brak powiązań),
 `historia_blad` (awaria budowy historii — to NIE to samo co 0), `pamiec_b_wymian`, `zasady_stylu` (lista naruszeń, oba ramiona; `my_w_przeszlosci` =
-twierdzenie „we wrote/tried/tested…”), `podloga` (wymyślone przeżycie w pierwszej osobie); ocena autora: `autor_odp_klasa`, `autor_odp`, `autor_odp_n`.
+twierdzenie „we wrote/tried/tested…” — prawdziwe tylko przy `historia_n` > 0; `ja_nawyk` = osobisty nawyk/metoda w 1. osobie, „my test is…”), `podloga` (wymyślone przeżycie w pierwszej osobie); ocena autora: `autor_odp_klasa`, `autor_odp`, `autor_odp_n`.
 **`data/cele_bez_komentarza.jsonl` (ITT):** cel przydzielony do ramienia, pod którym nie powstał komentarz — adres, ramię, liczba ciszy/zapory, powody.
 Bez niego ocena z dziennika obejmowałaby tylko cele, z których komentarz wyszedł, a ramiona mogą różnić się częstością ciszy.
 
@@ -84,7 +84,7 @@ pytanie ≈ 20–30% (A: ok. 5–8% komentarzy kończy się pytaniem), 40–70 s
 poprawić prompt i liczyć od nowa (lekcja z E17/E18).
 **Reguła:**
 1. Bez zaglądania w wynik przed 190 na ramię, poza stopem bezpieczeństwa: spadek polubień > 15 pkt proc., zarzuty „to bot/AI” pod naszymi
-   komentarzami albo więcej niż 5% komentarzy B z `my_w_przeszlosci` przy `historia_n` = 0 / niepustym `podloga` (wymyślona przeszłość).
+   komentarzami albo więcej niż 5% komentarzy B z `my_w_przeszlosci` przy `historia_n` = 0, z `ja_nawyk` lub z niepustym `podloga` (wymyślona przeszłość).
 2. Werdykt przy 380 na ramię. **Wdrażamy B**, jeśli rozmowa merytoryczna w B jest wyższa o ≥ +6 pkt proc. (jednostronnie, dolna granica 90%
    przedziału > 0, test permutacyjny z klastrowaniem po autorze wpisu) ORAZ spełniony jest strażnik polubień.
 3. Kierunek zgodny i efekt ≥ połowy wykrywalnego, ale warunek niespełniony: jedno przedłużenie do 630 na ramię, potem koniec.
