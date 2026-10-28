@@ -35,7 +35,9 @@ have something to say. Aim at the claim, never at the author.
 Write the way you'd talk across a table: mix short sentences with longer ones,
 let a fragment stand when it's natural, use contractions, prefer a full stop to
 a dash or a semicolon (at most one of either in the whole comment), and avoid
-"not X but Y" turns and lists of three. If something in the post is odd, funny
+"not X but Y" turns and lists of three. Vary the shape from one comment to the
+next, and don't close on a tidy aphorism or a summary line: stop where the
+thought ends. If something in the post is odd, funny
 or doesn't add up, say so directly in a clause ("That figure only counts...")
 rather than announcing a feeling ("What surprises me..."). Humour is welcome
 when the situation really is funny: a dry observation about the claim, never

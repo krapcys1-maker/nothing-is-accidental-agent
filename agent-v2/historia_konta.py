@@ -16,9 +16,11 @@ razy, w tym SpaceX/Cursor pod artykulem o bankach). Mierzymy wiec PODOBIENSTWO C
 wazonych rzadkoscia (idf liczone na tym samym oknie dziennika), liczby wchodza jako stale, rzadkie terminy.
 Wpis jest kandydatem dopiero przy cosinusie >= `HISTORIA_KONTA_MIN_PODOBIENSTWA` ORAZ co najmniej
 `HISTORIA_KONTA_MIN_RZADKICH` wspolnych rzadkich terminach (slowo z <= max(3, 5% okna) wpisow albo liczba).
-Zmierzone na 234 celach z 14-28.10: prog trafia w ok. 6% celow i lapie rzeczywiste powtorki tematu (policja i
+Zmierzone na 234 celach z 14-28.10: prog 0,13 trafia w ok. 5% celow i lapie rzeczywiste powtorki tematu (policja i
 Anthropic, S-1 i przychody Anthropica, falszywa wskazowka do policji); luzne skojarzenia sie zdarzaja, wiec
 prompt kaze historie ZIGNOROWAC, gdy niczego nie wnosi. Wolimy rzadki blok od wymuszonych nawiazan.
+
+NOTKI TYPU MYSL SA POMIJANE: to rozwazania w pierwszej osobie z wymyslonymi nawykami, nie opublikowane ustalenia.
 
 GRANICA: blok zawiera wylacznie to, co naprawde opublikowalismy. Prompt mowi wprost, ze tylko to sie wydarzylo
 i ze nie wolno dopisywac niczego o naszej przeszlosci ani udawac przezyc czy reportazy. To jest ciaglosc
@@ -88,6 +90,12 @@ def powiazane(tekst: str, *, teraz: datetime | None = None,
             continue
         if not isinstance(w, dict) or not w.get("udane") or w.get("rodzaj") not in ("notka", "artykul"):
             continue
+        # NOTKI MYSL NIE WCHODZA DO HISTORII. To rozwazania w pierwszej osobie („Every line an assistant writes
+        # for work, I re-read twice") — wymyslone nawyki, nie opublikowane ustalenia redakcji. Zmierzone w probie
+        # 28.10: model powtorzyl taki nawyk jako fakt o koncie („We re-read anything an assistant drafts...").
+        # Historia ma dawac ciaglosc tego, co konto USTALILO, a nie powielac dawne zmyslone przezycia.
+        if w.get("typ") == "MYSL":
+            continue
         rodzaj = w["rodzaj"]
         cudza = _jedna_linia(w.get("tekst") if rodzaj == "notka" else w.get("tytul"))
         kiedy = _czas(w.get("kiedy"))
@@ -131,8 +139,10 @@ _NAGLOWEK = "## What this account has already said (our own published record —
 _ZASADA = (
     "\nUse it the way a person with a memory would. If this post confirms, contradicts, updates or "
     "extends something we said, say so plainly in the first person plural (\"we wrote\", \"this "
-    "changes what we said last week\") and draw the conclusion that follows; if we got something "
-    "wrong, say that. Only what is written above happened: add nothing about our past, and never "
+    "changes what we said on 7 October\") and draw the conclusion that follows; if we got something "
+    "wrong, say that. Refer to when we wrote it as it is dated above (\"on 7 October\", \"three weeks "
+    "ago\"), never as \"last week\" unless it was. Only what is written above happened: add nothing "
+    "about our past, and never "
     "claim personal experience, reporting or conversations that are not recorded here. If nothing "
     "here bears on the post, ignore it: a loose resemblance is not a reason to bring it up. Don't "
     "quote the record at length.")
@@ -144,13 +154,14 @@ def blok(tekst: str, *, teraz: datetime | None = None, plik: Path | None = None)
     Skracamy WPISY, nie caly blok: zasada uzycia stoi na koncu i jej ucieciem blok zamienilby sie w sam
     zapis, bez polecenia, co z nim zrobic.
     """
+    teraz = teraz or datetime.now(timezone.utc)
     wpisy = powiazane(tekst, teraz=teraz, plik=plik)
     if not wpisy:
         return "", 0
-    zapas = config.HISTORIA_KONTA_BLOK_ZNAKOW - len(_NAGLOWEK) - len(_ZASADA)
+    zapas = config.HISTORIA_KONTA_BLOK_ZNAKOW - len(_NAGLOWEK) - len(_ZASADA) - 30
     na_wpis = max(80, min(config.HISTORIA_KONTA_ZNAKI, zapas // len(wpisy) - 40))
     linie = []
     for w in wpisy:
         co = "our note" if w["rodzaj"] == "notka" else "our article"
         linie.append('- %s, %s: "%s"' % (w["kiedy"].date().isoformat(), co, _skroc(w["tekst"], na_wpis)))
-    return _NAGLOWEK + "\n".join(linie) + _ZASADA, len(wpisy)
+    return (_NAGLOWEK + "\n".join(linie) + "\nToday is %s." % teraz.date().isoformat() + _ZASADA), len(wpisy)

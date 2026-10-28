@@ -242,8 +242,28 @@
 | `MIN_WIEK_NOTKI_MIN` | `(20, 90)` | NOTKA TO NIE ARTYKUL i zyje godziny, nie dni. Ten sam prog co dla artykulow oznaczal, ze pod notki wchodzilismy zawsze PO koncu rozmowy: prz |
 | `KOMFORTOWO_KOMENTARZY` | `25` | ILU KOMENTARZY POD CELEM JESZCZE NIE UWAZAMY ZA TLOK. Wyszukiwarka oddawala posty ze srednio 45 komentarzami, jeden ze 126 — a komentarz sto |
 | `ODSTEP_DNI_NA_PUBLIKACJE` | `4` | Ile dni odstepu przed kolejnym komentarzem pod TA SAMA publikacja. Komentarz pod kazdym kolejnym tekstem tej samej osoby to drugi najczyteln |
-| `MAKS_WIEK_POSTA_DO_KOMENTARZA_DNI` | `7` | NAJSTARSZY CEL KOMENTARZA (1.10.2026, decyzja wlasciciela). `MIN_WIEK_*` pilnuje tylko, zeby nie wejsc za szybko; gornej granicy nie bylo, a |
-| `MAKS_WIEK_NOTKI_DO_KOMENTARZA_H` | `36` | — |
+| `MAKS_WIEK_POSTA_DO_KOMENTARZA_DNI` | `3` | NAJSTARSZY CEL KOMENTARZA (1.10.2026, decyzja wlasciciela). `MIN_WIEK_*` pilnuje tylko, zeby nie wejsc za szybko; gornej granicy nie bylo, a |
+| `MAKS_WIEK_NOTKI_DO_KOMENTARZA_H` | `24` | — |
+| `ODPOWIADALNOSC_WLACZONA` | `True` | CZY AUTOR ODPOWIADA KOMENTUJACYM (28.10.2026) — glowne kryterium kolejnosci celow. Najsilniejsza i najtrwalsza cecha celu w analizie komenta |
+| `ODPOWIADALNOSC_NISKA` | `0.05` | — |
+| `ODPOWIADALNOSC_MIN_KOMENTARZY_ARTYKUL` | `4` | — |
+| `ODPOWIADALNOSC_MIN_KOMENTARZY_NOTKA` | `2` | — |
+| `ODPOWIADALNOSC_POSTY` | `3` | — |
+| `ODPOWIADALNOSC_TTL_DNI` | `5` | — |
+| `ODPOWIADALNOSC_TTL_NOTKI_H` | `12` | — |
+| `ODPOWIADALNOSC_BLAD_TTL_H` | `24` | — |
+| `ODPOWIADALNOSC_MAKS_ZAPYTAN` | `20` | — |
+| `ODPOWIADALNOSC_MAKS_SEKUND` | `90` | — |
+| `ODPOWIADALNOSC_PROBA_BEZ_FILTRA` | `0.25` | — |
+| `ODPOWIADALNOSC_PLIK` | `DATA_DIR / "odpowiadalnosc.json"` | — |
+| `KOMENTARZ_CEL_SLOW` | `"40–70"` | DLUGOSC KOMENTARZA POD CUDZYM WPISEM (28.10.2026): wskazowka dla modelu, nie sufit. Dol 40 slow, bo komentarze krotsze niz ok. 40 slow maja  |
+| `MANIERA_PYTANIE_UDZIAL` | `0.25` | E23, ramie „on": w ilu komentarzach prompt kaze zakonczyc JEDNYM prawdziwym pytaniem (po tezie, nie zamiast niej). Los po adresie celu, stal |
+| `HISTORIA_KONTA_OKNO_DNI` | `60` | HISTORIA KONTA W KOMENTARZU (E23, ramie „on"; 28.10.2026) — prawdziwa ciaglosc zamiast wymyslonych przezyc: wlasne, opublikowane wpisy na te |
+| `HISTORIA_KONTA_WPISOW` | `2` | — |
+| `HISTORIA_KONTA_MIN_PODOBIENSTWA` | `0.13` | — |
+| `HISTORIA_KONTA_MIN_RZADKICH` | `2` | — |
+| `HISTORIA_KONTA_ZNAKI` | `420` | — |
+| `HISTORIA_KONTA_BLOK_ZNAKOW` | `2000` | — |
 | `ZYWY_WATEK_KOMENTARZY` | `2` | ZYWY WATEK POD NOTKA (1.10.2026). Przy wieku celu ~7,5 h NIE wybierala notki z mediana 3 reakcji i 0 komentarzy — 8% jej komentarzy dostawal |
 | `ZYWY_WATEK_REAKCJI` | `5` | — |
 | `MIN_REAKCJI_CELU_NOTKI` | `5` | SLABA NOTKA ODPADA, NIE TYLKO CICHA (19.10.2026, decyzja wlasciciela). Zmierzone na komentarzach z 28.09-16.10 (pomiar po 72 h): pod notkami |

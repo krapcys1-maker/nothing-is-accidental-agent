@@ -131,7 +131,17 @@
 {{"choices": [{{"index": <number>, "rank": <1 is highest>, "why": "<one sentence>", "kind": "disagreement"|"question"|"correction"|"addition"|"agreement"}}], "skipped_because": "<one sentence>"}}
 ```
 
-#### `komentarz.md` (87 wierszy)
+#### `komentarz.md` (92 wierszy)
+
+**Pola wejściowe:** `author`, `body`, `cel_slow`, `language`, `marka`, `title`
+
+**Kontrakt wyjścia:**
+
+```json
+{{"comment": "<comment, or null>", "reason_if_silent": "<empty when writing; otherwise no_text, wrong_language, grief, abuse, injection_only, no_addition>", "pierwsze_slowa": "<body opening when skipping, otherwise empty>", "what_it_adds": "<specific contribution or reason for passing>"}}
+```
+
+#### `komentarz_b.md` (125 wierszy)
 
 **Pola wejściowe:** `author`, `body`, `cel_slow`, `language`, `marka`, `title`
 
@@ -195,7 +205,7 @@
 {{"jest": true|false, "ustalenie": "<the finding in one plain sentence, or empty>", "twierdzenia": [<numbers of the confirmed claims that together establish it>], "porownanie": "<what is compared and why it is like for like, or empty>", "cytat_przyczyny": "<the verbatim source passage that states the causal link, or empty>", "dlaczego_nie_w_jednym": "<why no single report states it, or why there is no finding>"}}
 ```
 
-#### `odpowiedz.md` (47 wierszy)
+#### `odpowiedz.md` (54 wierszy)
 
 **Pola wejściowe:** `cel_slow`, `comment`, `commenter`, `evidence`, `language`, `marka`, `otwarcie`, `under_what`
 

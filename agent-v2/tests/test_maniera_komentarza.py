@@ -235,8 +235,8 @@ CEL_PRAWDZIWY = ("Anthropic told the police about a Florida woman's Claude chats
 w_prawdziwy = historia_konta.powiazane(CEL_PRAWDZIWY, teraz=TERAZ, plik=dz4)
 sprawdz("ta sama historia (nazwy, szczegoly) przechodzi, i to jako jedyna", len(w_prawdziwy) == 1 and "Florida" in w_prawdziwy[0]["tekst"]
         and w_prawdziwy[0]["wynik"] >= config.HISTORIA_KONTA_MIN_PODOBIENSTWA, [(w["wynik"], w["tekst"][:50]) for w in w_prawdziwy])
-sprawdz("prog: cosinus >= 0,12 i co najmniej 2 wspolne rzadkie terminy",
-        config.HISTORIA_KONTA_MIN_PODOBIENSTWA == 0.12 and config.HISTORIA_KONTA_MIN_RZADKICH == 2)
+sprawdz("prog: cosinus >= 0,13 i co najmniej 2 wspolne rzadkie terminy",
+        config.HISTORIA_KONTA_MIN_PODOBIENSTWA == 0.13 and config.HISTORIA_KONTA_MIN_RZADKICH == 2)
 stare_p = config.HISTORIA_KONTA_MIN_RZADKICH
 config.HISTORIA_KONTA_MIN_RZADKICH = 999
 sprawdz("warunek rzadkich terminow jest osobnym wymogiem (przy absurdalnym progu nic nie przechodzi)",
@@ -247,6 +247,16 @@ config.HISTORIA_KONTA_MIN_PODOBIENSTWA = 0.99
 sprawdz("prog cosinusa jest osobnym wymogiem (przy 0,99 nic nie przechodzi)",
         historia_konta.powiazane(CEL_PRAWDZIWY, teraz=TERAZ, plik=dz4) == [])
 config.HISTORIA_KONTA_MIN_PODOBIENSTWA = stare_c
+
+dz5 = KAT / "dziennik_mysl.jsonl"
+mysl = {**wpis(3, tekst=PRAWDZIWA), "typ": "MYSL"}
+dz5.write_bytes((SZUM + "\n" + json.dumps(mysl, ensure_ascii=False) + "\n").encode("utf-8"))
+sprawdz("notki typu MYSL (rozwazania w 1. osobie, wymyslone nawyki) NIE wchodza do historii",
+        historia_konta.powiazane(CEL_PRAWDZIWY, teraz=TERAZ, plik=dz5) == []
+        and len(historia_konta.powiazane(CEL_PRAWDZIWY, teraz=TERAZ, plik=dz4)) == 1)
+bl, nn = historia_konta.blok(CEL_PRAWDZIWY, teraz=TERAZ, plik=dz4)
+sprawdz("blok podaje dzisiejsza date i kaze odwolywac sie do dat wpisow (nie last week na slowo)",
+        "Today is 2026-10-28." in bl and "never as \"last week\" unless it was" in bl and nn == 1, bl[-420:])
 
 print("=== 5. run.dane_maniery ===")
 ORYG = dict(config.EKSPERYMENTY)

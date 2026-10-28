@@ -3673,7 +3673,7 @@ MANIERA_PYTANIE_UDZIAL = 0.25
 # moze wyciagac wnioski („pisalismy o tym 20.10, to zmienia..."). Bez modelu.
 HISTORIA_KONTA_OKNO_DNI = 60
 HISTORIA_KONTA_WPISOW = 2
-HISTORIA_KONTA_MIN_PODOBIENSTWA = 0.12    # cosinus wektorow slow wazonych idf (typowy cel: 0,08; ta sama historia: >= 0,13)
+HISTORIA_KONTA_MIN_PODOBIENSTWA = 0.13    # cosinus wektorow slow wazonych idf (typowy cel: 0,08; ta sama historia: >= 0,13; 0,12 przepuszczalo luzne skojarzenia)
 HISTORIA_KONTA_MIN_RZADKICH = 2           # i tyle wspolnych RZADKICH terminow (slowo z <= max(3, 5%) wpisow albo liczba)
 HISTORIA_KONTA_ZNAKI = 420               # ile znakow jednego wpisu idzie do promptu
 HISTORIA_KONTA_BLOK_ZNAKOW = 2000        # sufit calego bloku (skracane sa WPISY, nie zasada uzycia)
