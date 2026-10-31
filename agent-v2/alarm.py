@@ -137,25 +137,45 @@ def artykul_zalegly() -> str | None:
                str(zaleg.get("powod"))[:200]))
 
 
+# SESJA MUSI POWSTAC NA SERWERZE, NIE NA KOMPUTERZE WLASCICIELA: sesja z innego
+# adresu IP jest odrzucana przez Cloudflare przy publikowaniu (JAK_WROCIC.md).
+# Ten tekst kazal wczesniej logowac sie w Chrome na wlasnym komputerze i kopiowac
+# plik na serwer — czyli robic dokladnie to, co nie dziala.
+_JAK_ODNOWIC_SESJE = (
+    "Zaloguj sie NA SERWERZE: polacz sie z pulpitem serwera (noVNC, port 6080\n"
+    "przez tunel SSH: ssh -L 6080:127.0.0.1:6080 <uzytkownik>@<serwer>, potem\n"
+    "http://localhost:6080/vnc.html), zaloguj sie na Substacka w tamtejszym\n"
+    "Chrome i na serwerze wykonaj:\n"
+    "  python agent-v2/browser.py sesja\n"
+    "Szczegoly: JAK_WROCIC.md, czesc „Rzecz, ktora zatrzyma agenta bez zadnego bledu”.")
+
+
 def sprawdz_sesje_i_ostrzez() -> None:
     """Pilnuje jedynej rzeczy, która zatrzymuje agenta bez żadnego błędu."""
     import browser
 
+    # NAJPIERW PLIK Z ZYWEJ SESJI. Bot pracuje na zywym Chrome serwera, a plik
+    # `storage-state.json` to tylko zapas — i to on dawal tu liczbe dni. Nikt
+    # go nie odswiezal od sierpnia, wiec 30.10.2026 alarm liczyl 14 dni, gdy
+    # zywa sesja miala 89 (Substack przedluza ja przy aktywnosci). Odswiezenie
+    # czyta tylko ciasteczka i nie nadpisuje pliku, gdy Chrome jest wylogowany
+    # albo nie odpowiada — wtedy mierzymy to, co jest w pliku, jak dotad.
+    try:
+        browser.odswiez_plik_sesji()
+    except Exception as exc:
+        print("  [sesja] odswiezenie pliku nie wyszlo: %s" % type(exc).__name__,
+              flush=True)
     dni = browser.dni_do_wygasniecia()
     if dni is None:
         wyslij("sesja-brak", "Brak sesji Substacka",
-               "Agent nie ma pliku sesji i nie moze nic wystawic.")
+               "Agent nie ma pliku sesji i nie moze nic wystawic.\n" + _JAK_ODNOWIC_SESJE)
     elif dni <= 0:
         wyslij("sesja-wygasla", "Sesja Substacka WYGASLA",
-               "Agent nie wystawi juz nic, dopoki nie odnowisz sesji.\n"
-               "Zaloguj sie w Chrome na swoim komputerze i wykonaj:\n"
-               "  python agent-v2/browser.py sesja\n"
-               "a potem skopiuj data/storage-state.json na serwer.")
+               "Agent nie wystawi juz nic, dopoki nie odnowisz sesji.\n" + _JAK_ODNOWIC_SESJE)
     elif dni <= browser.OSTRZEGAJ_PONIZEJ_DNI:
         wyslij("sesja-konczy", f"Sesja Substacka wygasa za {dni} dni",
-               f"Zostalo {dni} dni. Odnow ja, zanim agent zamilknie.\n"
-               "Zaloguj sie w Chrome i wykonaj:\n"
-               "  python agent-v2/browser.py sesja")
+               f"Zostalo {dni} dni wedlug pliku sesji I zywego Chrome serwera. "
+               "Odnow ja, zanim agent zamilknie.\n" + _JAK_ODNOWIC_SESJE)
 
 
 def sprawdz_przebiegi_i_ostrzez(ile: int = 3) -> None:

@@ -655,6 +655,58 @@ def sprawdz_sesje() -> None:
         p.stop()
 
 
+def odswiez_plik_sesji() -> int | None:
+    """Zapisuje stan ZYWEJ sesji (Chrome serwera) do pliku i oddaje, ile dni jej zostalo.
+
+    PO CO. Bot pracuje na zywym Chrome (CDP), a `storage-state.json` jest tylko
+    zapasem — i to PLIK mierzy alarm oraz ostrzezenie „sesja wygasa za N dni".
+    Nikt go nie odswiezal od sierpnia, wiec 30.10.2026 alarm liczyl 14 dni do
+    wygasniecia, gdy zywa sesja miala ich 89 (Substack przedluza ja przy
+    aktywnosci). Falszywy alarm kaze logowac sie bez potrzeby, a przy
+    prawdziwym ludzie juz nie czytaja.
+
+    BEZ NAWIGACJI I BEZ KLIKANIA: czytamy tylko ciasteczka kontekstu. Plik
+    nadpisujemy WYLACZNIE, gdy zywa sesja jest zalogowana — wylogowany Chrome nie
+    moze zastapic dzialajacej kopii zapasowej pustym stanem — i ATOMOWO (zapis do
+    pliku obok, sprawdzenie, podmiana), zeby przerwany zapis nie zostawil
+    polowy JSON-a. Gdy Chrome nie odpowiada, nie uruchamiamy zadnej innej
+    przegladarki w jego miejsce: oddajemy `None`, a plik zostaje taki, jaki byl.
+    """
+    import json
+
+    if not _chrome_odpowiada():
+        return None
+    try:
+        p, br, ctx = podlacz_sie()
+    except (Exception, SystemExit):
+        return None
+    tymczasowy = SESSION_FILE.with_name(SESSION_FILE.name + ".nowy")
+    try:
+        if not zalogowany(ctx):
+            return None
+        SESSION_FILE.parent.mkdir(parents=True, exist_ok=True)
+        ctx.storage_state(path=str(tymczasowy))
+        dane = json.loads(tymczasowy.read_text(encoding="utf-8"))
+        if not any(c.get("name") == SESSION_COOKIE for c in dane.get("cookies", [])):
+            return None
+        tymczasowy.replace(SESSION_FILE)
+    except Exception as exc:
+        print("  [sesja] nie odswiezylem pliku: %s" % type(exc).__name__, flush=True)
+        return None
+    finally:
+        try:
+            if tymczasowy.exists():
+                tymczasowy.unlink()
+        except OSError:
+            pass
+        try:
+            br.close()
+            p.stop()
+        except Exception:
+            pass
+    return dni_do_wygasniecia()
+
+
 def sprawdz_serwer() -> None:
     """Odpowiada na JEDNO pytanie: czy zapisana sesja żyje z adresu tego serwera.
 
@@ -1368,10 +1420,14 @@ def zapisz_czytelnikow(page=None, licznik: dict[str, Any] | None = None
 # sekundy, a blok ma dobowy budzet jednej sztuki). Blok obserwacji nie wchodzi
 # wiec do sieci ANI RAZU — czyta ten plik.
 #
-# PAMIEC SIE SAMA LECZY. Zrzut przepisuje uchwyty w calosci (odobserwowanie
-# przez wlasciciela znika z pamieci samo), a `obserwuj_profil` dopisuje kazdego,
-# kogo wlasnie zaobserwowal albo u kogo zastal „Unfollow" — wiec nawet przy
-# pustym pliku pomylka kosztuje jedno wejscie na profil, raz.
+# PAMIEC SIE SAMA LECZY — I OD 31.10.2026 NIE PRZEPISUJE SIE Z OBCIETEJ LISTY.
+# Zakladka `/following` oddaje ok. 46 osob przy wiekszej liczbie obserwowanych,
+# wiec zrzut tylko DOPISUJE, a konta, o ktorych dziennik wie, ze je obserwujemy
+# (`_obserwowani_z_dziennika`), wracaja do pamieci przy kazdym odswiezeniu.
+# `obserwuj_profil` dopisuje kazdego, kogo wlasnie zaobserwowal albo u kogo
+# zastal „Unfollow" — wiec nawet przy pustym pliku pomylka kosztuje jedno
+# wejscie na profil, raz. Cena: odobserwowanie przez wlasciciela nie znika
+# z pamieci samo (patrz `odswiez_kogo_obserwujemy`).
 OBSERWOWANI = config.DATA_DIR / "kogo_obserwujemy.json"
 
 
@@ -1463,9 +1519,11 @@ def czy_juz_obserwujemy(host: str, pamiec: dict[str, Any] | None = None) -> bool
 
 
 def odswiez_kogo_obserwujemy(page) -> int | None:
-    """Przepisuje pamiec ze strony `/@my/following`. Wymaga OTWARTEJ sesji.
+    """Dopisuje do pamieci ze strony `/@my/following` i z dziennika. Wymaga OTWARTEJ sesji.
 
-    Zwraca liczbe odczytanych osob albo None przy awarii odczytu.
+    Zwraca liczbe znanych kont (po scaleniu), 0 gdy zakladka nic nie oddala
+    albo None przy awarii odczytu. NIE przepisuje pamieci z listy — patrz
+    komentarz w srodku.
 
     PUSTY ODCZYT NIE KASUJE PAMIECI — ta sama zasada, co przy `zapisz_
     czytelnikow`: zapisane zero wygladaloby jak konto, ktore nie obserwuje
@@ -1482,21 +1540,78 @@ def odswiez_kogo_obserwujemy(page) -> int | None:
         print("  [obserwowani] %s" % f"{type(exc).__name__}: {exc}"[:120],
               flush=True)
         return None
+    teraz = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    stara = kogo_obserwujemy()
+    # SCALAMY, NIE PRZEPISUJEMY (31.10.2026). Zakladka `/following` oddaje
+    # tylko ok. 46 osob, a konto obserwuje ich wiecej: w pamieci stalo 41
+    # uchwytow, gdy bot zaobserwowal 134. Dawniej kazde odswiezenie przepisywalo
+    # pamiec z tej obcietej listy, wiec wszystko, co `obserwuj_profil` dopisal
+    # po drodze, znikalo przy najblizszym przebiegu i to samo konto wracalo do
+    # losowania (od 1.10 ok. 130 wejsc na profil zakonczonych „juz
+    # obserwujemy"). Teraz zakladka tylko DOPISUJE, a konta, o ktorych dziennik
+    # wie, ze je obserwujemy, wracaja do pamieci przy kazdym odswiezeniu — takze
+    # gdy plik pamieci zginie.
+    #
+    # CENA: odobserwowanie przez wlasciciela nie znika z pamieci samo; takie
+    # konto zostaje poza pula obserwacji. To swiadomy wybor — falszywe „juz
+    # obserwujemy" kosztuje jedno konto w puli, falszywe „nie" jedno wejscie na
+    # profil, a odrozniac te dwa przypadki umielibysmy tylko druga, pelna lista.
+    uchwyty = dict(stara["uchwyty"])
+    dopisani = 0
+    for uchwyt, kiedy in _obserwowani_z_dziennika().items():
+        if uchwyt not in uchwyty:
+            uchwyty[uchwyt] = kiedy or teraz
+            dopisani += 1
     if not ludzie:
         print("  [obserwowani] zakladka nic nie oddala — zostawiam pamiec",
               flush=True)
+        if dopisani:
+            _zapisz_kogo_obserwujemy({"zrzut": stara["zrzut"], "uchwyty": uchwyty,
+                                      "hosty": dict(stara["hosty"])})
         return 0
-    teraz = datetime.now(timezone.utc).isoformat(timespec="seconds")
-    stara = kogo_obserwujemy()
-    swiezi = {x["uchwyt"]: stara["uchwyty"].get(x["uchwyt"]) or teraz
-              for x in ludzie}
-    # HOSTY, KTORYCH UCHWYT ZNIKNAL ZE ZRZUTU, WYPADAJA RAZEM Z NIM. Inaczej
-    # odobserwowanie przez wlasciciela zostawaloby w pamieci na zawsze i host
-    # nie mialby jak wrocic do puli.
-    hosty = {h: u for h, u in stara["hosty"].items() if u in swiezi}
-    _zapisz_kogo_obserwujemy({"zrzut": teraz, "uchwyty": swiezi,
-                              "hosty": hosty})
-    return len(swiezi)
+    for x in ludzie:
+        # Pierwszy zapisany czas zostaje: mowi, od kiedy o koncie wiemy.
+        uchwyty.setdefault(x["uchwyt"], teraz)
+    _zapisz_kogo_obserwujemy({"zrzut": teraz, "uchwyty": uchwyty,
+                              "hosty": dict(stara["hosty"])})
+    return len(uchwyty)
+
+
+def _obserwowani_z_dziennika() -> dict[str, str]:
+    """Uchwyty, o ktorych DZIENNIK wie, ze je obserwujemy: {uchwyt: kiedy}.
+
+    Dwa rodzaje wpisow dowodza obserwowania: udana `obserwacja` (kliknelismy
+    i potwierdzilo sie) oraz `obserwacja_pominieta` z powodem „juz obserwujemy
+    ..." (menu profilu pokazalo „Unfollow"). Inne pominiecia (za duze konto,
+    brak ustalonego autora) NIE znacza, ze kogos obserwujemy, i nie wchodza.
+    Pierwsza data wygrywa. Brak pliku albo uszkodzona linia nie przerywaja
+    niczego — to pamiec pomocnicza.
+    """
+    import json as _json
+
+    wynik: dict[str, str] = {}
+    try:
+        tekst = DZIENNIK.read_text(encoding="utf-8")
+    except OSError:
+        return wynik
+    for linia in tekst.split(chr(10)):
+        if '"obserwacja' not in linia:
+            continue
+        try:
+            w = _json.loads(linia)
+        except ValueError:
+            continue
+        if not isinstance(w, dict) or not w.get("udane"):
+            continue
+        uchwyt = str(w.get("komu") or "").strip().lstrip("@")
+        if not uchwyt:
+            continue
+        rodzaj = w.get("rodzaj")
+        if rodzaj == "obserwacja" or (
+                rodzaj == "obserwacja_pominieta"
+                and str(w.get("powod") or "").startswith("juz obserwujemy")):
+            wynik.setdefault(uchwyt, str(w.get("kiedy") or ""))
+    return wynik
 
 
 WZROST = config.DATA_DIR / "wzrost.jsonl"
@@ -2466,6 +2581,35 @@ def _komentarze_galezi(page, komentarz: dict, korzen: str, post: dict,
     return komentarze
 
 
+def _nasz_komentarz_w_cudzym_watku(nasz: dict, moje_id: Any,
+                                   wpisy: dict) -> bool:
+    """Czy `nasz` to NASZ komentarz stojacy w watku, ktory zaczal ktos inny.
+
+    Dla zdarzenia `note_reply` to jedyny przypadek, ktorego nie pokrywa
+    `nieodpowiedziane`. Trzy warunki, kazdy z innego powodu:
+
+      - wpis musi byc w paczce kanalu i byc NASZ. Bez tego nie wiemy, czyj jest
+        cel zdarzenia, a zgadywanie konczy sie odpowiedzia w cudzej rozmowie;
+      - `ancestor_path` niepusty: pusty znaczy, ze to nasza notka-korzen, a jej
+        odpowiedzi czyta `nieodpowiedziane`;
+      - korzen watku (pierwszy przodek) nie moze byc nasz, o ile paczka go zna:
+        odpowiedz na nasza odpowiedz pod NASZA notka tez jest w rekach
+        `nieodpowiedziane`.
+    """
+    if not isinstance(nasz, dict) or nasz.get("user_id") != moje_id:
+        return False
+    przodkowie = _przodkowie(nasz)
+    if not przodkowie:
+        return False
+    korzen = przodkowie[0]
+    # Klucze paczki to liczby, `ancestor_path` to napis — sprawdzamy oba ksztalty.
+    for klucz in (korzen, int(korzen) if korzen.isdigit() else None):
+        wpis = wpisy.get(klucz) if klucz is not None else None
+        if isinstance(wpis, dict) and wpis.get("user_id") == moje_id:
+            return False
+    return True
+
+
 def odpowiedzi_na_nasze_komentarze(ile: int = 10) -> list[dict[str, Any]]:
     """Odpowiedzi na NASZE komentarze zostawione pod CUDZYMI tekstami.
 
@@ -2483,8 +2627,19 @@ def odpowiedzi_na_nasze_komentarze(ile: int = 10) -> list[dict[str, Any]]:
     odpowiedzi, a w tej samej odpowiedzi przychodza tresci, autorzy i posty,
     wiec nie trzeba o nic dopytywac.
 
-    Nie mylic z `note_reply`: to odpowiedzi pod naszymi notkami, ktore obsluguje
-    `nieodpowiedziane`. Braloby sie je tu drugi raz.
+    DWA TYPY ZDARZEN, BO ROZMOWA POD CUDZYM TEKSTEM TOCZY SIE W DWOCH MIEJSCACH.
+    Pod artykulem odpowiedz na nasz komentarz przychodzi jako `comment_reply`.
+    Pod cudza NOTKA przychodzi jako `note_reply` — i tego typu ta funkcja nie
+    brala wcale, bo `nieodpowiedziane` czyta tylko nasze WLASNE notki. Efekt,
+    zmierzony 29.10.2026 na 162 naszych komentarzach: pod artykulami
+    odpisalismy autorom w 9 z 13 watkow, pod cudzymi notkami w 0 z 33 —
+    wlasnie tam, gdzie autorzy odpowiadaja nam najczesciej.
+
+    `note_reply` bierzemy WYLACZNIE wtedy, gdy wiemy, ze jego cel to NASZ
+    komentarz stojacy w cudzym watku (`user_id` nasz i niepusty `ancestor_path`).
+    Odpowiedzi pod naszymi wlasnymi notkami nadal obsluguje
+    `nieodpowiedziane`; jesli ta sama odpowiedz przyjdzie dwiema drogami,
+    `run.odpowiedzi` odsiewa powtorke po numerze odpowiedzi.
     """
     wymagaj_sesji()
     p, browser, context = podlacz_sie()
@@ -2515,7 +2670,8 @@ def odpowiedzi_na_nasze_komentarze(ile: int = 10) -> list[dict[str, Any]]:
         for zdarzenie in kanal.get("activityItems") or []:
             if not isinstance(zdarzenie, dict):
                 continue
-            if zdarzenie.get("type") != "comment_reply":
+            typ = zdarzenie.get("type")
+            if typ not in ("comment_reply", "note_reply"):
                 continue
             ich_id = zdarzenie.get("comment_id")
             nasz_id = zdarzenie.get("target_comment_id")
@@ -2526,6 +2682,9 @@ def odpowiedzi_na_nasze_komentarze(ile: int = 10) -> list[dict[str, Any]]:
             nasz = wpisy.get(nasz_id) or {}
             tekst = ich.get("body") or ""
             if not tekst.strip():
+                continue
+            if typ == "note_reply" and not _nasz_komentarz_w_cudzym_watku(
+                    nasz, moje_id, wpisy):
                 continue
 
             # Czy juz odpisalismy PO ich odpowiedzi. Pytamy watku, nie wlasnego
@@ -2572,7 +2731,9 @@ def odpowiedzi_na_nasze_komentarze(ile: int = 10) -> list[dict[str, Any]]:
                 "tekst": tekst,
                 "id": ich_id,
                 "gdzie": "komentarz_obcy",
-                "kontekst": f"our own comment under \"{post.get('title') or 'someone else’s post'}\"",
+                "kontekst": (f"our own comment under \"{post.get('title') or 'someone else’s post'}\""
+                             if typ == "comment_reply"
+                             else "our own comment in someone else’s note thread"),
                 "url": post.get("canonical_url") or "",
             })
             if len(czekaja) >= ile:

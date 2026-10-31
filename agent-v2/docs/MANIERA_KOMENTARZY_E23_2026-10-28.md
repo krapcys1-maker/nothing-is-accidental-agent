@@ -107,6 +107,10 @@ poprawić prompt i liczyć od nowa (lekcja z E17/E18).
 * Filtr po odpowiadalności autora może zmniejszać rozmowę z postronnymi i wzmacniać pętle wzajemności — dlatego 25% bez kary i neutralna niewiedza.
 * Odpowiedź autora jest w dużej mierze grzecznościowa (65% to zgoda); nie mierzy jakości komentarza.
 * Notki z kanału mają uchwyt autora, a notki z wyszukiwarki dostały go dopiero 28.10 (wcześniej pamięć rozmówcy była dla nich pusta).
+* **GRANICA W TRAKCIE E23 (31.10.2026):** od wdrożenia zmiany `note_reply` bot odpisuje także na odpowiedzi do naszych komentarzy pod CUDZYMI NOTKAMI
+  (dotąd odpisywał tylko pod artykułami: 9 z 13 wątków, pod cudzymi notkami 0 z 33). To zmienia metrykę główną (odpowiedź ≥ 15 słów w 72 h) w OBU ramionach
+  jednakowo — nie jest różnicą między ramionami — ale podnosi poziom bazowy i dołącza rozmowę, której wcześniej nie było. Przy ocenie liczyć osobno komentarze
+  sprzed i po dacie wdrożenia (zapisanej w `docs/ZMIANY_2026-10-31_ODPOWIEDZI_OBSERWOWANI_SESJA.md`) albo uwzględnić ją jako zmienną; nie łączyć ich w jedną serię bez tego.
 
 ## Wycofanie
 `config.EKSPERYMENTY["maniera_komentarza"]["do"]` ustawić na datę z przeszłości (ramię „off” = dotychczasowy komentarz z zasadami etapu 2);

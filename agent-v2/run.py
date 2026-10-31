@@ -503,6 +503,30 @@ def odpowiedz_zablokowana(c: dict) -> bool:
     return True
 
 
+def bez_powtorzonych_odpowiedzi(czekaja: list[dict]) -> list[dict]:
+    """Ta sama cudza odpowiedz moze przyjsc DWIEMA drogami — zostaje pierwsza.
+
+    Trzy zrodla odpowiedzi (pod naszymi notkami, pod naszymi artykulami i pod
+    naszymi komentarzami u obcych) nakladaja sie w jednym miejscu: odpowiedz na
+    NASZA odpowiedz pod NASZA notka widzi i `nieodpowiedziane` (jako ostatni
+    glos w galezi), i `odpowiedzi_na_nasze_komentarze` (jako `note_reply`). Bez
+    odsiewu dostalaby dwie odpowiedzi, kazda z wywolaniem modelu. Klucz to numer
+    ICH odpowiedzi (`id`); pierwsza zostaje, a kolejnosc zrodel mowi, ktora to:
+    wlasne notki sa pierwsze. Pozycje bez numeru nie maja po czym sie powtarzac
+    i przechodza bez zmian.
+    """
+    widziane: set[str] = set()
+    wynik: list[dict] = []
+    for c in czekaja:
+        numer = c.get("id")
+        if numer is not None:
+            if str(numer) in widziane:
+                continue
+            widziane.add(str(numer))
+        wynik.append(c)
+    return wynik
+
+
 _KONIEC_CZASU: float | None = None
 
 
@@ -1651,6 +1675,10 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
         czekaja = (browser.nieodpowiedziane()
                    + browser.komentarze_pod_artykulami()
                    + browser.odpowiedzi_na_nasze_komentarze())
+        # TA SAMA ODPOWIEDZ MOZE PRZYJSC DWIEMA DROGAMI (od 31.10.2026
+        # `odpowiedzi_na_nasze_komentarze` bierze tez `note_reply`): odsiew po
+        # numerze ich odpowiedzi, kolejnosc zrodel rozstrzyga, ktora zostaje.
+        czekaja = bez_powtorzonych_odpowiedzi(czekaja)
         if not czekaja:
             return
         # PYTANIA CZYTELNIKOW DO PULI TEMATOW. Zbieramy tutaj, bo tutaj i tak

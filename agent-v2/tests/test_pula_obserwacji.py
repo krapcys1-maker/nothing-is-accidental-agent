@@ -369,11 +369,16 @@ NA_SUBSTACKU = {"openthebooks", "rwmalonemd"}
 BLOK_TERAZ = wytnij(zrodlo_run(), "obserwuj")
 
 
-print("=== 1. PAMIEC OBSERWOWANYCH: CZYTANIE, ZAPIS, SAMOLECZENIE ===")
+print("=== 1. PAMIEC OBSERWOWANYCH: CZYTANIE, ZAPIS, SCALANIE ===")
 _kat = pathlib.Path(tempfile.mkdtemp())
 _stare_obs = browser.OBSERWOWANI
+_stary_dziennik = browser.DZIENNIK
 try:
     browser.OBSERWOWANI = _kat / "kogo_obserwujemy.json"
+    # ODSWIEZENIE CZYTA TEZ DZIENNIK (od 31.10.2026: konta, o ktorych dziennik
+    # wie, ze je obserwujemy, wracaja do pamieci). Bez podmiany ten blok czytal
+    # by PRODUKCYJNY dziennik i liczyl cudze konta — wskazujemy nieistniejacy plik.
+    browser.DZIENNIK = _kat / "dziennik.jsonl"
     sprawdz("brak pliku to pusta pamiec, nie wyjatek",
             browser.kogo_obserwujemy() == {"zrzut": None, "uchwyty": {},
                                            "hosty": {}})
@@ -434,15 +439,22 @@ try:
     sprawdz("mapa hostow przezyla zrzut",
             browser.czy_juz_obserwujemy("www.malone.news") is True)
 
-    # SAMOLECZENIE: wlasciciel odobserwowal Malone'a recznie. Zrzut przepisuje
-    # liste w calosci, wiec host MUSI wrocic do puli sam — inaczej pamiec
-    # kasowalaby kandydatow na zawsze.
+    # SCALANIE, NIE SAMOLECZENIE (31.10.2026). Dawniej ten blok pilnowal, ze po
+    # recznym odobserwowaniu Malone'a zrzut „przepisuje liste w calosci", wiec
+    # host wraca do puli sam. To zakladalo, ze `/following` oddaje CALA liste.
+    # Produkcja pokazala, ze nie: 41-47 osob przy 134 zaobserwowanych przez bota,
+    # wiec kazde przepisanie kasowalo konta, ktorych zakladka po prostu nie
+    # pokazala, i ten sam kandydat wracal do losowania. Zakladka tylko DOPISUJE;
+    # cena to konto odobserwowane recznie, ktore zostaje poza pula — swiadomy
+    # wybor (falszywe „juz obserwujemy" kosztuje jedno konto w puli, falszywe
+    # „nie" jedno wejscie na profil), opisany przy `odswiez_kogo_obserwujemy`.
     ilu2 = browser.odswiez_kogo_obserwujemy(StronaZakladki([
         Odnosnik("/@openthebooks", "OpenTheBooks"),
         Odnosnik("/@ethanding", "Ethan Ding")]))
-    sprawdz("po odobserwowaniu zostaje dwoch", ilu2 == 2, ilu2)
-    sprawdz("a host wraca do puli",
-            browser.czy_juz_obserwujemy("www.malone.news") is False)
+    sprawdz("zakladka oddala dwoch, ale ZNAMY nadal trzech (scalenie, nie przepisanie)",
+            ilu2 == 3, ilu2)
+    sprawdz("konto, ktorego zakladka nie pokazala, zostaje w pamieci razem z hostem",
+            browser.czy_juz_obserwujemy("www.malone.news") is True)
 
     # PUSTY ODCZYT NIE KASUJE PAMIECI — inaczej jedna awaria strony
     # odblokowalaby cala pule i dzien poszedlby na powtorki.
@@ -452,6 +464,7 @@ try:
                 "openthebooks.substack.com") is True)
 finally:
     browser.OBSERWOWANI = _stare_obs
+    browser.DZIENNIK = _stary_dziennik
 
 
 print()

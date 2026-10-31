@@ -1,7 +1,7 @@
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-3915 wierszy, 46 funkcji na poziomie modułu, 2 klas
+3943 wierszy, 47 funkcji na poziomie modułu, 2 klas
 
 | funkcja | co robi |
 |---|---|
@@ -28,6 +28,7 @@
 | `dane_maniery(cel, tekst_celu, dzien)` | E23 (`maniera_komentarza`): ramie celu i to, co ramie „on" dopisuje do wywolania `comment_on`. |
 | `ramiona_odpowiedzi(c, e21)` | Pola dziennika odpowiedzi: uchwyt rozmowcy i E21. |
 | `odpowiedz_zablokowana(c)` | Czy odpowiedz pod artykulem na ten komentarz juz `MAKS_NIEUDANYCH_...` razy nie wyszla. |
+| `bez_powtorzonych_odpowiedzi(czekaja)` | Ta sama cudza odpowiedz moze przyjsc DWIEMA drogami — zostaje pierwsza. |
 | `zostal_czas(na_co, potrzeba_s)` | Czy zdazymy jeszcze cokolwiek zrobic przed koncem czasu przebiegu. |
 | `_pod_rzad_w_bloku(co, na_co)` *(wewn.)* | Ile porazek pod rzad naliczyl TEN blok, odkad sie zaczal. |
 | `rytm(co, na_co, stan)` | Przerwa MIEDZY dwoma dzialaniami tego samego rodzaju. |
@@ -304,7 +305,7 @@
 
 ### `browser.py` — cała styczność z Substackiem; nie woła modelu
 
-6088 wierszy, 119 funkcji na poziomie modułu, 0 klas
+6249 wierszy, 122 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -325,6 +326,7 @@
 | `api_json(page, sciezka, baza)` | Czyta API WCHODZĄC na adres, zamiast wołać `fetch` ze strony. |
 | `podlacz_sie()` | Podłącza się do Chrome'a, którego uruchomił i zalogował WŁAŚCICIEL. |
 | `sprawdz_sesje()` | Czy Chrome właściciela jest zalogowany i co agent w nim widzi. |
+| `odswiez_plik_sesji()` | Zapisuje stan ZYWEJ sesji (Chrome serwera) do pliku i oddaje, ile dni jej zostalo. |
 | `sprawdz_serwer()` | Odpowiada na JEDNO pytanie: czy zapisana sesja żyje z adresu tego serwera. |
 | `zaloguj()` | Otwiera prawdziwe okno przeglądarki i czeka, aż właściciel się zaloguje. |
 | `rozpoznanie()` | Sprawdza, czy agent umie się poruszać po zalogowanym koncie. |
@@ -343,7 +345,8 @@
 | `_zapisz_kogo_obserwujemy(pamiec)` *(wewn.)* | Nigdy nie przerywa dzialania — to pamiec pomocnicza, nie warunek pracy. |
 | `zapamietaj_obserwowanego(uchwyt, host)` | Dopisuje JEDNEGO do pamieci — po udanej obserwacji albo po zastaniu |
 | `czy_juz_obserwujemy(host, pamiec)` | Czy ten HOST wskazuje kogos, kogo juz obserwujemy. Bez sieci. |
-| `odswiez_kogo_obserwujemy(page)` | Przepisuje pamiec ze strony `/@my/following`. Wymaga OTWARTEJ sesji. |
+| `odswiez_kogo_obserwujemy(page)` | Dopisuje do pamieci ze strony `/@my/following` i z dziennika. Wymaga OTWARTEJ sesji. |
+| `_obserwowani_z_dziennika()` *(wewn.)* | Uchwyty, o ktorych DZIENNIK wie, ze je obserwujemy: {uchwyt: kiedy}. |
 | `zapisz_wzrost_konta(profil)` | Ilu nas czyta DZISIAJ — jedna linia na pomiar, historia zostaje. |
 | `_wiersze_zrodel(dane)` *(wewn.)* | Lista pozycji z odpowiedzi o zrodlach — niezaleznie od klucza. |
 | `_cos_w_odpowiedzi(dane)` *(wewn.)* | Czy odpowiedz W OGOLE cos niesie — odroznia „pusto" od „nie wiem". |
@@ -362,6 +365,7 @@
 | `nasze_odpowiedzi_w_rozmowie(komentarze, korzen, moje_id)` | Ile razy JUZ odpisalismy pod `korzen`. |
 | `limit_rozmowy(rozmowca_id)` | Ile razy wolno nam odpisac w jednej rozmowie z ta osoba. |
 | `_komentarze_galezi(page, komentarz, korzen, post, pamiec)` *(wewn.)* | Wszystkie komentarze galezi `korzen` — jedno zapytanie na galaz. |
+| `_nasz_komentarz_w_cudzym_watku(nasz, moje_id, wpisy)` *(wewn.)* | Czy `nasz` to NASZ komentarz stojacy w watku, ktory zaczal ktos inny. |
 | `odpowiedzi_na_nasze_komentarze(ile)` | Odpowiedzi na NASZE komentarze zostawione pod CUDZYMI tekstami. |
 | `komentarze_pod_artykulami(ile)` | Cudze komentarze pod NASZYMI artykulami, na ktore nie odpisalismy. |
 | `nieodpowiedziane(ile)` | Cudze odpowiedzi pod naszymi notkami, na które jeszcze nie odpisaliśmy. |
@@ -532,7 +536,7 @@
 
 ### `alarm.py` — kontrola sesji, zdrowia i alarm do właściciela
 
-1243 wierszy, 26 funkcji na poziomie modułu, 0 klas
+1263 wierszy, 26 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
