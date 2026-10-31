@@ -689,6 +689,16 @@ def odswiez_plik_sesji() -> int | None:
         dane = json.loads(tymczasowy.read_text(encoding="utf-8"))
         if not any(c.get("name") == SESSION_COOKIE for c in dane.get("cookies", [])):
             return None
+        # UPRAWNIENIA PLIKU SESJI ZOSTAJA TAKIE, JAKIE BYLY (u nas 600). Plik
+        # tymczasowy tworzy Playwright z domyslnymi uprawnieniami (644), a to sa
+        # ciasteczka zalogowanej sesji: po podmianie czytaliby je inni
+        # uzytkownicy serwera. Bez poprzedniego pliku — 600.
+        import os
+        try:
+            tryb = (SESSION_FILE.stat().st_mode & 0o777) if SESSION_FILE.exists() else 0o600
+            os.chmod(tymczasowy, tryb)
+        except OSError:
+            os.chmod(tymczasowy, 0o600)
         tymczasowy.replace(SESSION_FILE)
     except Exception as exc:
         print("  [sesja] nie odswiezylem pliku: %s" % type(exc).__name__, flush=True)

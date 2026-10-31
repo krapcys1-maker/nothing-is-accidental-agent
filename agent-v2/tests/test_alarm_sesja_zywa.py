@@ -28,6 +28,7 @@ odrzucana przy publikowaniu).
 Bez sieci i bez przegladarki; plik sesji jest tymczasowy.
 """
 import json
+import os
 import pathlib
 import sys
 import tempfile
@@ -125,6 +126,30 @@ try:
             browser.dni_do_wygasniecia())
     sprawdz("plik tymczasowy nie zostaje na dysku",
             not (KAT / (PLIK.name + ".nowy")).exists(), [p.name for p in KAT.iterdir()])
+
+    if os.name == "posix":
+        # ZAPISANY PLIK TO CIASTECZKA ZALOGOWANEJ SESJI: nie moze stac sie
+        # czytelny dla innych uzytkownikow serwera. Plik tymczasowy powstaje
+        # z domyslnymi uprawnieniami (tu symulujemy 644), a plik sesji mial 600.
+        zapisz_plik(14)
+        os.chmod(PLIK, 0o600)
+
+        class KontekstLuzny(Kontekst):
+            def storage_state(self, path=None):
+                super().storage_state(path=path)
+                os.chmod(path, 0o644)
+
+        ustaw(True, KontekstLuzny(89))
+        browser.odswiez_plik_sesji()
+        sprawdz("uprawnienia pliku sesji zostaja 600 (plik tymczasowy mial 644)",
+                oct(PLIK.stat().st_mode & 0o777) == "0o600", oct(PLIK.stat().st_mode & 0o777))
+        PLIK.unlink()
+        ustaw(True, KontekstLuzny(89))
+        browser.odswiez_plik_sesji()
+        sprawdz("bez poprzedniego pliku nowy dostaje 600, nie 644",
+                oct(PLIK.stat().st_mode & 0o777) == "0o600", oct(PLIK.stat().st_mode & 0o777))
+    else:
+        print("  (pominiete: uprawnienia plikow sprawdzane tylko na systemie POSIX)")
 
     print()
     print("=== 2. KOPIA ZAPASOWA NIE MOZE ZOSTAC ZASTAPIONA GORSZA ===")
