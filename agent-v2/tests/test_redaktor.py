@@ -148,16 +148,23 @@ sprawdz("kandydat o wzgl. tla <= 1 (dlugosc|111+: 0,6) nie jest proponowany", "d
 sprawdz("mocne sygnaly sa: brak propozycji „polityka”", not any(p["typ"] == "polityka" for p in e["propozycje"]))
 sprawdz("dowod niesie liczby z raportu, nazwe odniesienia i flage ostroznie", next(
     p for p in e["propozycje"] if p["dowod"]["id"] == "dlugosc|33-64")["dowod"] == {
-        "id": "dlugosc|33-64", "n": 8, "klastrow": 7, "wzgl_tla": 1.4, "stosunek": 1.5, "przedzial_95": [1.1, 2.0], "odniesienie": "65-110", "ostroznie": True})
+        "id": "dlugosc|33-64", "n": 8, "klastrow": 7, "wzgl_tla": 1.4, "wzgl_odn": 1.0, "przewaga": 1.4, "stosunek": 1.5, "przedzial_95": [1.1, 2.0],
+        "odniesienie": "65-110", "ostroznie": True})
 sprawdz("przewidywanie mocnego sygnalu jest na tej samej osi co dowod: werdykt wzgledem odniesienia (typ grupa_werdykt, oczekiwana klasa)",
         next(p for p in e["propozycje"] if p["dowod"]["id"] == "dlugosc|33-64")["przewidywanie"]["typ"] == "grupa_werdykt"
         and next(p for p in e["propozycje"] if p["dowod"]["id"] == "dlugosc|33-64")["przewidywanie"]["oczekiwana"] == "lepiej"
         and next(p for p in e["propozycje"] if p["dowod"]["id"] == "kategoria|PEOPLE")["przewidywanie"]["oczekiwana"] == "gorzej"
         and next(p for p in e["propozycje"] if p["dowod"]["id"] == "dlugosc|33-64")["przewidywanie"]["odniesienie"] == "65-110")
-sprawdz("przewidywanie kandydata dotyczy NOWYCH notek (n i wzgl. tla z chwili zapisu, min. 4 nowe)", next(
-    p for p in e["propozycje"] if p["dowod"]["id"] == "kategoria|MONEY")["przewidywanie"] == {
-        "typ": "grupa_nowe_notki", "wymiar": "kategoria", "grupa": "MONEY", "n_przy_zapisie": 4, "wzgl_przy_zapisie": 1.6, "wartosc_odniesienia": 1.0,
-        "min_nowych": 4, "sprawdz_po": "2026-11-30", "opis": next(p for p in e["propozycje"] if p["dowod"]["id"] == "kategoria|MONEY")["przewidywanie"]["opis"]})
+_pm = next(p for p in e["propozycje"] if p["dowod"]["id"] == "kategoria|MONEY")["przewidywanie"]
+sprawdz("przewidywanie kandydata dotyczy NOWYCH notek WZGLEDEM ODNIESIENIA (n, wzgl. tla i klastry z chwili zapisu, obu grup; okno raportu)",
+        {k: _pm.get(k) for k in ("typ", "wymiar", "grupa", "odniesienie", "wzgledem", "n_przy_zapisie", "wzgl_przy_zapisie", "klastrow_przy_zapisie",
+                                 "odn_n_przy_zapisie", "odn_wzgl_przy_zapisie", "wartosc_odniesienia", "min_nowych", "min_nowych_klastrow", "okno_od")}
+        == {"typ": "grupa_nowe_notki", "wymiar": "kategoria", "grupa": "MONEY", "odniesienie": "HOW_IT_WORKS", "wzgledem": "odniesienie", "n_przy_zapisie": 4,
+            "wzgl_przy_zapisie": 1.6, "klastrow_przy_zapisie": 3, "odn_n_przy_zapisie": 8, "odn_wzgl_przy_zapisie": 1.0, "wartosc_odniesienia": 1.0,
+            "min_nowych": 4, "min_nowych_klastrow": 2, "okno_od": "2026-10-26"}, _pm)
+_pw = next(p for p in e["propozycje"] if p["dowod"]["id"] == "dlugosc|33-64")["przewidywanie"]
+sprawdz("przewidywanie werdyktu tez niesie stan z chwili zapisu i okno raportu (rozliczenie dopiero po przyroscie danych)",
+        (_pw["n_przy_zapisie"], _pw["klastrow_przy_zapisie"], _pw["min_nowych"], _pw["min_nowych_klastrow"], _pw["okno_od"]) == (8, 7, 4, 2, "2026-10-26"), _pw)
 sprawdz("kazda propozycja ma termin 14 dni i opis przewidywania", all(
     p["przewidywanie"]["sprawdz_po"] == (DZIS + timedelta(days=14)).isoformat() and p["przewidywanie"]["opis"] for p in e["propozycje"]))
 sprawdz("id propozycji unikalne i z numerem tygodnia", len({p["id"] for p in e["propozycje"]}) == len(e["propozycje"])
@@ -194,6 +201,30 @@ szum["wymiary"]["forma"] = {"odniesienie": "x", "grupy": {"x": g(10, 8, 1.0), "m
 ps = {p["dowod"].get("id") for p in prop(szum)}
 sprawdz("kandydat wymaga n>=4, klastrow>=3, przewagi >=1,15 i przewagi >= polowy wykrywalnego efektu raportu (szum odpada)",
         "forma|dobra" in ps and not ps & {"forma|male_n", "forma|malo_klastrow", "forma|slaba_przewaga", "forma|za_maly_efekt"}, ps)
+odn = raport()
+odn["wymiary"] = {"forma": {"odniesienie": "x", "grupy": {"x": g(12, 9, 1.5), "gorsza_od_odn": g(6, 5, 1.3), "lepsza_od_odn": g(6, 5, 1.9)}}}
+po_odn = {p["dowod"].get("id") for p in prop(odn)}
+sprawdz("kandydat jest oceniany WZGLEDEM ODNIESIENIA, nie tla: grupa 1,3 przy odniesieniu 1,5 odpada, a 1,9 (przewaga 1,27) przechodzi",
+        "forma|lepsza_od_odn" in po_odn and "forma|gorsza_od_odn" not in po_odn, po_odn)
+_pl = next(p for p in prop(odn) if p["dowod"].get("id") == "forma|lepsza_od_odn")
+sprawdz("...a dowod niesie przewage i wzgl. tla odniesienia", _pl["dowod"]["przewaga"] == round(1.9 / 1.5, 3) and _pl["dowod"]["wzgl_odn"] == 1.5, _pl["dowod"])
+gran = raport()
+gran["wymiary"] = {"forma": {"odniesienie": "x", "grupy": {"x": g(10, 8, 1.0), "na_granicy": g(6, 5, 1.15, wykrywalny=0.30)}}}
+sprawdz("granica: przewaga 1,15 przy wykrywalnym efekcie 0,30 spelnia „co najmniej polowa” mimo bledu zmiennoprzecinkowego (0,15 >= 0,15)",
+        "forma|na_granicy" in {p["dowod"].get("id") for p in prop(gran)})
+pusty = raport(notek=5)
+pusty["wymiary"] = {"forma": {"odniesienie": "x", "grupy": {"x": g(10, 8, 1.0)}}}
+otw_pol = prop(pusty, otwarte={("", "", "silne_sygnaly")})
+sprawdz("„nie zmieniac polityki” nie wraca co tydzien, dopoki poprzednie nie jest rozliczone; zamiast pustej listy jest informacja bez nowego przewidywania",
+        len(otw_pol) == 1 and otw_pol[0]["typ"] == "polityka" and "Bez nowych" in otw_pol[0]["tresc"]
+        and otw_pol[0]["przewidywanie"]["typ"] == "brak" and "sprawdz_po" not in otw_pol[0]["przewidywanie"], otw_pol)
+sprawdz("...a bez otwartego przewidywania ten sam raport daje zwykle „nie zmieniac polityki” z terminem",
+        prop(pusty)[0]["przewidywanie"]["typ"] == "silne_sygnaly" and prop(pusty)[0]["przewidywanie"]["sprawdz_po"])
+sprawdz("otwarta „polityka” nie blokuje propozycji z mocnych sygnalow: nie powtarza tylko zdania o polityce",
+        not any(p["typ"] == "polityka" for p in prop(maly, otwarte={("", "", "silne_sygnaly")})))
+sprawdz("_otwarte liczy tez nierozliczone „polityki” (wymiar i grupa puste)", redaktor._otwarte([
+    {"rodzaj": "epoka", "propozycje": [{"id": "R-1", "przewidywanie": {"typ": "silne_sygnaly", "sprawdz_po": "2026-12-01"}},
+                                        {"id": "R-2", "przewidywanie": {"typ": "brak"}}]}]) == {("", "", "silne_sygnaly")})
 dp = raport()
 dp["wymiary"] = {"dzien": {"odniesienie": "pon", "grupy": {"pon": g(10, 8, 1.0), "wt": g(6, 5, 1.4)}}, "pora": {"odniesienie": "x", "grupy": {"x": g(10, 8, 1.0), "y": g(6, 5, 1.4)}}}
 sprawdz("wymiary dzien i pora: przy oknie raportu < 14 dni kandydat nie jest proponowany (jedna data kalendarzowa to nie niezalezny tydzien)",
@@ -248,35 +279,69 @@ uruchom(DZIS, KAT4)
 e4 = linie(KAT4 / PLIK.name)[0]
 po = DZIS + timedelta(days=15)
 sprawdz("przed terminem nic nie rozliczono", not [x for x in linie(KAT4 / PLIK.name) if x["rodzaj"] == "rozliczenie"])
+
+
+def kum(n0, w0, nowych, x):
+    """Skumulowane wzgl. tla (zaokraglone do 2 miejsc jak w raporcie), gdy n0 notek mialo w0, a `nowych` notek ma srednio x — wejscie zbudowane NIEZALEZNIE od wzoru w kodzie."""
+    return round(math.exp((n0 * math.log(w0) + nowych * math.log(x)) / (n0 + nowych)), 2)
+
+
 r2 = raport(dzis=po)
-r2["wymiary"]["dlugosc"]["grupy"]["33-64"]["werdykt"] = "lepiej"                      # nadal lepiej: potwierdzone
-r2["wymiary"]["kategoria"]["grupy"]["PEOPLE"]["werdykt"] = "lepiej"                    # oczekiwane gorzej, jest lepiej: chybione
-r2["wymiary"]["kategoria"]["grupy"]["MONEY"].update({"n": 9, "wzgl_tla": 1.3})        # 5 nowych, srednio ok. 1,10: potwierdzone
-r2["wymiary"]["pytanie"]["grupy"]["tak"].update({"n": 6, "wzgl_tla": 0.9})            # 1 nowa notka: bez rozstrzygniecia
+r2["wymiary"]["dlugosc"]["grupy"]["33-64"].update({"n": 13, "klastrow": 10})                                    # 5 nowych, 3 nowe jednostki, nadal lepiej: potwierdzone
+r2["wymiary"]["kategoria"]["grupy"]["PEOPLE"].update({"n": 14, "klastrow": 9, "werdykt": "lepiej"})            # oczekiwane gorzej, jest lepiej: chybione
+r2["wymiary"]["kategoria"]["grupy"]["MONEY"].update({"n": 9, "klastrow": 6, "wzgl_tla": kum(4, 1.6, 5, 1.2)})  # nowe notki srednio 1,2 przy odniesieniu 1,0: potwierdzone
+r2["wymiary"]["kategoria"]["grupy"]["HOW_IT_WORKS"].update({"n": 13, "klastrow": 10})                          # odniesienie tez ma 5 nowych notek (srednio 1,0)
+r2["wymiary"]["pytanie"]["grupy"]["tak"].update({"n": 6, "wzgl_tla": 0.9})                                      # 1 nowa notka: bez rozstrzygniecia
 zapisz_raport(r2, KAT4)
 uruchom(po, KAT4)
 roz = {x["id_propozycji"]: x for x in linie(KAT4 / PLIK.name) if x["rodzaj"] == "rozliczenie"}
 wyn = {next(p["dowod"]["id"] for p in e4["propozycje"] if p["id"] == k): v for k, v in roz.items()}
-sprawdz("grupa_werdykt: nadal lepiej = potwierdzone, odwrocona klasa = chybione", wyn["dlugosc|33-64"]["wynik"] == "potwierdzone"
+sprawdz("grupa_werdykt: po przyroscie danych nadal lepiej = potwierdzone, odwrocona klasa = chybione", wyn["dlugosc|33-64"]["wynik"] == "potwierdzone"
         and wyn["kategoria|PEOPLE"]["wynik"] == "chybione", {k: v["wynik"] for k, v in wyn.items()})
-oczek = round(math.exp((9 * math.log(1.3) - 4 * math.log(1.6)) / 5), 3)
-sprawdz("grupa_nowe_notki: wzgl. tla NOWYCH notek liczone z przyrostu (srednia logarytmow wazona liczba notek)", wyn["kategoria|MONEY"]["wynik"] == "potwierdzone"
-        and wyn["kategoria|MONEY"]["wartosc_aktualna"] == oczek and 1.0 <= oczek < 1.3, (wyn["kategoria|MONEY"], oczek))
+sprawdz("grupa_nowe_notki: nowe notki (srednio 1,2, wejscie zbudowane niezaleznie od wzoru) wobec nowych notek odniesienia (1,0) = potwierdzone, wartosc ok. 1,2",
+        wyn["kategoria|MONEY"]["wynik"] == "potwierdzone" and abs(wyn["kategoria|MONEY"]["wartosc_aktualna"] - 1.2) < 0.03, wyn["kategoria|MONEY"])
 sprawdz("za malo NOWYCH notek (1 < 4) = bez rozstrzygniecia, mimo ze skumulowane wzgl. tla spadlo", wyn["pytanie|tak"]["wynik"] == "bez_rozstrzygniecia"
-        and wyn["pytanie|tak"]["wartosc_aktualna"] == 1, wyn["pytanie|tak"])
+        and "nowych notek: 1" in str(wyn["pytanie|tak"]["wartosc_aktualna"]), wyn["pytanie|tak"])
 sprawdz("rozliczenie niesie epoke wpisu i epoke redakcyjna 0", all(x["epoka_redakcyjna"] == 0 and x["epoka_wpisu"] == "2026-W47" for x in roz.values()))
 n_roz = len(roz)
 uruchom(po, KAT4)
 sprawdz("ponowny przebieg nie rozlicza drugi raz", len([x for x in linie(KAT4 / PLIK.name) if x["rodzaj"] == "rozliczenie"]) == n_roz)
 sprawdz("tekst notatki: zapis zamiarow, trwajace eksperymenty, rozliczenie ze slowami „potwierdzone”, „chybione”, „bez rozstrzygniecia”",
         all(x in (KAT4 / "obserwatorium" / "redaktor.md").read_text(encoding="utf-8") for x in ("nie decyzje wykonane", "dlugosc_serii", "potwierdzone", "chybione", "bez rozstrzygniecia")))
-chyb = redaktor.rozlicz_przewidywanie({"typ": "grupa_nowe_notki", "wymiar": "kategoria", "grupa": "MONEY", "n_przy_zapisie": 4, "wzgl_przy_zapisie": 1.6,
-                                       "wartosc_odniesienia": 1.0, "min_nowych": 4},
-                                      {"wymiary": {"kategoria": {"grupy": {"MONEY": {"n": 10, "wzgl_tla": 0.9}}}}})
-sprawdz("nowe notki slabsze od tla (cala grupa spadla mocno): chybione", chyb[0] == "chybione" and chyb[1] < 1.0, chyb)
+PN = {"typ": "grupa_nowe_notki", "wymiar": "kategoria", "grupa": "MONEY", "odniesienie": "REF", "wzgledem": "tlo", "n_przy_zapisie": 4, "wzgl_przy_zapisie": 1.6,
+      "klastrow_przy_zapisie": 3, "wartosc_odniesienia": 1.0, "min_nowych": 4, "min_nowych_klastrow": 2}
+
+
+def rap(grupa, odn=None):
+    return {"od": "2026-10-26", "wymiary": {"kategoria": {"odniesienie": "REF", "grupy": {"MONEY": grupa, **({"REF": odn} if odn else {})}}}}
+
+
+chyb = redaktor.rozlicz_przewidywanie(PN, rap({"n": 10, "klastrow": 7, "wzgl_tla": kum(4, 1.6, 6, 0.8)}))
+sprawdz("nowe notki slabsze od tla (srednio 0,8; wejscie zbudowane niezaleznie): chybione, wartosc ok. 0,8", chyb[0] == "chybione" and abs(chyb[1] - 0.8) < 0.03, chyb)
+sprawdz("tyle samo nowych notek, ale tylko 1 nowa niezalezna jednostka (jedna seria): bez rozstrzygniecia, nie „potwierdzone”",
+        redaktor.rozlicz_przewidywanie(PN, rap({"n": 10, "klastrow": 4, "wzgl_tla": kum(4, 1.6, 6, 1.5)}))[0] == "bez_rozstrzygniecia")
+sprawdz("brak liczby klastrow w raporcie: bez rozstrzygniecia (nie zgadujemy)",
+        redaktor.rozlicz_przewidywanie(PN, rap({"n": 10, "wzgl_tla": 1.2}))[0] == "bez_rozstrzygniecia")
+PO = {**PN, "wzgledem": "odniesienie", "odn_n_przy_zapisie": 10, "odn_wzgl_przy_zapisie": 1.0}
+sprawdz("wzgledem odniesienia: grupa nowych notek 1,2, ale odniesienie nowych notek 1,5 = chybione (caly wymiar urosl, grupa nie wyprzedza)",
+        redaktor.rozlicz_przewidywanie(PO, rap({"n": 10, "klastrow": 7, "wzgl_tla": kum(4, 1.6, 6, 1.2)}, {"n": 20, "klastrow": 14, "wzgl_tla": kum(10, 1.0, 10, 1.5)}))[0] == "chybione")
+sprawdz("wzgledem odniesienia: to samo przy braku nowych notek w odniesieniu = bez rozstrzygniecia",
+        redaktor.rozlicz_przewidywanie(PO, rap({"n": 10, "klastrow": 7, "wzgl_tla": 1.2}, {"n": 10, "klastrow": 8, "wzgl_tla": 1.0}))[0] == "bez_rozstrzygniecia")
+PW = {"typ": "grupa_werdykt", "wymiar": "kategoria", "grupa": "MONEY", "oczekiwana": "lepiej", "odniesienie": "REF", "n_przy_zapisie": 8, "klastrow_przy_zapisie": 6,
+      "min_nowych": 4, "min_nowych_klastrow": 2}
+sprawdz("werdykt „lepiej” zmienia sie na „brak dowodu” po przyroscie danych = chybione (zanik przedzialu to porazka przewidywania, nie brak rozstrzygniecia)",
+        redaktor.rozlicz_przewidywanie(PW, rap(g(14, 9, 1.2, 1.1, [0.9, 1.4], "brak dowodu roznicy (..)")))[0] == "chybione")
+sprawdz("werdykt bez przyrostu danych (te same notki, tylko nowy dzien): bez rozstrzygniecia, nie „potwierdzone”",
+        redaktor.rozlicz_przewidywanie(PW, rap(g(9, 7, 1.4, 1.5, [1.1, 2.0], "lepiej")))[0] == "bez_rozstrzygniecia")
+sprawdz("zmiana okna raportu (`od`) uniewaznia porownanie nowych notek", redaktor.rozlicz_przewidywanie(
+    {**PW, "okno_od": "2026-10-26"}, {**rap(g(14, 9, 1.4, 1.5, [1.1, 2.0], "lepiej")), "od": "2026-10-01"})[0] == "bez_rozstrzygniecia")
+sprawdz("...a przy tym samym oknie ten sam przypadek jest rozliczany", redaktor.rozlicz_przewidywanie(
+    {**PW, "okno_od": "2026-10-26"}, rap(g(14, 9, 1.4, 1.5, [1.1, 2.0], "lepiej")))[0] == "potwierdzone")
+sprawdz("estymator: bez nowych notek, zle liczby i NaN daja None, nie wyjatek", [redaktor._nowe_wzgl(*a) for a in (
+    (4, 1.6, 4, 1.2), (4, 1.6, 3, 1.2), (4, 0, 9, 1.2), (4, 1.6, 9, float("nan")), (4, None, 9, 1.2), (4, 1.6, 9, float("inf")))] == [None] * 6)
 sprawdz("zmiana grupy odniesienia unieważnia porównanie werdyktu (bez rozstrzygniecia)", redaktor.rozlicz_przewidywanie(
-    {"typ": "grupa_werdykt", "wymiar": "dlugosc", "grupa": "33-64", "oczekiwana": "lepiej", "odniesienie": "65-110"},
-    {"wymiary": {"dlugosc": {"odniesienie": "111+", "grupy": {"33-64": g(8, 7, 1.4, 1.5, [1.1, 2.0], "lepiej")}}}})[0] == "bez_rozstrzygniecia")
+    {**PW, "wymiar": "dlugosc", "grupa": "33-64", "odniesienie": "65-110"},
+    {"wymiary": {"dlugosc": {"odniesienie": "111+", "grupy": {"33-64": g(14, 9, 1.4, 1.5, [1.1, 2.0], "lepiej")}}}})[0] == "bez_rozstrzygniecia")
 sprawdz("silne_sygnaly: potwierdzone przy grupie lepiej/gorzej w wymiarze innym niz model, chybione bez niej",
         redaktor.rozlicz_przewidywanie({"typ": "silne_sygnaly", "wartosc_odniesienia": 1}, raport())[0] == "potwierdzone"
         and redaktor.rozlicz_przewidywanie({"typ": "silne_sygnaly", "wartosc_odniesienia": 1}, tylko_model)[0] == "chybione")

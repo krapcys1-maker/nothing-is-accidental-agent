@@ -4550,15 +4550,20 @@ def wpisz_do_pola(page, pole, tekst: str) -> None:
     i na koncie wyszedl komentarz „Dry run only - this text is never sent.<nasza odpowiedz>”. Wiec: (1) czyscimy pole, jesli cos w nim jest,
     (2) po wpisaniu sprawdzamy, ze pole zaczyna sie od naszego tekstu i nie jest dluzsze o obcy tekst (porownanie po znakach alfanumerycznych),
     (3) przy niezgodzie czyscimy i probujemy jeszcze raz, a potem rzucamy wyjatek (wywolujacy nie wysyla). Gdy zawartosci pola w ogole nie
-    da sie odczytac, nie blokujemy wysylki (nie ma jak sprawdzic), tylko mowimy o tym w logu.
+    da sie odczytac albo jest puste po wpisaniu, nie blokujemy wysylki (nie ma jak sprawdzic), tylko mowimy o tym w logu.
     """
     nasz = _alnum(tekst)
 
     def odczytaj() -> str | None:
-        try:
-            return _alnum(pole.inner_text(timeout=3_000))
-        except Exception:                   # noqa: BLE001
-            return None
+        # textarea/input: `innerText` jest dla nich PUSTE (zmierzone 1.11 w Chromium na tescie odpowiedzi pod artykulem), zywa wartosc to `.value`;
+        # contenteditable nie ma `.value`, wiec tam `innerText`.
+        for czytnik in (lambda: pole.evaluate("e => (typeof e.value === 'string') ? e.value : e.innerText", timeout=3_000),
+                        lambda: pole.inner_text(timeout=3_000)):
+            try:
+                return _alnum(czytnik())
+            except Exception:               # noqa: BLE001
+                continue
+        return None
 
     def wyczysc() -> None:
         pole.click(timeout=5_000)
@@ -4575,7 +4580,12 @@ def wpisz_do_pola(page, pole, tekst: str) -> None:
         if po is None or (not po and not nasz):
             print("  [pole] nie umiem odczytac zawartosci pola — wysylam bez sprawdzenia", flush=True)
             return
-        if nasz and po.startswith(nasz[:40]) and len(po) <= len(nasz) + 40:
+        if not po:
+            # pusty odczyt po wpisaniu niepustego tekstu = czytnik slepy albo tekst nie wszedl; w obu przypadkach nie ma obcego tekstu do
+            # wykrycia, a przy pustym polu Substack i tak nie odblokuje przycisku wysylki — nie blokujemy
+            print("  [pole] pole wyglada na puste po wpisaniu — nie umiem zweryfikowac, wysylam bez sprawdzenia", flush=True)
+            return
+        if po.startswith(nasz[:40]) and len(po) <= len(nasz) + 20:
             return
         print("  [pole] w polu jest cos poza naszym tekstem (szkic?) — czyszcze i wpisuje jeszcze raz", flush=True)
         wyczysc()

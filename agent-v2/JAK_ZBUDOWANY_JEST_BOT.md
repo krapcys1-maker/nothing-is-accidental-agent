@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **45 plików**, 57 705 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **45 plików**, 57 769 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -114,7 +114,7 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
 się testować bez przeglądarki i bez pieniędzy**. 230 zestawów
-testów, 6935 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+testów, 6958 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -447,7 +447,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `browser.py` — cała styczność z Substackiem; nie woła modelu
 
-6405 wierszy, 126 funkcji na poziomie modułu, 0 klas
+6415 wierszy, 126 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -1246,7 +1246,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `redaktor.py` — redaktor w cieniu (R1, 1.11.2026) — raz w tygodniu czyta raport co_dziala.json i zapisuje do data/redaktor_cien.jsonl dziennik decyzji redakcji: obserwacje, propozycje (temat, research, styl, dlugosc, pora) z dowodami z werdyktow, przewidywania i ich rozliczenie po terminie; notatka dla czlowieka w obserwatorium/redaktor.md; bez modelu, bez wplywu na tresc, flaga REDAKTOR_CIEN
 
-405 wierszy, 21 funkcji na poziomie modułu, 0 klas
+459 wierszy, 23 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -1260,14 +1260,16 @@ wiec nie da sie go rozjechac z kodem.
 | `_liczniki(sygn)` *(wewn.)* | — |
 | `_termin(dzis)` *(wewn.)* | — |
 | `_dowod(s)` *(wewn.)* | — |
-| `_przew_werdykt(s, dzis)` *(wewn.)* | — |
-| `_przew_nowe(s, dzis)` *(wewn.)* | — |
+| `_przew_werdykt(s, dzis, okno_od)` *(wewn.)* | — |
+| `_przew_nowe(s, dzis, okno_od)` *(wewn.)* | — |
 | `_okno_dni(d, dzis)` *(wewn.)* | — |
 | `propozycje(d, sygn, dzis, tydzien, otwarte)` | (propozycje, ile obcieto). Do MAKS_PROPOZYCJI; przy braku mocnych sygnalow pierwsza to „nie zmieniac polityki”. |
 | `_obecna_grupa(d, wymiar, grupa)` *(wewn.)* | — |
+| `_nowe_wzgl(n0, w0, n1, w1)` *(wewn.)* | Sredni (geometrycznie) wzgl. tla NOWYCH notek grupy: wzgl_tla(nowe) = exp((n1*ln w1 - n0*ln w0) / (n1 - n0)) — `co_dziala` liczy wzgl_tla jako |
+| `_za_malo_nowych(p, g)` *(wewn.)* | Powod „bez rozstrzygniecia”, gdy od zapisu przybylo za malo notek lub niezaleznych jednostek (albo nie da sie tego policzyc); inaczej None. |
 | `rozlicz_przewidywanie(p, d)` | (wynik, wartosc aktualna): potwierdzone / chybione / bez_rozstrzygniecia (za malo NOWYCH danych — to tez uczciwa odpowiedz). |
 | `rozlicz(wpisy, d, dzis)` | Nowe linie „rozliczenie” dla propozycji, ktorych termin minal, a ktore nie byly jeszcze rozliczone. |
-| `_otwarte(wpisy)` *(wewn.)* | (wymiar, grupa, typ przewidywania) z propozycji, ktorych jeszcze nie rozliczono. |
+| `_otwarte(wpisy)` *(wewn.)* | (wymiar, grupa, typ przewidywania) z propozycji, ktorych jeszcze nie rozliczono (dla „polityki” wymiar i grupa sa puste). |
 | `tekst(epoka, rozliczenia, ostatnie_rozliczenia)` | Notatka redaktora dla czlowieka (cien: nic z tego nie jest wykonywane). |
 | `_dopisz(plik, rekordy)` *(wewn.)* | — |
 | `zapisz()` | Jeden przebieg: rozlicz zapadle przewidywania, a jesli tego tygodnia nie ma jeszcze epoki, zapisz ja. Zwraca sciezke notatki |
