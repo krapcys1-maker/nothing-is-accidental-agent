@@ -84,7 +84,7 @@ echo "  sprawdzam nowa wersje..."
 if ! AGENT_V2_SERVER=1 .venv/bin/python -c "
 import sys
 sys.path.insert(0, 'agent-v2')
-import config, db, llm, stages, browser, kanal, alarm, gates, style, run, historia_konta, pamiec_cien
+import config, db, llm, stages, browser, kanal, alarm, gates, style, run, historia_konta, pamiec_cien, redaktor
 assert config.MODEL_FOR and config.PRICING, 'pusta konfiguracja'
 assert callable(browser.wystaw_notke) and callable(stages.notki_dnia)
 assert config.OKNO_PUBLIKACJI_ET, 'brak okna publikacji'

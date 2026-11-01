@@ -1279,6 +1279,13 @@ def main(argv: list[str] | None = None) -> int:
                 print("co dziala:", co_dziala.zapisz(), flush=True)
             except Exception as exc:
                 print("co dziala: nie policzone (%s: %s)" % (type(exc).__name__, exc), flush=True)
+            # REDAKTOR W CIENIU (1.11.2026, R1) — cotygodniowy dziennik decyzji redakcji z przewidywaniami, liczony z raportu wyzej.
+            # Cien: NIC nie zmienia w tresci; awaria nie zatrzymuje raportu dobowego.
+            try:
+                import redaktor
+                print("redaktor:", redaktor.zapisz(), flush=True)
+            except Exception as exc:
+                print("redaktor: nie zapisany (%s: %s)" % (type(exc).__name__, exc), flush=True)
     elif a.cmd == "laboratorium":
         import laboratorium
         print(laboratorium.zapisz().read_text(encoding="utf-8"))

@@ -3698,6 +3698,11 @@ PAMIEC_CIEN = True
 PAMIEC_CIEN_PROFILE = (("luzny", 0.08, 1, 3), ("szeroki", 0.05, 0, 5))
 PAMIEC_CIEN_PULA = 50                    # ile kandydatow bierze najluzniejsze zapytanie, zanim je rozdzielimy na profile
 
+# R1 — REDAKTOR W CIENIU (1.11.2026): cotygodniowy dziennik decyzji redakcji (`redaktor.py`) z danych `co_dziala`: obserwacje,
+# propozycje, przewidywania i ich rozliczenie. NIC nie zmienia w tematach, stylu, dlugosci ani w zadnym tekscie (wykonywanie
+# propozycji to R2, po protokole oceny i poza oknem bazowym pamieci). Wylacznik: False.
+REDAKTOR_CIEN = True
+
 # ZYWY WATEK POD NOTKA (1.10.2026). Przy wieku celu ~7,5 h NIE wybierala notki
 # z mediana 3 reakcji i 0 komentarzy — 8% jej komentarzy dostawalo reakcje,
 # mediana 1 wyswietlenie. Komentarz pod zywym watkiem (reakcje i komentarze

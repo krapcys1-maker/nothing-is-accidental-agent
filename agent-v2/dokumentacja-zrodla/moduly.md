@@ -595,7 +595,7 @@
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-4442 wierszy, 49 funkcji na poziomie modułu, 0 klas
+4447 wierszy, 49 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -1100,6 +1100,29 @@
 | `_dopisz(plik, rec)` *(wewn.)* | — |
 | `cien_komentarza(tekst_celu, klucz_celu, ramie_e23)` | Zapisz rekord cienia dla jednej proby komentarza i go zwroc; None, gdy wylaczone, pominiete albo nieudane. |
 
+### `redaktor.py` — redaktor w cieniu (R1, 1.11.2026) — raz w tygodniu czyta raport co_dziala.json i zapisuje do data/redaktor_cien.jsonl dziennik decyzji redakcji: obserwacje, propozycje (temat, research, styl, dlugosc, pora) z dowodami z werdyktow, przewidywania i ich rozliczenie po terminie; notatka dla czlowieka w obserwatorium/redaktor.md; bez modelu, bez wplywu na tresc, flaga REDAKTOR_CIEN
+
+313 wierszy, 16 funkcji na poziomie modułu, 0 klas
+
+| funkcja | co robi |
+|---|---|
+| `_kat(katalog)` *(wewn.)* | — |
+| `_jsonl(plik)` *(wewn.)* | — |
+| `_tydzien(dzien)` *(wewn.)* | — |
+| `_id(*czesci)` *(wewn.)* | — |
+| `wczytaj_raport(kat)` | `obserwatorium/co_dziala.json` albo None (brak lub uszkodzony). |
+| `_klasa(g, jest_odniesieniem)` *(wewn.)* | lepiej / gorzej / brak_dowodu / za_malo / odniesienie — wg werdyktu policzonego przez `co_dziala` (nie liczymy od nowa). |
+| `sygnaly(d)` | Plaska lista grup ze wszystkich wymiarow: {id, wymiar, grupa, klasa, n, klastrow, wzgl_tla, stosunek, przedzial_95}. |
+| `_liczniki(sygn)` *(wewn.)* | — |
+| `_przewidywanie_grupy(s, kierunek, dzis)` *(wewn.)* | — |
+| `propozycje(d, sygn, dzis, tydzien)` | Do MAKS_PROPOZYCJI propozycji z dowodami i przewidywaniami; przy zbyt malej probie jedna: „nie zmieniac polityki”. |
+| `_obecna_grupa(d, wymiar, grupa)` *(wewn.)* | — |
+| `rozlicz_przewidywanie(p, d)` | (wynik, wartosc aktualna): potwierdzone / chybione / bez_rozstrzygniecia (za malo danych — to tez uczciwa odpowiedz). |
+| `rozlicz(wpisy, d, dzis)` | Nowe linie „rozliczenie” dla propozycji, ktorych termin minal, a ktore nie byly jeszcze rozliczone. |
+| `tekst(epoka, rozliczenia, ostatnie_rozliczenia)` | Notatka redaktora dla czlowieka (cien: nic z tego nie jest wykonywane). |
+| `_dopisz(plik, rekordy)` *(wewn.)* | — |
+| `zapisz()` | Jeden przebieg: rozlicz zapadle przewidywania, a jesli tego tygodnia nie ma jeszcze epoki, zapisz ja. Zwraca sciezke notatki |
+
 ### `zaklady.py` — księga zakładów — publiczne zgadywania z notek serii liczone i rozliczane: wyciąg po publikacji, sprawdzenie wyszukiwarką (rozstrzygnięcie tylko z adresem z wyszukiwania), notka rozliczająca w kolejce serii, trafienia z przedziałem Wilsona i wynik Briera
 
 689 wierszy, 32 funkcji na poziomie modułu, 0 klas
@@ -1173,7 +1196,7 @@
 
 ### `obserwatorium.py` — obserwatorium obu kont — dane dnia (wzrost, lejek, działania, koszt), dziennik zmian z reflogu i rejestru, tempo wzrostu i skutek zmian
 
-1305 wierszy, 54 funkcji na poziomie modułu, 0 klas
+1312 wierszy, 54 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
