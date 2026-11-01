@@ -113,8 +113,12 @@ sprawdz("puste pole: wpisany dokladnie nasz tekst, nic nie czyszczono", e.tresc 
 
 print("=== 2. SZKIC W POLU (przypadek z 1.11) ===")
 e = Edytor("Dry run only - this text is never sent.")
-wpisz(e, TEKST)
+log = wpisz(e, TEKST)
 sprawdz("szkic zostal skasowany: w polu wylacznie nasz tekst", e.tresc == TEKST, e.tresc)
+sprawdz("skasowany szkic zostawia slad w logu (bez jego tresci), zeby dalo sie zobaczyc na produkcji, ze poprawka dziala",
+        "[pole] w polu byl szkic" in log and "Dry run" not in log, log)
+log_czyste = wpisz(Edytor(""), TEKST)
+sprawdz("czyste pole nie zostawia sladu w logu", "[pole]" not in log_czyste, log_czyste)
 sprawdz("czyszczenie zaznacza wszystko i kasuje", e.nacisniete[:2] == ["Control+a", "Delete"], e.nacisniete)
 e = Edytor(TEKST)
 wpisz(e, TEKST)

@@ -305,7 +305,7 @@
 
 ### `browser.py` — cała styczność z Substackiem; nie woła modelu
 
-6415 wierszy, 126 funkcji na poziomie modułu, 0 klas
+6417 wierszy, 126 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -1104,10 +1104,11 @@
 
 ### `redaktor.py` — redaktor w cieniu (R1, 1.11.2026) — raz w tygodniu czyta raport co_dziala.json i zapisuje do data/redaktor_cien.jsonl dziennik decyzji redakcji: obserwacje, propozycje (temat, research, styl, dlugosc, pora) z dowodami z werdyktow, przewidywania i ich rozliczenie po terminie; notatka dla czlowieka w obserwatorium/redaktor.md; bez modelu, bez wplywu na tresc, flaga REDAKTOR_CIEN
 
-459 wierszy, 23 funkcji na poziomie modułu, 0 klas
+474 wierszy, 24 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
+| `_wymiary(d)` *(wewn.)* | Wymiary raportu + FORMAT notki (zwykla / seria / rozkmina / mysl / promocja): `co_dziala` odklada go do osobnego pola `formaty`, |
 | `_kat(katalog)` *(wewn.)* | — |
 | `_jsonl(plik)` *(wewn.)* | — |
 | `_tydzien(dzien)` *(wewn.)* | — |

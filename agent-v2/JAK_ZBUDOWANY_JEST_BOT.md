@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **45 plików**, 57 769 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **45 plików**, 57 786 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -114,7 +114,7 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
 się testować bez przeglądarki i bez pieniędzy**. 230 zestawów
-testów, 6958 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+testów, 6979 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -447,7 +447,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `browser.py` — cała styczność z Substackiem; nie woła modelu
 
-6415 wierszy, 126 funkcji na poziomie modułu, 0 klas
+6417 wierszy, 126 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -1246,10 +1246,11 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `redaktor.py` — redaktor w cieniu (R1, 1.11.2026) — raz w tygodniu czyta raport co_dziala.json i zapisuje do data/redaktor_cien.jsonl dziennik decyzji redakcji: obserwacje, propozycje (temat, research, styl, dlugosc, pora) z dowodami z werdyktow, przewidywania i ich rozliczenie po terminie; notatka dla czlowieka w obserwatorium/redaktor.md; bez modelu, bez wplywu na tresc, flaga REDAKTOR_CIEN
 
-459 wierszy, 23 funkcji na poziomie modułu, 0 klas
+474 wierszy, 24 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
+| `_wymiary(d)` *(wewn.)* | Wymiary raportu + FORMAT notki (zwykla / seria / rozkmina / mysl / promocja): `co_dziala` odklada go do osobnego pola `formaty`, |
 | `_kat(katalog)` *(wewn.)* | — |
 | `_jsonl(plik)` *(wewn.)* | — |
 | `_tydzien(dzien)` *(wewn.)* | — |

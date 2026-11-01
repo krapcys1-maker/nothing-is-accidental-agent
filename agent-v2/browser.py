@@ -4573,6 +4573,8 @@ def wpisz_do_pola(page, pole, tekst: str) -> None:
 
     for _ in range(2):
         if odczytaj():
+            # slad w logu (bez tresci szkicu): bez niego doba z pieciu skasowanych szkicow wygladalaby tak samo jak doba bez ani jednego
+            print("  [pole] w polu byl szkic — wyczyszczone przed wpisaniem", flush=True)
             wyczysc()
         page.keyboard.type(tekst, delay=12)
         page.wait_for_timeout(1500)

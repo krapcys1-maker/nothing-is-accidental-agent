@@ -351,6 +351,81 @@ sprawdz("silne_sygnaly: DOKLADNIE jedna grupa „lepiej” spelnia prog 1 (grani
 sprawdz("brak grupy w raporcie = bez rozstrzygniecia (nie zgadujemy)", redaktor.rozlicz_przewidywanie(
     {"typ": "grupa_werdykt", "wymiar": "x", "grupa": "y", "oczekiwana": "lepiej", "odniesienie": "z"}, {"wymiary": {}})[0] == "bez_rozstrzygniecia")
 
+print("=== 5b. FORMAT NOTKI, LICZNIKI, TEKSTY AWARYJNE, GRANICE I KOLEJNOSC (po przegladzie workflow) ===")
+fm = raport()
+fm["wymiary"] = {"dlugosc": {"odniesienie": "65-110", "grupy": {"65-110": g(10, 8, 1.0), "33-64": g(8, 7, 1.0, 1.0, [0.8, 1.2], "brak dowodu roznicy (..)")}}}
+fm["formaty"] = {"odniesienie": "zwykla", "n": 30, "grupy": {"zwykla": g(20, 15, 1.0), "seria": g(10, 8, 1.7, 1.7, [1.2, 2.4], "lepiej")}}
+sg = {s["id"]: s for s in redaktor.sygnaly(fm)}
+pf = prop(fm)
+sprawdz("format notki (`formaty`, osobne pole raportu) jest wymiarem „format”: sygnal, klasa, odniesienie", "format|seria" in sg and sg["format|seria"]["klasa"] == "lepiej"
+        and sg["format|seria"]["odniesienie"] == "zwykla" and sg["format|zwykla"]["klasa"] == "odniesienie", sorted(sg))
+sprawdz("...daje propozycje „zwiekszyc” (rodzaj styl) zamiast fałszywego „zadna grupa nie ma werdyktu”",
+        any(p["typ"] == "styl" and p["tresc"].startswith("Zwiekszyc") and p["dowod"].get("id") == "format|seria" for p in pf) and not any(p["typ"] == "polityka" for p in pf), pf)
+fm2 = raport(dzis=po)
+fm2["wymiary"] = fm["wymiary"]
+fm2["formaty"] = {"odniesienie": "zwykla", "n": 45, "grupy": {"zwykla": g(30, 22, 1.0), "seria": g(15, 11, 1.7, 1.7, [1.2, 2.4], "lepiej")}}
+PWF = {**PW, "wymiar": "format", "grupa": "seria", "odniesienie": "zwykla", "n_przy_zapisie": 10, "klastrow_przy_zapisie": 8}
+sprawdz("przewidywanie o formacie jest rozliczane z `formaty` (nadal lepiej po przyroscie danych = potwierdzone)",
+        redaktor.rozlicz_przewidywanie(PWF, fm2)[0] == "potwierdzone" and redaktor.rozlicz_przewidywanie(PWF, {"od": "2026-10-26", "wymiary": {}})[0] == "bez_rozstrzygniecia")
+
+KAT5 = pathlib.Path(tempfile.mkdtemp())
+zapisz_raport(tylko_model, KAT5)
+uruchom(DZIS, KAT5)
+e5 = linie(KAT5 / PLIK.name)[0]
+sprawdz("licznik „Co widze” liczy z tej samej puli co decyzja (bez wymiarow model i pozycja): jedyny „lepiej” w modelu nie jest widoczny",
+        e5["sygnaly"]["lepiej"] == 0 and e5["sygnaly"]["gorzej"] == 0 and "bez wymiarow model i pozycja" in (KAT5 / "obserwatorium" / "redaktor.md").read_text(encoding="utf-8"), e5["sygnaly"])
+sprawdz("...a decyzja o polityce nadal idzie wlasciwa galezia („zadna grupa nie ma werdyktu”), nie awaryjna",
+        e5["propozycje"][0]["typ"] == "polityka" and "Zadna grupa nie ma jeszcze werdyktu" in e5["propozycje"][0]["uzasadnienie"], e5["propozycje"][0])
+sprawdz("tekst awaryjny: bez grup z sygnalem mowi o czekajacej polityce, a nie o „grupach z sygnalem”",
+        "Brak grup z sygnalem" in prop(pusty, otwarte={("", "", "silne_sygnaly")})[0]["uzasadnienie"]
+        and "Wszystkie grupy z sygnalem" in prop(pusty, otwarte={("", "", "silne_sygnaly"), ("forma", "x", "grupa_werdykt")})[0]["uzasadnienie"])
+
+# dzien / pora: `co_dziala` bierze notki dopiero po 72 h, wiec okno liczy sie od ostatniej dojrzalej doby
+dk = raport()
+dk["wymiary"] = {"dzien": {"odniesienie": "pon", "grupy": {"pon": g(10, 8, 1.0), "wt": g(6, 5, 1.4)}}}
+ids_dk = lambda dz, rap_=dk: {p["dowod"].get("id") for p in redaktor.propozycje(rap_, redaktor.sygnaly(rap_), dz, "2026-W46")[0]}      # noqa: E731
+sprawdz("dzien/pora: okno 17 dni (13 po dojrzewaniu 72 h) jeszcze nie wystarcza, 18 (14) wystarcza",
+        "dzien|wt" not in ids_dk(date(2026, 11, 12)) and "dzien|wt" in ids_dk(date(2026, 11, 13)))
+dk_bez = {k: v for k, v in dk.items() if k != "od"}
+sprawdz("dzien/pora: raport bez daty `od` nie przechodzi (nie wiadomo, jak dlugie jest okno)", "dzien|wt" not in ids_dk(date(2026, 12, 20), dk_bez))
+
+# wybor propozycji: kolejnosc, limit, obcieto razem z „polityka”
+sl = raport(notek=12)
+sl["wymiary"] = {"forma": {"odniesienie": "x", "grupy": dict([("x", g(12, 9, 1.0))] + [("C%d" % i, g(6, 5, 1.2 + i / 10)) for i in range(7)])}}
+ps_, obc_ = redaktor.propozycje(sl, redaktor.sygnaly(sl), DZIS, "2026-W47")
+sprawdz("kandydaci bez mocnych sygnalow: „polityka” + 4 najsilniejsze (malejaco po przewadze), reszta w liczniku obcietych (7 - 4 = 3)",
+        [p["typ"] for p in ps_][:1] == ["polityka"] and [p["dowod"].get("id") for p in ps_[1:]] == ["forma|C6", "forma|C5", "forma|C4", "forma|C3"] and obc_ == 3,
+        ([p["dowod"].get("id") for p in ps_], obc_))
+mx = raport()
+mx["wymiary"] = {"forma": {"odniesienie": "x", "grupy": {"x": g(10, 8, 1.0), "A": g(8, 7, 1.3, 1.3, [1.1, 1.6], "lepiej"), "B": g(8, 7, 0.4, 0.4, [0.2, 0.7], "gorzej"),
+                                                         "C": g(8, 7, 2.0, 2.0, [1.5, 2.6], "lepiej")}}}
+sprawdz("mocne sygnaly „lepiej” i „gorzej” razem: kolejnosc wg odleglosci od 1 w obie strony (B 0,4, C 2,0, A 1,3)",
+        [p["dowod"]["id"] for p in prop(mx)] == ["forma|B", "forma|C", "forma|A"], [p["dowod"].get("id") for p in prop(mx)])
+sprawdz("prog minimalnej liczby notek: dokladnie 8 daje propozycje z sygnalow, 7 daje „nie zmieniac polityki”",
+        prop(raport(notek=8))[0]["typ"] != "polityka" and prop(raport(notek=7))[0]["typ"] == "polityka")
+
+# rozliczenia: granice progow, klasa „za malo”, tylko „gorzej”, termin
+sprawdz("dokladnie 4 nowe notki i 2 nowe jednostki: rozliczone (granica „co najmniej”)",
+        redaktor.rozlicz_przewidywanie(PN, rap({"n": 8, "klastrow": 5, "wzgl_tla": kum(4, 1.6, 4, 1.5)}))[0] == "potwierdzone")
+sprawdz("3 nowe notki: bez rozstrzygniecia, 1 nowa jednostka: bez rozstrzygniecia (z powodem w wartosci)",
+        redaktor.rozlicz_przewidywanie(PN, rap({"n": 7, "klastrow": 5, "wzgl_tla": 1.5}))[0] == "bez_rozstrzygniecia"
+        and "jednostek: 1" in str(redaktor.rozlicz_przewidywanie(PN, rap({"n": 8, "klastrow": 4, "wzgl_tla": 1.5}))[1]))
+sprawdz("nowe notki dokladnie na poziomie odniesienia (1,0): potwierdzone (granica „>=”)",
+        redaktor.rozlicz_przewidywanie({**PN, "wzgl_przy_zapisie": 1.0}, rap({"n": 8, "klastrow": 5, "wzgl_tla": 1.0}))[0] == "potwierdzone")
+sprawdz("werdykt „za malo danych” po przyroscie danych: bez rozstrzygniecia, nie „chybione”",
+        redaktor.rozlicz_przewidywanie(PW, rap(g(14, 9, 1.2, werdykt="za malo danych (..)")))[0] == "bez_rozstrzygniecia")
+tylko_gorzej = {"wymiary": {"kategoria": {"odniesienie": "A", "grupy": {"A": g(10, 8, 1.0), "B": g(8, 7, 0.4, 0.4, [0.2, 0.7], "gorzej")}}}}
+sprawdz("silne_sygnaly: sam „gorzej” tez jest mocnym sygnalem", redaktor.rozlicz_przewidywanie({"typ": "silne_sygnaly", "wartosc_odniesienia": 1}, tylko_gorzej) == ("potwierdzone", 1))
+ep_ = {"rodzaj": "epoka", "tydzien": "2026-W47", "propozycje": [{"id": "R-x", "przewidywanie": {"typ": "silne_sygnaly", "wartosc_odniesienia": 1, "sprawdz_po": "2026-11-30", "opis": "x"}}]}
+sprawdz("termin: rozliczenie dokladnie w dniu `sprawdz_po`, nie dzien wczesniej",
+        len(redaktor.rozlicz([ep_], raport(), date(2026, 11, 30))) == 1 and len(redaktor.rozlicz([ep_], raport(), date(2026, 11, 29))) == 0)
+roz_ = {"rodzaj": "rozliczenie", "id_propozycji": "R-1"}
+ep2_ = {"rodzaj": "epoka", "propozycje": [{"id": "R-1", "przewidywanie": {"typ": "grupa_werdykt", "wymiar": "forma", "grupa": "A", "sprawdz_po": "2026-11-30"}}]}
+sprawdz("_otwarte: propozycja po rozliczeniu przestaje byc otwarta (grupa moze wrocic)", redaktor._otwarte([ep2_]) == {("forma", "A", "grupa_werdykt")} and redaktor._otwarte([ep2_, roz_]) == set())
+e49 = [x for x in linie(KAT4 / PLIK.name) if x["rodzaj"] == "epoka" and x["tydzien"] == "2026-W49"]
+sprawdz("grupy rozliczone w TYM SAMYM przebiegu wracaja jako propozycje w nowej epoce (nie czekaja kolejnego tygodnia)",
+        len(e49) == 1 and {"dlugosc|33-64", "kategoria|PEOPLE"} <= {p["dowod"].get("id") for p in e49[0]["propozycje"]}, [p["dowod"].get("id") for p in e49[0]["propozycje"]] if e49 else None)
+
 print("=== 6. FLAGA, BRAK RAPORTU, USZKODZONY PLIK, ROZMIAR, UCIETY OGON ===")
 KAT2 = pathlib.Path(tempfile.mkdtemp())
 (KAT2 / "obserwatorium").mkdir()

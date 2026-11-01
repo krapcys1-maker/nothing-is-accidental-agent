@@ -27,6 +27,9 @@ cały wymiar moze miec wspolne przesuniecie wzgledem tla. (b) Przewidywanie o mo
 UCZCIWIE: wymiarow jest wiele (kilkadziesiat grup), a poprawki na wielokrotne testy nie ma — przy kilkudziesieciu grupach „mocny sygnal” z samego
 szumu pojawia sie niemal zawsze. Odsetek „potwierdzone” z cienia NIE jest dowodem, ze redaktor ma racje; sluzy do kalibracji dopiero z R2.
 
+WYMIARY. Poza `wymiary` redaktor czyta tez `formaty` (format notki: zwykla / seria / rozkmina / mysl / promocja) jako wymiar „format”. NIE czyta
+wynikow eksperymentow (`eksperymenty`, np. E22 dlugosc serii), ktore tez zasilaja sekcje „Wnioski” raportu: to luka do uzupelnienia przed R2.
+
 CZEGO NIE ROBI. Bez modelu, bez sieci. Zapisuje WYLACZNIE liczby zbiorcze i nazwy grup (kategorie, formaty): zadnych tekstow notek, zadnych
 uchwytow ani danych czytelnikow (P-013 pkt 5). Nic nie zapisuje, jesli nie ma swiezego raportu (starszego niz doba). Nie zmienia `co_dziala.py`
 ani niczego, co bot czyta przy pisaniu.
@@ -63,11 +66,21 @@ KAND_MIN_WZGL = 1.15                # przewaga NAD GRUPA ODNIESIENIA (wzgl_tla g
 MIN_NOWYCH_KLASTROW = 2           # tyle NOWYCH niezaleznych jednostek trzeba, zeby rozliczyc przewidywanie o grupie
 KAND_FRAKCJA_WYKRYWALNEGO = 0.5   # przewaga musi byc co najmniej taka czescia „wykrywalnego efektu” raportu
 OKNO_DLA_DNIA_I_PORY = 14         # wymiary dzien i pora: przy krotszym oknie grupa to jedna data kalendarzowa, nie niezalezny tydzien
+DOJRZEWANIE_DNI = 4               # `co_dziala` bierze notki dopiero po 72 h pomiaru: najmlodsze dni okna jeszcze nie licza sie do grup
 
 # Wymiar raportu -> rodzaj propozycji. Wymiary spoza tabeli to „styl”.
 RODZAJ_WYMIARU = {"kat": "temat", "kategoria": "temat", "dlugosc": "dlugosc", "pora": "pora", "dzien": "pora"}
 # Wymiary, z ktorych NIE robimy propozycji: opisuja kto pisal, a nie co czytelnika interesuje.
 POMIJANE_WYMIARY = {"model", "pozycja"}
+
+
+def _wymiary(d: dict[str, Any]) -> dict[str, Any]:
+    """Wymiary raportu + FORMAT notki (zwykla / seria / rozkmina / mysl / promocja): `co_dziala` odklada go do osobnego pola `formaty`,
+    a to wlasnie format jest najwazniejszym z wnioskow raportu. Wszystko, co czyta grupy, idzie przez te funkcje."""
+    out = dict(d.get("wymiary") or {})
+    if isinstance(d.get("formaty"), dict):
+        out["format"] = d["formaty"]
+    return out
 
 
 def _kat(katalog: Path | str | None) -> Path:
@@ -133,7 +146,7 @@ def _klasa(g: dict[str, Any], jest_odniesieniem: bool) -> str:
 def sygnaly(d: dict[str, Any]) -> list[dict[str, Any]]:
     """Plaska lista grup ze wszystkich wymiarow: {id, wymiar, grupa, klasa, n, klastrow, wzgl_tla, stosunek, przedzial_95, odniesienie, ostroznie...}."""
     out = []
-    for wymiar, tab in (d.get("wymiary") or {}).items():
+    for wymiar, tab in _wymiary(d).items():
         if not isinstance(tab, dict):
             continue
         ref = tab.get("odniesienie")
@@ -241,7 +254,7 @@ def propozycje(d: dict[str, Any], sygn: list[dict[str, Any]], dzis: date, tydzie
     slabi = [s for s in kandydaci if s["klasa"] in ("brak_dowodu", "za_malo") and isinstance(s["n"], int) and s["n"] >= KAND_MIN_N
              and isinstance(s["klastrow"], int) and s["klastrow"] >= KAND_MIN_KLASTROW
              and isinstance(s["przewaga"], (int, float)) and s["przewaga"] >= KAND_MIN_WZGL and wykrywalny_ok(s)
-             and not (s["wymiar"] in ("dzien", "pora") and (okno is None or okno < OKNO_DLA_DNIA_I_PORY))
+             and not (s["wymiar"] in ("dzien", "pora") and (okno is None or okno - DOJRZEWANIE_DNI < OKNO_DLA_DNIA_I_PORY))
              and (s["wymiar"], s["grupa"], "grupa_nowe_notki") not in otwarte]
     slabi.sort(key=lambda x: (-x["przewaga"], x["id"]))
     for s in slabi:
@@ -258,15 +271,17 @@ def propozycje(d: dict[str, Any], sygn: list[dict[str, Any]], dzis: date, tydzie
     obcieto = max(0, len(mocne) + len(slabi) - sum(1 for p in out if p["typ"] != "polityka"))
     if not out:
         # wszystkie mocne sygnaly i kandydaci maja jeszcze nierozliczone przewidywania (albo nie ma niczego do zaproponowania)
+        sa_sygnaly = bool(otwarte - {("", "", "silne_sygnaly")}) or any(s["klasa"] in ("lepiej", "gorzej") for s in kandydaci)
         dodaj("polityka", "Bez nowych propozycji w tym tygodniu; polityka bez zmian.",
-              "Wszystkie grupy z sygnalem maja jeszcze nierozliczone przewidywania z wczesniejszych tygodni (notek z pomiarem %d)." % n_notek,
+              ("Wszystkie grupy z sygnalem maja jeszcze nierozliczone przewidywania z wczesniejszych tygodni (notek z pomiarem %d)." % n_notek) if sa_sygnaly else
+              ("Brak grup z sygnalem i kandydatow, a poprzednie przewidywanie o polityce czeka na rozliczenie (notek z pomiarem %d)." % n_notek),
               {"notek_z_pomiarem": n_notek, "otwartych_przewidywan": len(otwarte)},
               {"typ": "brak", "opis": "bez nowego przewidywania: poprzednie czeka na rozliczenie"})
     return out[:MAKS_PROPOZYCJI], obcieto
 
 
 def _obecna_grupa(d: dict[str, Any], wymiar: str, grupa: str) -> dict[str, Any] | None:
-    g = (((d.get("wymiary") or {}).get(wymiar) or {}).get("grupy") or {}).get(grupa)
+    g = ((_wymiary(d).get(wymiar) or {}).get("grupy") or {}).get(grupa)
     return g if isinstance(g, dict) else None
 
 
@@ -308,7 +323,7 @@ def rozlicz_przewidywanie(p: dict[str, Any], d: dict[str, Any]) -> tuple[str, An
         g = _obecna_grupa(d, p["wymiar"], p["grupa"])
         if not g:
             return "bez_rozstrzygniecia", None
-        ref = ((d.get("wymiary") or {}).get(p["wymiar"]) or {}).get("odniesienie")
+        ref = (_wymiary(d).get(p["wymiar"]) or {}).get("odniesienie")
         if ref != p.get("odniesienie"):
             return "bez_rozstrzygniecia", "inne odniesienie: %s" % ref      # zmiana grupy odniesienia uniewaznia porownanie
         powod = _za_malo_nowych(p, g)
@@ -376,7 +391,7 @@ def tekst(epoka: dict[str, Any] | None, rozliczenia: list[dict[str, Any]], ostat
          "Epoka redakcyjna %d (polityka bez zmian)." % epoka["epoka_redakcyjna"], "",
          "## Co widze", "",
          "- Notek z pomiarem: %s, mediana wyswietlen: %s." % (epoka["n_notek"], epoka["mediana_wysw"]),
-         "- Grupy w raporcie wg werdyktu: %s." % ", ".join("%s %d" % (k, v) for k, v in epoka["sygnaly"].items()),
+         "- Grupy w raporcie wg werdyktu (bez wymiarow model i pozycja): %s." % ", ".join("%s %d" % (k, v) for k, v in epoka["sygnaly"].items()),
          "- Trwajace eksperymenty (zmienne dla analizy): %s." % (", ".join(sorted(k for k, v in (epoka.get("eksperymenty") or {}).items() if v == "trwa")) or "brak"),
          "", "## Co bym postanowil", ""]
     for p in epoka["propozycje"]:
@@ -445,7 +460,7 @@ def zapisz(*, dzis: date | None = None, katalog: Path | str | None = None) -> Pa
         epoka = {"rodzaj": "epoka", "record_id": uuid.uuid4().hex[:16], "schema_version": WERSJA_SCHEMATU, "code_commit": _kod(),
                  "tydzien": tydzien, "dzis": dzis.isoformat(), "raport_dzis": d.get("dzis"), "epoka_redakcyjna": EPOKA_REDAKCYJNA,
                  "polityka": "bez_zmian (cien)", "okno_od": d.get("od"), "n_notek": int(d.get("notek_z_pomiarem") or 0),
-                 "mediana_wysw": d.get("mediana_wysw"), "sygnaly": _liczniki(sygn),
+                 "mediana_wysw": d.get("mediana_wysw"), "sygnaly": _liczniki([s for s in sygn if s["wymiar"] not in POMIJANE_WYMIARY]),
                  "eksperymenty": {k: (v or {}).get("status") for k, v in (d.get("eksperymenty") or {}).items() if isinstance(v, dict)},
                  "propozycje": prop, "obcieto": obcieto, "status": "ok"}
         nowe = nowe + [epoka]
