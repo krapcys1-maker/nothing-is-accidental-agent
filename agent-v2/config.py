@@ -3693,7 +3693,7 @@ HISTORIA_KONTA_BLOK_ZNAKOW = 2500        # sufit calego bloku (skracane sa WPISY
 # (`historia_konta`) przy kilku progach — BEZ wplywu na tekst i bez modelu. Nie zapisuje tekstu celu (cudzego), tylko hash
 # i dlugosc. Profil „produkcja" jest brany z `HISTORIA_KONTA_*`, wiec nie moze sie rozjechac z tym, co dostaje E23 „on".
 # Profil: (nazwa, min. podobienstwo, min. rzadkich terminow, ile pozycji).
-# Wylacznik: False. Plan i protokol oceny: `D:\Pamiec LLM\WSPOLPRACA_NIE.md`, `docs/KARTA_AGENTA.md`.
+# Wylacznik: False. Plan i protokol oceny: WSPOLNY_PLAN.md (wspolny plan z sesja badawcza, wersja 1.1), `docs/KARTA_AGENTA.md`.
 PAMIEC_CIEN = True
 PAMIEC_CIEN_PROFILE = (("luzny", 0.08, 1, 3), ("szeroki", 0.05, 0, 5))
 PAMIEC_CIEN_PULA = 50                    # ile kandydatow bierze najluzniejsze zapytanie, zanim je rozdzielimy na profile

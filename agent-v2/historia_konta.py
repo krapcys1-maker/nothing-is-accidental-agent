@@ -67,8 +67,8 @@ def powiazane(tekst: str, *, teraz: datetime | None = None,
               statystyki: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     """Wlasne opublikowane wpisy najbardziej zwiazane z `tekst`, od najstarszego.
 
-    Kazdy: {"kiedy": datetime, "rodzaj": "notka"|"artykul", "tekst": str, "wynik": float (cosinus),
-    "rzadkie": int (liczba wspolnych rzadkich terminow)}.
+    Kazdy: {"kiedy": datetime, "rodzaj": "notka"|"artykul", "tekst": str, "wynik": float (cosinus zaokraglony do 3 miejsc),
+    "rzadkie": int (liczba wspolnych rzadkich terminow), "cos": float (cosinus NIEZAOKRAGLONY: porownania z progami robimy na nim)}.
     `statystyki` (opcjonalny slownik) dostaje {"pula": liczba kwalifikujacych sie wpisow w oknie, "najnowszy": ISO czas
     najnowszego z nich} — opis migawki indeksu dla `pamiec_cien`; nie zmienia wyniku.
     `min_podobienstwa`, `min_rzadkich` i `ile` to opcjonalne nadpisanie progow z `config` (domyslnie None =
@@ -156,7 +156,7 @@ def powiazane(tekst: str, *, teraz: datetime | None = None,
         if rzadkie < prog_rzadkich:
             continue
         kandydaci.append({"kiedy": w["kiedy"], "rodzaj": w["rodzaj"], "tekst": w["tekst"], "wynik": round(cos, 3),
-                          "rzadkie": rzadkie})
+                          "rzadkie": rzadkie, "cos": cos})
     kandydaci.sort(key=lambda k: (-k["wynik"], -k["kiedy"].timestamp()))
     return sorted(kandydaci[:limit], key=lambda k: k["kiedy"])
 

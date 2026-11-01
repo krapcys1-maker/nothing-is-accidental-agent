@@ -82,7 +82,7 @@ wyjścia); moje testy na Linuksie 58 + 36 + 30 + 46 + 41 zielone, w tym część
 **Dowody z produkcji (skrypt `robocze/zywa_weryfikacja_31_10.py`, 1.11 04:03–04:04 UTC, nic nie wysłane):**
 * *Sesja:* `odswiez_plik_sesji()` → 89 dni żywej sesji; plik 253 505 B → 239 642 B, tryb 600 zachowany, dni wg pliku 88 → 89, brak plików `.nowy`; alarm
   (wysyłka zatrzymana) nic by nie wysłał.
-* *Odpowiedzi pod cudzymi notkami:* `odpowiedzi_na_nasze_komentarze` oddaje 3 oczekujące odpowiedzi z notek (uchwyty `urkishika`, `hoangleitvn`, kontekst
+* *Odpowiedzi pod cudzymi notkami:* `odpowiedzi_na_nasze_komentarze` oddaje 3 oczekujące odpowiedzi z notek (uchwyty autorów notek pominięte w tym dokumencie, kontekst
   „our own comment in someone else's note thread"); tryb próbny `wystaw_odpowiedz(wyslij=False)`: pole odpowiedzi otwarte i wypełnione (9 słów), przycisk „Post"
   widoczny, `wyslane=False`, `blad=None`; dziennik bez nowych wpisów. **Publikacja i potwierdzenie w wątku NIE były jeszcze sprawdzone na żywo** — dopiero pierwsze
   prawdziwe odpowiedzi (przebieg ok. 11:27 UTC) to pokażą; obejrzeć ręcznie dwie pierwsze (wpis `odpowiedz`, `gdzie = note/c-<id>`, `udane`).

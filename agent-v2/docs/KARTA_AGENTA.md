@@ -1,6 +1,6 @@
 # Karta agenta (cele, charakter, granice) — wersja 0.1, 1.11.2026, SZKIC
 
-**Status: dokument. NIE jest wstrzykiwana do promptów.** Wejdzie do promptów razem z etapem N3 (żywa pamięć), jako stały rdzeń w OBU ramionach eksperymentu, dopiero po zgodzie właściciela i przeglądzie (patrz `D:\Pamiec LLM\WSPOLNY_PLAN.md`). Do tego czasu karta służy ludziom i sesjom badawczym jako jedno miejsce, w którym stoją cele i granice konta, oraz bazie do pomiaru postępu (N1 zapisuje tylko cień pamięci, `pamiec_cien.py`).
+**Status: dokument. NIE jest wstrzykiwana do promptów.** Wejdzie do promptów razem z etapem N3 (żywa pamięć), jako stały rdzeń w OBU ramionach eksperymentu, dopiero po zgodzie właściciela i przeglądzie (patrz WSPOLNY_PLAN.md, wspólny plan z sesją badawczą, wersja 1.1). Do tego czasu karta służy ludziom i sesjom badawczym jako jedno miejsce, w którym stoją cele i granice konta, oraz bazie do pomiaru postępu (N1 zapisuje tylko cień pamięci, `pamiec_cien.py`).
 
 Karta niczego nie zmienia w głosie konta. Opisuje to, co już jest w kodzie i dokumentach, i dodaje jawne cele, których dotąd nie było jako osobnego obiektu.
 

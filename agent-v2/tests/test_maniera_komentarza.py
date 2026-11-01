@@ -360,8 +360,8 @@ _kom = _RUN[_RUN.index("    def komentarze() -> None:"):_RUN.index("    def dysk
 _dys = _RUN[_RUN.index("    def dyskusje("):_RUN.index("    def obserwuj() -> None:")]
 sprawdz("oba bloki komentarzy podaja do comment_on dane ramienia E23",
         '**dane_maniery(cel, "%s %s" % (strony[0].get("title", ""), strony[0].get("text", ""))' in _kom
-        and 'run_id=run_id, zadanie="komentarz_pod_artykulem")' in _kom
-        and '**dane_maniery(cel, cel.get("opis", ""), run_id=run_id, zadanie="komentarz_pod_notka")' in _dys)
+        and 'run_id=run_id, zadanie="komentarz_pod_artykulem", wyslij=wyslij)' in _kom
+        and 'zadanie="komentarz_pod_notka",' in _dys and "wyslij=wyslij)" in _dys.split("dane_maniery(")[1])
 sprawdz("odpowiadalnosc autora liczona PO sicie limitu autora, a PRZED losowaniem swiezosci (obie sciezki)",
         _kom.index("limit_autorow.odsiej(cele)") < _kom.index("_wedlug_odpowiadalnosci(kanal, cele, notki=False)") < _kom.index("uloz_wedlug_swiezosci(")
         and _dys.index("_zywe_najpierw(kanal, limit_autorow.odsiej(cele))") < _dys.index("_wedlug_odpowiadalnosci(kanal, cele, notki=True)") < _dys.index("uloz_wedlug_swiezosci("))

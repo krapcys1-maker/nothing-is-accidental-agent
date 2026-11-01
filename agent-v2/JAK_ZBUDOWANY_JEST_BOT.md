@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **44 plików**, 57 191 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **44 plików**, 57 246 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -114,7 +114,7 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
 się testować bez przeglądarki i bez pieniędzy**. 228 zestawów
-testów, 6834 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+testów, 6854 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -143,7 +143,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-3968 wierszy, 47 funkcji na poziomie modułu, 2 klas
+3972 wierszy, 47 funkcji na poziomie modułu, 2 klas
 
 | funkcja | co robi |
 |---|---|
@@ -1221,23 +1221,26 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `pamiec_cien.py` — cień pamięci (etap N1, 1.11.2026) — dla każdego komentarza zapisuje do data/pamiec_cien.jsonl, co wstrzyknęłaby surowa pamięć własnej historii (historia_konta) przy progu produkcyjnym i dwóch luźniejszych, bez wpływu na tekst: rekord ze skrótem kluczowanym zapytania, pozycjami, tokenami, would_arm i statusem; fail-open, flaga PAMIEC_CIEN, limity czasu i rozmiaru
 
-237 wierszy, 13 funkcji na poziomie modułu, 0 klas
+288 wierszy, 16 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
-| `_plik()` *(wewn.)* | — |
+| `_katalog(katalog)` *(wewn.)* | — |
 | `_kod()` *(wewn.)* | — |
-| `_klucz()` *(wewn.)* | Klucz do skrotow kluczowanych; tworzony raz, tryb 0600. Brak klucza = rekord bez skrotow, nie awaria. |
+| `_klucz(katalog)` *(wewn.)* | (klucz, id klucza). Tworzony raz, tryb 0600. Brak klucza = (None, None): rekord ma status `degraded`. |
 | `_hmac(klucz, tekst)` *(wewn.)* | — |
 | `_sha(tekst)` *(wewn.)* | — |
-| `profile()` | (nazwa, min. podobienstwo, min. rzadkich, ile). „produkcja" zawsze z `HISTORIA_KONTA_*`: nie moze sie rozjechac |
+| `_uchwyt(autor)` *(wewn.)* | Znormalizowany uchwyt (jak w dzienniku: bez @, male litery); pusty, gdy go nie ma. |
+| `profile()` | (nazwa, min. podobienstwo, min. rzadkich terminow, ile). „produkcja" zawsze z `HISTORIA_KONTA_*`: nie moze sie rozjechac |
 | `digest_konfiguracji()` | — |
-| `_tokeny(tekst)` *(wewn.)* | — |
-| `_aktywne(teraz)` *(wewn.)* | Nazwy eksperymentow z `config.EKSPERYMENTY`, ktore trwaja w dniu decyzji (okno dat). Ramiona poza E23 zalezą od |
+| `_tokeny_wpisu(tekst)` *(wewn.)* | — |
+| `_tokeny_naglowka()` *(wewn.)* | Stala czesc bloku (naglowek i zasada uzycia z `historia_konta.blok`), liczona tylko gdy blok niepusty. |
+| `_aktywne(teraz)` *(wewn.)* | Nazwy eksperymentow z `config.EKSPERYMENTY`, ktore trwaja w dniu decyzji (okno dat). Ramiona poza E23 zaleza od |
 | `_pozycje(wpisy, teraz)` *(wewn.)* | — |
-| `_agregaty(poz, n_kandydatow)` *(wewn.)* | — |
-| `rekord(tekst_celu, klucz_celu)` | Zbuduj rekord cienia (bez zapisu). Rzuca wyjatek tylko przy bledzie programisty; `cien_komentarza` go lapie. |
-| `cien_komentarza(tekst_celu, klucz_celu, ramie_e23)` | Zapisz rekord cienia dla jednego komentarza i go zwroc; None, gdy wylaczone, pominiete albo nieudane. |
+| `_agregaty(poz, n_kandydatow, ucieta_pula)` *(wewn.)* | — |
+| `rekord(tekst_celu, klucz_celu)` | Zbuduj rekord cienia (bez zapisu). Szkielet powstaje PRZED wyszukiwaniem, wiec awaria wyszukiwania zostawia pelny |
+| `_dopisz(plik, rec)` *(wewn.)* | — |
+| `cien_komentarza(tekst_celu, klucz_celu, ramie_e23)` | Zapisz rekord cienia dla jednej proby komentarza i go zwroc; None, gdy wylaczone, pominiete albo nieudane. |
 
 ### `zaklady.py` — księga zakładów — publiczne zgadywania z notek serii liczone i rozliczane: wyciąg po publikacji, sprawdzenie wyszukiwarką (rozstrzygnięcie tylko z adresem z wyszukiwania), notka rozliczająca w kolejce serii, trafienia z przedziałem Wilsona i wynik Briera
 
