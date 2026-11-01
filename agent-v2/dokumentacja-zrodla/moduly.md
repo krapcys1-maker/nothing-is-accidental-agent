@@ -305,7 +305,7 @@
 
 ### `browser.py` — cała styczność z Substackiem; nie woła modelu
 
-6363 wierszy, 124 funkcji na poziomie modułu, 0 klas
+6405 wierszy, 126 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -405,6 +405,8 @@
 | `ustaw_oswiadczenie_ai(wyslij)` | Ustawia stałe oświadczenie pokazywane każdemu, kto skanuje nas pod kątem AI. |
 | `nieudane_odpowiedzi_pod_artykulem(komentarz_id, gdzie, komu)` | Ile razy obecna metoda NIE odpisala na ten komentarz pod artykulem. Bez sieci. |
 | `nieudane_odpowiedzi_w_watku(pod_id)` | Ile razy NIE udalo sie odpisac na ten komentarz w watku pod notka. Bez sieci. |
+| `_alnum(tekst)` *(wewn.)* | Tylko litery i cyfry, male: porownanie odporne na to, co edytor robi z cudzyslowami, spacjami i znakami nowej linii. |
+| `wpisz_do_pola(page, pole, tekst)` | Wpisz `tekst` w edytor tak, zeby w polu stal WYLACZNIE on; inaczej RuntimeError i NIC nie jest wysylane. |
 | `wystaw_odpowiedz_pod_artykulem(url_artykulu, autor, tekst, wyslij, kontekst)` | Odpowiada pod KONKRETNYM komentarzem pod naszym artykułem. |
 | `potwierdz_artykul(page, tytul)` | Pyta Substacka, czy artykuł naprawdę jest opublikowany. |
 | `_przyciski_okna(page)` *(wewn.)* | (napis, element) widocznych przyciskow okna ustawien. |
@@ -1102,23 +1104,28 @@
 
 ### `redaktor.py` — redaktor w cieniu (R1, 1.11.2026) — raz w tygodniu czyta raport co_dziala.json i zapisuje do data/redaktor_cien.jsonl dziennik decyzji redakcji: obserwacje, propozycje (temat, research, styl, dlugosc, pora) z dowodami z werdyktow, przewidywania i ich rozliczenie po terminie; notatka dla czlowieka w obserwatorium/redaktor.md; bez modelu, bez wplywu na tresc, flaga REDAKTOR_CIEN
 
-313 wierszy, 16 funkcji na poziomie modułu, 0 klas
+405 wierszy, 21 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
 | `_kat(katalog)` *(wewn.)* | — |
 | `_jsonl(plik)` *(wewn.)* | — |
 | `_tydzien(dzien)` *(wewn.)* | — |
-| `_id(*czesci)` *(wewn.)* | — |
+| `_kod()` *(wewn.)* | Skrot commita. Bez `import stages` (to wciaga caly graf modulow bota do procesu obserwatorium): wprost z gita, z limitem czasu. |
 | `wczytaj_raport(kat)` | `obserwatorium/co_dziala.json` albo None (brak lub uszkodzony). |
 | `_klasa(g, jest_odniesieniem)` *(wewn.)* | lepiej / gorzej / brak_dowodu / za_malo / odniesienie — wg werdyktu policzonego przez `co_dziala` (nie liczymy od nowa). |
-| `sygnaly(d)` | Plaska lista grup ze wszystkich wymiarow: {id, wymiar, grupa, klasa, n, klastrow, wzgl_tla, stosunek, przedzial_95}. |
+| `sygnaly(d)` | Plaska lista grup ze wszystkich wymiarow: {id, wymiar, grupa, klasa, n, klastrow, wzgl_tla, stosunek, przedzial_95, odniesienie, ostroznie...}. |
 | `_liczniki(sygn)` *(wewn.)* | — |
-| `_przewidywanie_grupy(s, kierunek, dzis)` *(wewn.)* | — |
-| `propozycje(d, sygn, dzis, tydzien)` | Do MAKS_PROPOZYCJI propozycji z dowodami i przewidywaniami; przy zbyt malej probie jedna: „nie zmieniac polityki”. |
+| `_termin(dzis)` *(wewn.)* | — |
+| `_dowod(s)` *(wewn.)* | — |
+| `_przew_werdykt(s, dzis)` *(wewn.)* | — |
+| `_przew_nowe(s, dzis)` *(wewn.)* | — |
+| `_okno_dni(d, dzis)` *(wewn.)* | — |
+| `propozycje(d, sygn, dzis, tydzien, otwarte)` | (propozycje, ile obcieto). Do MAKS_PROPOZYCJI; przy braku mocnych sygnalow pierwsza to „nie zmieniac polityki”. |
 | `_obecna_grupa(d, wymiar, grupa)` *(wewn.)* | — |
-| `rozlicz_przewidywanie(p, d)` | (wynik, wartosc aktualna): potwierdzone / chybione / bez_rozstrzygniecia (za malo danych — to tez uczciwa odpowiedz). |
+| `rozlicz_przewidywanie(p, d)` | (wynik, wartosc aktualna): potwierdzone / chybione / bez_rozstrzygniecia (za malo NOWYCH danych — to tez uczciwa odpowiedz). |
 | `rozlicz(wpisy, d, dzis)` | Nowe linie „rozliczenie” dla propozycji, ktorych termin minal, a ktore nie byly jeszcze rozliczone. |
+| `_otwarte(wpisy)` *(wewn.)* | (wymiar, grupa, typ przewidywania) z propozycji, ktorych jeszcze nie rozliczono. |
 | `tekst(epoka, rozliczenia, ostatnie_rozliczenia)` | Notatka redaktora dla czlowieka (cien: nic z tego nie jest wykonywane). |
 | `_dopisz(plik, rekordy)` *(wewn.)* | — |
 | `zapisz()` | Jeden przebieg: rozlicz zapadle przewidywania, a jesli tego tygodnia nie ma jeszcze epoki, zapisz ja. Zwraca sciezke notatki |

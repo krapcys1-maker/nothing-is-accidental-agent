@@ -4537,6 +4537,51 @@ def nieudane_odpowiedzi_w_watku(pod_id: Any) -> int:
     return ile
 
 
+def _alnum(tekst: str) -> str:
+    """Tylko litery i cyfry, male: porownanie odporne na to, co edytor robi z cudzyslowami, spacjami i znakami nowej linii."""
+    return re.sub(r"[^0-9a-ząćęłńóśźż]", "", (tekst or "").lower())
+
+
+def wpisz_do_pola(page, pole, tekst: str) -> None:
+    """Wpisz `tekst` w edytor tak, zeby w polu stal WYLACZNIE on; inaczej RuntimeError i NIC nie jest wysylane.
+
+    DLACZEGO (1.11.2026). Substack zapisuje SZKIC kazdego pola odpowiedzi. Moj test na zywo (`wyslij=False`) wpisal tekst probny w pole
+    odpowiedzi pod komentarzem, nie wyslal go, a szkic przezyl: gdy bot odpisal tam naprawde, `keyboard.type` dopisalo odpowiedz ZA szkicem
+    i na koncie wyszedl komentarz „Dry run only - this text is never sent.<nasza odpowiedz>”. Wiec: (1) czyscimy pole, jesli cos w nim jest,
+    (2) po wpisaniu sprawdzamy, ze pole zaczyna sie od naszego tekstu i nie jest dluzsze o obcy tekst (porownanie po znakach alfanumerycznych),
+    (3) przy niezgodzie czyscimy i probujemy jeszcze raz, a potem rzucamy wyjatek (wywolujacy nie wysyla). Gdy zawartosci pola w ogole nie
+    da sie odczytac, nie blokujemy wysylki (nie ma jak sprawdzic), tylko mowimy o tym w logu.
+    """
+    nasz = _alnum(tekst)
+
+    def odczytaj() -> str | None:
+        try:
+            return _alnum(pole.inner_text(timeout=3_000))
+        except Exception:                   # noqa: BLE001
+            return None
+
+    def wyczysc() -> None:
+        pole.click(timeout=5_000)
+        page.keyboard.press("Control+a")
+        page.keyboard.press("Delete")
+        page.wait_for_timeout(400)
+
+    for _ in range(2):
+        if odczytaj():
+            wyczysc()
+        page.keyboard.type(tekst, delay=12)
+        page.wait_for_timeout(1500)
+        po = odczytaj()
+        if po is None or (not po and not nasz):
+            print("  [pole] nie umiem odczytac zawartosci pola — wysylam bez sprawdzenia", flush=True)
+            return
+        if nasz and po.startswith(nasz[:40]) and len(po) <= len(nasz) + 40:
+            return
+        print("  [pole] w polu jest cos poza naszym tekstem (szkic?) — czyszcze i wpisuje jeszcze raz", flush=True)
+        wyczysc()
+    raise RuntimeError("w polu zostal obcy tekst (szkic z wczesniejszej proby?) — nie wysylam")
+
+
 def wystaw_odpowiedz_pod_artykulem(
     url_artykulu: str, autor: str, tekst: str, wyslij: bool = False,
     kontekst: dict[str, Any] | None = None,
@@ -4626,8 +4671,7 @@ def wystaw_odpowiedz_pod_artykulem(
         if forma.count() != 1:
             raise RuntimeError("pole odpowiedzi poza formularzem — nie wpisuje")
         pole.click(timeout=10_000)
-        page.keyboard.type(tekst, delay=12)
-        page.wait_for_timeout(1500)
+        wpisz_do_pola(page, pole, tekst)
         wynik["wpisane"] = True
         print(f"  wpisane w pole odpowiedzi: {len(tekst.split())} słów", flush=True)
 
@@ -5018,10 +5062,10 @@ def wystaw_odpowiedz(note_id: int, tekst: str, wyslij: bool = False,
         if not otwarte:
             raise RuntimeError("nie otworzyłem pola odpowiedzi")
 
-        page.locator("[contenteditable=true]").first.click(timeout=10_000)
+        pole = page.locator("[contenteditable=true]").first
+        pole.click(timeout=10_000)
         page.wait_for_timeout(700)
-        page.keyboard.type(tekst, delay=12)
-        page.wait_for_timeout(1500)
+        wpisz_do_pola(page, pole, tekst)
         wynik["wpisane"] = True
         print(f"  wpisane w pole odpowiedzi: {len(tekst.split())} słów", flush=True)
 
@@ -5253,8 +5297,7 @@ def wystaw_notke(tekst: str, wyslij: bool = False, typ: str = "",
         pole = page.locator("[contenteditable=true]").first
         pole.click(timeout=10_000)
         page.wait_for_timeout(800)
-        page.keyboard.type(tekst, delay=12)
-        page.wait_for_timeout(1500)
+        wpisz_do_pola(page, pole, tekst)
         wynik["wpisane"] = True
         print(f"  wpisane w pole notki: {len(tekst.split())} słów", flush=True)
 
@@ -5938,8 +5981,7 @@ def wystaw_komentarz(url: str, tekst: str, wyslij: bool = False,
             return wynik
         pole.click(timeout=8_000)
         page.wait_for_timeout(800)
-        page.keyboard.type(tekst, delay=12)
-        page.wait_for_timeout(1500)
+        wpisz_do_pola(page, pole, tekst)
         wynik["wpisane"] = True
         print(f"  wpisane w pole komentarza: {len(tekst.split())} słów", flush=True)
 

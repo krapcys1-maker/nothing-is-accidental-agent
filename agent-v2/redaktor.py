@@ -11,22 +11,29 @@ z sesja badawcza, tablica P-013).
 
 CO ROBI. (1) Bierze z raportu grupy z wymiarow notki (kat, kategoria, dlugosc, pora, forma, styk, pytanie...) i klasyfikuje je wg WERDYKTU, ktory
 policzyl `co_dziala` (lepiej / gorzej / brak dowodu / za malo danych / odniesienie) — sam NIE liczy statystyki od nowa. (2) Z mocnych sygnalow robi
-propozycje (zwiekszyc / ograniczyc udzial grupy jako EKSPERYMENT), ze slabych — „kandydatow do sprawdzenia", a gdy danych jest za malo, pisze
-to wprost: „nie zmieniac polityki, zbierac dane". (3) Do kazdej propozycji dopisuje przewidywanie, ktore da sie sprawdzic z tego samego raportu
-po terminie, i rozlicza stare (potwierdzone / chybione / bez rozstrzygniecia — to ostatnie, gdy danych dalej za malo). (4) Pisze notatke redaktora
-dla czlowieka: `obserwatorium/redaktor.md`.
+propozycje (zwiekszyc / ograniczyc udzial grupy jako EKSPERYMENT), ze slabych — „kandydatow do sprawdzenia" (dosc notek, niezaleznych jednostek,
+wyrazna przewaga i dluzsze okno dla wymiarow dzien/pora), a gdy zadnej grupy nie da sie jeszcze rozroznic od szumu, pisze to wprost: „nie zmieniac
+polityki, zbierac dane". (3) Do kazdej propozycji dopisuje przewidywanie, ktore da sie sprawdzic z kolejnych raportow, i rozlicza stare po terminie
+(potwierdzone / chybione / bez rozstrzygniecia — to ostatnie, gdy nowych danych za malo). (4) Pisze notatke redaktora dla czlowieka:
+`obserwatorium/redaktor.md`.
+
+JAK ROZLICZA (po przegladzie 1.11): okno `co_dziala` jest KUMULATYWNE (stale `od`), wiec ten sam raport po 14 dniach zawiera notki, ktore dały
+sygnal. Dlatego (a) przewidywanie o „kandydacie” sprawdza tylko NOWE notki grupy (szacunek z przyrostu: srednia logarytmow wzgl. tla z chwili zapisu
+i teraz) i wymaga ich co najmniej MIN_NOWYCH, (b) przewidywanie o mocnym sygnale sprawdza WERDYKT grupy (ta sama os co dowod: stosunek do grupy
+odniesienia), (c) ta sama grupa i kierunek nie wracaja co tydzien jako nowe przewidywanie, dopoki poprzednie nie jest rozliczone.
 
 CZEGO NIE ROBI. Bez modelu, bez sieci. Zapisuje WYLACZNIE liczby zbiorcze i nazwy grup (kategorie, formaty): zadnych tekstow notek, zadnych
-uchwytow ani danych czytelnikow (raporty R maja dane czytelnikow, wiec w dzienniku maja byc tylko liczby zbiorcze — P-013 pkt 5). Nie zapisuje
-nic, jesli nie ma raportu. Nie zmienia `co_dziala.py` ani niczego, co bot czyta przy pisaniu.
+uchwytow ani danych czytelnikow (P-013 pkt 5). Nic nie zapisuje, jesli nie ma swiezego raportu (starszego niz doba). Nie zmienia `co_dziala.py`
+ani niczego, co bot czyta przy pisaniu.
 
 EPOKA REDAKCYJNA. Kazdy rekord ma `epoka_redakcyjna`; zmiana POLITYKI (R2 i dalej) podnosi numer, zeby analiza pamieci mogla stratyfikowac po epoce
-(P-013 pkt 4). Dopoki polityka sie nie zmienia (cien), numer to `EPOKA_REDAKCYJNA = 0`.
+(P-013 pkt 4). Dopoki polityka sie nie zmienia (cien), numer to 0. Rekord epoki niesie tez statusy trwajacych eksperymentow (zmienne dla analizy).
 """
 from __future__ import annotations
 
-import hashlib
 import json
+import math
+import subprocess
 import uuid
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -41,13 +48,15 @@ RAPORT = "redaktor.md"
 MIN_NOTEK = 8                     # ponizej tylu notek z pomiarem nie wyciagamy wnioskow o polityce
 MAKS_PROPOZYCJI = 5
 HORYZONT_DNI = 14                 # po tylu dniach sprawdzamy przewidywanie
-MIN_W_GRUPIE_DO_ROZLICZENIA = 3   # jak `co_dziala.MIN_W_GRUPIE`
+MIN_NOWYCH = 4                    # tyle NOWYCH notek grupy trzeba, zeby rozliczyc przewidywanie o kandydacie
+MAKS_BAJTOW = 10 * 1024 * 1024
 # Kandydat do sprawdzenia (grupa BEZ przedzialu ufnosci) musi miec dosc notek, niezaleznych jednostek i wyrazna przewage, zeby nie gonic
 # za szumem: na zywym raporcie z 1.11 (12 notek, mediana 11 wyswietlen) grupy po 3 notki z przewaga 1,02-1,54 byly samym szumem.
 KAND_MIN_N = 4
 KAND_MIN_KLASTROW = 3
 KAND_MIN_WZGL = 1.15
-MAKS_BAJTOW = 10 * 1024 * 1024
+KAND_FRAKCJA_WYKRYWALNEGO = 0.5   # przewaga musi byc co najmniej taka czescia „wykrywalnego efektu” raportu
+OKNO_DLA_DNIA_I_PORY = 14         # wymiary dzien i pora: przy krotszym oknie grupa to jedna data kalendarzowa, nie niezalezny tydzien
 
 # Wymiar raportu -> rodzaj propozycji. Wymiary spoza tabeli to „styl”.
 RODZAJ_WYMIARU = {"kat": "temat", "kategoria": "temat", "dlugosc": "dlugosc", "pora": "pora", "dzien": "pora"}
@@ -83,8 +92,13 @@ def _tydzien(dzien: date) -> str:
     return "%d-W%02d" % (rok, tydz)
 
 
-def _id(*czesci: Any) -> str:
-    return hashlib.sha256("|".join(str(c) for c in czesci).encode("utf-8")).hexdigest()[:10]
+def _kod() -> str:
+    """Skrot commita. Bez `import stages` (to wciaga caly graf modulow bota do procesu obserwatorium): wprost z gita, z limitem czasu."""
+    try:
+        return subprocess.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True, timeout=5,
+                              cwd=str(Path(__file__).resolve().parent)).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return ""
 
 
 def wczytaj_raport(kat: Path) -> dict[str, Any] | None:
@@ -111,7 +125,7 @@ def _klasa(g: dict[str, Any], jest_odniesieniem: bool) -> str:
 
 
 def sygnaly(d: dict[str, Any]) -> list[dict[str, Any]]:
-    """Plaska lista grup ze wszystkich wymiarow: {id, wymiar, grupa, klasa, n, klastrow, wzgl_tla, stosunek, przedzial_95}."""
+    """Plaska lista grup ze wszystkich wymiarow: {id, wymiar, grupa, klasa, n, klastrow, wzgl_tla, stosunek, przedzial_95, odniesienie, ostroznie...}."""
     out = []
     for wymiar, tab in (d.get("wymiary") or {}).items():
         if not isinstance(tab, dict):
@@ -124,7 +138,8 @@ def sygnaly(d: dict[str, Any]) -> list[dict[str, Any]]:
                 "id": "%s|%s" % (wymiar, nazwa), "wymiar": wymiar, "grupa": str(nazwa),
                 "klasa": _klasa(g, nazwa == ref), "n": g.get("n"), "klastrow": g.get("klastrow"),
                 "wzgl_tla": g.get("wzgl_tla"), "stosunek": g.get("stosunek"), "przedzial_95": g.get("przedzial_95"),
-                "za_malo": bool(g.get("za_malo"))})
+                "wykrywalny_efekt": g.get("wykrywalny_efekt"), "odniesienie": ref,
+                "ostroznie": "OSTROZNIE" in str(g.get("werdykt") or ""), "za_malo": bool(g.get("za_malo"))})
     return out
 
 
@@ -135,57 +150,96 @@ def _liczniki(sygn: list[dict[str, Any]]) -> dict[str, int]:
     return out
 
 
-def _przewidywanie_grupy(s: dict[str, Any], kierunek: str, dzis: date) -> dict[str, Any]:
-    return {"typ": "grupa_wzgl_tla", "wymiar": s["wymiar"], "grupa": s["grupa"], "kierunek": kierunek,
-            "wartosc_odniesienia": 1.0, "n_przy_zapisie": s["n"],
-            "sprawdz_po": (dzis + timedelta(days=HORYZONT_DNI)).isoformat(),
-            "opis": "po %d dniach wzglednie do tla grupa %s/%s bedzie %s 1,0 (przy co najmniej %d notkach)" % (
-                HORYZONT_DNI, s["wymiar"], s["grupa"], "powyzej" if kierunek == ">=" else "ponizej", MIN_W_GRUPIE_DO_ROZLICZENIA)}
+def _termin(dzis: date) -> str:
+    return (dzis + timedelta(days=HORYZONT_DNI)).isoformat()
 
 
-def propozycje(d: dict[str, Any], sygn: list[dict[str, Any]], dzis: date, tydzien: str) -> list[dict[str, Any]]:
-    """Do MAKS_PROPOZYCJI propozycji z dowodami i przewidywaniami; przy zbyt malej probie jedna: „nie zmieniac polityki”."""
+def _dowod(s: dict[str, Any]) -> dict[str, Any]:
+    return {k: s[k] for k in ("id", "n", "klastrow", "wzgl_tla", "stosunek", "przedzial_95", "odniesienie", "ostroznie")}
+
+
+def _przew_werdykt(s: dict[str, Any], dzis: date) -> dict[str, Any]:
+    return {"typ": "grupa_werdykt", "wymiar": s["wymiar"], "grupa": s["grupa"], "oczekiwana": s["klasa"], "odniesienie": s["odniesienie"],
+            "sprawdz_po": _termin(dzis),
+            "opis": "po %d dniach werdykt grupy %s/%s wzgledem odniesienia „%s” nadal bedzie „%s”" % (
+                HORYZONT_DNI, s["wymiar"], s["grupa"], s["odniesienie"], s["klasa"])}
+
+
+def _przew_nowe(s: dict[str, Any], dzis: date) -> dict[str, Any]:
+    return {"typ": "grupa_nowe_notki", "wymiar": s["wymiar"], "grupa": s["grupa"], "n_przy_zapisie": s["n"], "wzgl_przy_zapisie": s["wzgl_tla"],
+            "wartosc_odniesienia": 1.0, "min_nowych": MIN_NOWYCH, "sprawdz_po": _termin(dzis),
+            "opis": "po %d dniach NOWE notki grupy %s/%s (co najmniej %d) beda srednio powyzej tla (wzgl. tla >= 1,0)" % (
+                HORYZONT_DNI, s["wymiar"], s["grupa"], MIN_NOWYCH)}
+
+
+def _okno_dni(d: dict[str, Any], dzis: date) -> int | None:
+    try:
+        return (dzis - date.fromisoformat(str(d.get("od"))[:10])).days
+    except ValueError:
+        return None
+
+
+def propozycje(d: dict[str, Any], sygn: list[dict[str, Any]], dzis: date, tydzien: str,
+               otwarte: set[tuple[str, str, str]] | None = None) -> tuple[list[dict[str, Any]], int]:
+    """(propozycje, ile obcieto). Do MAKS_PROPOZYCJI; przy braku mocnych sygnalow pierwsza to „nie zmieniac polityki”.
+    `otwarte` = (wymiar, grupa, typ przewidywania) z nierozliczonych poprzednich epok: te same nie wracaja co tydzien."""
+    otwarte = otwarte or set()
     n_notek = int(d.get("notek_z_pomiarem") or 0)
     out: list[dict[str, Any]] = []
+    okno = _okno_dni(d, dzis)
 
     def dodaj(typ: str, tresc: str, uzasadnienie: str, dowod: dict[str, Any], przewidywanie: dict[str, Any]) -> None:
         out.append({"id": "R-%s-%d" % (tydzien, len(out) + 1), "typ": typ, "tresc": tresc, "uzasadnienie": uzasadnienie,
                     "dowod": dowod, "przewidywanie": przewidywanie})
 
-    silne = any(s["klasa"] in ("lepiej", "gorzej") for s in sygn)
-    if n_notek < MIN_NOTEK or not silne:
+    kandydaci = [s for s in sygn if s["wymiar"] not in POMIJANE_WYMIARY and s["klasa"] != "odniesienie"]
+    mocne = [s for s in kandydaci if s["klasa"] in ("lepiej", "gorzej") and (s["wymiar"], s["grupa"], "grupa_werdykt") not in otwarte]
+    if n_notek < MIN_NOTEK or not any(s["klasa"] in ("lepiej", "gorzej") for s in kandydaci):
         dodaj("polityka", "Nie zmieniac polityki redakcyjnej w tej epoce; zbierac dane.",
               ("Notek z pomiarem jest %d (potrzeba co najmniej %d), mediana wyswietlen %s: za malo, by oddzielic efekt formy od szumu." % (
                   n_notek, MIN_NOTEK, d.get("mediana_wysw"))) if n_notek < MIN_NOTEK else
               ("Zadna grupa nie ma jeszcze werdyktu „lepiej” ani „gorzej” (notek z pomiarem %d, mediana wyswietlen %s): rozroznienia, "
                "ktore widac, mieszcza sie w szumie." % (n_notek, d.get("mediana_wysw"))),
               {"notek_z_pomiarem": n_notek, "mediana_wysw": d.get("mediana_wysw"), "min_notek": MIN_NOTEK},
-              {"typ": "liczba_notek", "wartosc_odniesienia": n_notek + 10,
-               "sprawdz_po": (dzis + timedelta(days=HORYZONT_DNI)).isoformat(),
-               "opis": "po %d dniach raport bedzie mial co najmniej %d notek z pomiarem" % (HORYZONT_DNI, n_notek + 10)})
-    kandydaci = [s for s in sygn if s["wymiar"] not in POMIJANE_WYMIARY and s["klasa"] != "odniesienie"]
-    for s in sorted((x for x in kandydaci if x["klasa"] in ("lepiej", "gorzej")), key=lambda x: x["id"]):
+              {"typ": "silne_sygnaly", "wartosc_odniesienia": 1, "sprawdz_po": _termin(dzis),
+               "opis": "po %d dniach co najmniej jedna grupa dostanie werdykt „lepiej” albo „gorzej”" % HORYZONT_DNI})
+    sila = lambda s: -abs(math.log(s["stosunek"])) if isinstance(s.get("stosunek"), (int, float)) and s["stosunek"] > 0 else 0.0   # noqa: E731
+    mocne.sort(key=lambda s: (sila(s), s["id"]))
+    for s in mocne:
+        if len(out) >= MAKS_PROPOZYCJI:
+            break
         typ = RODZAJ_WYMIARU.get(s["wymiar"], "styl")
         lepiej = s["klasa"] == "lepiej"
         dodaj(typ, "%s udzial grupy „%s” (wymiar %s) — jako eksperyment z regula decyzji z gory (R2, nie teraz)." % (
             "Zwiekszyc" if lepiej else "Ograniczyc", s["grupa"], s["wymiar"]),
-            "Przedzial 95%% stosunku do odniesienia %s wyklucza 1 (n=%s, klastrow=%s, wzgl. tla %s)." % (
-                s["przedzial_95"], s["n"], s["klastrow"], s["wzgl_tla"]),
-            {k: s[k] for k in ("id", "n", "klastrow", "wzgl_tla", "stosunek", "przedzial_95")},
-            _przewidywanie_grupy(s, ">=" if lepiej else "<=", dzis))
+            "Przedzial 95%% stosunku do grupy odniesienia „%s” wyklucza 1: %s (n=%s, klastrow=%s)%s." % (
+                s["odniesienie"], s["przedzial_95"], s["n"], s["klastrow"],
+                "; werdykt z zastrzezeniem: grupy z roznych okresow" if s["ostroznie"] else ""),
+            _dowod(s), _przew_werdykt(s, dzis))
+
+    def wykrywalny_ok(s: dict[str, Any]) -> bool:
+        w = s.get("wykrywalny_efekt")
+        return not isinstance(w, (int, float)) or (s["wzgl_tla"] - 1.0) >= KAND_FRAKCJA_WYKRYWALNEGO * w
+
     slabi = [s for s in kandydaci if s["klasa"] in ("brak_dowodu", "za_malo") and isinstance(s["n"], int) and s["n"] >= KAND_MIN_N
              and isinstance(s["klastrow"], int) and s["klastrow"] >= KAND_MIN_KLASTROW
-             and isinstance(s["wzgl_tla"], (int, float)) and s["wzgl_tla"] >= KAND_MIN_WZGL]
+             and isinstance(s["wzgl_tla"], (int, float)) and s["wzgl_tla"] >= KAND_MIN_WZGL and wykrywalny_ok(s)
+             and not (s["wymiar"] in ("dzien", "pora") and (okno is None or okno < OKNO_DLA_DNIA_I_PORY))
+             and (s["wymiar"], s["grupa"], "grupa_nowe_notki") not in otwarte]
     slabi.sort(key=lambda x: (-x["wzgl_tla"], x["id"]))
-    for s in slabi[:max(0, MAKS_PROPOZYCJI - len(out))]:
+    for s in slabi:
+        if len(out) >= MAKS_PROPOZYCJI:
+            break
         typ = RODZAJ_WYMIARU.get(s["wymiar"], "styl")
         dodaj("research" if typ == "temat" else typ,
               "Sprawdzic, czy grupa „%s” (wymiar %s) naprawde idzie lepiej: %s." % (
                   s["grupa"], s["wymiar"], "przygotowac dossier i test tematu" if typ == "temat" else "zebrac wiecej notek do porownania"),
-              "Wzgl. tla %s przy n=%s (klastrow %s), ale bez przedzialu: kandydat, nie wniosek." % (s["wzgl_tla"], s["n"], s["klastrow"]),
-              {k: s[k] for k in ("id", "n", "klastrow", "wzgl_tla", "stosunek", "przedzial_95")},
-              _przewidywanie_grupy(s, ">=", dzis))
-    return out[:MAKS_PROPOZYCJI]
+              "Wzgl. tla %s przy n=%s (klastrow %s), ale %s: kandydat, nie wniosek." % (
+                  s["wzgl_tla"], s["n"], s["klastrow"],
+                  "przedzial obejmuje 1" if s["klasa"] == "brak_dowodu" else "bez przedzialu (za malo niezaleznych jednostek)"),
+              _dowod(s), _przew_nowe(s, dzis))
+    obcieto = max(0, len(mocne) + len(slabi) - sum(1 for p in out if p["typ"] != "polityka"))
+    return out[:MAKS_PROPOZYCJI], obcieto
 
 
 def _obecna_grupa(d: dict[str, Any], wymiar: str, grupa: str) -> dict[str, Any] | None:
@@ -194,18 +248,34 @@ def _obecna_grupa(d: dict[str, Any], wymiar: str, grupa: str) -> dict[str, Any] 
 
 
 def rozlicz_przewidywanie(p: dict[str, Any], d: dict[str, Any]) -> tuple[str, Any]:
-    """(wynik, wartosc aktualna): potwierdzone / chybione / bez_rozstrzygniecia (za malo danych — to tez uczciwa odpowiedz)."""
+    """(wynik, wartosc aktualna): potwierdzone / chybione / bez_rozstrzygniecia (za malo NOWYCH danych — to tez uczciwa odpowiedz)."""
     typ = p.get("typ")
-    if typ == "liczba_notek":
-        akt = int(d.get("notek_z_pomiarem") or 0)
-        return ("potwierdzone" if akt >= p["wartosc_odniesienia"] else "chybione"), akt
-    if typ == "grupa_wzgl_tla":
+    if typ == "silne_sygnaly":
+        ile = sum(1 for s in sygnaly(d) if s["wymiar"] not in POMIJANE_WYMIARY and s["klasa"] in ("lepiej", "gorzej"))
+        return ("potwierdzone" if ile >= p["wartosc_odniesienia"] else "chybione"), ile
+    if typ == "grupa_werdykt":
         g = _obecna_grupa(d, p["wymiar"], p["grupa"])
-        if not g or not isinstance(g.get("n"), int) or g["n"] < MIN_W_GRUPIE_DO_ROZLICZENIA or not isinstance(g.get("wzgl_tla"), (int, float)):
-            return "bez_rozstrzygniecia", (g or {}).get("n")
-        akt = g["wzgl_tla"]
-        ok = akt >= p["wartosc_odniesienia"] if p.get("kierunek") == ">=" else akt <= p["wartosc_odniesienia"]
-        return ("potwierdzone" if ok else "chybione"), akt
+        if not g:
+            return "bez_rozstrzygniecia", None
+        ref = ((d.get("wymiary") or {}).get(p["wymiar"]) or {}).get("odniesienie")
+        if ref != p.get("odniesienie"):
+            return "bez_rozstrzygniecia", "inne odniesienie: %s" % ref      # zmiana grupy odniesienia unieważnia porównanie
+        klasa = _klasa(g, p["grupa"] == ref)
+        if klasa == p["oczekiwana"]:
+            return "potwierdzone", klasa
+        return ("chybione" if klasa in ("lepiej", "gorzej") else "bez_rozstrzygniecia"), klasa
+    if typ == "grupa_nowe_notki":
+        g = _obecna_grupa(d, p["wymiar"], p["grupa"])
+        if not g or not isinstance(g.get("n"), int) or not isinstance(g.get("wzgl_tla"), (int, float)):
+            return "bez_rozstrzygniecia", None
+        nowych = g["n"] - int(p.get("n_przy_zapisie") or 0)
+        w0, w1 = p.get("wzgl_przy_zapisie"), g["wzgl_tla"]
+        if nowych < int(p.get("min_nowych") or MIN_NOWYCH) or not isinstance(w0, (int, float)) or w0 <= 0 or w1 <= 0:
+            return "bez_rozstrzygniecia", nowych
+        # srednia logarytmow wzgl. tla jest wazona liczba notek: wzgl_tla(nowe) = exp((n1*ln w1 - n0*ln w0) / (n1 - n0))
+        n0, n1 = int(p["n_przy_zapisie"]), g["n"]
+        nowe = math.exp((n1 * math.log(w1) - n0 * math.log(w0)) / (n1 - n0))
+        return ("potwierdzone" if nowe >= p["wartosc_odniesienia"] else "chybione"), round(nowe, 3)
     return "bez_rozstrzygniecia", None
 
 
@@ -220,11 +290,26 @@ def rozlicz(wpisy: list[dict[str, Any]], d: dict[str, Any], dzis: date) -> list[
             p = pr.get("przewidywanie") or {}
             if pr.get("id") in rozliczone or not p.get("sprawdz_po") or str(p["sprawdz_po"]) > dzis.isoformat():
                 continue
+            rozliczone.add(pr.get("id"))
             wynik, akt = rozlicz_przewidywanie(p, d)
             out.append({"rodzaj": "rozliczenie", "record_id": uuid.uuid4().hex[:16], "schema_version": WERSJA_SCHEMATU,
                         "id_propozycji": pr.get("id"), "epoka_wpisu": e.get("tydzien"), "kiedy": dzis.isoformat(),
                         "wynik": wynik, "wartosc_aktualna": akt, "przewidywanie": p.get("opis"),
                         "epoka_redakcyjna": EPOKA_REDAKCYJNA})
+    return out
+
+
+def _otwarte(wpisy: list[dict[str, Any]]) -> set[tuple[str, str, str]]:
+    """(wymiar, grupa, typ przewidywania) z propozycji, ktorych jeszcze nie rozliczono."""
+    rozliczone = {w.get("id_propozycji") for w in wpisy if w.get("rodzaj") == "rozliczenie"}
+    out = set()
+    for e in wpisy:
+        if e.get("rodzaj") != "epoka":
+            continue
+        for pr in e.get("propozycje") or []:
+            p = pr.get("przewidywanie") or {}
+            if pr.get("id") not in rozliczone and p.get("wymiar"):
+                out.add((p["wymiar"], p["grupa"], p.get("typ")))
     return out
 
 
@@ -237,18 +322,21 @@ def tekst(epoka: dict[str, Any] | None, rozliczenia: list[dict[str, Any]], ostat
          "Epoka redakcyjna %d (polityka bez zmian)." % epoka["epoka_redakcyjna"], "",
          "## Co widze", "",
          "- Notek z pomiarem: %s, mediana wyswietlen: %s." % (epoka["n_notek"], epoka["mediana_wysw"]),
-         "- Grupy w raporcie wg werdyktu: %s." % ", ".join("%s %d" % (k, v) for k, v in epoka["sygnaly"].items()), "",
-         "## Co bym postanowil", ""]
+         "- Grupy w raporcie wg werdyktu: %s." % ", ".join("%s %d" % (k, v) for k, v in epoka["sygnaly"].items()),
+         "- Trwajace eksperymenty (zmienne dla analizy): %s." % (", ".join(sorted(k for k, v in (epoka.get("eksperymenty") or {}).items() if v == "trwa")) or "brak"),
+         "", "## Co bym postanowil", ""]
     for p in epoka["propozycje"]:
         L += ["- **%s** (%s): %s" % (p["id"], p["typ"], p["tresc"]), "  - dlaczego: %s" % p["uzasadnienie"],
               "  - przewiduje: %s (sprawdze po %s)" % (p["przewidywanie"]["opis"], p["przewidywanie"]["sprawdz_po"])]
+    if epoka.get("obcieto"):
+        L.append("- (pominieto jeszcze %d propozycji z powodu limitu %d na tydzien)" % (epoka["obcieto"], MAKS_PROPOZYCJI))
     L += ["", "## Czy sie sprawdzilo", ""]
     wszystkie = rozliczenia + ostatnie_rozliczenia
     if not wszystkie:
         L.append("- Zadne wczesniejsze przewidywanie nie osiagnelo jeszcze terminu.")
     for r in wszystkie:
         L.append("- %s: **%s** (%s; wartosc teraz: %s)" % (r["id_propozycji"], r["wynik"].replace("_", " "), r["przewidywanie"], r["wartosc_aktualna"]))
-    L += ["", "*Uczciwie: jesli danych jest za malo, pisze „bez rozstrzygniecia” zamiast zgadywac.*", ""]
+    L += ["", "*Uczciwie: jesli nowych danych jest za malo, pisze „bez rozstrzygniecia” zamiast zgadywac.*", ""]
     return "\n".join(L)
 
 
@@ -272,17 +360,24 @@ def _dopisz(plik: Path, rekordy: list[dict[str, Any]]) -> None:
 
 def zapisz(*, dzis: date | None = None, katalog: Path | str | None = None) -> Path | None:
     """Jeden przebieg: rozlicz zapadle przewidywania, a jesli tego tygodnia nie ma jeszcze epoki, zapisz ja. Zwraca sciezke notatki
-    albo None (wylaczone, brak raportu, plik za duzy). Wyjatki zostawia wywolujacemu (hak w `obserwatorium` je lapie)."""
+    albo None (wylaczone, brak lub stary raport, plik za duzy; powod idzie do logu). Wyjatki zostawia wywolujacemu (hak w `obserwatorium` je lapie)."""
     if not getattr(config, "REDAKTOR_CIEN", False):
+        print("  [redaktor] pominiety: flaga REDAKTOR_CIEN wylaczona", flush=True)
         return None
     kat = _kat(katalog)
     d = wczytaj_raport(kat)
     if d is None:
+        print("  [redaktor] pominiety: brak lub uszkodzony obserwatorium/co_dziala.json", flush=True)
         return None
     dzis = dzis or datetime.now(timezone.utc).date()
+    if str(d.get("dzis") or "") < (dzis - timedelta(days=1)).isoformat():
+        print("  [redaktor] pominiety: raport nieswiezy (dzis w raporcie %s, a jest %s) — co_dziala nie policzylo sie dzisiaj" % (
+            d.get("dzis"), dzis.isoformat()), flush=True)
+        return None
     plik = kat / PLIK
     try:
         if plik.stat().st_size > MAKS_BAJTOW:
+            print("  [redaktor] pominiety: plik %s przekroczyl %d MB" % (PLIK, MAKS_BAJTOW // 1048576), flush=True)
             return None
     except OSError:
         pass
@@ -292,16 +387,13 @@ def zapisz(*, dzis: date | None = None, katalog: Path | str | None = None) -> Pa
     epoka = next((w for w in wpisy if w.get("rodzaj") == "epoka" and w.get("tydzien") == tydzien), None)
     if epoka is None:
         sygn = sygnaly(d)
-        try:
-            import stages
-            kod = getattr(stages, "WERSJA_KODU", "") or ""
-        except Exception:                   # noqa: BLE001
-            kod = ""
-        epoka = {"rodzaj": "epoka", "record_id": uuid.uuid4().hex[:16], "schema_version": WERSJA_SCHEMATU, "code_commit": kod,
-                 "tydzien": tydzien, "dzis": dzis.isoformat(), "epoka_redakcyjna": EPOKA_REDAKCYJNA,
+        prop, obcieto = propozycje(d, sygn, dzis, tydzien, _otwarte(wpisy + nowe))
+        epoka = {"rodzaj": "epoka", "record_id": uuid.uuid4().hex[:16], "schema_version": WERSJA_SCHEMATU, "code_commit": _kod(),
+                 "tydzien": tydzien, "dzis": dzis.isoformat(), "raport_dzis": d.get("dzis"), "epoka_redakcyjna": EPOKA_REDAKCYJNA,
                  "polityka": "bez_zmian (cien)", "okno_od": d.get("od"), "n_notek": int(d.get("notek_z_pomiarem") or 0),
                  "mediana_wysw": d.get("mediana_wysw"), "sygnaly": _liczniki(sygn),
-                 "propozycje": propozycje(d, sygn, dzis, tydzien), "status": "ok"}
+                 "eksperymenty": {k: (v or {}).get("status") for k, v in (d.get("eksperymenty") or {}).items() if isinstance(v, dict)},
+                 "propozycje": prop, "obcieto": obcieto, "status": "ok"}
         nowe = nowe + [epoka]
     if nowe:
         _dopisz(plik, nowe)
