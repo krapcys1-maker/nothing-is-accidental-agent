@@ -143,6 +143,24 @@ sprawdz("skroty = HMAC-SHA256 z kluczem z pliku (24 hex): zapytanie, cel (gdzie 
         and r0["query"]["target_hmac"] == hmac.new(klucz, ("cel|" + ADRES).encode(), hashlib.sha256).hexdigest()[:24]
         and r0["query"]["author_hmac"] == hmac.new(klucz, b"autor|zenobiusz", hashlib.sha256).hexdigest()[:24]
         and r0["query"]["key_id"] == hashlib.sha256(klucz).hexdigest()[:8] and r0["query"]["chars"] == len(CEL), r0.get("query"))
+sprawdz("`target_hmac_gdzie` = HMAC postaci `gdzie` z dziennika; dla artykulu (pelny adres) to ta sama wartosc co `target_hmac`",
+        r0["query"]["target_hmac_gdzie"] == r0["query"]["target_hmac"]
+        == hmac.new(klucz, ("cel|" + ADRES).encode(), hashlib.sha256).hexdigest()[:24], r0.get("query"))
+r_nt = pamiec_cien.rekord(CEL, "https://substack.com/note/c-375278339", zadanie="komentarz_pod_notka", run_id=1, katalog=KAT)
+sprawdz("komentarz pod NOTKA: `target_hmac_gdzie` liczone z `note/c-<id>` (jak pisze dziennik), `target_hmac` z pelnego adresu (jak w 5ff6b0c)",
+        r_nt["query"]["target_hmac_gdzie"] == hmac.new(klucz, b"cel|note/c-375278339", hashlib.sha256).hexdigest()[:24]
+        and r_nt["query"]["target_hmac"] == hmac.new(klucz, b"cel|https://substack.com/note/c-375278339", hashlib.sha256).hexdigest()[:24]
+        and r_nt["query"]["target_hmac_gdzie"] != r_nt["query"]["target_hmac"], r_nt.get("query"))
+sprawdz("gdzie_dziennika: rozne postacie adresu notki (profil, handle, bez hosta) daja `note/c-<id>`; artykul i puste zostaja; obciecie do 200",
+        [pamiec_cien.gdzie_dziennika(x) for x in ("https://substack.com/note/c-1", "https://substack.com/@ktos/note/c-22",
+                                                   "https://substack.com/profile/5-jan/note/c-333", "note/c-4", "/note/c-55/", "", None)]
+        == ["note/c-1", "note/c-22", "note/c-333", "note/c-4", "note/c-55", "", ""]
+        and pamiec_cien.gdzie_dziennika("https://x.example/p/" + "a" * 300) == ("https://x.example/p/" + "a" * 300)[:200]
+        and pamiec_cien.gdzie_dziennika("https://x.example/p/notatki-c-5") == "https://x.example/p/notatki-c-5")
+import re as _re
+_br = pathlib.Path("agent-v2/browser.py").read_text(encoding="utf-8")
+sprawdz("SPRZEZENIE ze zrodlem: `wystaw_odpowiedz` nadal zapisuje `gdzie=f\"note/c-{note_id}\"`, a `wystaw_komentarz` `gdzie=url` (inaczej poprawic `gdzie_dziennika`)",
+        _br.count('gdzie=f"note/c-{note_id}"') >= 1 and _re.search(r'dopisz_wynik\("komentarz", wynik, gdzie=url', _br) is not None)
 sprawdz("skrot zapytania NIE jest zwyklym skrotem tekstu (slownikowo odtwarzalnym)",
         r0["query"]["hmac"] != hashlib.sha256(norm.encode()).hexdigest()[:24])
 surowy = out.read_text(encoding="utf-8")

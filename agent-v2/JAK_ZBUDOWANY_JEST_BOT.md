@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **45 plików**, 57 786 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **45 plików**, 57 804 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -114,7 +114,7 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
 się testować bez przeglądarki i bez pieniędzy**. 230 zestawów
-testów, 6979 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+testów, 6983 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -1223,11 +1223,12 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `pamiec_cien.py` — cień pamięci (etap N1, 1.11.2026) — dla każdego komentarza zapisuje do data/pamiec_cien.jsonl, co wstrzyknęłaby surowa pamięć własnej historii (historia_konta) przy progu produkcyjnym i dwóch luźniejszych, bez wpływu na tekst: rekord ze skrótem kluczowanym zapytania, pozycjami, tokenami, would_arm i statusem; fail-open, flaga PAMIEC_CIEN, limity czasu i rozmiaru
 
-288 wierszy, 16 funkcji na poziomie modułu, 0 klas
+306 wierszy, 17 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
 | `_katalog(katalog)` *(wewn.)* | — |
+| `gdzie_dziennika(klucz_celu)` | Postac celu, jaka dziennik zapisze jako `gdzie`: komentarz pod notka -> `note/c-<id>` (tak pisze `browser.wystaw_odpowiedz`), |
 | `_kod()` *(wewn.)* | — |
 | `_klucz(katalog)` *(wewn.)* | (klucz, id klucza). Tworzony raz, tryb 0600. Brak klucza = (None, None): rekord ma status `degraded`. |
 | `_hmac(klucz, tekst)` *(wewn.)* | — |

@@ -9,7 +9,7 @@ Przy każdej PRÓBIE komentarza (oba ramiona E23, oba bloki komentarzy w `run.py
 ## Rekord (uzgodniony z sesją badawczą)
 
 - **Tożsamość:** `record_id`, `schema_version`, `code_commit`, `run_id` (+ `run_id_basis`), `journal_ref: null` (+ `journal_ref_basis: none_at_decision_time`), `occurred_at`, `as_of`, `task_type`, `arm_e23`, `eksperymenty` (nazwy eksperymentów trwających w dniu decyzji), `mode`, `publish_run`.
-- **Zapytanie:** `query.hmac` (skrót treści zapytania), `query.target_hmac` (skrót tej samej wartości, którą dziennik zapisuje jako `gdzie`: to **klucz złączenia z wpisem dziennika** po publikacji, razem z czasem), `query.author_hmac` (uchwyt znormalizowany: bez `@`, małe litery), `query.key_id`, `query.chars`. Wszystkie skróty to HMAC-SHA256 z kluczem, a `key_id` (8 znaków skrótu klucza) czyni widoczną utratę lub wymianę klucza.
+- **Zapytanie:** `query.hmac` (skrót treści zapytania), `query.target_hmac_gdzie` (skrót wartości, którą dziennik zapisze jako `gdzie`: to **klucz złączenia z wpisem dziennika** po publikacji, razem z czasem; komentarz pod notką → `note/c-<id>`, pod artykułem → pełny adres), `query.target_hmac` (skrót adresu celu tak, jak go zna `run`, czyli `cel["url"]`; dla artykułów to ta sama wartość, dla notek różni się prefiksem adresu; patrz „Wdrożenie”), `query.author_hmac` (uchwyt znormalizowany: bez `@`, małe litery), `query.key_id`, `query.chars`. Wszystkie skróty to HMAC-SHA256 z kluczem, a `key_id` (8 znaków skrótu klucza) czyni widoczną utratę lub wymianę klucza.
 - **Strategia:** `strategy.id`, `config_digest`, `embedder: null`, trzy profile z progami.
 - **Wyniki** (`results.<profil>`): pozycje (`item_id` = skrót wpisu, `kind`, `age_days`, `rank`, `score`, `rare_terms`, `reason`, `tokens_est`) oraz agregaty: `n_candidates` PRZED obcięciem do limitu profilu (dla profilu „produkcja" wprost z `historia_konta.powiazane`), `n_candidates_capped`, `n_returned`, `tokens_entries`, `tokens_overhead` (stała część bloku), `tokens_total`, `over_budget`.
 - **Migawka indeksu:** `index_snapshot` (`pool_size`, `newest_item_at`, `window_days`, `journal_bytes`), `would_arm` (zamrożona funkcja losowania `pamiec_n3` < 10%, nieużywana w cieniu).
@@ -38,7 +38,20 @@ Repozytorium bota na GitHubie jest **publiczne**. Plik `data/pamiec_cien.jsonl` 
 
 ## Dowody i ograniczenia
 
-- Testy: `tests/test_pamiec_cien.py` (61 sprawdzeń), `tests/test_maniera_komentarza.py` (113), `tests/test_nadwyzka_pod_notkami.py` (atrapa `dane_maniery` odwzorowuje nowy podpis). Mutacje kodu (`robocze/mutacje_cien.py`): wynik w sekcji „Wdrożenie”.
+- Testy: `tests/test_pamiec_cien.py` (66 sprawdzeń), `tests/test_maniera_komentarza.py` (113), `tests/test_nadwyzka_pod_notkami.py` (atrapa `dane_maniery` odwzorowuje nowy podpis). Mutacje kodu (`robocze/mutacje_cien.py`): wynik w sekcji „Wdrożenie”.
 - Zapytanie cienia to tytuł i tekst celu, tak jak w `dane_maniery`. Pole `lang` i liczba terminów zapytania nie są zapisywane (do dodania w razie potrzeby N2).
 - Cień mierzy tylko, co zwróciłaby pamięć leksykalna (cosinus wag idf). Nie mówi, czy komentarz byłby lepszy z pamięcią: to zadanie protokołu oceny (P1) i etapów N2 i N3.
 - Karta celów i charakteru (`docs/KARTA_AGENTA.md`) jest dokumentem; do promptów wejdzie dopiero w N3.
+
+## Wdrożenie
+
+**1.11.2026, 15:04 RO (13:04 UTC), `b6271bc` → `b1d0f18`.** Pełny zestaw na serwerze: 24 czerwone = baza, zero nowych (wcześniej jeden nowy, atrapa ze starym podpisem `dane_maniery`: lokalne testy celowane nie zastępują pełnego zestawu na serwerze). Żywy test na prawdziwym dzienniku: ok, 52-82 ms, klucz 0600, zero znaków `@`.
+
+**Pierwszy przebieg produkcyjny (run 549, 19:05-20:14 RO, status DONE, 68 min):**
+
+- 4 rekordy (po jednym na komentarz pod notką), status `ok` 4/4, `latency_ms` p50 63, p95 66, max 66; zero znaków `@`; jeden `key_id`; `run_id` 549 istnieje w `runs`; `mode` produkcja, `publish_run` true; w logu 4 linie `[cien] rekord status=ok` i żadnej `nie zapisalem` ani `zapis nieudany`.
+- Brak wycieku tekstów celów: 15 charakterystycznych słów z trzech losowych komentarzy, żadne nie występuje w pliku.
+- Cień niczego nie zmienił: czas przebiegu 68 min (poprzednie 40 przebiegów dzień-DONE: mediana 90, max 102), proporcja ramion E23 3 on / 1 off (od 29.10: 19 on / 15 off / 8 bez ramienia), `historia_n` = 0 dla trzech komentarzy ramienia „on" zgodne z `n_candidates` profilu „produkcja" = 0.
+- Profil „luźny" dał 0 kandydatów, „szeroki" 0/2/4/1: materiał do kalibracji progu N3 (przy progu produkcyjnym pamięć trafia rzadko).
+
+**Wykryta rozbieżność (naprawiona w 5ff6b0c+):** dokument i docstring twierdziły, że `target_hmac` = HMAC wartości `gdzie` z dziennika. Na produkcji 0 z 5 wpisów łączyło się po `target_hmac`: komentarze pod notkami dziennik zapisuje jako `note/c-<id>` (`browser.wystaw_odpowiedz`), a cień haszował pełny adres `https://substack.com/note/c-<id>`. Test z wersji pierwszej sprawdzał tylko artykuł (pełny adres), więc tego nie widział. Dodano `query.target_hmac_gdzie` (z `gdzie_dziennika`) oraz test sprzężenia ze źródłem `browser.py`. Cztery rekordy z przebiegu 549 mają tylko `target_hmac`; łączy się je przez prefiks `https://substack.com/` + `gdzie`. Odpowiedzi (`rodzaj: odpowiedz`) nie mają rekordu cienia, bo idą ścieżką bez haka (poza zakresem N1).

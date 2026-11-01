@@ -1081,11 +1081,12 @@
 
 ### `pamiec_cien.py` — cień pamięci (etap N1, 1.11.2026) — dla każdego komentarza zapisuje do data/pamiec_cien.jsonl, co wstrzyknęłaby surowa pamięć własnej historii (historia_konta) przy progu produkcyjnym i dwóch luźniejszych, bez wpływu na tekst: rekord ze skrótem kluczowanym zapytania, pozycjami, tokenami, would_arm i statusem; fail-open, flaga PAMIEC_CIEN, limity czasu i rozmiaru
 
-288 wierszy, 16 funkcji na poziomie modułu, 0 klas
+306 wierszy, 17 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
 | `_katalog(katalog)` *(wewn.)* | — |
+| `gdzie_dziennika(klucz_celu)` | Postac celu, jaka dziennik zapisze jako `gdzie`: komentarz pod notka -> `note/c-<id>` (tak pisze `browser.wystaw_odpowiedz`), |
 | `_kod()` *(wewn.)* | — |
 | `_klucz(katalog)` *(wewn.)* | (klucz, id klucza). Tworzony raz, tryb 0600. Brak klucza = (None, None): rekord ma status `degraded`. |
 | `_hmac(klucz, tekst)` *(wewn.)* | — |

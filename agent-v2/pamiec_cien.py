@@ -17,8 +17,12 @@ tego, co dostaje „on". Nie zatrzymuje komentarza: kazdy wyjatek jest polykany 
 `[cien] ...` w logu przebiegu.
 
 LACZENIE Z DZIENNIKIEM. Wpis dziennika powstaje po publikacji, wiec rekord ma `journal_ref: null`. Klucz zlaczenia to
-`query.target_hmac` = HMAC dokladnie tej wartosci, ktora `run` zapisuje w dzienniku jako `gdzie` (adres artykulu albo id
-notki, ucieta do 200 znakow), plus czas. `query.hmac` (skrot tresci zapytania) sluzy do sprawdzania powtorek, nie do zlaczen.
+`query.target_hmac_gdzie` = HMAC wartosci, ktora dziennik zapisze jako `gdzie` (`gdzie_dziennika`): komentarz pod NOTKA
+(`browser.wystaw_odpowiedz`) zapisuje `note/c-<id>`, pod ARTYKULEM (`browser.wystaw_komentarz`) pelny adres (do 200 znakow);
+plus czas. `query.target_hmac` to HMAC adresu celu tak, jak go zna `run` (`cel["url"]`): dla artykulow to ta sama wartosc,
+dla notek rozni sie prefiksem `https://<host>/` (1.11.2026 przebieg 549: 0 z 5 wpisow laczylo sie po `target_hmac`, bo pierwsza
+wersja dokumentu twierdzila, ze to jedno i to samo; 4 rekordy z tego przebiegu maja tylko `target_hmac` i laczy sie je przez
+„https://substack.com/” + gdzie). `query.hmac` (skrot tresci zapytania) sluzy do sprawdzania powtorek, nie do zlaczen.
 
 HIGIENA (wymog sesji badawczej): flaga `config.PAMIEC_CIEN`, `LIMIT_S` (ETYKIETA `timeout` nadawana po policzeniu, nie
 przerwanie), limit rozmiaru pliku (`MAKS_BAJTOW`), pole `status` w kazdym rekordzie: `ok`, `degraded` (cien policzony, ale
@@ -37,6 +41,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import time
 import uuid
 from datetime import datetime, timezone
@@ -57,6 +62,17 @@ _ostrzezono_o_rozmiarze = False
 
 def _katalog(katalog: Path | str | None) -> Path:
     return Path(katalog) if katalog else Path(config.DATA_DIR)
+
+
+_NOTKA_W_ADRESIE = re.compile(r"/note/(c-\d+)")
+
+
+def gdzie_dziennika(klucz_celu: str) -> str:
+    """Postac celu, jaka dziennik zapisze jako `gdzie`: komentarz pod notka -> `note/c-<id>` (tak pisze `browser.wystaw_odpowiedz`),
+    pod artykulem -> pelny adres bez zmian (`browser.wystaw_komentarz`), ucieta do 200 znakow. Test pilnuje sprzezenia ze zrodlem `browser.py`."""
+    s = str(klucz_celu or "")
+    m = _NOTKA_W_ADRESIE.search(s)
+    return ("note/" + m.group(1)) if m else s[:200]
 
 
 def _kod() -> str:
@@ -171,7 +187,8 @@ def rekord(tekst_celu: str, klucz_celu: str, *, zadanie: str = "komentarz", rami
     teraz = teraz or datetime.now(timezone.utc)
     kat = _katalog(katalog)
     klucz_hmac, id_klucza = _klucz(kat)
-    gdzie = str(klucz_celu or "")[:200]                       # DOKLADNIE to, co `run` zapisuje w dzienniku jako `gdzie`
+    gdzie = str(klucz_celu or "")[:200]                       # adres celu tak, jak go zna `run` (cel["url"])
+    gdzie_dz = gdzie_dziennika(klucz_celu)                    # DOKLADNIE to, co dziennik zapisze jako `gdzie`
     rec: dict[str, Any] = {
         "record_id": uuid.uuid4().hex[:16], "schema_version": WERSJA_SCHEMATU, "code_commit": _kod(),
         "run_id": run_id, "run_id_basis": "native" if run_id is not None else "absent",
@@ -182,7 +199,8 @@ def rekord(tekst_celu: str, klucz_celu: str, *, zadanie: str = "komentarz", rami
         "query": {"hmac": _hmac(klucz_hmac, " ".join((tekst_celu or "").split())), "key_id": id_klucza,
                   "chars": len(tekst_celu or ""),
                   "author_hmac": _hmac(klucz_hmac, "autor|" + _uchwyt(autor)) if _uchwyt(autor) else None,
-                  "target_hmac": _hmac(klucz_hmac, "cel|" + gdzie) if gdzie else None},
+                  "target_hmac": _hmac(klucz_hmac, "cel|" + gdzie) if gdzie else None,
+                  "target_hmac_gdzie": _hmac(klucz_hmac, "cel|" + gdzie_dz) if gdzie_dz else None},
         "strategy": {"id": STRATEGIA, "config_digest": digest_konfiguracji(), "embedder": None,
                      "profiles": [{"name": n, "min_score": s, "min_rare_terms": r, "top": k}
                                   for n, s, r, k in profile()]},
