@@ -228,7 +228,10 @@ sprawdz("odpowiedzi: pamiec do promptu i pola do dziennika (oba rodzaje odpowied
         and _odp.count("**ramiona_odpowiedzi(c, e21)") >= 2, _odp.count("**ramiona_odpowiedzi(c, e21)"))
 sprawdz("kolejka odpowiedzi niesie uchwyt rozmowcy (trzy zrodla)", _BR.count('"uchwyt": ') >= 3
         and '"uchwyt": k.get("handle") or ""' in _BR and '"uchwyt": ostatni.get("handle") or ""' in _BR
-        and '"uchwyt": (ich.get("handle")' in _BR)
+        # Trzecie zrodlo (odpowiedzi na nasze komentarze u obcych) bierze uchwyt z AUTORA
+        # odpowiedzi (`nadawca` z `ich.user_id`), a nie z pierwszego nadawcy zdarzenia
+        # zbiorczego — poprawka z przegladu 1.11.2026.
+        and '"uchwyt": ich.get("handle") or nadawca.get("handle") or ""' in _BR)
 sprawdz("odpowiedz pod artykulem przyjmuje kontekst i zapisuje go w obu miejscach",
         "kontekst: dict[str, Any] | None = None,\n) -> dict[str, Any]:" in _BR
         and _BR[_BR.index("def wystaw_odpowiedz_pod_artykulem("):_BR.index("def wystaw_odpowiedz(")].count(
