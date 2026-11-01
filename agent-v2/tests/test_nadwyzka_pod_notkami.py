@@ -128,7 +128,7 @@ def runda(ile, nadwyzka_, odwiedzone, przydzial_notki=2):
           "_sito_celow": lambda kanal, cele, limit, notki: cele,
           "_zywe_najpierw": lambda kanal, cele: cele,
           "_wedlug_odpowiadalnosci": lambda kanal, cele, notki: cele,
-          "dane_maniery": lambda cel, tekst, dzien=None: {},
+          "dane_maniery": lambda cel, tekst, dzien=None, *, run_id=None, zadanie="komentarz": {},   # lustro podpisu `run.dane_maniery` (N1: cien pamieci)
           "limit_autorow": SimpleNamespace(odsiej=lambda c: c, zapisz=lambda c: None),
           "stages": SimpleNamespace(
               wybierz_cele=lambda conn, run_id, cele: cele,
