@@ -485,11 +485,26 @@ def odpowiedz_zablokowana(c: dict) -> bool:
     """Czy odpowiedz pod artykulem na ten komentarz juz `MAKS_NIEUDANYCH_...` razy nie wyszla.
 
     Liczy tylko porazki obecnej metody (`browser.METODA_ODPOWIEDZI_POD_ARTYKULEM`).
-    Odpowiedzi pod notkami i na nasze komentarze nie dotyczy.
+    Odpowiedzi pod WLASNYMI notkami nie dotyczy. Od 31.10.2026 dotyczy tez
+    odpowiedzi `komentarz_obcy` (na nasze komentarze u obcych, w tym pod cudzymi
+    notkami): ich sciezka z `note_reply` nie byla uzyta na produkcji, wiec ma
+    ten sam wylacznik — po dwoch porazkach nie wraca, bez modelu i bez przerwy.
     """
+    import browser   # jak w reszcie modulu: przegladarka dopiero, gdy potrzebna
+
+    if c.get("gdzie") == "komentarz_obcy":
+        w_watku = getattr(browser, "nieudane_odpowiedzi_w_watku", None)
+        if not callable(w_watku):
+            return False
+        ile_w_watku = w_watku(c.get("pod_id"))
+        if ile_w_watku < config.MAKS_NIEUDANYCH_ODPOWIEDZI_POD_ARTYKULEM:
+            return False
+        print("  (odpowiedz do %s w cudzym watku: %d nieudane proby — nie probuje"
+              " dalej, bez modelu i bez przerwy)"
+              % (c.get("autor") or "?", ile_w_watku), flush=True)
+        return True
     if c.get("gdzie") != "artykul":
         return False
-    import browser   # jak w reszcie modulu: przegladarka dopiero, gdy potrzebna
 
     f = getattr(browser, "nieudane_odpowiedzi_pod_artykulem", None)
     if not callable(f):

@@ -51,5 +51,28 @@ Tekst alarmu: logowanie NA SERWERZE (noVNC, port 6080 przez tunel SSH) i `python
   `HEAD` — środowiskowe, nie z tej zmiany; porównanie z bazą serwera (`robocze/czerwone.sh`) przed wdrożeniem.
 * Wymiana pamięci rozmówcy (E21), `maniera_komentarza` i reszta eksperymentów nie zmieniają się; zmienia się wolumen odpowiedzi pod cudzymi notkami.
 
+## Po przeglądzie niezależnym (1.11.2026; 6 agentów + krytyk)
+Pierwsza próba przeglądu (31.10) NIE odbyła się — agenty padły na tygodniowym limicie użycia — i nie została uznana za wykonaną; druga przeszła.
+Zero blokerów, jedna realna luka, kilka wzmocnień. Poprawione przed wdrożeniem:
+* **Korzeń wątku `note_reply` (jedyna prawdziwa luka).** Na żywym kanale korzeń wątku NIGDY nie leży w paczce zdarzeń, więc sito „korzeń nie jest nasz"
+  było martwe: nasza odpowiedź pod NASZĄ notką (jej `ancestor_path` to sama notka) wyglądała jak komentarz w cudzym wątku, a bot odpisałby drugi raz i obszedł
+  limit rozmowy. Teraz `_wlasciciel_korzenia` ustala autora korzenia jednym zapytaniem (`rootComment.user_id`, pamięć na przebieg), a brak odpowiedzi,
+  wyjątek albo nasz korzeń znaczą POMIŃ. Częstość niska (0 przypadków w danych historycznych), ale skutek publiczny.
+* **Autor i uchwyt z `user_id` odpowiedzi**, nie z pierwszego nadawcy zdarzenia zbiorczego (E21 i `komu` w dzienniku).
+* **Wyłącznik prób dla `komentarz_obcy`** (`nieudane_odpowiedzi_w_watku`): po 2 porażkach odpowiedź nie wraca, bez modelu i bez przerwy — nowa ścieżka nie była
+  używana na produkcji, a poprzednio wyłącznik dotyczył tylko artykułów.
+* **Plik sesji:** unikalna nazwa tymczasowa (`mkstemp`, od razu 0600) zamiast stałej `.nowy`; tekst alarmu z komendą, która działa na serwerze
+  (`cd ~/nothing-is-accidental-agent && .venv/bin/python agent-v2/browser.py sesja`); zdanie „wg żywego Chrome" tylko po udanym odświeżeniu; poprawione
+  `JAK_WROCIC.md`.
+* **Pamięć obserwowanych:** zapis atomowy, odporny odczyt dziennika (`errors="replace"`), liczba „40" w komentarzach (zakładka oddaje dokładnie 40 osób
+  w 198 z 198 odświeżeń od 12.09, nie „41–47"), poprawiony nieaktualny komentarz o „samoleczeniu" w `obserwuj_profil`.
+* Testy: korzeń poza paczką, odczyt korzenia nieudany/z wyjątkiem, pamięć korzeni, limit `ile`, pusta treść, wyłącznik prób, pierwsza data z dziennika,
+  ucięty koniec pliku; mutacje 26 + 14 + 12, wszystkie wykrywane.
+
+**Świadomie zostaje (backlog, nie regresja):** alarm sesji nie rozróżnia „Chrome nie odpowiada / wylogowany" od „sesja zdrowa" (dawniej też nie widział);
+brak osobnego sufitu wolumenu na odpowiedzi (szczyt kroczącego okna 40 przy suficie 71, dodatkowe 3–7 odpowiedzi/dobę nie zbliżają się do niego); pamięć
+obserwowanych nie leczy się po ręcznym odobserwowaniu; obserwacje wynikające z subskrypcji bota (menu „Unfollow") są nieznane odtwarzaniu z dziennika
+(ok. 84 zbędnych wejść na profil); `time.sleep`-podobne czekanie bloku odpowiedzi odejmuje ok. 0,4 komentarza na dobę z budżetu czasu przebiegu.
+
 ## Wdrożenie
 Uzupełnić po wdrożeniu: data, commit, wynik kontroli na żywo.

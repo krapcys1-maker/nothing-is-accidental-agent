@@ -103,6 +103,19 @@ KANAL = {
         zd("note_reply", 5009, 4009, nadawca=SIOSTRA),
         # J: zwykly rozmowca, jedna nasza odpowiedz w galezi -> wolno (limit 2)
         zd("note_reply", 5010, 4010, nadawca=333),
+        # K: korzen watku NIE ma wpisu w paczce (jak na zywym kanale), a jego
+        # autorem jestesmy MY — to nasza odpowiedz pod NASZA notka, nie cudzy watek
+        zd("note_reply", 5011, 4011),
+        # L: odczyt wlasciciela korzenia zwraca nic -> pomin (w razie watpliwosci)
+        zd("note_reply", 5012, 4012),
+        # M: odczyt wlasciciela korzenia rzuca wyjatek -> pomin, reszta dziala
+        zd("note_reply", 5013, 4013),
+        # N: nadawca zdarzenia to kto inny niz autor odpowiedzi — uchwyt z `user_id`
+        zd("note_reply", 5014, 4014, nadawca=333),
+        # O: ten sam korzen co A (9001) -> jedno zapytanie na korzen, nie dwa
+        zd("note_reply", 5015, 4015),
+        # Q: pusta tresc odpowiedzi -> nic do odpisania
+        zd("note_reply", 5016, 4016),
         # polubienie nie jest odpowiedzia
         {"type": "note_like", "comment_id": None, "target_comment_id": 4001,
          "created_at": "2026-10-30T11:00:00.000Z"},
@@ -118,6 +131,12 @@ KANAL = {
         wpis(4008, MOJE, "", post_id=7), wpis(5008, 111, "4008", "H: pod artykulem", post_id=7),
         wpis(4009, MOJE, "9009"), wpis(5009, SIOSTRA, "9009.4009", "I"),
         wpis(4010, MOJE, "9010"), wpis(5010, 333, "9010.4010", "J"),
+        wpis(4011, MOJE, "8011"), wpis(5011, 111, "8011.4011", "K"),
+        wpis(4012, MOJE, "8012"), wpis(5012, 111, "8012.4012", "L"),
+        wpis(4013, MOJE, "8013"), wpis(5013, 111, "8013.4013", "M"),
+        wpis(4014, MOJE, "9014"), wpis(5014, 111, "9014.4014", "N: autor z user_id"),
+        wpis(4015, MOJE, "9001"), wpis(5015, 111, "9001.4015", "O: ten sam korzen co A"),
+        wpis(4016, MOJE, "9016"), wpis(5016, 111, "9016.4016", "   "),
     ],
     "users": [{"id": 111, "name": "Ann", "handle": "ann"},
               {"id": SIOSTRA, "name": "Siostra", "handle": "siostra"},
@@ -153,7 +172,26 @@ WATKI = {
     "5009": galaz(), "4009": galaz(NASZE(7004, "9009.4009.7000")),
     # J: zwykly rozmowca, jedna nasza odpowiedz w galezi 4010 (nie pod 5010)
     "5010": galaz(), "4010": galaz(NASZE(7005, "9010.4010.7000")),
+    "5011": galaz(), "4011": galaz(), "5012": galaz(), "4012": galaz(),
+    "5013": galaz(), "4013": galaz(), "5014": galaz(), "4014": galaz(),
+    "5015": galaz(), "4015": galaz(), "5016": galaz(), "4016": galaz(),
 }
+
+
+def korzen(i, wlasciciel):
+    """Odpowiedz `/replies` na korzen watku: niesie `rootComment` z autorem — tak jak
+    na zywym kanale, gdzie korzenia NIE MA w paczce zdarzen i trzeba o niego zapytac."""
+    return {"rootComment": {"id": i, "user_id": wlasciciel, "body": "cudza notka"},
+            "commentBranches": []}
+
+
+# KORZENIE WATKOW. Cudzy autor (5) dla tych, ktore maja byc brane; MY (MOJE) dla K;
+# L nie ma wpisu wcale (odczyt oddaje None), M rzuca wyjatek (patrz `api`).
+for _korzen in (9001, 9006, 9007, 9009, 9010, 9014, 9016):
+    WATKI[str(_korzen)] = korzen(_korzen, 5)
+WATKI["8011"] = korzen(8011, MOJE)
+
+ZAPYTANIA = []
 
 
 def api(page, sciezka, baza=None):
@@ -163,6 +201,9 @@ def api(page, sciezka, baza=None):
         return KANAL
     m = re.search(r"/reader/comment/(\d+)/replies", sciezka)
     if m:
+        ZAPYTANIA.append(m.group(1))
+        if m.group(1) == "8013":
+            raise RuntimeError("odczyt korzenia padl")
         return WATKI.get(m.group(1))
     return None
 
@@ -173,10 +214,11 @@ browser.podlacz_sie = lambda: (Nic(), Nic(), Nic())
 browser.wymagaj_sesji = lambda: None
 try:
     print("=== 1. KTORE ZDARZENIA TRAFIAJA DO ODPOWIEDZI ===")
+    ZAPYTANIA.clear()
     czekaja = browser.odpowiedzi_na_nasze_komentarze(ile=50)
     numery = sorted(c["pod_id"] for c in czekaja)
-    sprawdz("czekaja dokladnie: A (5001), H (5008), J (5010)",
-            numery == [5001, 5008, 5010], numery)
+    sprawdz("czekaja dokladnie: A (5001), H (5008), J (5010), N (5014), O (5015)",
+            numery == [5001, 5008, 5010, 5014, 5015], numery)
     po = {c["pod_id"]: c for c in czekaja}
 
     a = po.get(5001, {})
@@ -199,6 +241,29 @@ try:
     sprawdz("D: cel nie jest nasz", 5004 not in po)
     sprawdz("E: celu nie ma w paczce, nie zgadujemy", 5005 not in po)
     sprawdz("polubienie nie jest odpowiedzia", all(c["pod_id"] is not None for c in czekaja))
+    sprawdz("Q: pusta tresc ich odpowiedzi -> nic do odpisania", 5016 not in po)
+
+    print()
+    print("=== 2b. WLASCICIEL KORZENIA WATKU: PRZEGLAD 1.11.2026 ===")
+    # NA ZYWYM KANALE KORZENIA WATKU NIE MA W PACZCE, wiec samo sito z paczki
+    # uznawalo nasza odpowiedz pod NASZA notka za komentarz w cudzym watku
+    # i bot odpisywalby drugi raz, omijajac limit rozmowy. Wlasciciela ustala
+    # jedno zapytanie o korzen, a w razie watpliwosci pomijamy.
+    sprawdz("K: korzen poza paczka, wlasciciel to MY -> pomin (nasza notka)", 5011 not in po)
+    sprawdz("L: odczyt wlasciciela korzenia nic nie oddal -> pomin (w razie watpliwosci)",
+            5012 not in po)
+    sprawdz("M: odczyt wlasciciela korzenia rzucil wyjatek -> pomin, reszta dziala",
+            5013 not in po and len(po) == 5)
+    sprawdz("A: korzen poza paczka, wlasciciel CUDZY -> brany", 5001 in po)
+    sprawdz("jedno zapytanie na korzen, nie na zdarzenie (A i O dziela korzen 9001)",
+            ZAPYTANIA.count("9001") == 1, ZAPYTANIA.count("9001"))
+    n = po.get(5014, {})
+    sprawdz("N: autor i uchwyt z `user_id` odpowiedzi, nie z pierwszego nadawcy zdarzenia",
+            n.get("uchwyt") == "ann", (n.get("uchwyt"), n.get("autor")))
+    sprawdz("O: drugie zdarzenie z tego samego korzenia tez brane", 5015 in po)
+    ZAPYTANIA.clear()
+    sprawdz("`ile` ogranicza liczbe oddanych odpowiedzi",
+            len(browser.odpowiedzi_na_nasze_komentarze(ile=1)) == 1)
 
     print()
     print("=== 3. LIMIT ROZMOWY I `JUZ ODPISALISMY` ===")
@@ -241,9 +306,46 @@ sprawdz("nie nasz -> nie", f({"user_id": 5, "ancestor_path": "9001"}, MOJE, wp) 
 sprawdz("sciezka pusta (nasza notka-korzen) -> nie",
         f({"user_id": MOJE, "ancestor_path": ""}, MOJE, wp) is False)
 sprawdz("korzen znany i NASZ -> nie", f({"user_id": MOJE, "ancestor_path": "8003"}, MOJE, wp) is False)
-sprawdz("korzen nieznany paczce -> tak (nie zgadujemy, ze jest nasz)",
+sprawdz("korzen nieznany paczce -> helper przepuszcza; o wlascicielu rozstrzyga `_wlasciciel_korzenia`",
         f({"user_id": MOJE, "ancestor_path": "9999"}, MOJE, wp) is True)
 sprawdz("pusty wpis -> nie", f({}, MOJE, wp) is False and f(None, MOJE, wp) is False)
+sprawdz("brak naszego numeru -> nie (None == None nie moze uznac cudzego wpisu za nasz)",
+        f({"user_id": None, "ancestor_path": "9001"}, None, wp) is False
+        and f({}, None, wp) is False)
+
+print()
+print("=== 6b. `_wlasciciel_korzenia` ===")
+g = browser._wlasciciel_korzenia
+zap = []
+oryg_api = browser.api_json
+
+
+def api_korzen(page, sciezka, baza=None):
+    zap.append(sciezka)
+    if "/777/" in sciezka:
+        return {"rootComment": {"id": 777, "user_id": 42}}
+    if "/778/" in sciezka:
+        raise RuntimeError("padlo")
+    if "/779/" in sciezka:
+        return {"commentBranches": []}                     # brak `rootComment`
+    if "/780/" in sciezka:
+        return {"rootComment": {"id": 780}}                # brak `user_id`
+    return None
+
+
+browser.api_json = api_korzen
+try:
+    cache = {}
+    sprawdz("z paczki: bez zapytania", g(None, "9001", {9001: {"user_id": 5}}, cache) == 5 and zap == [], zap)
+    sprawdz("z paczki takze po kluczu napisowym", g(None, "9002", {"9002": {"user_id": 6}}, cache) == 6)
+    sprawdz("z zapytania: `rootComment.user_id`", g(None, "777", {}, cache) == 42 and len(zap) == 1, zap)
+    sprawdz("drugie pytanie o ten sam korzen nie idzie do sieci", g(None, "777", {}, cache) == 42 and len(zap) == 1, zap)
+    sprawdz("wyjatek -> None, i to zapamietane", g(None, "778", {}, cache) is None and "778" in cache)
+    sprawdz("brak `rootComment` -> None", g(None, "779", {}, cache) is None)
+    sprawdz("`rootComment` bez `user_id` -> None", g(None, "780", {}, cache) is None)
+    sprawdz("odpowiedz zamiast slownika (None) -> None", g(None, "781", {}, cache) is None)
+finally:
+    browser.api_json = oryg_api
 
 print()
 print("=== 7. ODSIEW POWTOREK MIEDZY ZRODLAMI ===")
@@ -257,11 +359,68 @@ sprawdz("powtorka po numerze (takze liczba kontra napis) odpada, pierwsze zrodlo
 sprawdz("pozycje bez numeru przechodza wszystkie", sum(1 for x in w if x.get("id") is None) == 2)
 sprawdz("pusta lista -> pusta", run.bez_powtorzonych_odpowiedzi([]) == [])
 zrodlo = pathlib.Path("agent-v2/run.py").read_text(encoding="utf-8")
-i_zrodla = zrodlo.index("browser.odpowiedzi_na_nasze_komentarze())")
-i_odsiew = zrodlo.index("bez_powtorzonych_odpowiedzi(czekaja)", i_zrodla)
-i_pytania = zrodlo.index("stages.zbierz_pytania(czekaja)", i_zrodla)
-sprawdz("przebieg odsiewa PO zebraniu trzech zrodel i PRZED zbieraniem pytan",
-        i_zrodla < i_odsiew < i_pytania, (i_zrodla, i_odsiew, i_pytania))
+m_zrodla = re.search(r"czekaja = \(browser\.nieodpowiedziane\(\)\s*\+ browser\.komentarze_pod_artykulami\(\)"
+                     r"\s*\+ browser\.odpowiedzi_na_nasze_komentarze\(\)\)", zrodlo)
+m_odsiew = re.search(r"^\s+czekaja = bez_powtorzonych_odpowiedzi\(czekaja\)\s*$", zrodlo, re.M)
+m_pytania = re.search(r"stages\.zbierz_pytania\(czekaja\)", zrodlo)
+sprawdz("przebieg sklada trzy zrodla w tej kolejnosci (wlasne notki sa pierwsze, wiec wygrywaja)",
+        bool(m_zrodla), "brak `czekaja = (nieodpowiedziane + komentarze_pod_artykulami + odpowiedzi_na_nasze_komentarze)`")
+sprawdz("odsiew jest PRZYPISANY (nie samo wywolanie) i stoi po zebraniu zrodel, przed zbieraniem pytan",
+        bool(m_zrodla and m_odsiew and m_pytania) and m_zrodla.start() < m_odsiew.start() < m_pytania.start(),
+        (m_zrodla and m_zrodla.start(), m_odsiew and m_odsiew.start(), m_pytania and m_pytania.start()))
+
+print()
+print("=== 8. WYLACZNIK PROB: NOWA SCIEZKA NIE WRACA W KAZDYM PRZEBIEGU ===")
+# `wystaw_odpowiedz` zapisuje kazda probe jako `odpowiedz` z `gdzie=note/c-<numer
+# komentarza, na ktory odpisujemy>`, a porazke jako `udane=False`. Sciezka z
+# `note_reply` nie byla uzyta na produkcji, wiec ma ten sam wylacznik co artykuly:
+# po `MAKS_NIEUDANYCH_ODPOWIEDZI_POD_ARTYKULEM` porazkach nie wraca.
+import json as _json   # noqa: E402
+import tempfile        # noqa: E402
+
+KAT8 = pathlib.Path(tempfile.mkdtemp())
+stary_dziennik = browser.DZIENNIK
+browser.DZIENNIK = KAT8 / "dziennik.jsonl"
+MAKS = config.MAKS_NIEUDANYCH_ODPOWIEDZI_POD_ARTYKULEM
+
+
+def zapisz_dziennik(*wpisy):
+    browser.DZIENNIK.write_text("".join(_json.dumps(w) + chr(10) for w in wpisy), encoding="utf-8")
+
+
+def odp(gdzie, udane, rodzaj="odpowiedz"):
+    return {"kiedy": "2026-10-31T10:00:00+00:00", "rodzaj": rodzaj, "udane": udane, "gdzie": gdzie}
+
+
+CEL = {"gdzie": "komentarz_obcy", "pod_id": 5001, "autor": "Ann"}
+try:
+    sprawdz("limit prob to liczba, na ktorej test stoi (2)", MAKS == 2, MAKS)
+    sprawdz("brak dziennika -> nie blokuje", run.odpowiedz_zablokowana(CEL) is False)
+    zapisz_dziennik(*[odp("note/c-5001", False)] * (MAKS - 1))
+    sprawdz("o jedna porazke za malo -> nie blokuje", run.odpowiedz_zablokowana(CEL) is False)
+    zapisz_dziennik(*[odp("note/c-5001", False)] * MAKS)
+    sprawdz("dokladnie limit porazek -> BLOKUJE (bez modelu i bez przerwy)",
+            run.odpowiedz_zablokowana(CEL) is True)
+    zapisz_dziennik(*[odp("note/c-5001", False)] * MAKS, odp("note/c-5002", False))
+    sprawdz("porazki INNEGO komentarza nie blokuja tego",
+            run.odpowiedz_zablokowana({"gdzie": "komentarz_obcy", "pod_id": 5003, "autor": "X"}) is False)
+    zapisz_dziennik(*[odp("note/c-5001", True)] * 5, odp("note/c-5001", False))
+    sprawdz("udane proby nie liczą sie jako porazki", run.odpowiedz_zablokowana(CEL) is False)
+    # Wpis `komentarz` z slowem „odpowiedz" W INNYM POLU: szybki filtr tekstowy go przepusci,
+    # wiec o odrzuceniu decyduje dopiero sprawdzenie rodzaju (mutacja W4).
+    zapisz_dziennik(*[dict(odp("note/c-5001", False, rodzaj="komentarz"), typ="odpowiedz")] * MAKS)
+    sprawdz("porazki `komentarz` (wejscie pod cudza notke) nie liczą sie jako porazki odpowiedzi",
+            run.odpowiedz_zablokowana(CEL) is False)
+    zapisz_dziennik(*[odp("note/c-50011", False)] * MAKS)
+    sprawdz("numer 50011 to NIE numer 5001 (dopasowanie calego adresu, nie prefiksu)",
+            run.odpowiedz_zablokowana(CEL) is False)
+    browser.DZIENNIK.write_text("{to nie json 5001 odpowiedz\n" + _json.dumps(odp("note/c-5001", False)) + chr(10),
+                                encoding="utf-8")
+    sprawdz("uszkodzona linia nie przerywa liczenia", browser.nieudane_odpowiedzi_w_watku(5001) == 1)
+    sprawdz("odpowiedzi pod WLASNA notka (inne `gdzie`) nie sa objete wylacznikiem",
+            run.odpowiedz_zablokowana({"gdzie": "notka", "pod_id": 5001, "autor": "Ann"}) is False)
+finally:
+    browser.DZIENNIK = stary_dziennik
 
 print()
 print("=== PRODUKCJA: bez zmian ===")

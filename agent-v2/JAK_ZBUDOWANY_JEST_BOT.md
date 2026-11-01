@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **43 plików**, 56 781 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **43 plików**, 56 919 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -114,7 +114,7 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
 się testować bez przeglądarki i bez pieniędzy**. 227 zestawów
-testów, 6753 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+testów, 6792 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -143,7 +143,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-3943 wierszy, 47 funkcji na poziomie modułu, 2 klas
+3958 wierszy, 47 funkcji na poziomie modułu, 2 klas
 
 | funkcja | co robi |
 |---|---|
@@ -447,7 +447,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `browser.py` — cała styczność z Substackiem; nie woła modelu
 
-6249 wierszy, 122 funkcji na poziomie modułu, 0 klas
+6363 wierszy, 124 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -508,6 +508,7 @@ wiec nie da sie go rozjechac z kodem.
 | `limit_rozmowy(rozmowca_id)` | Ile razy wolno nam odpisac w jednej rozmowie z ta osoba. |
 | `_komentarze_galezi(page, komentarz, korzen, post, pamiec)` *(wewn.)* | Wszystkie komentarze galezi `korzen` — jedno zapytanie na galaz. |
 | `_nasz_komentarz_w_cudzym_watku(nasz, moje_id, wpisy)` *(wewn.)* | Czy `nasz` to NASZ komentarz stojacy w watku, ktory zaczal ktos inny. |
+| `_wlasciciel_korzenia(page, korzen, wpisy, pamiec)` *(wewn.)* | `user_id` autora korzenia watku (notki) albo None, gdy nie umiemy ustalic. |
 | `odpowiedzi_na_nasze_komentarze(ile)` | Odpowiedzi na NASZE komentarze zostawione pod CUDZYMI tekstami. |
 | `komentarze_pod_artykulami(ile)` | Cudze komentarze pod NASZYMI artykulami, na ktore nie odpisalismy. |
 | `nieodpowiedziane(ile)` | Cudze odpowiedzi pod naszymi notkami, na które jeszcze nie odpisaliśmy. |
@@ -545,6 +546,7 @@ wiec nie da sie go rozjechac z kodem.
 | `tresc_oswiadczenia()` | Oświadczenie „Jak to robię" — z pliku, nie z drugiej kopii w kodzie. |
 | `ustaw_oswiadczenie_ai(wyslij)` | Ustawia stałe oświadczenie pokazywane każdemu, kto skanuje nas pod kątem AI. |
 | `nieudane_odpowiedzi_pod_artykulem(komentarz_id, gdzie, komu)` | Ile razy obecna metoda NIE odpisala na ten komentarz pod artykulem. Bez sieci. |
+| `nieudane_odpowiedzi_w_watku(pod_id)` | Ile razy NIE udalo sie odpisac na ten komentarz w watku pod notka. Bez sieci. |
 | `wystaw_odpowiedz_pod_artykulem(url_artykulu, autor, tekst, wyslij, kontekst)` | Odpowiada pod KONKRETNYM komentarzem pod naszym artykułem. |
 | `potwierdz_artykul(page, tytul)` | Pyta Substacka, czy artykuł naprawdę jest opublikowany. |
 | `_przyciski_okna(page)` *(wewn.)* | (napis, element) widocznych przyciskow okna ustawien. |
@@ -678,7 +680,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `alarm.py` — kontrola sesji, zdrowia i alarm do właściciela
 
-1263 wierszy, 26 funkcji na poziomie modułu, 0 klas
+1272 wierszy, 26 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|

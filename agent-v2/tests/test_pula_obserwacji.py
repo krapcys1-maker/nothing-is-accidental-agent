@@ -442,7 +442,7 @@ try:
     # SCALANIE, NIE SAMOLECZENIE (31.10.2026). Dawniej ten blok pilnowal, ze po
     # recznym odobserwowaniu Malone'a zrzut „przepisuje liste w calosci", wiec
     # host wraca do puli sam. To zakladalo, ze `/following` oddaje CALA liste.
-    # Produkcja pokazala, ze nie: 41-47 osob przy 134 zaobserwowanych przez bota,
+    # Produkcja pokazala, ze nie: 40 osob przy 134 zaobserwowanych przez bota,
     # wiec kazde przepisanie kasowalo konta, ktorych zakladka po prostu nie
     # pokazala, i ten sam kandydat wracal do losowania. Zakladka tylko DOPISUJE;
     # cena to konto odobserwowane recznie, ktore zostaje poza pula — swiadomy

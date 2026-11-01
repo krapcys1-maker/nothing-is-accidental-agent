@@ -124,8 +124,8 @@ try:
     sprawdz("oddaje dni ZYWEJ sesji (89), nie starego pliku (14)", dni in (88, 89), dni)
     sprawdz("plik zostal zapisany stanem zywej sesji", 88 <= browser.dni_do_wygasniecia() <= 89,
             browser.dni_do_wygasniecia())
-    sprawdz("plik tymczasowy nie zostaje na dysku",
-            not (KAT / (PLIK.name + ".nowy")).exists(), [p.name for p in KAT.iterdir()])
+    sprawdz("plik tymczasowy (unikalna nazwa z `mkstemp`) nie zostaje na dysku",
+            list(KAT.glob("*.nowy")) == [], [p.name for p in KAT.iterdir()])
 
     if os.name == "posix":
         # ZAPISANY PLIK TO CIASTECZKA ZALOGOWANEJ SESJI: nie moze stac sie
@@ -163,7 +163,7 @@ try:
         sprawdz("%s -> None, plik bez zmian" % opis,
                 wynik is None and PLIK.read_text(encoding="utf-8") == przed, wynik)
         sprawdz("   ... i bez pozostawionego pliku tymczasowego",
-                not (KAT / (PLIK.name + ".nowy")).exists())
+                list(KAT.glob("*.nowy")) == [], [p.name for p in KAT.iterdir()])
     zapisz_plik(14)
     ustaw(False, Kontekst(89))
     sprawdz("Chrome nie odpowiada -> None", browser.odswiez_plik_sesji() is None)
@@ -211,6 +211,17 @@ try:
     tresc = wyslane[0][2] if wyslane else ""
     sprawdz("mowi o logowaniu NA SERWERZE", "NA SERWERZE" in tresc, tresc[:120])
     sprawdz("podaje komende `browser.py sesja`", "browser.py sesja" in tresc, tresc)
+    sprawdz("komenda DZIALA NA SERWERZE: interpreter projektu w katalogu projektu, nie goly `python`",
+            "cd ~/nothing-is-accidental-agent && .venv/bin/python agent-v2/browser.py sesja" in tresc, tresc)
+    sprawdz("odswiezenie sie nie udalo -> alarm mowi, ze liczba pochodzi ze STAREGO pliku",
+            "Chrome serwera nie odpowiedzial" in tresc and "zywego Chrome serwera" not in tresc, tresc[:200])
+    zapisz_plik(3)
+    ustaw(True, Kontekst(3))
+    wyslane.clear()
+    alarm.sprawdz_sesje_i_ostrzez()
+    sprawdz("odswiezenie sie udalo -> alarm mowi o pliku I zywym Chrome (i liczba jest z zywej sesji)",
+            wyslane and "zywego Chrome serwera" in wyslane[0][2] and "nieaktualna" not in wyslane[0][2],
+            wyslane)
     sprawdz("mowi o pulpicie przez tunel (noVNC)", "noVNC" in tresc and "6080" in tresc, tresc)
     sprawdz("NIE kaze kopiowac pliku z komputera",
             "skopiuj" not in tresc.lower() and "swoim komputerze" not in tresc, tresc)

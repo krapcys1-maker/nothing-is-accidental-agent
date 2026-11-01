@@ -162,15 +162,25 @@ publikacji.
 
 ## Rzecz, która zatrzyma agenta bez żadnego błędu
 
-**Wygaśnięcie sesji Substacka.** Ważna do około 13 listopada 2026. Alarm mailowy
-przychodzi na 14 dni przed.
+**Wygaśnięcie sesji Substacka.** Bot pracuje na ŻYWYM Chrome serwera, a Substack
+przedłuża jego sesję przy aktywności (zmierzone 30.10.2026: wygasała 28.01.2027,
+czyli ok. 90 dni od „teraz"). Plik `agent-v2/data/storage-state.json` to tylko
+zapas. Alarm (`nia-alarm`, ok. 07:00 UTC) sam odświeża ten plik z żywego Chrome
+(`browser.odswiez_plik_sesji`) i dopiero potem liczy dni, a mail przychodzi na
+14 dni przed końcem. **Do 31.10.2026 alarm liczył dni ze starego pliku**
+(14 dni, gdy żywa sesja miała 89) — to był fałszywy alarm.
 
-Odnowienie wymaga człowieka, bo Substack loguje przez link na e-mail:
+Odnowienie, gdy żywa sesja naprawdę dobiega końca, wymaga człowieka, bo Substack
+loguje przez link na e-mail:
 
-1. na komputerze uruchom `bash ~/polacz-z-serwerem.cmd` — otworzy pulpit serwera
-   w przeglądarce
+1. połącz się z pulpitem serwera: tunel `ssh -L 6080:127.0.0.1:6080
+   <użytkownik>@<serwer>` i `http://localhost:6080/vnc.html` (noVNC; dawny skrypt
+   `~/polacz-z-serwerem.cmd` nie jest już pewnym źródłem — sprawdź, czy istnieje)
 2. zaloguj się w tamtejszym Chrome na Substacka
-3. `.venv/bin/python agent-v2/browser.py serwer` — potwierdzi, że sesja działa
+3. na serwerze: `cd ~/nothing-is-accidental-agent && .venv/bin/python
+   agent-v2/browser.py sesja` — zapisze stan zalogowanej sesji do pliku;
+   `… browser.py serwer` potwierdzi, że sesja działa (na serwerze nie ma polecenia
+   `python`, tylko `.venv/bin/python`)
 
 Sesja **musi** powstać na serwerze, nie na komputerze właściciela: sesja z innego
 adresu IP jest odrzucana przez Cloudflare przy publikowaniu. To było odkrycie,

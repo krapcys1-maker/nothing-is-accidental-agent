@@ -145,8 +145,9 @@ _JAK_ODNOWIC_SESJE = (
     "Zaloguj sie NA SERWERZE: polacz sie z pulpitem serwera (noVNC, port 6080\n"
     "przez tunel SSH: ssh -L 6080:127.0.0.1:6080 <uzytkownik>@<serwer>, potem\n"
     "http://localhost:6080/vnc.html), zaloguj sie na Substacka w tamtejszym\n"
-    "Chrome i na serwerze wykonaj:\n"
-    "  python agent-v2/browser.py sesja\n"
+    "Chrome i na serwerze wykonaj (na serwerze nie ma polecenia `python`,\n"
+    "tylko interpreter projektu):\n"
+    "  cd ~/nothing-is-accidental-agent && .venv/bin/python agent-v2/browser.py sesja\n"
     "Szczegoly: JAK_WROCIC.md, czesc „Rzecz, ktora zatrzyma agenta bez zadnego bledu”.")
 
 
@@ -160,8 +161,9 @@ def sprawdz_sesje_i_ostrzez() -> None:
     # zywa sesja miala 89 (Substack przedluza ja przy aktywnosci). Odswiezenie
     # czyta tylko ciasteczka i nie nadpisuje pliku, gdy Chrome jest wylogowany
     # albo nie odpowiada — wtedy mierzymy to, co jest w pliku, jak dotad.
+    odswiezone = None
     try:
-        browser.odswiez_plik_sesji()
+        odswiezone = browser.odswiez_plik_sesji()
     except Exception as exc:
         print("  [sesja] odswiezenie pliku nie wyszlo: %s" % type(exc).__name__,
               flush=True)
@@ -174,8 +176,15 @@ def sprawdz_sesje_i_ostrzez() -> None:
                "Agent nie wystawi juz nic, dopoki nie odnowisz sesji.\n" + _JAK_ODNOWIC_SESJE)
     elif dni <= browser.OSTRZEGAJ_PONIZEJ_DNI:
         wyslij("sesja-konczy", f"Sesja Substacka wygasa za {dni} dni",
-               f"Zostalo {dni} dni wedlug pliku sesji I zywego Chrome serwera. "
-               "Odnow ja, zanim agent zamilknie.\n" + _JAK_ODNOWIC_SESJE)
+               # „ZYWY CHROME" TYLKO WTEDY, GDY ODSWIEZENIE SIE UDALO. Gdy Chrome nie
+               # odpowiedzial albo byl wylogowany, liczba pochodzi ze starego pliku
+               # i tak trzeba to napisac — inaczej alarm twierdzi o swiecie wiecej,
+               # niz wie.
+               (f"Zostalo {dni} dni wedlug pliku sesji I zywego Chrome serwera. "
+                if odswiezone is not None else
+                f"Zostalo {dni} dni wedlug pliku sesji (Chrome serwera nie "
+                "odpowiedzial albo jest wylogowany — liczba moze byc nieaktualna). ")
+               + "Odnow ja, zanim agent zamilknie.\n" + _JAK_ODNOWIC_SESJE)
 
 
 def sprawdz_przebiegi_i_ostrzez(ile: int = 3) -> None:

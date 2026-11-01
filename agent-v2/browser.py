@@ -673,6 +673,8 @@ def odswiez_plik_sesji() -> int | None:
     przegladarki w jego miejsce: oddajemy `None`, a plik zostaje taki, jaki byl.
     """
     import json
+    import os
+    import tempfile
 
     if not _chrome_odpowiada():
         return None
@@ -680,20 +682,27 @@ def odswiez_plik_sesji() -> int | None:
         p, br, ctx = podlacz_sie()
     except (Exception, SystemExit):
         return None
-    tymczasowy = SESSION_FILE.with_name(SESSION_FILE.name + ".nowy")
+    tymczasowy: Path | None = None
     try:
         if not zalogowany(ctx):
             return None
         SESSION_FILE.parent.mkdir(parents=True, exist_ok=True)
-        ctx.storage_state(path=str(tymczasowy))
+        # UNIKALNA NAZWA I OD RAZU 0600 (`mkstemp`). Stala nazwa `.nowy` pozwalala
+        # dwom nakladajacym sie odswiezeniom (alarm i koniec przebiegu) pisac do
+        # jednego pliku naraz; z unikalna kazde ma wlasny, a ostatnia podmiana
+        # wygrywa na CALYM, poprawnym pliku.
+        deskryptor, nazwa = tempfile.mkstemp(
+            dir=str(SESSION_FILE.parent), prefix=SESSION_FILE.name + ".", suffix=".nowy")
+        os.close(deskryptor)
+        tymczasowy = Path(nazwa)
+        ctx.storage_state(path=nazwa)
         dane = json.loads(tymczasowy.read_text(encoding="utf-8"))
         if not any(c.get("name") == SESSION_COOKIE for c in dane.get("cookies", [])):
             return None
-        # UPRAWNIENIA PLIKU SESJI ZOSTAJA TAKIE, JAKIE BYLY (u nas 600). Plik
-        # tymczasowy tworzy Playwright z domyslnymi uprawnieniami (644), a to sa
+        # UPRAWNIENIA PLIKU SESJI ZOSTAJA TAKIE, JAKIE BYLY (u nas 600). Playwright
+        # potrafi zapisac plik z domyslnymi uprawnieniami (644), a to sa
         # ciasteczka zalogowanej sesji: po podmianie czytaliby je inni
         # uzytkownicy serwera. Bez poprzedniego pliku — 600.
-        import os
         try:
             tryb = (SESSION_FILE.stat().st_mode & 0o777) if SESSION_FILE.exists() else 0o600
             os.chmod(tymczasowy, tryb)
@@ -705,7 +714,7 @@ def odswiez_plik_sesji() -> int | None:
         return None
     finally:
         try:
-            if tymczasowy.exists():
+            if tymczasowy is not None and tymczasowy.exists():
                 tymczasowy.unlink()
         except OSError:
             pass
@@ -1431,7 +1440,8 @@ def zapisz_czytelnikow(page=None, licznik: dict[str, Any] | None = None
 # wiec do sieci ANI RAZU — czyta ten plik.
 #
 # PAMIEC SIE SAMA LECZY — I OD 31.10.2026 NIE PRZEPISUJE SIE Z OBCIETEJ LISTY.
-# Zakladka `/following` oddaje ok. 46 osob przy wiekszej liczbie obserwowanych,
+# Zakladka `/following` oddaje dokladnie 40 osob (40 w 198 z 198 odswiezen od
+# 12.09) przy wiekszej liczbie obserwowanych,
 # wiec zrzut tylko DOPISUJE, a konta, o ktorych dziennik wie, ze je obserwujemy
 # (`_obserwowani_z_dziennika`), wracaja do pamieci przy kazdym odswiezeniu.
 # `obserwuj_profil` dopisuje kazdego, kogo wlasnie zaobserwowal albo u kogo
@@ -1474,8 +1484,13 @@ def _zapisz_kogo_obserwujemy(pamiec: dict[str, Any]) -> None:
 
     try:
         OBSERWOWANI.parent.mkdir(parents=True, exist_ok=True)
-        OBSERWOWANI.write_text(
+        # ATOMOWO: plik jest od 31.10.2026 cenniejszy (mapa host -> uchwyt nie
+        # odtwarza sie z dziennika), a przerwany zapis zostawialby polowe JSON-a,
+        # ktora `kogo_obserwujemy` czyta jako pusta pamiec.
+        tymczasowy = OBSERWOWANI.with_name(OBSERWOWANI.name + ".nowy")
+        tymczasowy.write_text(
             _json.dumps(pamiec, ensure_ascii=False, indent=1), encoding="utf-8")
+        tymczasowy.replace(OBSERWOWANI)
     except OSError as exc:
         print("  [obserwowani] nie zapisalem: %s" % type(exc).__name__,
               flush=True)
@@ -1553,7 +1568,7 @@ def odswiez_kogo_obserwujemy(page) -> int | None:
     teraz = datetime.now(timezone.utc).isoformat(timespec="seconds")
     stara = kogo_obserwujemy()
     # SCALAMY, NIE PRZEPISUJEMY (31.10.2026). Zakladka `/following` oddaje
-    # tylko ok. 46 osob, a konto obserwuje ich wiecej: w pamieci stalo 41
+    # tylko 40 osob, a konto obserwuje ich wiecej: w pamieci stalo 41
     # uchwytow, gdy bot zaobserwowal 134. Dawniej kazde odswiezenie przepisywalo
     # pamiec z tej obcietej listy, wiec wszystko, co `obserwuj_profil` dopisal
     # po drodze, znikalo przy najblizszym przebiegu i to samo konto wracalo do
@@ -1601,7 +1616,9 @@ def _obserwowani_z_dziennika() -> dict[str, str]:
 
     wynik: dict[str, str] = {}
     try:
-        tekst = DZIENNIK.read_text(encoding="utf-8")
+        # `errors="replace"`: uciety w polowie znaku koniec pliku rzucilby
+        # UnicodeDecodeError i obcial caly odczyt, a to jest pamiec pomocnicza.
+        tekst = DZIENNIK.read_text(encoding="utf-8", errors="replace")
     except OSError:
         return wynik
     for linia in tekst.split(chr(10)):
@@ -2596,16 +2613,23 @@ def _nasz_komentarz_w_cudzym_watku(nasz: dict, moje_id: Any,
     """Czy `nasz` to NASZ komentarz stojacy w watku, ktory zaczal ktos inny.
 
     Dla zdarzenia `note_reply` to jedyny przypadek, ktorego nie pokrywa
-    `nieodpowiedziane`. Trzy warunki, kazdy z innego powodu:
+    `nieodpowiedziane`. Warunki, kazdy z innego powodu:
 
       - wpis musi byc w paczce kanalu i byc NASZ. Bez tego nie wiemy, czyj jest
         cel zdarzenia, a zgadywanie konczy sie odpowiedzia w cudzej rozmowie;
       - `ancestor_path` niepusty: pusty znaczy, ze to nasza notka-korzen, a jej
         odpowiedzi czyta `nieodpowiedziane`;
-      - korzen watku (pierwszy przodek) nie moze byc nasz, o ile paczka go zna:
-        odpowiedz na nasza odpowiedz pod NASZA notka tez jest w rekach
-        `nieodpowiedziane`.
+      - korzen watku (pierwszy przodek) nie moze byc nasz, o ile paczka go zna.
+
+    TO SITO NIE WYSTARCZA SAMO (przeglad z 1.11.2026). Na zywym kanale korzen
+    watku NIGDY nie lezy w paczce, wiec trzeci warunek jest tam martwy, a nasza
+    odpowiedz pod NASZA notka (jej `ancestor_path` to sama notka) wygladalaby
+    jak komentarz w cudzym watku. Wlasciciela korzenia ustala dlatego
+    `_wlasciciel_korzenia` — jednym zapytaniem, z zasada „w razie watpliwosci
+    pomin" — i dopiero ono rozstrzyga o `note_reply`.
     """
+    if not moje_id:
+        return False
     if not isinstance(nasz, dict) or nasz.get("user_id") != moje_id:
         return False
     przodkowie = _przodkowie(nasz)
@@ -2618,6 +2642,36 @@ def _nasz_komentarz_w_cudzym_watku(nasz: dict, moje_id: Any,
         if isinstance(wpis, dict) and wpis.get("user_id") == moje_id:
             return False
     return True
+
+
+def _wlasciciel_korzenia(page, korzen: str, wpisy: dict, pamiec: dict) -> Any:
+    """`user_id` autora korzenia watku (notki) albo None, gdy nie umiemy ustalic.
+
+    NONE ZNACZY „POMIN", nie „cudzy". Pomylka w druga strone konczy sie druga
+    odpowiedzia pod nasza wlasna notka i obejsciem limitu rozmowy, a pomylka
+    w te kosztuje jedna odpowiedz, ktora wroci przy nastepnym przebiegu.
+    Najpierw paczka kanalu (gdy korzen przypadkiem w niej jest), potem JEDNO
+    zapytanie `/reader/comment/<korzen>/replies` — `rootComment.user_id`
+    (sprawdzone na zywych danych) — z pamiecia na caly przebieg, bo wiele
+    zdarzen bywa z tego samego watku.
+    """
+    for klucz in (korzen, int(korzen) if str(korzen).isdigit() else None):
+        wpis = wpisy.get(klucz) if klucz is not None else None
+        if isinstance(wpis, dict) and wpis.get("user_id") is not None:
+            return wpis["user_id"]
+    if korzen in pamiec:
+        return pamiec[korzen]
+    wlasciciel = None
+    try:
+        watek = api_json(page, f"/api/v1/reader/comment/{korzen}/replies"
+                               f"?comment_id={korzen}")
+        korzen_wpis = watek.get("rootComment") if isinstance(watek, dict) else None
+        if isinstance(korzen_wpis, dict):
+            wlasciciel = korzen_wpis.get("user_id")
+    except Exception:
+        wlasciciel = None
+    pamiec[korzen] = wlasciciel
+    return wlasciciel
 
 
 def odpowiedzi_na_nasze_komentarze(ile: int = 10) -> list[dict[str, Any]]:
@@ -2677,6 +2731,7 @@ def odpowiedzi_na_nasze_komentarze(ile: int = 10) -> list[dict[str, Any]]:
 
         czekaja: list[dict[str, Any]] = []
         pamiec_galezi: dict = {}
+        pamiec_korzeni: dict = {}
         for zdarzenie in kanal.get("activityItems") or []:
             if not isinstance(zdarzenie, dict):
                 continue
@@ -2693,9 +2748,17 @@ def odpowiedzi_na_nasze_komentarze(ile: int = 10) -> list[dict[str, Any]]:
             tekst = ich.get("body") or ""
             if not tekst.strip():
                 continue
-            if typ == "note_reply" and not _nasz_komentarz_w_cudzym_watku(
-                    nasz, moje_id, wpisy):
-                continue
+            if typ == "note_reply":
+                if not _nasz_komentarz_w_cudzym_watku(nasz, moje_id, wpisy):
+                    continue
+                # KORZEN WATKU MUSI BYC CUDZY, A NIE „NIEZNANY". Paczka kanalu
+                # go nie niesie, wiec pytamy (raz na korzen); brak odpowiedzi
+                # albo nasz korzen to pomin — odpowiedz pod nasza notka
+                # obsluguje `nieodpowiedziane`.
+                wlasciciel = _wlasciciel_korzenia(
+                    page, _przodkowie(nasz)[0], wpisy, pamiec_korzeni)
+                if wlasciciel is None or wlasciciel == moje_id:
+                    continue
 
             # Czy juz odpisalismy PO ich odpowiedzi. Pytamy watku, nie wlasnego
             # zapisu: po restarcie zapis klamie, Substack wie na pewno.
@@ -2711,9 +2774,16 @@ def odpowiedzi_na_nasze_komentarze(ile: int = 10) -> list[dict[str, Any]]:
                    for c in plaskie):
                 continue
 
-            autor = (ich.get("name")
-                     or (ludzie.get((zdarzenie.get("recent_sender_ids") or [None])[0])
-                         or {}).get("name") or "")
+            # AUTOR TEJ ODPOWIEDZI, nie „pierwszy nadawca zdarzenia": przy
+            # zdarzeniu zbiorczym kolejnosc `recent_sender_ids` nie jest
+            # gwarantowana i uchwyt (pamiec rozmowcy E21, `komu` w dzienniku)
+            # moglby nalezec do kogos innego niz tresc, na ktora odpisujemy.
+            # Kanal nie niesie `name` ani `handle` samej odpowiedzi, ale niesie
+            # jej `user_id`.
+            nadawca = (ludzie.get(ich.get("user_id"))
+                       or ludzie.get((zdarzenie.get("recent_sender_ids") or [None])[0])
+                       or {})
+            autor = ich.get("name") or nadawca.get("name") or ""
             post = posty.get(zdarzenie.get("target_post_id")) or {}
             # LIMIT ROZMOWY — patrz `korzen_rozmowy`. Dopiero tutaj, po odsianiu
             # wiadomosci, na ktore juz odpisalismy: galaz kosztuje jedno wejscie
@@ -2734,9 +2804,7 @@ def odpowiedzi_na_nasze_komentarze(ile: int = 10) -> list[dict[str, Any]]:
                 "pod_id": ich_id,
                 "autor": autor,
                 # UCHWYT — pamiec rozmowcy (E21) i dziennik odpowiedzi.
-                "uchwyt": (ich.get("handle")
-                           or (ludzie.get((zdarzenie.get("recent_sender_ids") or [None])[0])
-                               or {}).get("handle") or ""),
+                "uchwyt": ich.get("handle") or nadawca.get("handle") or "",
                 "jezyk": ich.get("language"),
                 "tekst": tekst,
                 "id": ich_id,
@@ -3874,10 +3942,12 @@ def obserwuj_profil(handle: str, wyslij: bool = False) -> dict[str, Any]:
         if wyslij and (wynik["zrobione"] or wynik["juz_obserwowany"]):
             # PAMIETAMY, ZEBY NIE LOSOWAC TEGO SAMEGO JUTRO. Zapis idzie takze
             # przy `potwierdzone=None` (czyli „kliknelismy, nie odczytalismy
-            # skutku"): jesli obserwacja jednak nie weszla, najblizszy zrzut
-            # `/following` wyrzuci ten uchwyt z pamieci sam, bo przepisuje
-            # liste w calosci. Falszywy wpis kosztuje wiec najwyzej jeden dzien
-            # nieobecnosci w puli, a jego brak — powtorzone wejscie na profil.
+            # skutku"). OD 31.10.2026 NIE MA TU SAMOLECZENIA: zrzut `/following`
+            # tylko dopisuje (oddaje 40 osob, nie cala liste), wiec falszywy
+            # wpis zostaje w pamieci na stale, a konto poza pula obserwacji.
+            # Dzis `potwierdzone=None` z `udane=True` nie wystapilo ani razu
+            # (0 z 139 obserwacji), ale gdyby wystapilo, trzeba to poprawic
+            # recznie. Brak wpisu kosztuje za to powtorzone wejscie na profil.
             zapamietaj_obserwowanego(handle)
         if wyslij and wynik["juz_obserwowany"]:
             # NIE `dopisz_wynik`, I TO JEST SEDNO. Tamta funkcja zna dwa stany:
@@ -4428,6 +4498,40 @@ def nieudane_odpowiedzi_pod_artykulem(komentarz_id: Any = None, gdzie: str = "",
                 ile += str(w["komentarz_id"]) == str(komentarz_id)
             else:
                 ile += w.get("gdzie") == gdzie and w.get("komu") == komu
+    except OSError:
+        return 0
+    return ile
+
+
+def nieudane_odpowiedzi_w_watku(pod_id: Any) -> int:
+    """Ile razy NIE udalo sie odpisac na ten komentarz w watku pod notka. Bez sieci.
+
+    `wystaw_odpowiedz` zapisuje kazda probe jako `odpowiedz` z `gdzie =
+    note/c-<numer komentarza, na ktory odpisujemy>`, a porazke jako
+    `udane=False`. To licznik dla odpowiedzi `komentarz_obcy` (w tym z nowej
+    sciezki `note_reply`, ktorej publikacja nie byla jeszcze uzyta na
+    produkcji): bez niego porazka wracalaby w KAZDYM przebiegu, dopoki
+    zdarzenie siedzi w kanale, i kazdy przebieg placilby model i krecil sie
+    przerwa rytmu.
+    """
+    import json as _json
+
+    cel = "note/c-%s" % pod_id
+    ile = 0
+    try:
+        if not DZIENNIK.exists():
+            return 0
+        for linia in DZIENNIK.read_text(encoding="utf-8",
+                                        errors="replace").split(chr(10)):
+            if cel not in linia or '"odpowiedz"' not in linia:
+                continue
+            try:
+                w = _json.loads(linia)
+            except ValueError:
+                continue
+            if (isinstance(w, dict) and w.get("rodzaj") == "odpowiedz"
+                    and not w.get("udane") and w.get("gdzie") == cel):
+                ile += 1
     except OSError:
         return 0
     return ile

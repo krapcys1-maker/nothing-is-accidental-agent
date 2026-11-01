@@ -4,7 +4,7 @@
 ## Co bylo zepsute
 
 `browser.odswiez_kogo_obserwujemy` przepisywala pamiec w calosci z zakladki
-`/@my/following`, a ta oddaje tylko ok. 46 osob przy wiekszej liczbie
+`/@my/following`, a ta oddaje tylko 40 osob przy wiekszej liczbie
 obserwowanych. Zmierzone 31.10.2026 na produkcji: w pamieci stalo 41 uchwytow,
 a bot zaobserwowal 134. Wszystko, co `obserwuj_profil` dopisal po drodze
 (`zapamietaj_obserwowanego`), znikalo przy najblizszym przebiegu i to samo
@@ -240,6 +240,33 @@ try:
     zrodlo = pathlib.Path("agent-v2/browser.py").read_text(encoding="utf-8")
     sprawdz("odswiezenie nie przepisuje juz pamieci z samej listy",
             "swiezi = {x[\"uchwyt\"]" not in zrodlo)
+
+    print()
+    print("=== 8. DZIENNIK: PIERWSZA DATA, UCIETY KONIEC, ZAPIS ATOMOWY (przeglad 1.11.2026) ===")
+    dziennik(w("obserwacja", "dwa_razy", kiedy="2026-10-05T10:00:00+00:00"),
+             w("obserwacja_pominieta", "dwa_razy", powod="juz obserwujemy dwa_razy — menu pokazuje 'Unfollow'",
+               kiedy="2026-10-20T10:00:00+00:00"))
+    sprawdz("gdy dziennik zna konto dwa razy, wygrywa PIERWSZA data",
+            browser._obserwowani_z_dziennika().get("dwa_razy") == "2026-10-05T10:00:00+00:00",
+            browser._obserwowani_z_dziennika())
+    # Plik uciety W POLOWIE wieloznakowego znaku (przerwany zapis dziennika): odczyt nie moze
+    # rzucic UnicodeDecodeError i zgubic calej reszty — to pamiec pomocnicza.
+    DZIENNIK.write_bytes(
+        '{"rodzaj": "obserwacja", "udane": true, "komu": "przed_ucieciem"}\n'.encode("utf-8")
+        + '{"rodzaj": "obserwacja", "udane": true, "komu": "zl'.encode("utf-8") + b"\xc4")
+    try:
+        sprawdz("ucieta w polowie znaku koncowka nie rzuca i nie gubi poprzednich wpisow",
+                set(browser._obserwowani_z_dziennika()) >= {"przed_ucieciem"},
+                browser._obserwowani_z_dziennika())
+    except UnicodeDecodeError as exc:
+        sprawdz("ucieta w polowie znaku koncowka nie rzuca i nie gubi poprzednich wpisow", False, repr(exc))
+    dziennik()
+    PAMIEC.unlink()
+    browser.zapamietaj_obserwowanego("zapis_atomowy", host="atomowy.example")
+    sprawdz("zapis atomowy nie zostawia pliku tymczasowego",
+            list(KAT.glob("*.nowy")) == [], [p.name for p in KAT.iterdir()])
+    sprawdz("a pamiec jest poprawnym JSON-em z uchwytem i hostem",
+            pamiec()["uchwyty"].get("zapis_atomowy") and pamiec()["hosty"].get("atomowy.example") == "zapis_atomowy")
 finally:
     browser.OBSERWOWANI, browser.DZIENNIK = stare
 

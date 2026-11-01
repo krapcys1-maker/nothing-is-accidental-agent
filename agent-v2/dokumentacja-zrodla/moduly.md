@@ -1,7 +1,7 @@
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-3943 wierszy, 47 funkcji na poziomie modułu, 2 klas
+3958 wierszy, 47 funkcji na poziomie modułu, 2 klas
 
 | funkcja | co robi |
 |---|---|
@@ -305,7 +305,7 @@
 
 ### `browser.py` — cała styczność z Substackiem; nie woła modelu
 
-6249 wierszy, 122 funkcji na poziomie modułu, 0 klas
+6363 wierszy, 124 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -366,6 +366,7 @@
 | `limit_rozmowy(rozmowca_id)` | Ile razy wolno nam odpisac w jednej rozmowie z ta osoba. |
 | `_komentarze_galezi(page, komentarz, korzen, post, pamiec)` *(wewn.)* | Wszystkie komentarze galezi `korzen` — jedno zapytanie na galaz. |
 | `_nasz_komentarz_w_cudzym_watku(nasz, moje_id, wpisy)` *(wewn.)* | Czy `nasz` to NASZ komentarz stojacy w watku, ktory zaczal ktos inny. |
+| `_wlasciciel_korzenia(page, korzen, wpisy, pamiec)` *(wewn.)* | `user_id` autora korzenia watku (notki) albo None, gdy nie umiemy ustalic. |
 | `odpowiedzi_na_nasze_komentarze(ile)` | Odpowiedzi na NASZE komentarze zostawione pod CUDZYMI tekstami. |
 | `komentarze_pod_artykulami(ile)` | Cudze komentarze pod NASZYMI artykulami, na ktore nie odpisalismy. |
 | `nieodpowiedziane(ile)` | Cudze odpowiedzi pod naszymi notkami, na które jeszcze nie odpisaliśmy. |
@@ -403,6 +404,7 @@
 | `tresc_oswiadczenia()` | Oświadczenie „Jak to robię" — z pliku, nie z drugiej kopii w kodzie. |
 | `ustaw_oswiadczenie_ai(wyslij)` | Ustawia stałe oświadczenie pokazywane każdemu, kto skanuje nas pod kątem AI. |
 | `nieudane_odpowiedzi_pod_artykulem(komentarz_id, gdzie, komu)` | Ile razy obecna metoda NIE odpisala na ten komentarz pod artykulem. Bez sieci. |
+| `nieudane_odpowiedzi_w_watku(pod_id)` | Ile razy NIE udalo sie odpisac na ten komentarz w watku pod notka. Bez sieci. |
 | `wystaw_odpowiedz_pod_artykulem(url_artykulu, autor, tekst, wyslij, kontekst)` | Odpowiada pod KONKRETNYM komentarzem pod naszym artykułem. |
 | `potwierdz_artykul(page, tytul)` | Pyta Substacka, czy artykuł naprawdę jest opublikowany. |
 | `_przyciski_okna(page)` *(wewn.)* | (napis, element) widocznych przyciskow okna ustawien. |
@@ -536,7 +538,7 @@
 
 ### `alarm.py` — kontrola sesji, zdrowia i alarm do właściciela
 
-1263 wierszy, 26 funkcji na poziomie modułu, 0 klas
+1272 wierszy, 26 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
