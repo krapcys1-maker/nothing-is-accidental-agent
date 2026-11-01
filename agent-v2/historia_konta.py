@@ -62,10 +62,18 @@ def _cosinus(a: dict[str, float], b: dict[str, float]) -> float:
 
 
 def powiazane(tekst: str, *, teraz: datetime | None = None,
-              plik: Path | None = None) -> list[dict[str, Any]]:
+              plik: Path | None = None, min_podobienstwa: float | None = None,
+              min_rzadkich: int | None = None, ile: int | None = None,
+              statystyki: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     """Wlasne opublikowane wpisy najbardziej zwiazane z `tekst`, od najstarszego.
 
-    Kazdy: {"kiedy": datetime, "rodzaj": "notka"|"artykul", "tekst": str, "wynik": float (cosinus)}.
+    Kazdy: {"kiedy": datetime, "rodzaj": "notka"|"artykul", "tekst": str, "wynik": float (cosinus),
+    "rzadkie": int (liczba wspolnych rzadkich terminow)}.
+    `statystyki` (opcjonalny slownik) dostaje {"pula": liczba kwalifikujacych sie wpisow w oknie, "najnowszy": ISO czas
+    najnowszego z nich} — opis migawki indeksu dla `pamiec_cien`; nie zmienia wyniku.
+    `min_podobienstwa`, `min_rzadkich` i `ile` to opcjonalne nadpisanie progow z `config` (domyslnie None =
+    `HISTORIA_KONTA_*`, czyli zachowanie jak dotad): pozwalaja `pamiec_cien` zmierzyc, co dalyby luzniejsze progi,
+    bez zmiany tego, co dostaje ramie „on".
     Dziennik czytany po `\\n` i z `errors="replace"` (powod jak w `spojnosc.wczesniejsze_notki`: U+2028 i
     bajty spoza UTF-8). Tresc identyczna z `tekst` (ponowny przebieg) jest pomijana.
     """
@@ -114,8 +122,14 @@ def powiazane(tekst: str, *, teraz: datetime | None = None,
         widziane.add(tresc)
         wpisy.append({"kiedy": kiedy, "rodzaj": rodzaj, "tekst": cudza, "tresc": tresc,
                       "slowa": _slowa(cudza), "liczby": _liczby(cudza)})
+    if statystyki is not None:
+        statystyki["pula"] = len(wpisy)
+        statystyki["najnowszy"] = max(w["kiedy"] for w in wpisy).isoformat(timespec="seconds") if wpisy else None
     if not wpisy:
         return []
+    prog_cos = config.HISTORIA_KONTA_MIN_PODOBIENSTWA if min_podobienstwa is None else min_podobienstwa
+    prog_rzadkich = config.HISTORIA_KONTA_MIN_RZADKICH if min_rzadkich is None else min_rzadkich
+    limit = config.HISTORIA_KONTA_WPISOW if ile is None else ile
     n = len(wpisy)
     df = Counter(s for w in wpisy for s in w["slowa"])
     idf = lambda s: math.log((n + 1) / (df.get(s, 0) + 1))      # noqa: E731
@@ -135,15 +149,16 @@ def powiazane(tekst: str, *, teraz: datetime | None = None,
             continue
         ich_liczby = rzadkie_liczby(w["liczby"])
         cos = _cosinus(moj_wektor, _wektor(w["slowa"], ich_liczby, idf))
-        if cos < config.HISTORIA_KONTA_MIN_PODOBIENSTWA:
+        if cos < prog_cos:
             continue
         rzadkie = (sum(1 for s in moje_slowa & w["slowa"] if df.get(s, 0) <= prog_rzadkosci)
                    + len(moje_rzadkie_liczby & ich_liczby))
-        if rzadkie < config.HISTORIA_KONTA_MIN_RZADKICH:
+        if rzadkie < prog_rzadkich:
             continue
-        kandydaci.append({"kiedy": w["kiedy"], "rodzaj": w["rodzaj"], "tekst": w["tekst"], "wynik": round(cos, 3)})
+        kandydaci.append({"kiedy": w["kiedy"], "rodzaj": w["rodzaj"], "tekst": w["tekst"], "wynik": round(cos, 3),
+                          "rzadkie": rzadkie})
     kandydaci.sort(key=lambda k: (-k["wynik"], -k["kiedy"].timestamp()))
-    return sorted(kandydaci[:config.HISTORIA_KONTA_WPISOW], key=lambda k: k["kiedy"])
+    return sorted(kandydaci[:limit], key=lambda k: k["kiedy"])
 
 
 def _skroc(tekst: str, ile: int) -> str:

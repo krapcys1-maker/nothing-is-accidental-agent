@@ -3688,6 +3688,16 @@ HISTORIA_KONTA_MIN_RZADKICH = 2           # i tyle wspolnych RZADKICH terminow (
 HISTORIA_KONTA_ZNAKI = 650               # ile znakow jednego wpisu idzie do promptu (mediana notki: 571; stanowisko stoi na koncu)
 HISTORIA_KONTA_BLOK_ZNAKOW = 2500        # sufit calego bloku (skracane sa WPISY, nie zasada uzycia)
 
+# N1 — CIEN PAMIECI (1.11.2026, wlasciciel: bot ma miec pamiec, osobowosc i cele; najpierw CIEN). Dla kazdego komentarza
+# (oba ramiona E23) `pamiec_cien` zapisuje do `data/pamiec_cien.jsonl`, co wstrzyknelaby SUROWA pamiec wlasnej historii
+# (`historia_konta`) przy kilku progach — BEZ wplywu na tekst i bez modelu. Nie zapisuje tekstu celu (cudzego), tylko hash
+# i dlugosc. Profil „produkcja" jest brany z `HISTORIA_KONTA_*`, wiec nie moze sie rozjechac z tym, co dostaje E23 „on".
+# Profil: (nazwa, min. podobienstwo, min. rzadkich terminow, ile pozycji).
+# Wylacznik: False. Plan i protokol oceny: `D:\Pamiec LLM\WSPOLPRACA_NIE.md`, `docs/KARTA_AGENTA.md`.
+PAMIEC_CIEN = True
+PAMIEC_CIEN_PROFILE = (("luzny", 0.08, 1, 3), ("szeroki", 0.05, 0, 5))
+PAMIEC_CIEN_PULA = 50                    # ile kandydatow bierze najluzniejsze zapytanie, zanim je rozdzielimy na profile
+
 # ZYWY WATEK POD NOTKA (1.10.2026). Przy wieku celu ~7,5 h NIE wybierala notki
 # z mediana 3 reakcji i 0 komentarzy — 8% jej komentarzy dostawalo reakcje,
 # mediana 1 wyswietlenie. Komentarz pod zywym watkiem (reakcje i komentarze

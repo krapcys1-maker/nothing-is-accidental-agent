@@ -49,14 +49,14 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **43 plików**, 56 919 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **44 plików**, 57 191 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
 | jedno polecenie uruchamiające | `python agent-v2/run.py` | dotrzymane |
 | pełna autonomia, zero pytań | brak interaktywnych promptów | dotrzymane |
 
-**WADA — 43 plików zamiast dziesięciu.** Najbliższe usunięciu:
+**WADA — 44 plików zamiast dziesięciu.** Najbliższe usunięciu:
 `style.py` (127 wierszy, wołany tylko z `stages.py`) i
 `kopia_subskrybentow.py` (203 wierszy, narzędzie ręczne poza
 przebiegiem). Scalenie któregokolwiek przywraca zgodność z mandatem.
@@ -113,8 +113,8 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 > w głównej ścieżce artykułu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
-się testować bez przeglądarki i bez pieniędzy**. 227 zestawów
-testów, 6792 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+się testować bez przeglądarki i bez pieniędzy**. 228 zestawów
+testów, 6834 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -143,7 +143,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-3958 wierszy, 47 funkcji na poziomie modułu, 2 klas
+3968 wierszy, 47 funkcji na poziomie modułu, 2 klas
 
 | funkcja | co robi |
 |---|---|
@@ -737,7 +737,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-4432 wierszy, 49 funkcji na poziomie modułu, 0 klas
+4442 wierszy, 49 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -1209,7 +1209,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `historia_konta.py` — co to konto już powiedziało na ten temat — z własnego dziennika do dwóch opublikowanych wpisów (notki bez typu MYSL i bez „I/my/me”, tytuły artykułów) o podobieństwie cosinusowym ważonym rzadkością słów, blok do promptu komentarza w ramieniu B (E23); prawdziwa ciągłość zamiast wymyślonych przeżyć
 
-184 wierszy, 5 funkcji na poziomie modułu, 0 klas
+199 wierszy, 5 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -1218,6 +1218,26 @@ wiec nie da sie go rozjechac z kodem.
 | `powiazane(tekst)` | Wlasne opublikowane wpisy najbardziej zwiazane z `tekst`, od najstarszego. |
 | `_skroc(tekst, ile)` *(wewn.)* | — |
 | `blok(tekst)` | (blok do promptu albo "", liczba wpisow w bloku). |
+
+### `pamiec_cien.py` — cień pamięci (etap N1, 1.11.2026) — dla każdego komentarza zapisuje do data/pamiec_cien.jsonl, co wstrzyknęłaby surowa pamięć własnej historii (historia_konta) przy progu produkcyjnym i dwóch luźniejszych, bez wpływu na tekst: rekord ze skrótem kluczowanym zapytania, pozycjami, tokenami, would_arm i statusem; fail-open, flaga PAMIEC_CIEN, limity czasu i rozmiaru
+
+237 wierszy, 13 funkcji na poziomie modułu, 0 klas
+
+| funkcja | co robi |
+|---|---|
+| `_plik()` *(wewn.)* | — |
+| `_kod()` *(wewn.)* | — |
+| `_klucz()` *(wewn.)* | Klucz do skrotow kluczowanych; tworzony raz, tryb 0600. Brak klucza = rekord bez skrotow, nie awaria. |
+| `_hmac(klucz, tekst)` *(wewn.)* | — |
+| `_sha(tekst)` *(wewn.)* | — |
+| `profile()` | (nazwa, min. podobienstwo, min. rzadkich, ile). „produkcja" zawsze z `HISTORIA_KONTA_*`: nie moze sie rozjechac |
+| `digest_konfiguracji()` | — |
+| `_tokeny(tekst)` *(wewn.)* | — |
+| `_aktywne(teraz)` *(wewn.)* | Nazwy eksperymentow z `config.EKSPERYMENTY`, ktore trwaja w dniu decyzji (okno dat). Ramiona poza E23 zalezą od |
+| `_pozycje(wpisy, teraz)` *(wewn.)* | — |
+| `_agregaty(poz, n_kandydatow)` *(wewn.)* | — |
+| `rekord(tekst_celu, klucz_celu)` | Zbuduj rekord cienia (bez zapisu). Rzuca wyjatek tylko przy bledzie programisty; `cien_komentarza` go lapie. |
+| `cien_komentarza(tekst_celu, klucz_celu, ramie_e23)` | Zapisz rekord cienia dla jednego komentarza i go zwroc; None, gdy wylaczone, pominiete albo nieudane. |
 
 ### `zaklady.py` — księga zakładów — publiczne zgadywania z notek serii liczone i rozliczane: wyciąg po publikacji, sprawdzenie wyszukiwarką (rozstrzygnięcie tylko z adresem z wyszukiwania), notka rozliczająca w kolejce serii, trafienia z przedziałem Wilsona i wynik Briera
 
@@ -13619,6 +13639,9 @@ wartosc i komentarz stojacy bezposrednio nad definicja.
 | `HISTORIA_KONTA_MIN_RZADKICH` | `2` | — |
 | `HISTORIA_KONTA_ZNAKI` | `650` | — |
 | `HISTORIA_KONTA_BLOK_ZNAKOW` | `2500` | — |
+| `PAMIEC_CIEN` | `True` | N1 — CIEN PAMIECI (1.11.2026, wlasciciel: bot ma miec pamiec, osobowosc i cele; najpierw CIEN). Dla kazdego komentarza (oba ramiona E23) `pa |
+| `PAMIEC_CIEN_PROFILE` | `(("luzny", 0.08, 1, 3), ("szeroki", 0.05, 0,` | — |
+| `PAMIEC_CIEN_PULA` | `50` | — |
 | `ZYWY_WATEK_KOMENTARZY` | `2` | ZYWY WATEK POD NOTKA (1.10.2026). Przy wieku celu ~7,5 h NIE wybierala notki z mediana 3 reakcji i 0 komentarzy — 8% jej komentarzy dostawal |
 | `ZYWY_WATEK_REAKCJI` | `5` | — |
 | `MIN_REAKCJI_CELU_NOTKI` | `5` | SLABA NOTKA ODPADA, NIE TYLKO CICHA (19.10.2026, decyzja wlasciciela). Zmierzone na komentarzach z 28.09-16.10 (pomiar po 72 h): pod notkami |

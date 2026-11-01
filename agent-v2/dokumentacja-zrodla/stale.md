@@ -266,6 +266,9 @@
 | `HISTORIA_KONTA_MIN_RZADKICH` | `2` | — |
 | `HISTORIA_KONTA_ZNAKI` | `650` | — |
 | `HISTORIA_KONTA_BLOK_ZNAKOW` | `2500` | — |
+| `PAMIEC_CIEN` | `True` | N1 — CIEN PAMIECI (1.11.2026, wlasciciel: bot ma miec pamiec, osobowosc i cele; najpierw CIEN). Dla kazdego komentarza (oba ramiona E23) `pa |
+| `PAMIEC_CIEN_PROFILE` | `(("luzny", 0.08, 1, 3), ("szeroki", 0.05, 0,` | — |
+| `PAMIEC_CIEN_PULA` | `50` | — |
 | `ZYWY_WATEK_KOMENTARZY` | `2` | ZYWY WATEK POD NOTKA (1.10.2026). Przy wieku celu ~7,5 h NIE wybierala notki z mediana 3 reakcji i 0 komentarzy — 8% jej komentarzy dostawal |
 | `ZYWY_WATEK_REAKCJI` | `5` | — |
 | `MIN_REAKCJI_CELU_NOTKI` | `5` | SLABA NOTKA ODPADA, NIE TYLKO CICHA (19.10.2026, decyzja wlasciciela). Zmierzone na komentarzach z 28.09-16.10 (pomiar po 72 h): pod notkami |

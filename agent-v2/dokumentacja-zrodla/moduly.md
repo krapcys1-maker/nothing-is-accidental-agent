@@ -1,7 +1,7 @@
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-3958 wierszy, 47 funkcji na poziomie modułu, 2 klas
+3968 wierszy, 47 funkcji na poziomie modułu, 2 klas
 
 | funkcja | co robi |
 |---|---|
@@ -595,7 +595,7 @@
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-4432 wierszy, 49 funkcji na poziomie modułu, 0 klas
+4442 wierszy, 49 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -1067,7 +1067,7 @@
 
 ### `historia_konta.py` — co to konto już powiedziało na ten temat — z własnego dziennika do dwóch opublikowanych wpisów (notki bez typu MYSL i bez „I/my/me”, tytuły artykułów) o podobieństwie cosinusowym ważonym rzadkością słów, blok do promptu komentarza w ramieniu B (E23); prawdziwa ciągłość zamiast wymyślonych przeżyć
 
-184 wierszy, 5 funkcji na poziomie modułu, 0 klas
+199 wierszy, 5 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -1076,6 +1076,26 @@
 | `powiazane(tekst)` | Wlasne opublikowane wpisy najbardziej zwiazane z `tekst`, od najstarszego. |
 | `_skroc(tekst, ile)` *(wewn.)* | — |
 | `blok(tekst)` | (blok do promptu albo "", liczba wpisow w bloku). |
+
+### `pamiec_cien.py` — cień pamięci (etap N1, 1.11.2026) — dla każdego komentarza zapisuje do data/pamiec_cien.jsonl, co wstrzyknęłaby surowa pamięć własnej historii (historia_konta) przy progu produkcyjnym i dwóch luźniejszych, bez wpływu na tekst: rekord ze skrótem kluczowanym zapytania, pozycjami, tokenami, would_arm i statusem; fail-open, flaga PAMIEC_CIEN, limity czasu i rozmiaru
+
+237 wierszy, 13 funkcji na poziomie modułu, 0 klas
+
+| funkcja | co robi |
+|---|---|
+| `_plik()` *(wewn.)* | — |
+| `_kod()` *(wewn.)* | — |
+| `_klucz()` *(wewn.)* | Klucz do skrotow kluczowanych; tworzony raz, tryb 0600. Brak klucza = rekord bez skrotow, nie awaria. |
+| `_hmac(klucz, tekst)` *(wewn.)* | — |
+| `_sha(tekst)` *(wewn.)* | — |
+| `profile()` | (nazwa, min. podobienstwo, min. rzadkich, ile). „produkcja" zawsze z `HISTORIA_KONTA_*`: nie moze sie rozjechac |
+| `digest_konfiguracji()` | — |
+| `_tokeny(tekst)` *(wewn.)* | — |
+| `_aktywne(teraz)` *(wewn.)* | Nazwy eksperymentow z `config.EKSPERYMENTY`, ktore trwaja w dniu decyzji (okno dat). Ramiona poza E23 zalezą od |
+| `_pozycje(wpisy, teraz)` *(wewn.)* | — |
+| `_agregaty(poz, n_kandydatow)` *(wewn.)* | — |
+| `rekord(tekst_celu, klucz_celu)` | Zbuduj rekord cienia (bez zapisu). Rzuca wyjatek tylko przy bledzie programisty; `cien_komentarza` go lapie. |
+| `cien_komentarza(tekst_celu, klucz_celu, ramie_e23)` | Zapisz rekord cienia dla jednego komentarza i go zwroc; None, gdy wylaczone, pominiete albo nieudane. |
 
 ### `zaklady.py` — księga zakładów — publiczne zgadywania z notek serii liczone i rozliczane: wyciąg po publikacji, sprawdzenie wyszukiwarką (rozstrzygnięcie tylko z adresem z wyszukiwania), notka rozliczająca w kolejce serii, trafienia z przedziałem Wilsona i wynik Briera
 

@@ -413,7 +413,8 @@ def pola_odpowiadalnosci(cel: dict) -> dict[str, Any]:
         return {}
 
 
-def dane_maniery(cel: dict, tekst_celu: str, dzien: str | None = None) -> dict[str, Any]:
+def dane_maniery(cel: dict, tekst_celu: str, dzien: str | None = None, *, run_id: int | None = None,
+                 zadanie: str = "komentarz") -> dict[str, Any]:
     """E23 (`maniera_komentarza`): ramie celu i to, co ramie „on" dopisuje do wywolania `comment_on`.
 
     Ramie losuje `stages.ramie` po adresie celu (1:1, stale dla celu). Zapisuje je w `cel["_maniera"]`
@@ -428,6 +429,14 @@ def dane_maniery(cel: dict, tekst_celu: str, dzien: str | None = None) -> dict[s
     klucz = cel.get("url") or cel.get("id") or ""
     r = _ramie_stale("maniera_komentarza", klucz, dzien)
     cel["_maniera"] = r
+    # N1 — CIEN PAMIECI (`pamiec_cien`): zapis, co wstrzyknelaby surowa pamiec wlasnej historii dla tego komentarza.
+    # NIE zmienia niczego, co dostaje model ani co zwraca ta funkcja; fail-open; wylacznik `config.PAMIEC_CIEN`.
+    try:
+        import pamiec_cien
+        pamiec_cien.cien_komentarza(tekst_celu, str(klucz), r, zadanie=zadanie, run_id=run_id,
+                                    autor=str(cel.get("uchwyt") or cel.get("pub") or ""))
+    except Exception:                   # noqa: BLE001 — cien nie moze zatrzymac komentarza
+        pass
     if r != "on":
         if r == "off":
             print("  [maniera] E23 off", flush=True)
@@ -2261,7 +2270,8 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
                 {**strony[0], "co_dodamy": cel.get("co_dodamy", ""),
                  "pamiec": cel["_e21"]["tekst"],
                  # E23 — MANIERA KOMENTARZA (`dane_maniery`): ramie po adresie celu.
-                 **dane_maniery(cel, "%s %s" % (strony[0].get("title", ""), strony[0].get("text", "")))})
+                 **dane_maniery(cel, "%s %s" % (strony[0].get("title", ""), strony[0].get("text", "")),
+                                run_id=run_id, zadanie="komentarz_pod_artykulem")})
             dobre = [k for k in out["candidates"]
                      if k.get("comment") and k.get("safe_to_post")]
             if not dobre:
@@ -2441,7 +2451,7 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
                  "co_dodamy": cel.get("co_dodamy", ""),
                  "pamiec": cel["_e21"]["tekst"],
                  # E23 — MANIERA KOMENTARZA (`dane_maniery`): ramie po adresie notki.
-                 **dane_maniery(cel, cel.get("opis", ""))})
+                 **dane_maniery(cel, cel.get("opis", ""), run_id=run_id, zadanie="komentarz_pod_notka")})
             dobre = [k for k in out["candidates"]
                      if k.get("comment") and k.get("safe_to_post")]
             if not dobre:
