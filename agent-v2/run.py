@@ -21,6 +21,7 @@ import config
 import db
 import gates
 import llm
+import persona
 import seria
 import stages
 
@@ -209,6 +210,22 @@ def _wedlug_odpowiadalnosci(kanal: Any, cele: list, notki: bool) -> list:
     """`kanal.wedlug_odpowiadalnosci` — atrapa bez tej funkcji zostawia kolejnosc (i nie dotyka sieci)."""
     f = getattr(kanal, "wedlug_odpowiadalnosci", None)
     return f(cele, notki) if callable(f) else cele
+
+
+def _persona_pomija(tekst: Any, *, rodzaj: str) -> bool:
+    """FILTR WEJSCIA PERSONY (`persona.pomin_cel`): True, gdy komentarz skierowany DO NAS pyta wprost o nature konta (bot/AI/czlowiek/eksperyment)
+    albo prosi o spotkanie, telefon lub zdjecie. Takiego celu nie czytamy dalej i nie odpowiadamy na niego wcale (decyzja wlasciciela 2.11);
+    log persony zapisuje tylko kategorie i dlugosc, bez tresci. Flaga `PERSONA` wylaczona = zawsze False."""
+    if not getattr(config, "PERSONA", False):
+        return False
+    try:
+        powod = persona.pomin_cel(str(tekst or ""), do_nas=True)
+    except Exception:                                        # noqa: BLE001 — siatka nie moze zatrzymac przebiegu
+        return False
+    if powod:
+        persona.dziennik("cel_pominiety", rodzaj=rodzaj, powod=powod, znakow=len(str(tekst or "")))
+        print(f"  [persona] pomijam cel ({powod}): bez odpowiedzi", flush=True)
+    return bool(powod)
 
 
 def _ramie_stale(nazwa: str, miejsce: Any, dzien: str | None = None) -> str:
@@ -1722,7 +1739,7 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
         # wiec porazka wracala w KAZDYM przebiegu: od 18.10 dziewiec prob, kazda
         # z wywolaniem modelu i przerwa rytmu 5-15 min. Sito stoi PRZED wyborem
         # i pisaniem — zablokowany komentarz nie kosztuje nic.
-        czekaja = [c for c in czekaja if not odpowiedz_zablokowana(c)]
+        czekaja = [c for c in czekaja if not odpowiedz_zablokowana(c) and not _persona_pomija(c.get("tekst"), rodzaj="odpowiedz")]
         if not czekaja:
             return
         # Przy dwóch odpowiada się obu. Przy dwustu odpowiedź pod każdym wygląda
@@ -2034,6 +2051,27 @@ def dzien(conn, run_id: int, wyslij: bool, poza_oknem: bool = False) -> int:
             # A rejected draft or an already-existing note is not a new post.
             if not wyslij or (wynik.get("wyslane") and not wynik.get("pominiete")):
                 zrobione["notki"] += 1
+
+        # PAS Z ZYCIA PERSONY (etap 1; `persona.py`): jedna notka na dobe, za flagami `PERSONA` i `PERSONA_ZYCIE` oraz bramka na bio.
+        # Poza dzienna norma notek (nie podmienia zadnego slotu); stan zapisujemy dopiero po POTWIERDZONEJ publikacji.
+        if getattr(config, "PERSONA", False) and getattr(config, "PERSONA_ZYCIE", False) and zostal_czas("notki"):
+            try:
+                _z = persona.notka_zycia(conn, run_id)
+            except stages.PRZERYWAJA:
+                raise
+            except Exception as exc:                         # noqa: BLE001 — pas z zycia nie moze zatrzymac reszty przebiegu
+                print(f"  [persona] notka z zycia nie powstala ({type(exc).__name__})", flush=True)
+                _z = None
+            if _z:
+                if not wyslij:
+                    print("  --- NA SUCHO, NIE WYSTAWIAM (notka z zycia) ---", flush=True)
+                    for _w in _z["text"].splitlines():
+                        print("  | %s" % _w, flush=True)
+                elif rytm("notka", "notki", rytm_stanu):
+                    _wz = browser.wystaw_notke(_z["text"], wyslij=True, typ="ZYCIE", forma="ZYCIE", model=_z.get("model", ""),
+                                               pomiar={"eksperymenty": {"persona": "on"}, "zasiew": _z.get("zasiew")})
+                    persona.po_publikacji(_z, _wz, run_id)
+                    rytm_stanu["notka"] = True
 
         # ZWROT. Stoi tu, a nie w `finally`, bo z tej petli wychodzi sie juz
         # tylko przez `break` — a `break` prowadzi dokladnie tutaj.

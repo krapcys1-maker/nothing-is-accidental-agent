@@ -1,7 +1,7 @@
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-3972 wierszy, 47 funkcji na poziomie modułu, 2 klas
+4010 wierszy, 48 funkcji na poziomie modułu, 2 klas
 
 | funkcja | co robi |
 |---|---|
@@ -14,6 +14,7 @@
 | `_sito_celow(kanal, cele, limit, notki)` *(wewn.)* | `kanal.odsiej_cele` — atrapa bez tej funkcji znaczy „bez sita". |
 | `_zywe_najpierw(kanal, cele)` *(wewn.)* | `kanal.zywe_najpierw` — atrapa bez tej funkcji zostawia kolejnosc. |
 | `_wedlug_odpowiadalnosci(kanal, cele, notki)` *(wewn.)* | `kanal.wedlug_odpowiadalnosci` — atrapa bez tej funkcji zostawia kolejnosc (i nie dotyka sieci). |
+| `_persona_pomija(tekst)` *(wewn.)* | FILTR WEJSCIA PERSONY (`persona.pomin_cel`): True, gdy komentarz skierowany DO NAS pyta wprost o nature konta (bot/AI/czlowiek/eksperyment) |
 | `_ramie_stale(nazwa, miejsce, dzien)` *(wewn.)* | `stages.ramie_stale` (bez daty w losowaniu) — a atrapa `stages` bez niej schodzi do zwyklego `_ramie`. |
 | `_ramie(nazwa, miejsce, dzien)` *(wewn.)* | Ramie eksperymentu z `stages.ramie` — a atrapa `stages` bez tej funkcji |
 | `przydzial_komentarzy(n, klucz, dzien)` | Ile miejsc na komentarz dostaje blok pod ARTYKULAMI, a ile pod NOTKAMI. |
@@ -55,7 +56,7 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-12957 wierszy, 243 funkcji na poziomie modułu, 0 klas
+12963 wierszy, 243 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -305,7 +306,7 @@
 
 ### `browser.py` — cała styczność z Substackiem; nie woła modelu
 
-6417 wierszy, 126 funkcji na poziomie modułu, 0 klas
+6447 wierszy, 127 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -315,6 +316,7 @@
 | `dopisz_wynik(rodzaj, wynik, **szczegoly)` | Jeden wpis na dzialanie — takze wtedy, gdy sie NIE UDALO, i z powodem. |
 | `zapisz_w_dzienniku(rodzaj, **szczegoly)` | Dziennik DZIALAN, nie wywolan modelu. |
 | `z_dziennika_dzis()` | Ile komentarzy i polubien poszlo dzis — wedlug naszego zapisu. |
+| `_persona_odrzuca(tekst, rodzaj)` *(wewn.)* | FILTR WYJSCIA PERSONY (`persona.wyjscie_ok`), jedno miejsce dla wszystkich publikacji tekstu: gdy flaga `config.PERSONA` jest wlaczona |
 | `naprawde_wyslac(wyslij, co)` | Ostatnie sito przed KAZDYM dzialaniem widocznym publicznie. |
 | `zalogowany(context)` | Twarde sprawdzenie: albo jest ciasteczko sesji, albo go nie ma. |
 | `dni_do_wygasniecia()` | Ile dni zostało sesji. None, gdy sesji nie ma wcale. |
@@ -597,7 +599,7 @@
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-4447 wierszy, 49 funkcji na poziomie modułu, 0 klas
+4455 wierszy, 49 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -1102,6 +1104,28 @@
 | `rekord(tekst_celu, klucz_celu)` | Zbuduj rekord cienia (bez zapisu). Szkielet powstaje PRZED wyszukiwaniem, wiec awaria wyszukiwania zostawia pelny |
 | `_dopisz(plik, rec)` *(wewn.)* | — |
 | `cien_komentarza(tekst_celu, klucz_celu, ramie_e23)` | Zapisz rekord cienia dla jednej proby komentarza i go zwroc; None, gdy wylaczone, pominiete albo nieudane. |
+
+### `persona.py` — persona „Marit” (2.11.2026) — kanon zmyślonego życia i głos (persona/marit_v0.md), pas notek z życia (jedna na dobę, zasiewy z oknem dat, zapis dopowiedzeń z proweniencją), bramka na bio (publiczne API profilu, fail-closed), filtr wejścia (pomija pytania o naturę konta i prośby o kontakt) i tani filtr wyjścia na jawne „I am human / not a bot”; wyłączona flagą config.PERSONA
+
+291 wierszy, 15 funkcji na poziomie modułu, 0 klas
+
+| funkcja | co robi |
+|---|---|
+| `pomin_cel(tekst)` | Kategoria powodu pominiecia celu („natura” / „kontakt”) albo None. `do_nas=True`: tekst jest skierowany do konta (odpowiedz na nasz |
+| `wyjscie_ok(tekst)` | (True, "") albo (False, nazwa wzorca): tekst NIE twierdzi wprost, ze autor jest czlowiekiem, ani nie zaprzecza botowi. |
+| `_pobierz(url)` *(wewn.)* | — |
+| `bio_ok()` | Czy PUBLICZNY profil zawiera zdanie ujawnienia. Wynik pamietany (TTL 1 h gdy tak, 5 min gdy nie); wszelki blad = False (fail-closed). |
+| `aktywna()` | Persona jest wlaczona flaga ORAZ bramka na bio przechodzi. |
+| `karta()` | — |
+| `data_po_angielsku(dzien)` | — |
+| `blok(nazwa_promptu)` | Blok persony do wstawienia po wspolnym glosie, albo "" (flaga wylaczona, prompt spoza listy, brak bramki na bio, brak karty). |
+| `dziennik(zdarzenie, **pola)` | Dopisuje linie do data/persona_log.jsonl. Nigdy nie rzuca; limit rozmiaru. |
+| `_jsonl(plik)` *(wewn.)* | — |
+| `zasiewy_na_dzien(dzien)` | Zasiewy (ISO `dzien`) bez tych, ktorych okno nie obejmuje tego dnia. |
+| `juz_dzis(dzien)` | Czy dziennik ma juz udana notke typu ZYCIE z tego dnia (UTC). |
+| `wybierz_zasiew(dzien)` | Zasiew najdawniej niewykorzystany (wg `zycie_wystawiona` w dzienniku persony); przy remisie kolejnosc z pliku. |
+| `notka_zycia(conn, run_id)` | Jedna notka z zycia na dobe (flagi `PERSONA` i `PERSONA_ZYCIE`, bramka na bio). Zwraca {"text", "zasiew", "model"} albo None. |
+| `po_publikacji(z, wynik, run_id)` | Zapis po POTWIERDZONEJ publikacji: dziennik persony (do wyboru zasiewu) i dopowiedzenia (proweniencja dla badan pamieci). |
 
 ### `redaktor.py` — redaktor w cieniu (R1, 1.11.2026) — raz w tygodniu czyta raport co_dziala.json i zapisuje do data/redaktor_cien.jsonl dziennik decyzji redakcji: obserwacje, propozycje (temat, research, styl, dlugosc, pora) z dowodami z werdyktow, przewidywania i ich rozliczenie po terminie; notatka dla czlowieka w obserwatorium/redaktor.md; bez modelu, bez wplywu na tresc, flaga REDAKTOR_CIEN
 

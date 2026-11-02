@@ -3714,6 +3714,14 @@ PAMIEC_CIEN_PULA = 50                    # ile kandydatow bierze najluzniejsze z
 # propozycji to R2, po protokole oceny i poza oknem bazowym pamieci). Wylacznik: False.
 REDAKTOR_CIEN = True
 
+# PERSONA „Marit” (2.11.2026; `persona.py`, kanon w `persona/marit_v0.md`). WYLACZONA domyslnie: dopoki flaga jest False, zaden prompt ani tekst sie
+# nie zmienia. `PERSONA_PROMPTY` = nazwy promptow (bez .md), do ktorych idzie blok persony; etap 1 to tylko pas notek z zycia (`notka_zycie`),
+# komentarze i artykuly dochodza pozniej. Persona wchodzi w zycie tylko, gdy publiczne bio zawiera zdanie ujawnienia (bramka fail-closed).
+PERSONA = False
+PERSONA_ZYCIE = False                       # pas notek z zycia (jedna na dobe), tylko gdy PERSONA jest wlaczona
+PERSONA_PROMPTY: tuple[str, ...] = ()       # np. ("Notka_zycie.md",): nazwy plikow promptow, ktore dostaja blok persony
+PERSONA_HANDLE = "nothingisaccidental"
+
 # ZYWY WATEK POD NOTKA (1.10.2026). Przy wieku celu ~7,5 h NIE wybierala notki
 # z mediana 3 reakcji i 0 komentarzy — 8% jej komentarzy dostawalo reakcje,
 # mediana 1 wyswietlenie. Komentarz pod zywym watkiem (reakcje i komentarze
