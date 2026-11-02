@@ -316,6 +316,24 @@ def z_dziennika_dzis() -> dict[str, int]:
     return ile
 
 
+def _persona_odrzuca(tekst: str, rodzaj: str) -> dict[str, Any] | None:
+    """FILTR WYJSCIA PERSONY (`persona.wyjscie_ok`), jedno miejsce dla wszystkich publikacji tekstu: gdy flaga `config.PERSONA` jest wlaczona
+    i tekst twierdzi wprost, ze autor jest czlowiekiem albo zaprzecza botowi, NIC nie jest wystawiane (wynik jak przy zwyklej porazce).
+    Wylaczona flaga = None i zero skutkow. To siatka; glowna ochrona to filtr wejscia (pytania o nature konta nie docieraja do persony)."""
+    if not getattr(config, "PERSONA", False):
+        return None
+    try:
+        import persona
+        ok, wzorzec = persona.wyjscie_ok(tekst)
+    except Exception:                                        # noqa: BLE001 — siatka nie moze zatrzymac publikacji awaria wlasnego kodu
+        return None
+    if ok:
+        return None
+    persona.dziennik("wyjscie_zablokowane", rodzaj=rodzaj, wzorzec=wzorzec, tekst=str(tekst)[:400])
+    print(f"  [persona] tekst NIE wychodzi: filtr wyjscia ({wzorzec})", flush=True)
+    return {"wpisane": False, "wyslane": False, "blad": f"persona_filtr:{wzorzec}"}
+
+
 def naprawde_wyslac(wyslij: bool, co: str) -> bool:
     """Ostatnie sito przed KAZDYM dzialaniem widocznym publicznie.
 
@@ -4605,6 +4623,9 @@ def wystaw_odpowiedz_pod_artykulem(
     rozmówca dostaje powiadomienie, a wątek czyta się jak rozmowa.
     """
     wyslij = naprawde_wyslac(wyslij, "odpowiedz pod artykułem")
+    _odrzut = _persona_odrzuca(tekst, "odpowiedz_pod_artykulem") if wyslij else None
+    if _odrzut:
+        return _odrzut
     wymagaj_sesji()
     p, browser, context = podlacz_sie()
     page = context.new_page()
@@ -5007,6 +5028,9 @@ def wystaw_odpowiedz(note_id: int, tekst: str, wyslij: bool = False,
     ktory regularnie klamie, uczy ludzi nie patrzec na alarmy.
     """
     wyslij = naprawde_wyslac(wyslij, rodzaj)
+    _odrzut = _persona_odrzuca(tekst, "odpowiedz") if wyslij else None
+    if _odrzut:
+        return _odrzut
     wymagaj_sesji()
     p, browser, context = podlacz_sie()
     page = context.new_page()
@@ -5262,6 +5286,9 @@ def wystaw_notke(tekst: str, wyslij: bool = False, typ: str = "",
     trafia we właściwe pole, dopiero potem wysyłamy.
     """
     wyslij = naprawde_wyslac(wyslij, "notka")
+    _odrzut = _persona_odrzuca(tekst, "notka") if wyslij else None
+    if _odrzut:
+        return _odrzut
     wymagaj_sesji()
     p, browser, context = podlacz_sie()
     page = context.new_page()
@@ -5967,6 +5994,9 @@ def wystaw_komentarz(url: str, tekst: str, wyslij: bool = False,
     a kosztuja zero, bo mamy je juz w reku i dotad je wyrzucalismy.
     """
     wyslij = naprawde_wyslac(wyslij, "komentarz")
+    _odrzut = _persona_odrzuca(tekst, "komentarz") if wyslij else None
+    if _odrzut:
+        return _odrzut
     wymagaj_sesji()
     p, browser, context = podlacz_sie()
     page = context.new_page()

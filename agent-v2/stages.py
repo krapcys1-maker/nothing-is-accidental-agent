@@ -21,6 +21,7 @@ from urllib.parse import urlparse
 
 import aktualne_modele
 import config
+import persona
 import korpus_kanalow
 import db
 import llm
@@ -141,10 +142,15 @@ def _prompt(name: str, **fields: Any) -> str:
     """Render a task prompt and prepend the shared public voice once."""
     text = (config.PROMPTS_DIR / name).read_text(encoding="utf-8")
     text = text.format(**{"marka": config.MARKA, **fields})
+    # PERSONA „Marit” (`persona.py`): "" dopoki flaga wylaczona, prompt spoza `config.PERSONA_PROMPTY` albo bramka na bio nie przechodzi —
+    # wtedy ponizsze zdania sa tozsame z dotychczasowymi. Blok idzie PO wspolnym glosie (testy wymagaja, by prompt zaczynal sie od glosu).
+    persona_blok = persona.blok(name)
     if name in Z_GLOSEM_KROTKICH:
         # Jeden glos dla wszystkich publikowanych formatow, przed danymi.
         text = (config.PROMPTS_DIR / "glos_krotkich.md").read_text(
-            encoding="utf-8") + "\n\n" + pamiec_glosu(name) + text
+            encoding="utf-8") + "\n\n" + persona_blok + pamiec_glosu(name) + text
+    else:
+        text = persona_blok + text
     return text
 
 

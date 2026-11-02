@@ -41,7 +41,7 @@ zakwestionował, i tyle. Nikt na to nie czeka i nic przez to nie stoi.
 
 ---
 
-## 2. Co mimo to blokuje — trzy rzeczy i tylko trzy
+## 2. Co mimo to blokuje — trzy rzeczy (plus wąska siatka persony, patrz dopisek)
 
 Punkt pierwszy nie znaczy „publikuj cokolwiek". Blokują:
 
@@ -56,6 +56,14 @@ sprawdzalnym.
 
 **Wyczerpany budżet i wyłącznik `KILL_SWITCH`.** To brak pieniędzy, nie
 wątpliwość — i jedyna twarda blokada, jaka została.
+
+**Dopisek z 2.11.2026 (persona „Marit”, `persona.py`, tylko gdy `config.PERSONA` jest włączona):**
+wąska, czwarta siatka, którą ustalił właściciel razem z ujawnieniem w bio. Persona sama nie wie, że konto prowadzi bot, więc ochrona
+czytelników siedzi w kodzie poza nią: (1) **bramka na bio** (persona działa tylko, gdy publiczny profil zawiera zdanie ujawnienia;
+błąd sieci = wyłączona), (2) **filtr wejścia** (komentarz skierowany do konta, który pyta wprost o bycie botem/AI/człowiekiem albo prosi
+o spotkanie, telefon, zdjęcie, jest pomijany bez odpowiedzi; decyzja właściciela: „niech olewa takie pytania i nie odpowiada wcale”),
+(3) **tani filtr wyjścia** (tekst z jawnym „I am human” albo „I am not a bot” nie wychodzi). Nie ogranicza opinii, także błędnych, ani
+plotek z podanym źródłem, ani życia codziennego persony. Przy wyłączonej fladze nie robi nic.
 
 ---
 
