@@ -145,6 +145,7 @@
 | `MAX_TOKENS` | `{ # 6 tematow: tytul, pytanie, ZLAMANE PRZEK` | — |
 | `NOTE_MIN_WORDS` | `40` | --- notki i komentarze ------------------------------------------------------ SUFIT PODNIESIONY 4 wrzesnia 2026 DECYZJA WLASCICIELA: „chce z |
 | `NOTE_MAX_WORDS` | `70` | — |
+| `NOTE_SKROC_POWYZEJ` | `75` | 13.11.2026: notka dluzsza niz to wraca do pisarza po krotsza wersje (`stages.skroc_notke`); proba na sucho: 84-159 slow przy oknie 40-70. |
 | `NOTE_MIN_WORDS_DLUGA` | `120` | DLUGA NOTKA — OKNO OSOBNE, BO SUFIT 64 SLOW MA ZMIERZONY KOSZT. Sufit wyzej optymalizuje ZAANGAZOWANIE i ma zrodlo. Nie optymalizuje ZROZUMI |
 | `NOTE_MAX_WORDS_DLUGA` | `200` | — |
 | `SLEDZTWO_TRYB` | `"lekkie"` | Ilu kandydatow generujemy. Dawniej bylo pieciu, potem trzech; dodatkowe warianty tego samego zdania niczego nie dokladaly, a placilismy za n |

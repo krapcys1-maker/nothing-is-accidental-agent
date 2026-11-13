@@ -56,7 +56,7 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-12966 wierszy, 243 funkcji na poziomie modułu, 0 klas
+13014 wierszy, 244 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -145,6 +145,7 @@
 | `za_duzo_zargonu(tekst)` | Terminy insiderskie, gdy jest ich wiecej, niz notka udzwignie. Inaczej pusto. |
 | `dopnij_pytanie(notka, pytanie)` | E18: notka konczy sie pytaniem — gdy model go nie postawil, dopina je KOD. |
 | `z_krotka_notka(prompt, dol, gora)` | Prompt notki z poleceniem krotkiej notki (E17, ramie „on"). |
+| `skroc_notke(conn, run_id, etap, tekst, dol, gora)` | Krotsza wersja notki od tego samego pisarza albo None (gdy nie wyszla krotsza i nie krotsza niz `dol`). |
 | `z_dlugoscia(prompt, dol, gora)` | Prompt notki z dlugoscia podana wprost (poza ramieniem „on" E17). |
 | `zakonczenia_brakiem(ile)` | Ostatnie zdania tych z `ile` ostatnich notek, ktore koncza sie brakiem. |
 | `_slowa_tresci(tekst)` *(wewn.)* | — |
@@ -599,7 +600,7 @@
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-4478 wierszy, 49 funkcji na poziomie modułu, 0 klas
+4480 wierszy, 49 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|

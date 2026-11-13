@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **46 plików**, 58 351 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **46 plików**, 58 401 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -113,8 +113,8 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 > w głównej ścieżce artykułu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
-się testować bez przeglądarki i bez pieniędzy**. 231 zestawów
-testów, 7056 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+się testować bez przeglądarki i bez pieniędzy**. 232 zestawów
+testów, 7068 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -198,7 +198,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-12966 wierszy, 243 funkcji na poziomie modułu, 0 klas
+13014 wierszy, 244 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -287,6 +287,7 @@ wiec nie da sie go rozjechac z kodem.
 | `za_duzo_zargonu(tekst)` | Terminy insiderskie, gdy jest ich wiecej, niz notka udzwignie. Inaczej pusto. |
 | `dopnij_pytanie(notka, pytanie)` | E18: notka konczy sie pytaniem — gdy model go nie postawil, dopina je KOD. |
 | `z_krotka_notka(prompt, dol, gora)` | Prompt notki z poleceniem krotkiej notki (E17, ramie „on"). |
+| `skroc_notke(conn, run_id, etap, tekst, dol, gora)` | Krotsza wersja notki od tego samego pisarza albo None (gdy nie wyszla krotsza i nie krotsza niz `dol`). |
 | `z_dlugoscia(prompt, dol, gora)` | Prompt notki z dlugoscia podana wprost (poza ramieniem „on" E17). |
 | `zakonczenia_brakiem(ile)` | Ostatnie zdania tych z `ile` ostatnich notek, ktore koncza sie brakiem. |
 | `_slowa_tresci(tekst)` *(wewn.)* | — |
@@ -741,7 +742,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-4478 wierszy, 49 funkcji na poziomie modułu, 0 klas
+4480 wierszy, 49 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -13604,6 +13605,7 @@ wartosc i komentarz stojacy bezposrednio nad definicja.
 | `MAX_TOKENS` | `{ # 6 tematow: tytul, pytanie, ZLAMANE PRZEK` | — |
 | `NOTE_MIN_WORDS` | `40` | --- notki i komentarze ------------------------------------------------------ SUFIT PODNIESIONY 4 wrzesnia 2026 DECYZJA WLASCICIELA: „chce z |
 | `NOTE_MAX_WORDS` | `70` | — |
+| `NOTE_SKROC_POWYZEJ` | `75` | 13.11.2026: notka dluzsza niz to wraca do pisarza po krotsza wersje (`stages.skroc_notke`); proba na sucho: 84-159 slow przy oknie 40-70. |
 | `NOTE_MIN_WORDS_DLUGA` | `120` | DLUGA NOTKA — OKNO OSOBNE, BO SUFIT 64 SLOW MA ZMIERZONY KOSZT. Sufit wyzej optymalizuje ZAANGAZOWANIE i ma zrodlo. Nie optymalizuje ZROZUMI |
 | `NOTE_MAX_WORDS_DLUGA` | `200` | — |
 | `SLEDZTWO_TRYB` | `"lekkie"` | Ilu kandydatow generujemy. Dawniej bylo pieciu, potem trzech; dodatkowe warianty tego samego zdania niczego nie dokladaly, a placilismy za n |
