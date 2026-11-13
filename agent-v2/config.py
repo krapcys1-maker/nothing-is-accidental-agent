@@ -1944,7 +1944,7 @@ MAX_TOKENS = {
 NOTE_MIN_WORDS = 40
 NOTE_MAX_WORDS = 70
 # 13.11.2026: notka dluzsza niz to wraca do pisarza po krotsza wersje (`stages.skroc_notke`); proba na sucho: 84-159 slow przy oknie 40-70.
-NOTE_SKROC_POWYZEJ = 90
+NOTE_SKROC_POWYZEJ = 75
 
 # DLUGA NOTKA — OKNO OSOBNE, BO SUFIT 64 SLOW MA ZMIERZONY KOSZT.
 #

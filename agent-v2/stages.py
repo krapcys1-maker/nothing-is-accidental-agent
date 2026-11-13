@@ -3948,8 +3948,9 @@ POLECENIE_SKROCENIA = """Here is a draft Substack Note ({slow} words):
 
 It is too long. Rewrite it as ONE complete note of {dol}-{gora} words. Keep the single main point and the concrete
 fact it rests on (same numbers, names and sources, nothing new added), drop the second example, the background and
-any caveat that does not change the point. It must read as a whole thought to a stranger on the first read: not a
-fragment, not an aphorism. Same voice.
+any caveat that does not change the point. If the draft ends with a question to the reader, keep a short version of
+it as the last sentence. It must read as a whole thought to a stranger on the first read: not a fragment, not an
+aphorism. Same voice.
 
 Return only valid JSON: {{"note": "<the shorter note>"}}"""
 
@@ -4719,8 +4720,13 @@ def note(
                     except Exception as exc:
                         print("    [zapowiedz] druga wersja nie wyszla (%s)"
                               % type(exc).__name__, flush=True)
-            # SKRACANIE PRZEPISANIEM (`skroc_notke`) — zwykle notki, nie seria (E22 mierzy jej dlugosc) i nie formy dlugie.
-            if (not gotowy_tekst and not seria and note_form not in config.FORMY_DLUGIE
+            # E18 — pytanie na koncu dopina kod (`dopnij_pytanie`), PRZED
+            # liczeniem slow i sprawdzaniem faktow, wiec idzie przez te same bramki.
+            if (wariant or {}).get("pytanie") and isinstance(data.get("note"), str):
+                data["note"] = dopnij_pytanie(data["note"], data.get("closing_question") or "")
+            # SKRACANIE PRZEPISANIEM (`skroc_notke`) — PO dopieciu pytania E18, bo pytanie tez liczy sie do dlugosci.
+            # Notki serii tez (E22 zakonczony 12.11); nie formy dlugie i nie gotowy tekst serii lekkiej.
+            if (not gotowy_tekst and note_form not in config.FORMY_DLUGIE
                     and isinstance(data.get("note"), str)
                     and len(data["note"].split()) > config.NOTE_SKROC_POWYZEJ):
                 _krotsza = skroc_notke(conn, run_id, etap, data["note"], _min_slow, _maks_slow)
@@ -4728,10 +4734,6 @@ def note(
                 if _krotsza:
                     data["note"] = _krotsza
                     data["skrocona"] = True
-            # E18 — pytanie na koncu dopina kod (`dopnij_pytanie`), PRZED
-            # liczeniem slow i sprawdzaniem faktow, wiec idzie przez te same bramki.
-            if (wariant or {}).get("pytanie") and isinstance(data.get("note"), str):
-                data["note"] = dopnij_pytanie(data["note"], data.get("closing_question") or "")
             # Mimo polecenia konczy sie brakiem — zastrzezenie wyzej, ten sam pisarz.
             if (_konce_brakiem and isinstance(data.get("note"), str)
                     and konczy_ocena_materialu(data["note"])):
