@@ -4725,8 +4725,8 @@ def note(
             if (wariant or {}).get("pytanie") and isinstance(data.get("note"), str):
                 data["note"] = dopnij_pytanie(data["note"], data.get("closing_question") or "")
             # SKRACANIE PRZEPISANIEM (`skroc_notke`) — PO dopieciu pytania E18, bo pytanie tez liczy sie do dlugosci.
-            # Notki serii tez (E22 zakonczony 12.11); nie formy dlugie i nie gotowy tekst serii lekkiej.
-            if (not gotowy_tekst and note_form not in config.FORMY_DLUGIE
+            # Notki serii tez, takze gotowy tekst serii lekkiej (E22 zakonczony 12.11); nie formy dlugie.
+            if (note_form not in config.FORMY_DLUGIE
                     and isinstance(data.get("note"), str)
                     and len(data["note"].split()) > config.NOTE_SKROC_POWYZEJ):
                 _krotsza = skroc_notke(conn, run_id, etap, data["note"], _min_slow, _maks_slow)
