@@ -3937,6 +3937,43 @@ POLECENIE_DLUGOSCI = (
     "number. Short does not mean cryptic: a reader must still get it on the first read.")
 
 
+# SKRACANIE PRZEPISANIEM (13.11.2026, wlasciciel: „to napraw to"). Proba na sucho tego dnia: przy poleceniu
+# 40-70 slow pisarz oddal 8 notek po 84-159 slow — polecenie w prompcie nie wystarcza. Notka ponad
+# `config.NOTE_SKROC_POWYZEJ` slow wraca do TEGO SAMEGO pisarza z prosba o krotsza wersje tej samej mysli. To NIE
+# jest ciecie (decyzja z 9.09 „nic nie ma wycinac"): model pisze cala mysl od nowa, krocej; jesli nie wyjdzie
+# krotsza i sensowna (ponizej minimum, pusto, blad), idzie pierwsza wersja. Fakty sprawdza potem factcheck, jak zwykle.
+POLECENIE_SKROCENIA = """Here is a draft Substack Note ({slow} words):
+
+{notka}
+
+It is too long. Rewrite it as ONE complete note of {dol}-{gora} words. Keep the single main point and the concrete
+fact it rests on (same numbers, names and sources, nothing new added), drop the second example, the background and
+any caveat that does not change the point. It must read as a whole thought to a stranger on the first read: not a
+fragment, not an aphorism. Same voice.
+
+Return only valid JSON: {{"note": "<the shorter note>"}}"""
+
+
+def skroc_notke(conn: sqlite3.Connection, run_id: int, etap: str, tekst: str, dol: int, gora: int) -> str | None:
+    """Krotsza wersja notki od tego samego pisarza albo None (gdy nie wyszla krotsza i nie krotsza niz `dol`)."""
+    slow = len(tekst.split())
+    try:
+        data = llm.parse_json(llm.call(etap, NOTE_SYSTEM, POLECENIE_SKROCENIA.format(
+            slow=slow, notka=tekst, dol=dol, gora=gora), conn=conn, run_id=run_id))
+    except PRZERYWAJA:
+        raise
+    except Exception as exc:                                 # noqa: BLE001
+        print("    [skracanie] nie wyszlo (%s) — idzie pierwsza wersja" % type(exc).__name__, flush=True)
+        return None
+    nowa = " ".join(str((data or {}).get("note") or "").split()) if isinstance(data, dict) else ""
+    n = len(nowa.split())
+    if not nowa or n >= slow or n < dol:
+        print("    [skracanie] %d -> %d slow — idzie pierwsza wersja" % (slow, n), flush=True)
+        return None
+    print("    [skracanie] %d -> %d slow" % (slow, n), flush=True)
+    return nowa
+
+
 def z_dlugoscia(prompt: str, dol: int, gora: int) -> str:
     """Prompt notki z dlugoscia podana wprost (poza ramieniem „on" E17)."""
     stare, nowe = ZDANIE_O_DLUGOSCI % (dol, gora), POLECENIE_DLUGOSCI % (dol, gora, gora)
@@ -4682,6 +4719,15 @@ def note(
                     except Exception as exc:
                         print("    [zapowiedz] druga wersja nie wyszla (%s)"
                               % type(exc).__name__, flush=True)
+            # SKRACANIE PRZEPISANIEM (`skroc_notke`) — zwykle notki, nie seria (E22 mierzy jej dlugosc) i nie formy dlugie.
+            if (not gotowy_tekst and not seria and note_form not in config.FORMY_DLUGIE
+                    and isinstance(data.get("note"), str)
+                    and len(data["note"].split()) > config.NOTE_SKROC_POWYZEJ):
+                _krotsza = skroc_notke(conn, run_id, etap, data["note"], _min_slow, _maks_slow)
+                data["slow_przed_skroceniem"] = len(data["note"].split())
+                if _krotsza:
+                    data["note"] = _krotsza
+                    data["skrocona"] = True
             # E18 — pytanie na koncu dopina kod (`dopnij_pytanie`), PRZED
             # liczeniem slow i sprawdzaniem faktow, wiec idzie przez te same bramki.
             if (wariant or {}).get("pytanie") and isinstance(data.get("note"), str):
