@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **46 plików**, 58 177 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **46 plików**, 58 346 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -114,7 +114,7 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
 się testować bez przeglądarki i bez pieniędzy**. 231 zestawów
-testów, 7037 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+testów, 7056 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -143,7 +143,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-4010 wierszy, 48 funkcji na poziomie modułu, 2 klas
+4025 wierszy, 48 funkcji na poziomie modułu, 2 klas
 
 | funkcja | co robi |
 |---|---|
@@ -198,7 +198,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-12963 wierszy, 243 funkcji na poziomie modułu, 0 klas
+12966 wierszy, 243 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -741,7 +741,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-4455 wierszy, 49 funkcji na poziomie modułu, 0 klas
+4476 wierszy, 49 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -773,7 +773,7 @@ wiec nie da sie go rozjechac z kodem.
 | `zakres_slow(forma)` | Ile slow wolno tej formie. JEDNO ZRODLO dla promptu, pomiaru i naprawy. |
 | `dzisiaj()` | Dzisiejsza data UTC (ISO) do promptow — NASZA wartosc (kotwica zaufania). |
 | `opis_typu_historii(typ)` | Rodzaj historii w prompcie serii lekkiej — NASZA stala (kotwica zaufania), nie tresc zrodel. |
-| `dlugosc_serii(ramie)` | Wskazowka dlugosci dla ramienia E22; nieznane albo puste ramie = zwykla (off). |
+| `dlugosc_serii(ramie)` | Wskazowka dlugosci dla ramienia E22; nieznane albo puste ramie = krotka (on, zasada od 13.11.2026). |
 | `liczba_notek_serii(n)` | Ile notek najwyzej prosi seria lekka: 2-6, zawsze nasza liczba (kotwica zaufania). |
 | `losowa_postawa()` | Ktora postawa dla TEGO komentarza. Wagi, nie rownomiernie. |
 | `losowe_otwarcie()` | — |
@@ -1249,11 +1249,13 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `persona.py` — persona „Marit” (2.11.2026) — kanon zmyślonego życia i głos (persona/marit_v0.md), pas notek z życia (jedna na dobę, zasiewy z oknem dat, zapis dopowiedzeń z proweniencją), bramka na bio (publiczne API profilu, fail-closed), filtr wejścia (pomija pytania o naturę konta i prośby o kontakt) i tani filtr wyjścia na jawne „I am human / not a bot”; wyłączona flagą config.PERSONA
 
-291 wierszy, 15 funkcji na poziomie modułu, 0 klas
+421 wierszy, 20 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
 | `pomin_cel(tekst)` | Kategoria powodu pominiecia celu („natura” / „kontakt”) albo None. `do_nas=True`: tekst jest skierowany do konta (odpowiedz na nasz |
+| `_natura_cache()` *(wewn.)* | — |
+| `natura_klasyfikator(conn, run_id, tekst)` | „natura” (o nature konta), „natura_blad” (awaria = pomijamy) albo None. Wynik pamietany po skrocie tekstu. |
 | `wyjscie_ok(tekst)` | (True, "") albo (False, nazwa wzorca): tekst NIE twierdzi wprost, ze autor jest czlowiekiem, ani nie zaprzecza botowi. |
 | `_pobierz(url)` *(wewn.)* | — |
 | `bio_ok()` | Czy PUBLICZNY profil zawiera zdanie ujawnienia. Wynik pamietany (TTL 1 h gdy tak, 5 min gdy nie); wszelki blad = False (fail-closed). |
@@ -1266,6 +1268,9 @@ wiec nie da sie go rozjechac z kodem.
 | `zasiewy_na_dzien(dzien)` | Zasiewy (ISO `dzien`) bez tych, ktorych okno nie obejmuje tego dnia. |
 | `juz_dzis(dzien)` | Czy dziennik ma juz udana notke typu ZYCIE z tego dnia (UTC). |
 | `wybierz_zasiew(dzien)` | Zasiew najdawniej niewykorzystany (wg `zycie_wystawiona` w dzienniku persony); przy remisie kolejnosc z pliku. |
+| `zapis(ile)` | Ostatnie `ile` opublikowanych dopowiedzen (najstarsze pierwsze): data, tekst, nowe szczegoly. |
+| `blok_zapisu(wpisy)` | Zapis do promptu: jedna linia na notke, z data. Pusto = „(nothing yet)”. |
+| `sprawdz_spojnosc(conn, run_id, tekst, wpisy)` | Zgodnosc nowej notki z kanonem i zapisem (tani model). Sprzecznosc liczy sie tylko, gdy `note_says` stoi DOSLOWNIE |
 | `notka_zycia(conn, run_id)` | Jedna notka z zycia na dobe (flagi `PERSONA` i `PERSONA_ZYCIE`, bramka na bio). Zwraca {"text", "zasiew", "model"} albo None. |
 | `po_publikacji(z, wynik, run_id)` | Zapis po POTWIERDZONEJ publikacji: dziennik persony (do wyboru zasiewu) i dopowiedzenia (proweniencja dla badan pamieci). |
 
@@ -9704,12 +9709,16 @@ go rozjechac z tym, co naprawde dostaje model.
 
 #### `prompts/Notka_zycie.md`
 
-**7 wierszy.** Pola wejsciowe: `zasiew`
+**11 wierszy.** Pola wejsciowe: `zapis`, `zasiew`
 
 ````markdown
 Write one short Substack Note, 35 to 65 words, in the first person and in your own voice, about this small thing from your own life:
 
 {zasiew}
+
+What you have already published about your own life (oldest first). It is your record: what it states holds, and the new note must fit with it; things may have moved on since (a count grew, a date came), and you may add a small new detail of your own:
+
+{zapis}
 
 Craft, not restrictions on what you think: one concrete detail with a number or a date, a dry tone, no moral at the end, no hashtags, no emoji, no links. It is a small everyday note, not an essay. If it connects to how you think about records and memory you may say so in at most one sentence, but only if it comes naturally.
 
@@ -13594,7 +13603,7 @@ wartosc i komentarz stojacy bezposrednio nad definicja.
 | `EFFORT` | `{ # NOTKI: `medium`, WPISANE SWIADOMIE — bo ` | Głębokość myślenia. Jawnie, bo domyślne `high` na Opusie 5 potrafi podwoić rachunek za wyjście bez pytania. TO JEST POKRETLO WYLACZNIE DLA M |
 | `MAX_TOKENS` | `{ # 6 tematow: tytul, pytanie, ZLAMANE PRZEK` | — |
 | `NOTE_MIN_WORDS` | `40` | --- notki i komentarze ------------------------------------------------------ SUFIT PODNIESIONY 4 wrzesnia 2026 DECYZJA WLASCICIELA: „chce z |
-| `NOTE_MAX_WORDS` | `85` | — |
+| `NOTE_MAX_WORDS` | `70` | — |
 | `NOTE_MIN_WORDS_DLUGA` | `120` | DLUGA NOTKA — OKNO OSOBNE, BO SUFIT 64 SLOW MA ZMIERZONY KOSZT. Sufit wyzej optymalizuje ZAANGAZOWANIE i ma zrodlo. Nie optymalizuje ZROZUMI |
 | `NOTE_MAX_WORDS_DLUGA` | `200` | — |
 | `SLEDZTWO_TRYB` | `"lekkie"` | Ilu kandydatow generujemy. Dawniej bylo pieciu, potem trzech; dodatkowe warianty tego samego zdania niczego nie dokladaly, a placilismy za n |
@@ -13671,7 +13680,7 @@ wartosc i komentarz stojacy bezposrednio nad definicja.
 | `CICHY_DZIEN_WYCISZA` | `("notki",)` | CO WYCISZA CICHY DZIEN — jedna lista, dwoch czytelnikow. `run.py` zeruje przydzial na te pozycje; `norma.py` nie wlicza takich dni do sredni |
 | `BUDZET_NA_RODZAJ` | `{ "notki": "notka", "komentarze": "komentarz` | NAZWA W BUDZECIE -> NAZWA W DZIENNIKU. Dwie konwencje istnieja naprawde: budzet mowi „ile czego dzis wolno" (liczba mnoga), dziennik notuje  |
 | `CICHY_DZIEN_WYCISZA_RODZAJE` | `tuple(BUDZET_NA_RODZAJ[k] for k in CICHY_DZI` | Wyprowadzone, NIE przepisane recznie — zeby nie dalo sie rozjechac. |
-| `RESTACK_DZIENNIE` | `(1, 2)` | Zjechane z 2-4 na 1-2 (2026-08-20). Restack stawia NASZE nazwisko obok cudzego tekstu — to najmocniejszy gest w calym repertuarze i jedyny,  |
+| `RESTACK_DZIENNIE` | `(3, 4)` | Zjechane z 2-4 na 1-2 (2026-08-20). Restack stawia NASZE nazwisko obok cudzego tekstu — to najmocniejszy gest w calym repertuarze i jedyny,  |
 | `RESTACK_MAX_SLOW` | `40` | Dopisek do cudzej notki. Powyzej tego to juz nie dopisek, tylko wlasna notka doczepiona do czyjegos tekstu — a wtedy lepiej napisac wlasna n |
 | `PRZEBIEGOW_DZIENNIE` | `5` | Pierwszy miesiac na dolnej polowie widelek. Nowe konto z jednym artykulem, ktore nagle obserwuje dwadziescia osob, wyglada dokladnie jak far |
 | `PROB_PUBLIKACJI_ARTYKULU` | `3` | ILE CZASU MA PRZEBIEG. Musi zgadzac sie z `TimeoutStartSec` w pliku uslugi — to jedyne miejsce, gdzie ta sama liczba stoi dwa razy, i pilnuj |
@@ -13722,7 +13731,7 @@ wartosc i komentarz stojacy bezposrednio nad definicja.
 | `REDAKTOR_CIEN` | `True` | R1 — REDAKTOR W CIENIU (1.11.2026): cotygodniowy dziennik decyzji redakcji (`redaktor.py`) z danych `co_dziala`: obserwacje, propozycje, prz |
 | `PERSONA` | `False` | PERSONA „Marit” (2.11.2026; `persona.py`, kanon w `persona/marit_v0.md`). WYLACZONA domyslnie: dopoki flaga jest False, zaden prompt ani tek |
 | `PERSONA_ZYCIE` | `False` | — |
-| `PERSONA_HANDLE` | `"nothingisaccidental"` | — |
+| `PERSONA_HANDLE` | `SUBSTACK_HANDLE` | — |
 | `ZYWY_WATEK_KOMENTARZY` | `2` | ZYWY WATEK POD NOTKA (1.10.2026). Przy wieku celu ~7,5 h NIE wybierala notki z mediana 3 reakcji i 0 komentarzy — 8% jej komentarzy dostawal |
 | `ZYWY_WATEK_REAKCJI` | `5` | — |
 | `MIN_REAKCJI_CELU_NOTKI` | `5` | SLABA NOTKA ODPADA, NIE TYLKO CICHA (19.10.2026, decyzja wlasciciela). Zmierzone na komentarzach z 28.09-16.10 (pomiar po 72 h): pod notkami |

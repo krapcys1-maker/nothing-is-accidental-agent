@@ -526,6 +526,11 @@ MODEL_FOR = {
     "spojnosc": DEEPSEEK,
     "spojnosc_potwierdz": CLAUDE,
     "spojnosc_potwierdz_zapas": DEEPSEEK,
+    # PERSONA: zgodnosc notki z zycia z kanonem i wlasnym zapisem (13.11.2026, `persona.sprawdz_spojnosc`). POMIAR
+    # pamieci, nie bramka: wynik idzie do dziennika persony i do zapisu, notka wychodzi niezaleznie od niego.
+    "persona_spojnosc": DEEPSEEK,
+    # PERSONA: klasyfikator pytan o nature konta (filtr wejscia v1, `persona.natura_klasyfikator`); tak/nie, bez myslenia.
+    "persona_natura": DEEPSEEK,
     # NOTKI SERII Z KATOW FAKTOW TEZ PISZE OPUS 5.5 (decyzja D1 kontraktu,
     # 25.10.2026). Spec chciala tu Flasha z rozumowaniem, ale reczne czytanie prob
     # z 25.10 pokazalo, ze Flash bez rozumowania mial bledy wiernosci, ktorych
@@ -596,6 +601,7 @@ DEEPSEEK_EFFORT_FOR: dict[str, str] = {
     # probach z 27.10 lapalo subtelna sprzecznosc 1 raz na 4 (V1) wobec 2 na 4 przy `medium` z jawna metoda (V3,
     # ok. 0,003 USD; wyrazne sprzecznosci 16/16 w obu), bez fałszywych trafien na negatywach. Dokladnosc kosztuje tu groszowe sumy.
     "spojnosc": "medium", "spojnosc_potwierdz_zapas": "medium",
+    "persona_spojnosc": "medium",
 }
 
 # Pamiec brzmienia z juz potwierdzonych publikacji, bez dodatkowego modelu.
@@ -662,6 +668,8 @@ DEEPSEEK_MYSLENIE: dict[str, dict[str, str]] = {
     "spojnosc": {"type": "enabled"},
     "spojnosc_potwierdz": {"type": "enabled"},
     "spojnosc_potwierdz_zapas": {"type": "enabled"},
+    "persona_spojnosc": {"type": "enabled"},
+    "persona_natura": {"type": "disabled"},
     "wiernosc_notki": {"type": "disabled"},
     # Jak `naprawa` notek: trzeba zwazyc zdanie wobec dowodow.
     "naprawa_artykulu": {"type": "enabled"},
@@ -1888,6 +1896,8 @@ MAX_TOKENS = {
     "spojnosc": 4000,
     "spojnosc_potwierdz": 3000,
     "spojnosc_potwierdz_zapas": 3000,
+    "persona_spojnosc": 3000,
+    "persona_natura": 300,
     # Do szesciu zdan, kazde jedno zdanie odpowiedzi.
     "naprawa_artykulu": 6000,
     # Trzy wnioski po kilka krotkich pol.
@@ -3720,7 +3730,7 @@ REDAKTOR_CIEN = True
 PERSONA = False
 PERSONA_ZYCIE = False                       # pas notek z zycia (jedna na dobe), tylko gdy PERSONA jest wlaczona
 PERSONA_PROMPTY: tuple[str, ...] = ()       # np. ("Notka_zycie.md",): nazwy plikow promptow, ktore dostaja blok persony
-PERSONA_HANDLE = "nothingisaccidental"
+PERSONA_HANDLE = SUBSTACK_HANDLE              # bramka na bio czyta profil TEGO konta (druga kopia ma wlasny uchwyt w .env)
 
 # ZYWY WATEK POD NOTKA (1.10.2026). Przy wieku celu ~7,5 h NIE wybierala notki
 # z mediana 3 reakcji i 0 komentarzy — 8% jej komentarzy dostawalo reakcje,

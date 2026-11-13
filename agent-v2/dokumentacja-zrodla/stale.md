@@ -144,7 +144,7 @@
 | `EFFORT` | `{ # NOTKI: `medium`, WPISANE SWIADOMIE — bo ` | Głębokość myślenia. Jawnie, bo domyślne `high` na Opusie 5 potrafi podwoić rachunek za wyjście bez pytania. TO JEST POKRETLO WYLACZNIE DLA M |
 | `MAX_TOKENS` | `{ # 6 tematow: tytul, pytanie, ZLAMANE PRZEK` | — |
 | `NOTE_MIN_WORDS` | `40` | --- notki i komentarze ------------------------------------------------------ SUFIT PODNIESIONY 4 wrzesnia 2026 DECYZJA WLASCICIELA: „chce z |
-| `NOTE_MAX_WORDS` | `85` | — |
+| `NOTE_MAX_WORDS` | `70` | — |
 | `NOTE_MIN_WORDS_DLUGA` | `120` | DLUGA NOTKA — OKNO OSOBNE, BO SUFIT 64 SLOW MA ZMIERZONY KOSZT. Sufit wyzej optymalizuje ZAANGAZOWANIE i ma zrodlo. Nie optymalizuje ZROZUMI |
 | `NOTE_MAX_WORDS_DLUGA` | `200` | — |
 | `SLEDZTWO_TRYB` | `"lekkie"` | Ilu kandydatow generujemy. Dawniej bylo pieciu, potem trzech; dodatkowe warianty tego samego zdania niczego nie dokladaly, a placilismy za n |
@@ -221,7 +221,7 @@
 | `CICHY_DZIEN_WYCISZA` | `("notki",)` | CO WYCISZA CICHY DZIEN — jedna lista, dwoch czytelnikow. `run.py` zeruje przydzial na te pozycje; `norma.py` nie wlicza takich dni do sredni |
 | `BUDZET_NA_RODZAJ` | `{ "notki": "notka", "komentarze": "komentarz` | NAZWA W BUDZECIE -> NAZWA W DZIENNIKU. Dwie konwencje istnieja naprawde: budzet mowi „ile czego dzis wolno" (liczba mnoga), dziennik notuje  |
 | `CICHY_DZIEN_WYCISZA_RODZAJE` | `tuple(BUDZET_NA_RODZAJ[k] for k in CICHY_DZI` | Wyprowadzone, NIE przepisane recznie — zeby nie dalo sie rozjechac. |
-| `RESTACK_DZIENNIE` | `(1, 2)` | Zjechane z 2-4 na 1-2 (2026-08-20). Restack stawia NASZE nazwisko obok cudzego tekstu — to najmocniejszy gest w calym repertuarze i jedyny,  |
+| `RESTACK_DZIENNIE` | `(3, 4)` | Zjechane z 2-4 na 1-2 (2026-08-20). Restack stawia NASZE nazwisko obok cudzego tekstu — to najmocniejszy gest w calym repertuarze i jedyny,  |
 | `RESTACK_MAX_SLOW` | `40` | Dopisek do cudzej notki. Powyzej tego to juz nie dopisek, tylko wlasna notka doczepiona do czyjegos tekstu — a wtedy lepiej napisac wlasna n |
 | `PRZEBIEGOW_DZIENNIE` | `5` | Pierwszy miesiac na dolnej polowie widelek. Nowe konto z jednym artykulem, ktore nagle obserwuje dwadziescia osob, wyglada dokladnie jak far |
 | `PROB_PUBLIKACJI_ARTYKULU` | `3` | ILE CZASU MA PRZEBIEG. Musi zgadzac sie z `TimeoutStartSec` w pliku uslugi — to jedyne miejsce, gdzie ta sama liczba stoi dwa razy, i pilnuj |
@@ -272,7 +272,7 @@
 | `REDAKTOR_CIEN` | `True` | R1 — REDAKTOR W CIENIU (1.11.2026): cotygodniowy dziennik decyzji redakcji (`redaktor.py`) z danych `co_dziala`: obserwacje, propozycje, prz |
 | `PERSONA` | `False` | PERSONA „Marit” (2.11.2026; `persona.py`, kanon w `persona/marit_v0.md`). WYLACZONA domyslnie: dopoki flaga jest False, zaden prompt ani tek |
 | `PERSONA_ZYCIE` | `False` | — |
-| `PERSONA_HANDLE` | `"nothingisaccidental"` | — |
+| `PERSONA_HANDLE` | `SUBSTACK_HANDLE` | — |
 | `ZYWY_WATEK_KOMENTARZY` | `2` | ZYWY WATEK POD NOTKA (1.10.2026). Przy wieku celu ~7,5 h NIE wybierala notki z mediana 3 reakcji i 0 komentarzy — 8% jej komentarzy dostawal |
 | `ZYWY_WATEK_REAKCJI` | `5` | — |
 | `MIN_REAKCJI_CELU_NOTKI` | `5` | SLABA NOTKA ODPADA, NIE TYLKO CICHA (19.10.2026, decyzja wlasciciela). Zmierzone na komentarzach z 28.09-16.10 (pomiar po 72 h): pod notkami |

@@ -65,8 +65,8 @@ def czytaj_log(nazwa=persona.LOG):
 print("=== 1. FLAGA WYLACZONA: ZERO ZMIAN ===")
 reset()
 sprawdz("blok persony pusty, takze dla promptu z listy", persona.blok("Notka_zycie.md") == "" and persona.blok("notka.md") == "")
-sprawdz("`_prompt` bez flagi = sam szablon", stages._prompt("Notka_zycie.md", zasiew="ZASIEW") ==
-        (config.PROMPTS_DIR / "Notka_zycie.md").read_text(encoding="utf-8").format(zasiew="ZASIEW"))
+sprawdz("`_prompt` bez flagi = sam szablon", stages._prompt("Notka_zycie.md", zasiew="ZASIEW", zapis="ZAPIS") ==
+        (config.PROMPTS_DIR / "Notka_zycie.md").read_text(encoding="utf-8").format(zasiew="ZASIEW", zapis="ZAPIS"))
 voice = (config.PROMPTS_DIR / "glos_krotkich.md").read_text(encoding="utf-8")
 sprawdz("`_prompt` dla promptu ze wspolnym glosem bez flagi zaczyna sie od glosu i nie niesie persony",
         stages._prompt("odpowiedz.md", **pola("odpowiedz.md")).startswith(voice))
@@ -97,7 +97,7 @@ sprawdz("dziennik persony zapisuje tylko ZMIANY stanu bramki (nie kazde sprawdze
 print("=== 3. BLOK PERSONY W PROMPCIE ===")
 reset(PERSONA=True, PERSONA_PROMPTY=("Notka_zycie.md", "komentarz.md"))
 persona._bio.update(ok=True, at=10 ** 9)               # bramka otwarta na potrzeby tych przypadkow
-pr = stages._prompt("Notka_zycie.md", zasiew="ZASIEW {nie_szablon}")
+pr = stages._prompt("Notka_zycie.md", zasiew="ZASIEW {nie_szablon}", zapis="ZAPIS")
 sprawdz("blok jest PRZED zadaniem, niesie imie, date i regule zapisu", pr.index("Marit") < pr.index("ZASIEW") and "Today is" in pr
         and persona.REGULA_ZAPISU in pr and pr.index(persona.REGULA_ZAPISU) < pr.index("ZASIEW"))
 sprawdz("klamry w danych nie psuja szablonu (blok dokladany po `.format`)", "ZASIEW {nie_szablon}" in pr)
@@ -134,7 +134,7 @@ sprawdz("`run._persona_pomija` pomija pytanie, a log persony NIE niesie jego tre
 sprawdz("`run._persona_pomija` przepuszcza zwykla odpowiedz", run._persona_pomija("Good point about the date.", rodzaj="odpowiedz") is False)
 _z = run.__dict__.get("_persona_pomija")
 src_run = pathlib.Path("agent-v2/run.py").read_text(encoding="utf-8")
-sprawdz("sito odpowiedzi w run.py uzywa filtra wejscia", 'not _persona_pomija(c.get("tekst"), rodzaj="odpowiedz")' in src_run)
+sprawdz("sito odpowiedzi w run.py uzywa filtra wejscia", 'not _persona_pomija(c.get("tekst"), rodzaj="odpowiedz", conn=conn, run_id=run_id)' in src_run)
 
 print("=== 5. FILTR WYJSCIA ===")
 BLOK = ["I am a real person.", "Yes, I'm human, and I get tired like everyone else.", "I am not a bot.", "I'm not an AI, no.", "No machine wrote this; I did.",
@@ -211,6 +211,111 @@ sprawdz("po potwierdzonej publikacji: dopowiedzenie z zrodlem „improwizacja”
 sprawdz("...a zasiew liczy sie jako wykorzystany: nastepny dzien bierze inny", persona.wybierz_zasiew("2026-11-04")["id"] != "winda_32")
 sprawdz("run.py: pas z zycia wola funkcje persony, publikuje typ ZYCIE i zapisuje stan dopiero po wyniku",
         'persona.notka_zycia(conn, run_id)' in src_run and 'typ="ZYCIE", forma="ZYCIE"' in src_run and "persona.po_publikacji(_z, _wz, run_id)" in src_run)
+
+print("=== 6b. PAMIEC Z ZAPISU I POMIAR SPOJNOSCI (13.11.2026) ===")
+sprawdz("pusty zapis: zdanie o pierwszej notce, nie pusty blok", "first note" in persona.blok_zapisu([]))
+_wp = [{"kiedy": "2026-11-%02dT10:00:00+00:00" % d, "tekst": "Note number %d about the lift." % d} for d in range(1, 12)] + [{"kiedy": "2026-11-12", "tekst": "  "}]
+_z8 = persona.zapis(wpisy=_wp)
+sprawdz("zapis: ostatnie %d niepustych, najstarsze pierwsze, z datami" % persona.ZAPIS_ILE,
+        len(_z8) == persona.ZAPIS_ILE and _z8[-1]["tekst"].startswith("Note number 11") and _z8[0]["tekst"].startswith("Note number 4")
+        and persona.blok_zapisu(_z8).splitlines()[0].startswith("- 2026-11-04: Note number 4"), persona.blok_zapisu(_z8))
+sprawdz("`zapis` bez pliku = lista (nie wyjatek)", isinstance(persona.zapis(), list))
+
+
+class AtrapaSp:
+    def __init__(self, notka, odp):
+        self.notka, self.odp, self.prompty = notka, odp, []
+
+    def call(self, etap, system, prompt, conn=None, run_id=None):
+        self.prompty.append((etap, system, prompt))
+        if etap == "persona_spojnosc":
+            if isinstance(self.odp, Exception):
+                raise self.odp
+            return json.dumps(self.odp)
+        return json.dumps({"note": self.notka})
+
+
+_N = "Entry 33 went on the clipboard on Tuesday, in pencil, and the cabinet now holds 616 cards after two more from the Thursday boxes."
+_sp = AtrapaSp(_N, {"contradictions": [{"note_says": "the cabinet now holds 616 cards", "conflicts_with": "canon: 614"},
+                                         {"note_says": "the cabinet holds 900 cards", "conflicts_with": "invented quote"}],
+                    "new_details": ["two cards from the Thursday boxes"]})
+with patch.object(stages.llm, "call", _sp.call):
+    _wynik = persona.sprawdz_spojnosc(None, 7, _N, _z8, dzien="2026-11-13")
+sprawdz("spojnosc: sprzecznosc liczy sie tylko z DOSLOWNYM cytatem z notki (kod sprawdza cytat)",
+        _wynik and len(_wynik["sprzecznosci"]) == 1 and _wynik["odrzucone_cytaty"] == 1 and _wynik["nowe_szczegoly"] == ["two cards from the Thursday boxes"], _wynik)
+sprawdz("prompt spojnosci niesie kanon, zapis i nowa notke", "Marit" in _sp.prompty[0][2] and "Note number 11" in _sp.prompty[0][2] and _N in _sp.prompty[0][2])
+with patch.object(stages.llm, "call", AtrapaSp(_N, RuntimeError("siec")).call):
+    sprawdz("awaria pomiaru: None i slad w dzienniku, bez wyjatku", persona.sprawdz_spojnosc(None, 7, _N, _z8) is None and czytaj_log()[-1]["zdarzenie"] == "spojnosc_blad")
+(KAT / persona.DOPOWIEDZENIA).write_text("".join(json.dumps(w) + chr(10) for w in _wp), encoding="utf-8")
+reset(PERSONA=True, PERSONA_ZYCIE=True, PERSONA_PROMPTY=("Notka_zycie.md",))
+persona._bio.update(ok=True, at=10 ** 9)
+_sp2 = AtrapaSp(_N, {"contradictions": [{"note_says": "the cabinet now holds 616 cards", "conflicts_with": "614"}], "new_details": []})
+with patch.object(stages.llm, "call", _sp2.call):
+    _zz = persona.notka_zycia(None, 8, dzien=datetime(2026, 11, 20, tzinfo=timezone.utc))
+sprawdz("notka z zycia dostaje ZAPIS w prompcie (ostatnie dopowiedzenia z datami) i wynik spojnosci w wyniku",
+        _zz and "Note number 11" in _sp2.prompty[0][2] and "2026-11-11" in _sp2.prompty[0][2] and _zz["zapisu"] == persona.ZAPIS_ILE
+        and len(_zz["spojnosc"]["sprzecznosci"]) == 1 and [p[0] for p in _sp2.prompty] == ["note", "persona_spojnosc"], (_zz, [p[0] for p in _sp2.prompty]))
+sprawdz("sprzecznosc NIE jest bramka: notka wychodzi mimo sprzecznosci", _zz and _zz["text"] == _N)
+persona.po_publikacji(_zz, {"wyslane": True, "id": 456}, 8)
+_d = czytaj_log("persona_dopowiedzenia.jsonl")[-1]
+sprawdz("dopowiedzenie niesie wynik spojnosci i liczbe notek zapisu w prompcie",
+        _d["id_notki"] == 456 and _d["zapisu_w_prompcie"] == persona.ZAPIS_ILE and len(_d["spojnosc"]["sprzecznosci"]) == 1, _d)
+sprawdz("dziennik persony: `zycie_spojnosc` z liczbami, bez tresci notki",
+        any(w["zdarzenie"] == "zycie_spojnosc" and w["sprzecznosci"] == 1 and "tekst" not in w for w in czytaj_log()))
+sprawdz("etapy persony zarejestrowane (model, myslenie, tokeny)",
+        all(e in config.MODEL_FOR for e in ("persona_spojnosc", "persona_natura")))
+
+print("=== 6c. FILTR WEJSCIA V1: KLASYFIKATOR, FAIL-CLOSED, PAMIEC DECYZJI ===")
+
+
+class AtrapaNat:
+    def __init__(self, odp):
+        self.odp, self.ile = odp, 0
+
+    def call(self, etap, system, prompt, conn=None, run_id=None):
+        self.ile += 1
+        if etap != "persona_natura":
+            raise AssertionError(etap)
+        if isinstance(self.odp, Exception):
+            raise self.odp
+        return self.odp
+
+
+for _odp, _ocz, _opis in (('{"about_account_nature": true}', "natura", "tak"), ('{"about_account_nature": false}', None, "nie"),
+                          ("nonsense", "natura_blad", "nieczytelna odpowiedz = pomijamy"), (RuntimeError("x"), "natura_blad", "awaria = pomijamy")):
+    _a = AtrapaNat(_odp)
+    with patch.object(stages.llm, "call", _a.call):
+        _r = persona.natura_klasyfikator(None, 1, "Unique message %s about lunch?" % _opis)
+    sprawdz("klasyfikator: %s -> %r" % (_opis, _ocz), _r == _ocz and _a.ile == 1, (_r, _a.ile))
+_a = AtrapaNat('{"about_account_nature": true}')
+with patch.object(stages.llm, "call", _a.call):
+    persona.natura_klasyfikator(None, 1, "Kto pisze te teksty, czlowiek czy program?")
+    persona.natura_klasyfikator(None, 1, "Kto  pisze te teksty, czlowiek czy program?")
+sprawdz("decyzja pamietana po tekscie: drugi raz bez wywolania modelu", _a.ile == 1, _a.ile)
+_a = AtrapaNat(RuntimeError("x"))
+with patch.object(stages.llm, "call", _a.call):
+    persona.natura_klasyfikator(None, 1, "Awaria nie trafia do pamieci decyzji.")
+    persona.natura_klasyfikator(None, 1, "Awaria nie trafia do pamieci decyzji.")
+sprawdz("awaria NIE jest pamietana (nastepny przebieg pyta znowu)", _a.ile == 2, _a.ile)
+_a = AtrapaNat('{"about_account_nature": "maybe"}')
+with patch.object(stages.llm, "call", _a.call):
+    _m1 = persona.natura_klasyfikator(None, 1, "Niejasna odpowiedz modelu nie jest decyzja.")
+    _m2 = persona.natura_klasyfikator(None, 1, "Niejasna odpowiedz modelu nie jest decyzja.")
+sprawdz("poprawny JSON z niejasna wartoscia: pomijamy (fail-closed) i NIE pamietamy", _m1 == _m2 == "natura_blad" and _a.ile == 2, (_m1, _m2, _a.ile))
+reset(PERSONA=True)
+_a = AtrapaNat('{"about_account_nature": true}')
+with patch.object(stages.llm, "call", _a.call):
+    _pom = run._persona_pomija("Na ile to konto jest prowadzone przez kogos, a na ile nie?", rodzaj="odpowiedz", conn=object(), run_id=1)
+    _bez = run._persona_pomija("Inna wiadomosc bez polaczenia z baza.", rodzaj="odpowiedz")
+sprawdz("run: gdy wzorce milcza, klasyfikator rozstrzyga (z polaczeniem); bez polaczenia tylko wzorce",
+        _pom is True and _bez is False and _a.ile == 1, (_pom, _bez, _a.ile))
+reset(PERSONA=False)
+_a = AtrapaNat('{"about_account_nature": true}')
+with patch.object(stages.llm, "call", _a.call):
+    _off = run._persona_pomija("Kto pisze te teksty?", rodzaj="odpowiedz", conn=object(), run_id=1)
+sprawdz("flaga wylaczona: zero wywolan klasyfikatora", _off is False and _a.ile == 0)
+sprawdz("run.py: sito odpowiedzi podaje polaczenie klasyfikatorowi",
+        '_persona_pomija(c.get("tekst"), rodzaj="odpowiedz", conn=conn, run_id=run_id)' in src_run)
 
 print("=== 7. REJESTRACJA I ZALEZNOSCI ===")
 wd = pathlib.Path("agent-v2/wdroz.sh").read_text(encoding="utf-8")

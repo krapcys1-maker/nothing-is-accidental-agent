@@ -34,3 +34,14 @@ Zlecenie właściciela (1-2.11): konto NIE ma mieć osobowość z upodobaniami, 
 ## Wycofanie
 
 `config.PERSONA = False` (jedna linia, bez restartu bazy), albo `git reset --hard <poprzednia wersja>`. Dane persony (`data/persona_log.jsonl`, `data/persona_dopowiedzenia.jsonl`) są osobnymi plikami i niczego innego nie dotyczą.
+
+## Poprawki 13.11.2026 (przed wdrożeniem ciemnym)
+
+Decyzja właściciela 13.11: „ok to wprowadź to”.
+
+- **Błędy z przeglądu:** `PERSONA_HANDLE = SUBSTACK_HANDLE` (druga kopia bota czyta własny profil); pas z życia jest osobnym blokiem przebiegu `zycie()` po `notki()`, więc pętla notek znów kończy się zwrotem faktów do puli, a wyjątek w pasie nie gubi zwrotu.
+- **Pamięć z zapisu:** każda nowa notka z życia dostaje w prompcie ostatnie 8 opublikowanych dopowiedzeń z datami (`persona.zapis`, `blok_zapisu`). Powód: test P2 drugiej sesji, sama reguła „trzymaj się zapisu” dawała 0,73–0,76 przy progu 0,90, bo persona nie widziała, co już powiedziała.
+- **Pomiar spójności (nie bramka):** `persona.sprawdz_spojnosc` (Flash z myśleniem, etap `persona_spojnosc`) porównuje notkę z kanonem i zapisem; sprzeczność liczy się tylko z dosłownym cytatem z notki (sprawdza kod). Wynik trafia do `persona_log.jsonl` (`zycie_spojnosc`, same liczby) i do dopowiedzenia. Notka wychodzi niezależnie od wyniku.
+- **Filtr wejścia v1:** gdy wzorce v0 milczą, rozstrzyga tani klasyfikator (`persona.natura_klasyfikator`, etap `persona_natura`, bez myślenia), fail-closed, decyzje pamiętane po skrócie tekstu (`persona_natura_cache.json`). Wzorców v0 nie stroiłem pod ślepy zbiór drugiej sesji; v1 mierzy ona na NOWYM zbiorze.
+- **Kanały kosztu:** blok `zycie` na kanale `notka`, klasyfikator na kanale `odpowiedz`.
+- **Dowody:** `tests/test_persona.py` 75/0; mutacje `robocze/mutacje_persona.py` 39/39 zabitych; testy kanałów, zwrotu faktów i drugiego konta bez nowych czerwonych względem bazy.

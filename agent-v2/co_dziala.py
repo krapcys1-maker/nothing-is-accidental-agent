@@ -84,7 +84,7 @@ GRUPY_KOSZTU = (
                              "pytania_ciekawosci", "dokumenty_lekkie", "seria_redakcja", "naglowek_naprawa", "ten_sam_punkt",
                              "wiernosc_notki"), ("seria_lekka", "rozkmina", "investigation")),
     ("sprawdzenie faktow i naprawa", ("factcheck", "naprawa", "naprawa_komentarza", "naprawa_artykulu", "spojnosc",
-                                       "spojnosc_potwierdz", "spojnosc_potwierdz_zapas"), ()),
+                                       "spojnosc_potwierdz", "spojnosc_potwierdz_zapas", "persona_spojnosc"), ()),
     ("artykul (pisanie, recenzja, okladka)", ("write", "review", "obraz", "grafika", "warto_pisac", "wybor", "bibliotekarz"),
      ("article", "artykul")),
     ("komentarze, odpowiedzi, restacki", ("cele", "comment", "reply", "restack", "restack_opus"), ("odpowiedz", "komentarz")),

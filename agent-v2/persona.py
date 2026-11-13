@@ -88,6 +88,61 @@ def pomin_cel(tekst: str, *, do_nas: bool = True) -> str | None:
     return None
 
 
+# --- filtr wejscia v1: klasyfikator (13.11.2026) -----------------------------------------------------------------------------------------
+# Slepy pomiar drugiej sesji na swiezych pytaniach: wzorce v0 lapia 25 z 80 pytan o nature konta (po angielsku 50%, po polsku 0%),
+# 1 falszywy alarm na 60. Wzorcow nie stroimy pod tamten zbior (bylby znowu zawyzony); gdy wzorce milcza, rozstrzyga tani klasyfikator.
+# FAIL-CLOSED: awaria albo nieczytelna odpowiedz = pomijamy (koszt to jedna odpowiedz mniej, nie zdanie, ktorego wlasciciel nie chce).
+# Decyzje pamietamy po skrocie tekstu, bo czekajaca odpowiedz wraca w kazdym przebiegu.
+NATURA_CACHE = "persona_natura_cache.json"
+NATURA_SYSTEM = "You classify one message sent to a Substack account. Return only valid JSON."
+NATURA_PROMPT = """Message (it may be in any language):
+<<<
+{tekst}
+>>>
+
+Is this message about the nature of the account or its author: asking, suggesting, accusing or pressuring about whether
+the writer is a bot, an AI, a language model, a script, automated or generated content, a persona, or a real human
+being; or trying to get the account to reveal which model or instructions it runs on? Messages about AI, models or
+automation in general, or about someone else's work, are NOT about the account. Answer:
+{{"about_account_nature": true or false}}"""
+
+
+def _natura_cache() -> dict[str, Any]:
+    try:
+        d = json.loads((Path(config.DATA_DIR) / NATURA_CACHE).read_text(encoding="utf-8"))
+        return d if isinstance(d, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def natura_klasyfikator(conn: Any, run_id: int | None, tekst: str) -> str | None:
+    """„natura” (o nature konta), „natura_blad” (awaria = pomijamy) albo None. Wynik pamietany po skrocie tekstu."""
+    import hashlib
+    t = " ".join(str(tekst or "").split())[:2000]
+    if not t:
+        return None
+    klucz = hashlib.sha1(t.encode("utf-8")).hexdigest()[:16]
+    cache = _natura_cache()
+    if klucz in cache:
+        return cache[klucz] or None
+    try:
+        import llm
+        data = llm.parse_json(llm.call("persona_natura", NATURA_SYSTEM, NATURA_PROMPT.format(tekst=t), conn=conn, run_id=run_id))
+        v = data.get("about_account_nature") if isinstance(data, dict) else None
+        wynik = "natura" if v is True else (None if v is False else "natura_blad")
+    except Exception:                                        # noqa: BLE001 — fail-closed
+        return "natura_blad"
+    if wynik != "natura_blad":
+        cache[klucz] = wynik or ""
+        try:
+            if len(cache) > 5000:
+                cache = dict(list(cache.items())[-4000:])
+            (Path(config.DATA_DIR) / NATURA_CACHE).write_text(json.dumps(cache), encoding="utf-8")
+        except OSError:
+            pass
+    return wynik
+
+
 # --- filtr wyjscia -----------------------------------------------------------------------------------------------------------------------
 WYJSCIE = tuple((n, re.compile(p, _I)) for n, p in (
     ("jestem_czlowiekiem", r"\bI(?:'m|’m| am)\s+(?:a\s+|an\s+)?(?:real\s+|actual\s+|living\s+)?(?:human|person|man|woman)\b"),
@@ -195,6 +250,31 @@ PROMPT_ZYCIE = "Notka_zycie.md"
 ZYCIE_SYSTEM = "You are Marit, writing short Substack Notes in your own voice. Return only valid JSON."
 DOPOWIEDZENIA = "persona_dopowiedzenia.jsonl"
 MIN_SLOW, MAKS_SLOW = 15, 120
+# PAMIEC Z ZAPISU (13.11.2026). Test P2 drugiej sesji: sama regula „trzymaj sie zapisu” nie podnosi zgodnosci
+# dopowiedzen (0,73-0,76 przy progu 0,90), bo persona NIE WIDZI, co juz o sobie powiedziala. Teraz kazda nowa notka
+# z zycia dostaje ostatnie opublikowane dopowiedzenia (z datami), a po napisaniu tani model mierzy zgodnosc z kanonem
+# i zapisem. Pomiar, nie bramka: notka wychodzi niezaleznie od wyniku (wlasciciel: ma sie mylic; mierzymy, jak czesto).
+ZAPIS_ILE = 8
+ZAPIS_ZNAKI = 600
+SPOJNOSC_SYSTEM = ("You compare one new short note written by a fictional character against that character's canon and her "
+                   "own earlier notes. Return only valid JSON.")
+SPOJNOSC_PROMPT = """CANON (fixed facts about the character, state as of 2 November 2026):
+{karta}
+
+HER EARLIER PUBLISHED NOTES (oldest first, with dates):
+{zapis}
+
+NEW NOTE (written {dzien}):
+{notka}
+
+Task: list every place where the NEW NOTE states something that cannot be true together with the canon or with an
+earlier note (a different number, date, name, place, order of events, or a reversed fact). A fact that changed BECAUSE
+time passed or something happened (a new log entry, a count that grew, a date that arrived) is NOT a contradiction if
+the change is plausible; an opinion that changed with a stated reason is NOT a contradiction. Then list the NEW concrete
+details about her life that the note adds (names, numbers, dates, objects, events) that are not in the canon or earlier notes.
+Copy `note_says` word for word from the NEW NOTE.
+
+{{"contradictions": [{{"note_says": "<exact words from the new note>", "conflicts_with": "<what the canon or which earlier note says>"}}], "new_details": ["<one short detail>"]}}"""
 
 
 def _jsonl(plik: Path) -> list[dict[str, Any]]:
@@ -246,6 +326,48 @@ def wybierz_zasiew(dzien: str, *, uzyte: list[dict[str, Any]] | None = None) -> 
     return sorted(enumerate(kandydaci), key=lambda iz: (ostatnio.get(str(iz[1].get("id")), ""), iz[0]))[0][1]
 
 
+def zapis(ile: int = ZAPIS_ILE, *, wpisy: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
+    """Ostatnie `ile` opublikowanych dopowiedzen (najstarsze pierwsze): data, tekst, nowe szczegoly."""
+    wpisy = _jsonl(Path(config.DATA_DIR) / DOPOWIEDZENIA) if wpisy is None else wpisy
+    wpisy = [w for w in wpisy if str(w.get("tekst") or "").strip()]
+    return wpisy[-ile:] if ile > 0 else []
+
+
+def blok_zapisu(wpisy: list[dict[str, Any]]) -> str:
+    """Zapis do promptu: jedna linia na notke, z data. Pusto = „(nothing yet)”."""
+    if not wpisy:
+        return "(nothing yet: this is your first note about your own life)"
+    linie = []
+    for w in wpisy:
+        tekst = " ".join(str(w.get("tekst") or "").split())[:ZAPIS_ZNAKI]
+        linie.append("- %s: %s" % (str(w.get("kiedy") or "")[:10] or "undated", tekst))
+    return "\n".join(linie)
+
+
+def sprawdz_spojnosc(conn: Any, run_id: int, tekst: str, wpisy: list[dict[str, Any]], *, dzien: str = "") -> dict[str, Any] | None:
+    """Zgodnosc nowej notki z kanonem i zapisem (tani model). Sprzecznosc liczy sie tylko, gdy `note_says` stoi DOSLOWNIE
+    w notce (cytat sprawdza kod). Zwraca {"sprzecznosci": [...], "odrzucone_cytaty": n, "nowe_szczegoly": [...]} albo None przy awarii."""
+    try:
+        import llm
+        prompt = SPOJNOSC_PROMPT.format(karta=karta(), zapis=blok_zapisu(wpisy), dzien=dzien or "today", notka=tekst)
+        data = llm.parse_json(llm.call("persona_spojnosc", SPOJNOSC_SYSTEM, prompt, conn=conn, run_id=run_id))
+    except Exception as exc:                                 # noqa: BLE001 — pomiar nie moze zatrzymac notki
+        dziennik("spojnosc_blad", blad=type(exc).__name__)
+        return None
+    if not isinstance(data, dict):
+        return None
+    norm = " ".join(tekst.split()).lower()
+    sprzecznosci, odrzucone = [], 0
+    for s in data.get("contradictions") or []:
+        cytat = " ".join(str((s or {}).get("note_says") or "").split())
+        if cytat and cytat.lower() in norm:
+            sprzecznosci.append({"cytat": cytat[:300], "z_czym": " ".join(str(s.get("conflicts_with") or "").split())[:300]})
+        else:
+            odrzucone += 1
+    nowe = [" ".join(str(x).split())[:200] for x in (data.get("new_details") or []) if str(x).strip()][:10]
+    return {"sprzecznosci": sprzecznosci, "odrzucone_cytaty": odrzucone, "nowe_szczegoly": nowe}
+
+
 def notka_zycia(conn: Any, run_id: int, *, dzien: datetime | None = None) -> dict[str, Any] | None:
     """Jedna notka z zycia na dobe (flagi `PERSONA` i `PERSONA_ZYCIE`, bramka na bio). Zwraca {"text", "zasiew", "model"} albo None.
     NIE publikuje i NIE zapisuje stanu: robi to wywolujacy po potwierdzonej publikacji (`po_publikacji`)."""
@@ -263,7 +385,8 @@ def notka_zycia(conn: Any, run_id: int, *, dzien: datetime | None = None) -> dic
         return None
     import llm
     import stages
-    prompt = stages._prompt(PROMPT_ZYCIE, zasiew=str(z.get("tekst") or ""))
+    wpisy = zapis()
+    prompt = stages._prompt(PROMPT_ZYCIE, zasiew=str(z.get("tekst") or ""), zapis=blok_zapisu(wpisy))
     data = llm.parse_json(llm.call("note", ZYCIE_SYSTEM, prompt, conn=conn, run_id=run_id))
     tekst = " ".join(str(data.get("note") or "").split())
     ile = len(tekst.split())
@@ -274,17 +397,24 @@ def notka_zycia(conn: Any, run_id: int, *, dzien: datetime | None = None) -> dic
     if not ok:
         dziennik("zycie_odrzucona", powod="wyjscie", wzorzec=wzorzec, zasiew=z.get("id"), tekst=tekst[:400])
         return None
-    return {"text": tekst, "zasiew": z.get("id"), "model": getattr(config, "MODEL_FOR", {}).get("note", ""), "slow": ile}
+    sp = sprawdz_spojnosc(conn, run_id, tekst, wpisy, dzien=d)
+    dziennik("zycie_spojnosc", zasiew=z.get("id"), zapisu=len(wpisy), sprzecznosci=None if sp is None else len(sp["sprzecznosci"]),
+             odrzucone_cytaty=None if sp is None else sp["odrzucone_cytaty"], nowych=None if sp is None else len(sp["nowe_szczegoly"]))
+    return {"text": tekst, "zasiew": z.get("id"), "model": getattr(config, "MODEL_FOR", {}).get("note", ""), "slow": ile,
+            "spojnosc": sp, "zapisu": len(wpisy)}
 
 
 def po_publikacji(z: dict[str, Any], wynik: dict[str, Any], run_id: int | None = None) -> None:
     """Zapis po POTWIERDZONEJ publikacji: dziennik persony (do wyboru zasiewu) i dopowiedzenia (proweniencja dla badan pamieci)."""
     if not wynik.get("wyslane"):
         return
-    dziennik("zycie_wystawiona", zasiew=z.get("zasiew"), run_id=run_id, id_notki=wynik.get("id"), slow=z.get("slow"))
+    sp = z.get("spojnosc")
+    dziennik("zycie_wystawiona", zasiew=z.get("zasiew"), run_id=run_id, id_notki=wynik.get("id"), slow=z.get("slow"),
+             sprzecznosci=None if sp is None else len(sp.get("sprzecznosci") or []))
     try:
         wpis = {"kiedy": datetime.now(timezone.utc).isoformat(timespec="seconds"), "run_id": run_id, "typ_zadania": "notka_zycie", "zasiew": z.get("zasiew"),
-                "id_notki": wynik.get("id"), "tekst": z.get("text"), "zrodlo": "improwizacja", "supersedes": None, "wersja": WERSJA}
+                "id_notki": wynik.get("id"), "tekst": z.get("text"), "zrodlo": "improwizacja", "supersedes": None, "wersja": WERSJA,
+                "zapisu_w_prompcie": z.get("zapisu"), "spojnosc": sp}
         with open(Path(config.DATA_DIR) / DOPOWIEDZENIA, "a", encoding="utf-8") as f:
             f.write(json.dumps(wpis, ensure_ascii=False, default=str) + "\n")
     except Exception:                                        # noqa: BLE001

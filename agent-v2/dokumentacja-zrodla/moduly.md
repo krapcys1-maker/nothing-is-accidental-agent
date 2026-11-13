@@ -1,7 +1,7 @@
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-4010 wierszy, 48 funkcji na poziomie modułu, 2 klas
+4025 wierszy, 48 funkcji na poziomie modułu, 2 klas
 
 | funkcja | co robi |
 |---|---|
@@ -56,7 +56,7 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-12963 wierszy, 243 funkcji na poziomie modułu, 0 klas
+12966 wierszy, 243 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -599,7 +599,7 @@
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-4455 wierszy, 49 funkcji na poziomie modułu, 0 klas
+4476 wierszy, 49 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -631,7 +631,7 @@
 | `zakres_slow(forma)` | Ile slow wolno tej formie. JEDNO ZRODLO dla promptu, pomiaru i naprawy. |
 | `dzisiaj()` | Dzisiejsza data UTC (ISO) do promptow — NASZA wartosc (kotwica zaufania). |
 | `opis_typu_historii(typ)` | Rodzaj historii w prompcie serii lekkiej — NASZA stala (kotwica zaufania), nie tresc zrodel. |
-| `dlugosc_serii(ramie)` | Wskazowka dlugosci dla ramienia E22; nieznane albo puste ramie = zwykla (off). |
+| `dlugosc_serii(ramie)` | Wskazowka dlugosci dla ramienia E22; nieznane albo puste ramie = krotka (on, zasada od 13.11.2026). |
 | `liczba_notek_serii(n)` | Ile notek najwyzej prosi seria lekka: 2-6, zawsze nasza liczba (kotwica zaufania). |
 | `losowa_postawa()` | Ktora postawa dla TEGO komentarza. Wagi, nie rownomiernie. |
 | `losowe_otwarcie()` | — |
@@ -1107,11 +1107,13 @@
 
 ### `persona.py` — persona „Marit” (2.11.2026) — kanon zmyślonego życia i głos (persona/marit_v0.md), pas notek z życia (jedna na dobę, zasiewy z oknem dat, zapis dopowiedzeń z proweniencją), bramka na bio (publiczne API profilu, fail-closed), filtr wejścia (pomija pytania o naturę konta i prośby o kontakt) i tani filtr wyjścia na jawne „I am human / not a bot”; wyłączona flagą config.PERSONA
 
-291 wierszy, 15 funkcji na poziomie modułu, 0 klas
+421 wierszy, 20 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
 | `pomin_cel(tekst)` | Kategoria powodu pominiecia celu („natura” / „kontakt”) albo None. `do_nas=True`: tekst jest skierowany do konta (odpowiedz na nasz |
+| `_natura_cache()` *(wewn.)* | — |
+| `natura_klasyfikator(conn, run_id, tekst)` | „natura” (o nature konta), „natura_blad” (awaria = pomijamy) albo None. Wynik pamietany po skrocie tekstu. |
 | `wyjscie_ok(tekst)` | (True, "") albo (False, nazwa wzorca): tekst NIE twierdzi wprost, ze autor jest czlowiekiem, ani nie zaprzecza botowi. |
 | `_pobierz(url)` *(wewn.)* | — |
 | `bio_ok()` | Czy PUBLICZNY profil zawiera zdanie ujawnienia. Wynik pamietany (TTL 1 h gdy tak, 5 min gdy nie); wszelki blad = False (fail-closed). |
@@ -1124,6 +1126,9 @@
 | `zasiewy_na_dzien(dzien)` | Zasiewy (ISO `dzien`) bez tych, ktorych okno nie obejmuje tego dnia. |
 | `juz_dzis(dzien)` | Czy dziennik ma juz udana notke typu ZYCIE z tego dnia (UTC). |
 | `wybierz_zasiew(dzien)` | Zasiew najdawniej niewykorzystany (wg `zycie_wystawiona` w dzienniku persony); przy remisie kolejnosc z pliku. |
+| `zapis(ile)` | Ostatnie `ile` opublikowanych dopowiedzen (najstarsze pierwsze): data, tekst, nowe szczegoly. |
+| `blok_zapisu(wpisy)` | Zapis do promptu: jedna linia na notke, z data. Pusto = „(nothing yet)”. |
+| `sprawdz_spojnosc(conn, run_id, tekst, wpisy)` | Zgodnosc nowej notki z kanonem i zapisem (tani model). Sprzecznosc liczy sie tylko, gdy `note_says` stoi DOSLOWNIE |
 | `notka_zycia(conn, run_id)` | Jedna notka z zycia na dobe (flagi `PERSONA` i `PERSONA_ZYCIE`, bramka na bio). Zwraca {"text", "zasiew", "model"} albo None. |
 | `po_publikacji(z, wynik, run_id)` | Zapis po POTWIERDZONEJ publikacji: dziennik persony (do wyboru zasiewu) i dopowiedzenia (proweniencja dla badan pamieci). |
 

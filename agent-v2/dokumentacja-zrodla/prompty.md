@@ -1,7 +1,7 @@
 
-#### `Notka_zycie.md` (7 wierszy)
+#### `Notka_zycie.md` (11 wierszy)
 
-**Pola wejściowe:** `zasiew`
+**Pola wejściowe:** `zapis`, `zasiew`
 
 #### `OSWIADCZENIE_AI.md` (56 wierszy)
 
