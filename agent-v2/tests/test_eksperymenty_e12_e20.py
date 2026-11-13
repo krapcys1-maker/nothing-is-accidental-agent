@@ -152,7 +152,7 @@ config.EKSPERYMENTY = dict(ORYG_EKSP)
 _z = _budzet_w_dniu("2026-09-29")
 sprawdz("KONTRDOWOD: E12 zmienia TYLKO restacki — reszta budzetu z tego samego ziarna bez zmian",
         {k: v for k, v in _bez.items() if k != "restacki"} == {k: v for k, v in _z.items() if k != "restacki"}
-        and 1 <= _bez["restacki"] <= 2, (_bez, _z))
+        and config.RESTACK_DZIENNIE[0] <= _bez["restacki"] <= config.RESTACK_DZIENNIE[1], (_bez, _z))
 
 print()
 print("=== 2. E13 — KTO PISZE ZDANIE RESTACKA ===")
@@ -345,7 +345,9 @@ sprawdz("E18: prompt z poleceniem pytania",
 sprawdz("KONTRDOWOD: bez wariantu zwykle okno (wprost, od 1.10) i zakonczenie jak dotad",
         (stages.POLECENIE_DLUGOSCI % (config.NOTE_MIN_WORDS, config.NOTE_MAX_WORDS,
                                       config.NOTE_MAX_WORDS)) in _bez_wariantu
-        and stages.ZDANIE_O_ZAKONCZENIU in _bez_wariantu and "SHORT note" not in _bez_wariantu)
+        and stages.ZDANIE_O_ZAKONCZENIU in _bez_wariantu
+        # od 13.11.2026 zwykle okno ma brzmienie E17, ale WLASNE widelki — wariant E17 sie nie przecieka
+        and (stages.POLECENIE_KROTKIEJ % (_k[0], _k[1], _k[1])) not in _bez_wariantu)
 sprawdz("KONTRDOWOD: dluga forma zostaje w swoim oknie mimo E17",
         (stages.ZDANIE_O_DLUGOSCI % (config.NOTE_MIN_WORDS_DLUGA, config.NOTE_MAX_WORDS_DLUGA)) in _dluga
         and "SHORT note" not in _dluga)

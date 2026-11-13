@@ -304,11 +304,13 @@ sprawdz("sprawdzenie faktow w sieci DZIALA na takiej notce (cel `factcheck` wola
 
 print()
 print("=== 7. E22: DLUGOSC SERII JAKO EKSPERYMENT NA CALA SERIE ===")
-sprawdz("config: ramie on = 30-60 slow, off albo nieznane albo puste = 50-110 jak dotad",
+# 13.11.2026: E22 zakonczony, krotka seria to zasada — puste i nieznane ramie = 30-60 (jak „on").
+sprawdz("config: ramie on = 30-60 slow, off = 50-110, nieznane albo puste = 30-60 (zasada od 13.11)",
         config.dlugosc_serii("on") == "usually 30–60 words" and config.dlugosc_serii("off") == "usually 50–110 words"
-        and config.dlugosc_serii("") == config.dlugosc_serii(None) == config.dlugosc_serii("x") == "usually 50–110 words")
+        and config.dlugosc_serii("") == config.dlugosc_serii(None) == config.dlugosc_serii("x") == "usually 30–60 words")
+sprawdz("E22 zakonczony 12.11: od 13.11 brak ramienia", stages.ramie("dlugosc_serii", 7, "2026-11-13") == "")
 for typ in ("sledztwo", "rozkmina"):
-    for ramie, oczek in (("on", "usually 30–60 words"), ("off", "usually 50–110 words"), ("", "usually 50–110 words")):
+    for ramie, oczek in (("on", "usually 30–60 words"), ("off", "usually 50–110 words"), ("", "usually 30–60 words")):
         pr = stages.prompt_serii_lekkiej("T", "[1] f", "- u", "(none yet)", typ=typ, n_max=3, ramie_dlugosci=ramie)
         sprawdz("prompt %s, ramie %r: wskazowka %s, nie sufit, brak niewypelnionej klamry" % (typ, ramie, oczek),
                 oczek + ", a guide and not a cap" in pr and "{dlugosc}" not in pr
@@ -335,8 +337,8 @@ config.EKSPERYMENTY = dict(_stare, dlugosc_serii={"udzial": 0.5, "od": "2999-01-
 WYWOLANIA.clear()
 ODPOWIEDZI[:] = [{"notki": [nota("REVEAL", "First distinct opening here. " + SLOWA), nota("VERDICT", "Second distinct opening there. " + SLOWA)]}]
 wynik, _ = cicho(sledztwo.seria_lekka, CONN, run_on, karta(12), H)
-sprawdz("poza oknem dat eksperymentu: zwykla wskazowka i puste ramie (nic nie psuje dotychczasowej serii)",
-        "usually 50–110 words" in WYWOLANIA[0]["prompt"] and all(w["eksperymenty"] == {} for w in wynik), wynik)
+sprawdz("poza oknem dat eksperymentu: krotka wskazowka (zasada od 13.11) i puste ramie",
+        "usually 30–60 words" in WYWOLANIA[0]["prompt"] and all(w["eksperymenty"] == {} for w in wynik), wynik)
 config.EKSPERYMENTY = _stare
 sprawdz("`EKSPERYMENTY` ma E22 i `run.py` zapisuje `fc` do dziennika",
         "dlugosc_serii" in config.EKSPERYMENTY

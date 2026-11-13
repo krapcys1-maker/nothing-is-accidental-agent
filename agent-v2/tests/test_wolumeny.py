@@ -85,7 +85,7 @@ sprawdz("komentarze 14-20 od 4.10 (poziom docelowy rampy; bylo 7-9, a przed 3.09
         config.KOMENTARZE_DZIENNIE == (14, 20), config.KOMENTARZE_DZIENNIE)
 sprawdz("i odstep urosl razem z liczba — inaczej to byloby seria",
         config.ODSTEPY["komentarz"][0] >= 300, config.ODSTEPY["komentarz"])
-sprawdz("restacki 1-2 (było 2-4)", config.RESTACK_DZIENNIE == (1, 2),
+sprawdz("restacki 3-4 od 13.11.2026 (E12: 3-5 dziennie lepiej niz 1-3; bylo 1-2)", config.RESTACK_DZIENNIE == (3, 4),
         config.RESTACK_DZIENNIE)
 # WYCOFANE 2026-08-23, ODWIESZONE 2026-09-01 — BO WNIOSEK BYL FALSZYWY.
 #

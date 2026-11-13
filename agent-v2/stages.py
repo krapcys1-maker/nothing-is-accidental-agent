@@ -3921,11 +3921,14 @@ def z_krotka_notka(prompt: str, dol: int, gora: int) -> str:
 # notek ponad 120 slow (126, 183, 163, 121), DeepSeek 4 z 8. Przy E17 polecenie
 # wprost zadzialalo (135 -> 47-75 slow). NADAL NIC NIE TNIEMY (decyzja wlasciciela
 # z 9.09): to polecenie, dlugosc dalej tylko mierzymy. Obu pisarzom E11 to samo.
+# 13.11.2026: brzmienie z E17 (`POLECENIE_KROTKIEJ`), bo tylko ono dzialalo (135 -> 47-75 slow);
+# poprzednie „if the point needs more than %d words, take them" model bral doslownie (mediana 103).
 POLECENIE_DLUGOSCI = (
-    "Length: usually %d–%d words — a guide, not a cap. Finish the thought: if the "
-    "point needs more than %d words to make sense, take them; never cut a point "
-    "short or stop mid-argument to hit a number, and never pad. One point, explained "
-    "in ordinary words; drop a second example or a side remark before you drop clarity.")
+    "This is a SHORT note: usually %d–%d words. Make one point and explain it in "
+    "ordinary words; leave out a second example and any caveat that does not change "
+    "the point. The word range is a guide, not a cap: finish the thought even if it "
+    "runs a little past %d, and never cut a point short or stop mid-argument to hit a "
+    "number. Short does not mean cryptic: a reader must still get it on the first read.")
 
 
 def z_dlugoscia(prompt: str, dol: int, gora: int) -> str:

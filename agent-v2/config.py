@@ -215,7 +215,9 @@ EKSPERYMENTY: dict = {
     # „wskazowka, nie sufit". Powod: notki NIE maja zasiegu zalezacego od pisarza, a drugie konto ma krotsze
     # i wieksze (E17); seria jest dluzsza, bo rozkmina potrzebuje miejsca — to sprawdzamy, nie zakladamy.
     # Analiza po SERIACH (`co_dziala.py`), nie po notkach: notki jednej serii nie sa niezalezne.
-    "dlugosc_serii": {"udzial": 0.5, "od": "2026-10-29", "do": "2026-12-03"},
+    # ZAKONCZONY PRZED TERMINEM 13.11.2026 (krotka seria to zasada, jak E17 25.10): ramie „on" 12 notek,
+    # mediana 81 slow, x1,34 [1,02-1,71] wobec „off" (4 notki, 115 slow); `DLUGOSC_SERII` bez ramienia = „on".
+    "dlugosc_serii": {"udzial": 0.5, "od": "2026-10-29", "do": "2026-11-12"},
     # E23 — MANIERA KOMENTARZA (28.10.2026, wlasciciel: „dajmy mu dusze", konto do testow):
     # los po celu (adres). „on" = `prompts/komentarz_b.md` (sedno w pierwszym zdaniu, zwykla
     # mowa, stanowisko wobec konkretnego twierdzenia, prawdziwe pytanie PO tezie w co 4.-5.
@@ -1924,8 +1926,13 @@ MAX_TOKENS = {
 # 25.10.2026, wieczorem: wlasciciel — „notki nie maja miec sztywnych ograniczen, widelki
 # owszem, ale ma konczyc mysl, zeby to mialo sens; to jest pisanie, a nie matematyka".
 # Okno 40-85 to WSKAZOWKA dla pisarza i pomiar (`length_ok`); nigdzie nie odrzuca ani nie tnie.
+# 13.11.2026 — 40-70 I POLECENIE KROTKIEJ NOTKI DLA WSZYSTKICH (wlasciciel: „ok to zrob te zmiany",
+# po porownaniu obu kont). Okno 40-85 z poleceniem „take them if the point needs more" dawalo
+# w praktyce 80-180 slow (26.10-12.11: mediana zwyklych notek 103), mediana wyswietlen 10; NIA pisze
+# ok. 57 slow i ma 23-26. Wewnatrz NIE notki 71-90 slow x1,31 [1,09-1,54] wobec >110 (`co_dziala`),
+# ramie „on" E22 x1,34. Nadal NIC NIE TNIEMY: to polecenie i pomiar, nie bramka.
 NOTE_MIN_WORDS = 40
-NOTE_MAX_WORDS = 85
+NOTE_MAX_WORDS = 70
 
 # DLUGA NOTKA — OKNO OSOBNE, BO SUFIT 64 SLOW MA ZMIERZONY KOSZT.
 #
@@ -2033,8 +2040,8 @@ DLUGOSC_SERII = {"on": "usually 30–60 words", "off": "usually 50–110 words"}
 
 
 def dlugosc_serii(ramie):
-    """Wskazowka dlugosci dla ramienia E22; nieznane albo puste ramie = zwykla (off)."""
-    return DLUGOSC_SERII.get(str(ramie or ""), DLUGOSC_SERII["off"])
+    """Wskazowka dlugosci dla ramienia E22; nieznane albo puste ramie = krotka (on, zasada od 13.11.2026)."""
+    return DLUGOSC_SERII.get(str(ramie or ""), DLUGOSC_SERII["on"])
 
 
 def liczba_notek_serii(n):
@@ -3340,7 +3347,11 @@ def cichy_dzien(kiedy=None) -> bool:
 # cudzego tekstu — to najmocniejszy gest w calym repertuarze i jedyny, ktory
 # firmuje czyjes zdanie. Cztery dziennie to nie czytanie, tylko rozdawanie
 # poparcia. Zmierzone wykonanie i tak wynosilo 0,4 dziennie.
-RESTACK_DZIENNIE = (1, 2)
+# 13.11.2026: 3-4 (wlasciciel: „ok to zrob te zmiany"). E12 (6 tygodni ABBAAB, 29.09-9.11): ramie
+# 3-5 dziennie dalo +0,57 subskrybenta na dobe wobec +0,33 przy 1-3 i wiecej odwiedzin profilu
+# (1,05 wobec 0,81) — kierunek, nie dowod; NIA robi ok. 4 dziennie, a restacki sa jej glownym
+# zrodlem zapisow (18 z 35). Gorna granica 4 zostaje (`tests/test_restack.py`).
+RESTACK_DZIENNIE = (3, 4)
 
 # Dopisek do cudzej notki. Powyzej tego to juz nie dopisek, tylko wlasna notka
 # doczepiona do czyjegos tekstu — a wtedy lepiej napisac wlasna notke.
