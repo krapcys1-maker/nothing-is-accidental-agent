@@ -323,7 +323,10 @@ sk = pathlib.Path("agent-v2/dokumentacja-zrodla/sklej.py").read_text(encoding="u
 sprawdz("wdroz.sh importuje persona w kontroli „moduly wstaja”", re.search(r"^.*import config.*\bpersona\b", wd, re.M) is not None)
 sprawdz("sklej.py ma persona.py na liscie modulow", '("persona.py"' in sk)
 sprawdz("pliki persony istnieja: karta, zasiewy, prompt", all(pathlib.Path(p).exists() for p in ("agent-v2/persona/marit_v0.md", "agent-v2/persona/zasiewy.json", "agent-v2/prompts/Notka_zycie.md")))
-sprawdz("domyslna konfiguracja: persona WYLACZONA", all(re.search(r"^%s\b" % d, pathlib.Path("agent-v2/config.py").read_text(encoding="utf-8"), re.M) for d in ("PERSONA = False", "PERSONA_ZYCIE = False")) and "PERSONA_PROMPTY: tuple[str, ...] = ()" in pathlib.Path("agent-v2/config.py").read_text(encoding="utf-8"))
+_cfg = pathlib.Path("agent-v2/config.py").read_text(encoding="utf-8")
+sprawdz("konfiguracja od 13.11.2026 (etap 1b): persona i pas z zycia wlaczone, blok persony TYLKO w notce z zycia",
+        all(re.search(r"^%s\b" % d, _cfg, re.M) for d in ("PERSONA = True", "PERSONA_ZYCIE = True"))
+        and 'PERSONA_PROMPTY: tuple[str, ...] = ("Notka_zycie.md",)' in _cfg)
 _src = pathlib.Path("agent-v2/persona.py").read_text(encoding="utf-8")
 sprawdz("persona.py nie importuje modulow bota na poziomie modulu (tylko config)", not re.search(r"^(?:from|import)\s+(?:stages|run|llm|browser|db)\b", _src, re.M))
 

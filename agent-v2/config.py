@@ -3727,9 +3727,11 @@ REDAKTOR_CIEN = True
 # PERSONA „Marit” (2.11.2026; `persona.py`, kanon w `persona/marit_v0.md`). WYLACZONA domyslnie: dopoki flaga jest False, zaden prompt ani tekst sie
 # nie zmienia. `PERSONA_PROMPTY` = nazwy promptow (bez .md), do ktorych idzie blok persony; etap 1 to tylko pas notek z zycia (`notka_zycie`),
 # komentarze i artykuly dochodza pozniej. Persona wchodzi w zycie tylko, gdy publiczne bio zawiera zdanie ujawnienia (bramka fail-closed).
-PERSONA = False
-PERSONA_ZYCIE = False                       # pas notek z zycia (jedna na dobe), tylko gdy PERSONA jest wlaczona
-PERSONA_PROMPTY: tuple[str, ...] = ()       # np. ("Notka_zycie.md",): nazwy plikow promptow, ktore dostaja blok persony
+# WLACZONA 13.11.2026 (etap 1b, wlasciciel: „ok to wprowadz to"): jedna notka z zycia na dobe; komentarze i odpowiedzi BEZ persony.
+# Wycofanie: PERSONA = False (jedna linia).
+PERSONA = True
+PERSONA_ZYCIE = True                        # pas notek z zycia (jedna na dobe), tylko gdy PERSONA jest wlaczona
+PERSONA_PROMPTY: tuple[str, ...] = ("Notka_zycie.md",)   # nazwy plikow promptow, ktore dostaja blok persony (etap 1: tylko notka z zycia)
 PERSONA_HANDLE = SUBSTACK_HANDLE              # bramka na bio czyta profil TEGO konta (druga kopia ma wlasny uchwyt w .env)
 
 # ZYWY WATEK POD NOTKA (1.10.2026). Przy wieku celu ~7,5 h NIE wybierala notki

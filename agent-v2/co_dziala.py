@@ -189,6 +189,9 @@ def format_notki(e: dict[str, Any], rozkminy: set[str]) -> str:
         return "mysl"
     if str(e.get("typ") or "") == "ARTYKUL":
         return "promocja"
+    # Notka z zycia persony (13.11.2026) to osobny format: bez tego wpadalaby do „zwyklej", czyli do ODNIESIENIA.
+    if str(e.get("typ") or "") == "ZYCIE":
+        return "zycie"
     return "zwykla"
 
 
