@@ -599,7 +599,7 @@
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-4476 wierszy, 49 funkcji na poziomie modułu, 0 klas
+4478 wierszy, 49 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -1322,7 +1322,7 @@
 
 ### `co_dziala.py` — co działa — statystyki NIE jako produktu: formaty notek, wymiary (kąt, długość, pora, model...), eksperymenty także po seriach, koszt tematu i notki, sprawdzenie faktów, potok, wzrost, zakłady i czujnik; werdykt tylko z przedziałem 95%, grupa poniżej progu to „za mało danych”
 
-857 wierszy, 39 funkcji na poziomie modułu, 0 klas
+860 wierszy, 39 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|

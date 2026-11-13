@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **46 plików**, 58 346 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **46 plików**, 58 351 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -741,7 +741,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-4476 wierszy, 49 funkcji na poziomie modułu, 0 klas
+4478 wierszy, 49 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -1464,7 +1464,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `co_dziala.py` — co działa — statystyki NIE jako produktu: formaty notek, wymiary (kąt, długość, pora, model...), eksperymenty także po seriach, koszt tematu i notki, sprawdzenie faktów, potok, wzrost, zakłady i czujnik; werdykt tylko z przedziałem 95%, grupa poniżej progu to „za mało danych”
 
-857 wierszy, 39 funkcji na poziomie modułu, 0 klas
+860 wierszy, 39 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -13729,8 +13729,8 @@ wartosc i komentarz stojacy bezposrednio nad definicja.
 | `PAMIEC_CIEN_PROFILE` | `(("luzny", 0.08, 1, 3), ("szeroki", 0.05, 0,` | — |
 | `PAMIEC_CIEN_PULA` | `50` | — |
 | `REDAKTOR_CIEN` | `True` | R1 — REDAKTOR W CIENIU (1.11.2026): cotygodniowy dziennik decyzji redakcji (`redaktor.py`) z danych `co_dziala`: obserwacje, propozycje, prz |
-| `PERSONA` | `False` | PERSONA „Marit” (2.11.2026; `persona.py`, kanon w `persona/marit_v0.md`). WYLACZONA domyslnie: dopoki flaga jest False, zaden prompt ani tek |
-| `PERSONA_ZYCIE` | `False` | — |
+| `PERSONA` | `True` | PERSONA „Marit” (2.11.2026; `persona.py`, kanon w `persona/marit_v0.md`). WYLACZONA domyslnie: dopoki flaga jest False, zaden prompt ani tek |
+| `PERSONA_ZYCIE` | `True` | — |
 | `PERSONA_HANDLE` | `SUBSTACK_HANDLE` | — |
 | `ZYWY_WATEK_KOMENTARZY` | `2` | ZYWY WATEK POD NOTKA (1.10.2026). Przy wieku celu ~7,5 h NIE wybierala notki z mediana 3 reakcji i 0 komentarzy — 8% jej komentarzy dostawal |
 | `ZYWY_WATEK_REAKCJI` | `5` | — |
