@@ -3730,7 +3730,7 @@ REDAKTOR_CIEN = True
 # WLACZONA 13.11.2026 (etap 1b, wlasciciel: „ok to wprowadz to"): jedna notka z zycia na dobe; komentarze i odpowiedzi BEZ persony.
 # Wycofanie: PERSONA = False (jedna linia).
 PERSONA = True
-PERSONA_ZYCIE = True                        # pas notek z zycia (jedna na dobe), tylko gdy PERSONA jest wlaczona
+PERSONA_ZYCIE = False                       # pas notek z zycia (jedna na dobe), tylko gdy PERSONA jest wlaczona
 PERSONA_PROMPTY: tuple[str, ...] = ("Notka_zycie.md",)   # nazwy plikow promptow, ktore dostaja blok persony (etap 1: tylko notka z zycia)
 PERSONA_HANDLE = SUBSTACK_HANDLE              # bramka na bio czyta profil TEGO konta (druga kopia ma wlasny uchwyt w .env)
 

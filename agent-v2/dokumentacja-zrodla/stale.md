@@ -271,7 +271,7 @@
 | `PAMIEC_CIEN_PULA` | `50` | — |
 | `REDAKTOR_CIEN` | `True` | R1 — REDAKTOR W CIENIU (1.11.2026): cotygodniowy dziennik decyzji redakcji (`redaktor.py`) z danych `co_dziala`: obserwacje, propozycje, prz |
 | `PERSONA` | `True` | PERSONA „Marit” (2.11.2026; `persona.py`, kanon w `persona/marit_v0.md`). WYLACZONA domyslnie: dopoki flaga jest False, zaden prompt ani tek |
-| `PERSONA_ZYCIE` | `True` | — |
+| `PERSONA_ZYCIE` | `False` | — |
 | `PERSONA_HANDLE` | `SUBSTACK_HANDLE` | — |
 | `ZYWY_WATEK_KOMENTARZY` | `2` | ZYWY WATEK POD NOTKA (1.10.2026). Przy wieku celu ~7,5 h NIE wybierala notki z mediana 3 reakcji i 0 komentarzy — 8% jej komentarzy dostawal |
 | `ZYWY_WATEK_REAKCJI` | `5` | — |
