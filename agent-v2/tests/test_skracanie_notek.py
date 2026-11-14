@@ -75,5 +75,16 @@ sprawdz("formy dlugie wylaczone",
         re.search(r"if \(note_form not in config\.FORMY_DLUGIE\s+and isinstance\(data\.get\(\"note\"\), str\)\s+"
                   r"and len\(data\[\"note\"\]\.split\(\)\) > config\.NOTE_SKROC_POWYZEJ\)", src) is not None)
 
+print("=== 3. skracanie po naprawie faktu (14.11.2026) ===")
+_i_napr = src.index('data["tekst_przed_naprawa"] = data.get("note")')
+_i_skr = src.index('_krotsza = skroc_notke(conn, run_id, etap, poprawka["tekst"],')
+_i_wer = src.index('data["weryfikacja"] = audyt')
+sprawdz("drugie skracanie siedzi w galezi naprawy, przed zapisem weryfikacji", _i_napr < _i_skr < _i_wer)
+_blok = src[_i_skr:_i_wer]
+sprawdz("krotsza po naprawie jest sprawdzana od nowa (zweryfikuj)", "zweryfikuj(conn, run_id, _krotsza, kontekst)" in _blok)
+sprawdz("obalone albo niesprawdzone = zostaje naprawiona wersja",
+        '_audyt_k.get("nie_sprawdzone") or _obalone_k' in _blok and '"refuted", "outdated"' in _blok)
+sprawdz("krotsza przechodzi zapore notki", "_zapora_notki(_krotsza)" in _blok)
+
 print("\n=== WYNIK: %d zdanych, %d oblanych ===" % (wyniki["ok"], wyniki["zle"]))
 sys.exit(1 if wyniki["zle"] else 0)

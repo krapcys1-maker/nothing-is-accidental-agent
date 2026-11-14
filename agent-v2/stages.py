@@ -5045,6 +5045,27 @@ def note(
             data["note"] = text
             data["words_actual"] = poprawka["slow"]
             audyt = poprawka["audyt"]
+            # SKRACANIE PO NAPRAWIE (14.11.2026): naprawa faktu wydluza notke (13.11: 68 -> 81 slow; 10 z 10
+            # naprawionych w 30 dniach ponad 70). Krotsza wersja wchodzi TYLKO po ponownym sprawdzeniu bez
+            # zadnego obalonego/nieaktualnego twierdzenia; inaczej zostaje naprawiona, dluzsza (fakt wazniejszy).
+            if (note_form not in config.FORMY_DLUGIE
+                    and len(poprawka["tekst"].split()) > config.NOTE_SKROC_POWYZEJ):
+                _krotsza = skroc_notke(conn, run_id, etap, poprawka["tekst"], _min_slow, _maks_slow)
+                if _krotsza and not _zapora_notki(_krotsza):
+                    _audyt_k = zweryfikuj(conn, run_id, _krotsza, kontekst)
+                    _obalone_k = [c for c in (_audyt_k.get("zarzuty") or [])
+                                  if _status_twierdzenia(c) in ("refuted", "outdated")]
+                    if _audyt_k.get("nie_sprawdzone") or _obalone_k:
+                        print("    [skracanie po naprawie] ODRZUCONE (%s) — zostaje naprawiona wersja"
+                              % ("nie sprawdzone" if _audyt_k.get("nie_sprawdzone")
+                                 else "obalone: %s" % str(_obalone_k[0].get("claim"))[:70]), flush=True)
+                    else:
+                        data["slow_przed_skroceniem_po_naprawie"] = len(poprawka["tekst"].split())
+                        data["skrocona_po_naprawie"] = True
+                        text = _krotsza + sufiks
+                        data["note"] = text
+                        data["words_actual"] = len(_krotsza.split())
+                        audyt = _audyt_k
 
         data["weryfikacja"] = audyt
         data["safe_to_post"] = True
