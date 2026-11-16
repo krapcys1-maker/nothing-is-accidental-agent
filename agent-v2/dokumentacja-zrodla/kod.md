@@ -2051,6 +2051,9 @@ def restackuj_w_kanale(
                 notka = _notka_przy_przycisku(kandydat)
                 if not notka.get("tekst"):
                     continue
+                if notka_konta_siostrzanego(notka):
+                    print("    pomijam: notka konta siostrzanego", flush=True)
+                    continue
                 autor_teraz = str(notka.get("autor") or "").strip().casefold()
                 odcisk_zrodla = _odcisk_notki(notka.get("tekst"))
                 if odcisk_zrodla in odciski_zrobione or (
@@ -2063,11 +2066,17 @@ def restackuj_w_kanale(
                           flush=True)
                     continue
                 wynik["rozwazone"] += 1
+                # Odcisk bez etykiety wieku idzie do decyzji: E24 losuje po nim ramie, zeby ta sama
+                # notka miala to samo ramie w kazdym przebiegu (`stages.ocen_restack`).
+                notka["odcisk"] = odcisk_zrodla
                 ocena = decyzja(notka)
                 if not ocena.get("restack"):
                     powod = str(ocena.get("reason", ""))[:90]
                     wynik["odmowy"].append(powod)
-                    print(f"    pomijam: {powod}", flush=True)
+                    # Ramie E24 w logu odmowy: po tym widac, czy nowy wzor odpada czesciej
+                    # (np. „zdanie ma N slow przy limicie 75"), bez nowego rodzaju wpisu w dzienniku.
+                    _ram = (ocena.get("eksperymenty") or {}).get("wzor_restacka")
+                    print(f"    pomijam{' [wzor ' + _ram + ']' if _ram else ''}: {powod}", flush=True)
                     continue
 
                 zdanie = ocena["sentence"]
@@ -2103,7 +2112,10 @@ def restackuj_w_kanale(
                 page.wait_for_timeout(SETTLE_MS)
                 pole = page.get_by_role("textbox").last
                 pole.click(timeout=8000)
-                pole.type(zdanie, delay=random.randint(18, 45))
+                # Limit czasu jawnie (16.11.2026): domyslne 30 s obejmuje samo pisanie, a tekst
+                # ramienia „on" E24 (do ok. 520 znakow po 18-45 ms na klawisz) moze go przekroczyc
+                # i zostawic w oknie pol tekstu.
+                pole.type(zdanie, delay=random.randint(18, 45), timeout=120000)
                 page.wait_for_timeout(1200)
                 # Substack nazywa przycisk wyslania "Post" — szukamy go
                 # WEWNATRZ okna, nie w calym kanale, zeby nie trafic w cudzy.
@@ -2157,7 +2169,7 @@ def restackuj_w_kanale(
                 zapisz_w_dzienniku("restack", udane=True,
                                    komu=notka.get("autor", ""),
                                    slow=len(zdanie.split()),
-                                   tekst=zdanie[:300], id=numer_restacka,
+                                   tekst=zdanie[:600], id=numer_restacka,
                                    zrodlo=odcisk_zrodla,
                                    **{k: ocena[k] for k in ("model", "eksperymenty")
                                       if ocena.get(k)})

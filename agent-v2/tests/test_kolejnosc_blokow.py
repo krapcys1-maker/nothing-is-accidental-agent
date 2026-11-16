@@ -134,8 +134,8 @@ else:
 sprawdz("nadwyzka nie rusza w E14 i tylko przy wolnych miejscach",
         'if przydzial["e14"] or not wolne:' in ZR
         and 'dyskusje(ile=wolne, nadwyzka=True)' in ZR)
-sprawdz("poza eksperymentem przydzial jak dotad: N i max(1, N // 2)",
-        'return {"artykuly": n, "notki": max(1, n // 2), "e14": False}' in ZR)
+sprawdz("poza eksperymentem (od 16.11.2026, analiza przyrostu): notki N, artykuly max(1, N // 2)",
+        'return {"artykuly": max(1, n // 2), "notki": n, "e14": False}' in ZR)
 
 print()
 print("=== 5. POWOD ZMIANY STOI PRZY KODZIE ===")

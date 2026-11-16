@@ -198,10 +198,10 @@ sprawdz("przegladarka zapisuje model i ramiona do dziennika restacka",
 print()
 print("=== 3. E14 — GDZIE KOMENTARZ ===")
 config.EKSPERYMENTY = {}
-sprawdz("poza eksperymentem przydzial jak dotad: artykuly N, notki max(1, N//2)",
+sprawdz("poza eksperymentem (od 16.11.2026): notki N, artykuly max(1, N//2), suma jak dotad",
         [run.przydzial_komentarzy(n, 7) for n in (0, 1, 2, 5)] == [
             {"artykuly": 0, "notki": 0, "e14": False}, {"artykuly": 1, "notki": 1, "e14": False},
-            {"artykuly": 2, "notki": 1, "e14": False}, {"artykuly": 5, "notki": 2, "e14": False}])
+            {"artykuly": 1, "notki": 2, "e14": False}, {"artykuly": 2, "notki": 5, "e14": False}])
 config.EKSPERYMENTY = {"cel_komentarza": dict(ZAWSZE, udzial=1.0)}
 sprawdz("wszystkie miejsca on: wszystko pod notkami, suma bez zmian",
         run.przydzial_komentarzy(2, 7) == {"artykuly": 0, "notki": 3, "e14": True})
@@ -215,7 +215,7 @@ sprawdz("E14 w oknie: suma miejsc zawsze N + N//2, pod notkami ok. polowa, ten s
         and 0.4 < sum(x["notki"] for x in _p) / 600 < 0.6
         and run.przydzial_komentarzy(2, 11, "2026-10-01") == _p[11], sum(x["notki"] for x in _p) / 600)
 sprawdz("KONTRDOWOD: przed oknem E14 przydzial jak dotad",
-        run.przydzial_komentarzy(2, 11, "2026-09-28") == {"artykuly": 2, "notki": 1, "e14": False})
+        run.przydzial_komentarzy(2, 11, "2026-09-28") == {"artykuly": 1, "notki": 2, "e14": False})
 sprawdz("pola dziennika: rodzaj celu zawsze, ramie E14 tylko w eksperymencie",
         run.ramiona_komentarza({}, "notka", True) == {"pod": "notka", "eksperymenty": {"cel_komentarza": "on"}}
         and run.ramiona_komentarza({}, "artykul", True) == {"pod": "artykul", "eksperymenty": {"cel_komentarza": "off"}}

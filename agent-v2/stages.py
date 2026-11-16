@@ -223,7 +223,7 @@ def prompt_zakladu_notki(zaklad: str, wynik: str, dowod: str, opublikowano: str,
 def pamiec_glosu(prompt: str) -> str:
     """Kilka potwierdzonych wypowiedzi do unikania powtorek, bez wywolan API."""
     rodzaje = {"komentarz.md": "komentarz", "komentarz_b.md": "komentarz", "odpowiedz.md": "odpowiedz",
-               "restack.md": "restack"}
+               "restack.md": "restack", "restack_glos.md": "restack"}
     # Notki maja juz pamiec otwarc, zakonczen i calych tekstow.
     # Naprawa koryguje gotowy tekst, wiec nie powinna zmieniac jego stylu.
     rodzaj = rodzaje.get(prompt)
@@ -244,7 +244,12 @@ def pamiec_glosu(prompt: str) -> str:
     # E23: pamiec glosu NIE miesza ramion. Prompt B widzi tylko wlasne ostatnie komentarze (ramie „on"), prompt A —
     # wszystkie poza ramieniem „on". Inaczej A widzialby brzmienie B i odwrotnie (przeciek miedzy ramionami, przeglad
     # 28.10), a wpisy sprzed eksperymentu (bez pola ramienia) naleza do A.
-    ramie_promptu = {"komentarz_b.md": "on", "komentarz.md": "off"}.get(prompt)
+    # E24 (16.11.2026): to samo dla restackow — `restack_glos.md` widzi tylko restacki ramienia „on" eksperymentu
+    # `wzor_restacka`, `restack.md` wszystkie pozostale (takze sprzed eksperymentu).
+    eksp_pamieci, ramie_promptu = {
+        "komentarz_b.md": ("maniera_komentarza", "on"), "komentarz.md": ("maniera_komentarza", "off"),
+        "restack_glos.md": ("wzor_restacka", "on"), "restack.md": ("wzor_restacka", "off"),
+    }.get(prompt, ("", None))
     for linia in reversed(linie):
         try:
             w = json.loads(linia)
@@ -253,7 +258,7 @@ def pamiec_glosu(prompt: str) -> str:
         if not isinstance(w, dict) or w.get("rodzaj") != rodzaj or w.get("udane") is not True:
             continue
         if ramie_promptu:
-            ich = (w.get("eksperymenty") or {}).get("maniera_komentarza") == "on"
+            ich = (w.get("eksperymenty") or {}).get(eksp_pamieci) == "on"
             if ich != (ramie_promptu == "on"):
                 continue
         tekst = w.get("tekst")
@@ -290,7 +295,7 @@ def pamiec_glosu(prompt: str) -> str:
 # Nazwa pliku zachowana dla zgodnosci; glos obejmuje takze artykuly.
 Z_PO_LUDZKU = frozenset()  # legacy fragment no longer injected
 Z_GLOSEM_KROTKICH = frozenset({
-    "pisarz.md", "notka.md", "komentarz.md", "komentarz_b.md", "odpowiedz.md", "restack.md", "naprawa.md",
+    "pisarz.md", "notka.md", "komentarz.md", "komentarz_b.md", "odpowiedz.md", "restack.md", "restack_glos.md", "naprawa.md",
     "seria_lekka.md",
 })
 
@@ -2928,8 +2933,12 @@ def _wersja_kodu() -> str:
 WERSJA_KODU = _wersja_kodu()
 
 
-def ramie(nazwa: str, miejsce: int | str, dzien: str | None = None) -> str:
+def ramie(nazwa: str, miejsce: int | str, dzien: str | None = None, staly_los: bool = False) -> str:
     """Ramie notki w eksperymencie przeplatanym: "on", "off" albo "" (nie trwa).
+
+    `staly_los` (E24, 16.11.2026): los zalezy tylko od nazwy i `miejsce`, NIE od dnia — ten sam
+    klucz dostaje to samo ramie przez caly eksperyment (dzien nadal decyduje, czy eksperyment trwa).
+    Dla celu, ktory moze byc oceniany wiele razy w rozne dni (cudza notka w kanale).
 
     `config.EKSPERYMENTY` = {nazwa: udzial notek ze zmiana}. Przydzial jest
     DETERMINISTYCZNY z dnia UTC i numeru miejsca notki w dobie, wiec ten sam
@@ -2963,8 +2972,8 @@ def ramie(nazwa: str, miejsce: int | str, dzien: str | None = None) -> str:
         udzial = float(ustaw)
     # `%s`, nie `%d`: dla liczby daje ten sam napis (te same ramiona E10/E11),
     # a przyjmuje tez klucz tekstowy — E13 losuje po tresci ocenianej notki.
-    los = int(hashlib.sha256(("%s|%s|%s" % (nazwa, dzien, miejsce)).encode())
-              .hexdigest()[:8], 16) / 0x100000000
+    _klucz = ("%s||%s" % (nazwa, miejsce)) if staly_los else ("%s|%s|%s" % (nazwa, dzien, miejsce))
+    los = int(hashlib.sha256(_klucz.encode()).hexdigest()[:8], 16) / 0x100000000
     return "on" if los < udzial else "off"
 
 
@@ -7012,6 +7021,13 @@ RESTACK_SYSTEM = (
     "with a short useful reaction attached. Pass when there is no useful addition. "
     "Return only valid JSON."
 )
+# E24, ramie „on": komunikat systemowy jest mocniejszy od polecenia, wiec „short useful reaction"
+# walczyloby z `restack_glos.md` w tym samym wywolaniu (ta sama lekcja co przy komentarzach).
+RESTACK_SYSTEM_GLOS = (
+    "You decide whether to pass somebody else's note on to your own readers "
+    "with a short note of your own attached, one that reads well by itself. "
+    "Pass when you have nothing of your own to say. Return only valid JSON."
+)
 
 
 @_na_kanal("restack")
@@ -7040,29 +7056,73 @@ def ocen_restack(
     # po TRESCI ocenianej notki: ta sama notka zawsze trafia do tego samego
     # ramienia, a kolejnosc w kanale nie ma na to wplywu. E12 idzie obok —
     # ramie tygodnia, zeby dziennik restacka mial oba.
-    _e13 = ramie("pisarz_restackow",
-                 hashlib.sha256(" ".join(tekst.split())[:500].encode()).hexdigest()[:12])
+    _odcisk = hashlib.sha256(" ".join(tekst.split())[:500].encode()).hexdigest()[:12]
+    _e13 = ramie("pisarz_restackow", _odcisk)
     etap = "restack_opus" if _e13 == "on" else "restack"
-    surowy = llm.call(
-        etap, RESTACK_SYSTEM,
-        _prompt("restack.md", autor=notka.get("autor", "")[:80], tekst=tekst[:2500]),
-        conn=conn, run_id=run_id,
-    )
-    o = llm.parse_json(surowy)
+    # E24 — WZOR RESTACKA (`config.EKSPERYMENTY["wzor_restacka"]`). „on" = wlasna mini-notka
+    # (`restack_glos.md`, wlasny komunikat systemowy i wyzszy limit slow); „off" i poza eksperymentem
+    # = dopisek jak dotad. Ramie idzie do dziennika razem z restackiem.
+    # LOS MA BYC STALY DLA NOTKI, nie dla przebiegu ani doby (przeglad 16.11): tekst kontenera niesie
+    # etykiete wieku („2h") i liczniki, wiec hasz calego tekstu dawal tej samej notce nowy los co
+    # przebieg — notka odrzucona w „on" moglaby potem wyjsc w „off" i ramiona przestalyby byc
+    # porownywalne. Kluczem jest odcisk bez wieku (`browser._odcisk_notki`, pole `odcisk`), a los nie
+    # zalezy od dnia (`staly_los`). Bez pola `odcisk` (wywolanie spoza kanalu) zostaje hasz tekstu.
+    _klucz24 = str(notka.get("odcisk") or "").strip() or _odcisk
+    _e24 = ramie("wzor_restacka", _klucz24, staly_los=True)
+    glos = _e24 == "on"
+    limit_slow = config.RESTACK_MAX_SLOW_GLOS if glos else config.RESTACK_MAX_SLOW
+    autor = notka.get("autor", "")[:80]
+    if glos:
+        # Imie autora trafia w tym ramieniu do publicznego tekstu, wiec musi byc pewne: pole `autor`
+        # to pierwszy odsylacz do profilu w kontenerze, a przy pozycji „X restacked" moze nim byc X.
+        # Gdy naglowek notki nie zaczyna sie od tej nazwy albo mowi o restacku, polecenie nie dostaje
+        # nazwy i pisze „this note".
+        _naglowek = " ".join(tekst.split())[:80].casefold()
+        if (not autor.strip() or autor.strip().casefold() not in _naglowek
+                or "restacked" in _naglowek):
+            autor = ""
+        polecenie = _prompt("restack_glos.md", autor=autor, tekst=tekst[:2500])
+    else:
+        polecenie = _prompt("restack.md", autor=autor, tekst=tekst[:2500])
+    surowy = llm.call(etap, RESTACK_SYSTEM_GLOS if glos else RESTACK_SYSTEM, polecenie,
+                      conn=conn, run_id=run_id)
+    try:
+        o = llm.parse_json(surowy)
+    except ValueError:
+        if not glos:
+            raise
+        # Trzy akapity w jednym polu JSON: model bywa wpisuje prawdziwy znak nowej linii zamiast
+        # `\n`, a scisly parser to odrzuca. `strict=False` dopuszcza znaki sterujace w napisie.
+        _a, _b = surowy.find("{"), surowy.rfind("}")
+        if _a < 0 or _b <= _a:
+            raise
+        o = json.loads(surowy[_a:_b + 1], strict=False)
     o["model"] = config.MODEL_FOR.get(etap, "")
     o["eksperymenty"] = {n: r for n, r in (("restacki_norma", ramie("restacki_norma", 0)),
-                                           ("pisarz_restackow", _e13)) if r}
-    zdanie = str(o.get("sentence") or "").strip()
+                                           ("pisarz_restackow", _e13),
+                                           ("wzor_restacka", _e24)) if r}
+    if glos:
+        # Pole moze przyjsc jako lista trzech zdan albo z doslownym „\n" zamiast nowej linii;
+        # `str(lista)` wyszloby na profil jako „['A', 'B']". Inny typ niz napis i lista = brak tekstu.
+        _s = o.get("sentence")
+        if isinstance(_s, list):
+            _s = "\n\n".join(x.strip() for x in _s if isinstance(x, str) and x.strip())
+        zdanie = (_s if isinstance(_s, str) else "").replace("\\n", "\n").strip()
+        # Akapity zostaja (to czesc wzoru), reszta bialych znakow sie splaszcza: najwyzej jedna
+        # pusta linia miedzy akapitami, bez spacji na brzegach wierszy.
+        zdanie = "\n\n".join(" ".join(a.split()) for a in re.split(r"\n\s*\n|\n", zdanie) if a.strip())
+    else:
+        zdanie = str(o.get("sentence") or "").strip()
 
     # Deklaracja bez zdania to nie decyzja. I odwrotnie: zdanie za dlugie
     # przestaje byc dopiskiem, a staje sie notka doczepiona do cudzej.
     if o.get("restack") and not zdanie:
         o["restack"] = False
         o["reason"] = "zaznaczono restack, ale nie napisano zdania"
-    elif zdanie and len(zdanie.split()) > config.RESTACK_MAX_SLOW:
+    elif zdanie and len(zdanie.split()) > limit_slow:
         o["restack"] = False
         o["reason"] = ("zdanie ma %d slow przy limicie %d — to juz nie dopisek"
-                       % (len(zdanie.split()), config.RESTACK_MAX_SLOW))
+                       % (len(zdanie.split()), limit_slow))
     elif zdanie:
         # Nasze wlasne zdanie tez przechodzi przez zapore: model mogl
         # przepisac do niego adres albo wzmiankę z cudzego tekstu.

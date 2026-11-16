@@ -271,7 +271,10 @@ def przydzial_komentarzy(n: int, klucz: Any = "", dzien: str | None = None) -> d
     ramiona = [_ramie("cel_komentarza", "%s-%d" % (klucz, i), dzien)
                for i in range(razem)]
     if not all(ramiona):
-        return {"artykuly": n, "notki": max(1, n // 2), "e14": False}
+        # ODWROCONE 16.11.2026 (analiza przyrostu): pod artykulami 0 zapisow na 247 komentarzy i 0 odwiedzin
+        # profilu od 19.10, pod notkami 13 zapisow na 482 (2,7 na 100). Ta sama suma miejsc, wieksza czesc
+        # pod notkami; wolne miejsca spod artykulow nadal ida pod notki (`nadwyzka_pod_notkami`).
+        return {"artykuly": max(1, n // 2), "notki": n, "e14": False}
     notki = sum(1 for r in ramiona if r == "on")
     return {"artykuly": razem - notki, "notki": notki, "e14": True}
 

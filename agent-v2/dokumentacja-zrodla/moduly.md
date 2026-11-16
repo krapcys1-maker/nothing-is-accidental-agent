@@ -1,7 +1,7 @@
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-4025 wierszy, 48 funkcji na poziomie modułu, 2 klas
+4028 wierszy, 48 funkcji na poziomie modułu, 2 klas
 
 | funkcja | co robi |
 |---|---|
@@ -56,7 +56,7 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-13035 wierszy, 244 funkcji na poziomie modułu, 0 klas
+13095 wierszy, 244 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -123,7 +123,7 @@
 | `ostatnie_zakonczenia(rodzaj, ile)` | Ostatnie zdania ostatnich notek — zeby kolejna nie konczyla sie tak samo. |
 | `rozbior(conn, run_id, evidence)` | Przepytanie materialu, ZANIM powstanie notka. |
 | `_wersja_kodu()` *(wewn.)* | Skrot commita, z ktorego dziala przebieg — albo pusto, gdy gita nie ma. |
-| `ramie(nazwa, miejsce, dzien)` | Ramie notki w eksperymencie przeplatanym: "on", "off" albo "" (nie trwa). |
+| `ramie(nazwa, miejsce, dzien, staly_los)` | Ramie notki w eksperymencie przeplatanym: "on", "off" albo "" (nie trwa). |
 | `wniosek(conn, run_id, evidence)` | NIESZTANDAROWY WNIOSEK przed pisaniem — albo `{}`, gdy go nie ma. |
 | `wiek_zrodla_w_dniach(data_zrodla, teraz)` | Ile dni ma zrodlo. None, gdy daty nie da sie odczytac. |
 | `nazywa_wersje(tekst)` | Czy zdanie nazywa konkretna wersje produktu. Zwraca ja albo pusty napis. |
@@ -307,7 +307,7 @@
 
 ### `browser.py` — cała styczność z Substackiem; nie woła modelu
 
-6447 wierszy, 127 funkcji na poziomie modułu, 0 klas
+6481 wierszy, 129 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -438,6 +438,8 @@
 | `_odciski_restackow_z_dziennika(dni)` *(wewn.)* | Odciski notek, ktore podalismy dalej w ostatnich `dni` dniach (pole `zrodlo`). Bez sieci. |
 | `restackuj_w_kanale(ile, decyzja, wyslij, limit_autorow)` | Podaje dalej cudze notki z wlasnym zdaniem. |
 | `_notka_przy_przycisku(przycisk)` *(wewn.)* | Tresc i autor notki, przy ktorej stoi ten przycisk. |
+| `uchwyty_z_odsylaczy(hrefy)` | `/@nazwa` z odsylaczy kontenera notki, malymi literami, bez powtorzen (16.11.2026). |
+| `notka_konta_siostrzanego(notka)` | Czy w kontenerze notki jest profil konta siostrzanego (`config.UCHWYTY_SIOSTRZANE`). |
 
 ### `llm.py` — JEDYNA warstwa dostępu do modeli i liczenia kosztu
 
@@ -600,7 +602,7 @@
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-4480 wierszy, 49 funkcji na poziomie modułu, 0 klas
+4492 wierszy, 49 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|

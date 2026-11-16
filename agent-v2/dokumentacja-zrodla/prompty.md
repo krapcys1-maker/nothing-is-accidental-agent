@@ -353,6 +353,16 @@
 {{"restack": true|false, "reason": "<why this is or is not worth sharing>", "sentence": "<your reaction, or empty when false>", "mechanism_named": "<supported connection if there is one, otherwise empty>"}}
 ```
 
+#### `restack_glos.md` (78 wierszy)
+
+**Pola wejściowe:** `autor`, `marka`, `tekst`
+
+**Kontrakt wyjścia:**
+
+```json
+{{"restack": true|false, "reason": "<why this is or is not worth sharing>", "sentence": "<first sentence>\n\n<second sentence>\n\n<third sentence>"}}
+```
+
 #### `rozbior.md` (47 wierszy)
 
 **Pola wejściowe:** `evidence`, `marka`

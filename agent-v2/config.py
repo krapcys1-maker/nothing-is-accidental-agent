@@ -227,6 +227,15 @@ EKSPERYMENTY: dict = {
     # rozkladamy ja na skladniki. Regula decyzji zapisana z gory w
     # `docs/MANIERA_KOMENTARZY_E23_2026-10-28.md`.
     "maniera_komentarza": {"udzial": 0.5, "od": "2026-10-29", "do": "2027-02-10"},
+    # E24 — WZOR RESTACKA (16.11.2026, wlasciciel: test ma ruszyc „od razu"): los po tresci ocenianej
+    # notki BEZ etykiety wieku, staly przez caly eksperyment. „on" = `prompts/restack_glos.md`: wlasna mini-notka, trzy akapity po jednym zdaniu, prosba o 60 slow
+    # (pierwszy wiersz zrozumialy bez oryginalu, jeden konkret z notki z imieniem autora, stanowisko
+    # w pierwszej osobie), limit `RESTACK_MAX_SLOW_GLOS`; „off" = `restack.md` jak dotad (do 40 slow).
+    # Powod: od 7.09 restacki drugiego konta daly 18 zapisow na 257 (7,0 na 100; 4,2-11,1), nasze
+    # 1 na 136 (0,74; 0,01-4,1); autor odpowiada na 31% tamtych i 12% naszych. To PACZKA (dlugosc,
+    # glos, uklad): jesli wygra, rozkladamy ja na skladniki. Regula decyzji zapisana z gory w
+    # `docs/WZOR_RESTACKA_E24_2026-11-16.md`.
+    "wzor_restacka": {"udzial": 0.5, "od": "2026-11-17", "do": "2026-12-28"},
 }
 
 # E12 — dobowe widelki restackow w obu ramionach (srednio 4 i 2). Widelki, nie
@@ -3368,6 +3377,9 @@ RESTACK_DZIENNIE = (3, 4)
 # Dopisek do cudzej notki. Powyzej tego to juz nie dopisek, tylko wlasna notka
 # doczepiona do czyjegos tekstu — a wtedy lepiej napisac wlasna notke.
 RESTACK_MAX_SLOW = 40
+# E24, ramie „on" (`prompts/restack_glos.md`): polecenie prosi o 60 slow w trzech zdaniach, limit stoi wyzej,
+# bo model przekracza prosbe o kilka slow, a odrzucony restack to stracone miejsce w dobie.
+RESTACK_MAX_SLOW_GLOS = 75
 
 # Pierwszy miesiac na dolnej polowie widelek. Nowe konto z jednym artykulem,
 # ktore nagle obserwuje dwadziescia osob, wyglada dokladnie jak farma.

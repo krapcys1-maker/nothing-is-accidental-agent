@@ -14,6 +14,10 @@ import llm      # noqa: E402
 import stages   # noqa: E402
 
 zdane = oblane = 0
+# Ten plik sprawdza sciezke PODSTAWOWA. Eksperymenty na restacku (E13, E24) losuja ramie z dnia
+# i tresci, wiec bez wylaczenia wynik zalezalby od daty uruchomienia (E24 zmienia limit slow).
+# Ramiona E24 sprawdza `test_wzor_restacka.py`.
+config.EKSPERYMENTY = {}
 
 
 def sprawdz(nazwa, warunek, szczegol=""):
