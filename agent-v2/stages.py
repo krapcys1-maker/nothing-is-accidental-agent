@@ -3964,8 +3964,12 @@ aphorism. Same voice.
 Return only valid JSON: {{"note": "<the shorter note>"}}"""
 
 
-def skroc_notke(conn: sqlite3.Connection, run_id: int, etap: str, tekst: str, dol: int, gora: int) -> str | None:
-    """Krotsza wersja notki od tego samego pisarza albo None (gdy nie wyszla krotsza i nie krotsza niz `dol`)."""
+def skroc_notke(conn: sqlite3.Connection, run_id: int, etap: str, tekst: str, dol: int, gora: int,
+                druga_proba: bool = True) -> str | None:
+    """Krotsza wersja notki od tego samego pisarza albo None (gdy nie wyszla krotsza i nie krotsza niz `dol`).
+
+    DRUGA PROBA (16.11.2026): na sucho 152 -> 101 slow, czyli krotsza, ale nadal ponad prog; wtedy jeszcze raz
+    od wersji krotszej. Zostaje najkrotsza udana wersja."""
     slow = len(tekst.split())
     try:
         data = llm.parse_json(llm.call(etap, NOTE_SYSTEM, POLECENIE_SKROCENIA.format(
@@ -3981,7 +3985,35 @@ def skroc_notke(conn: sqlite3.Connection, run_id: int, etap: str, tekst: str, do
         print("    [skracanie] %d -> %d slow — idzie pierwsza wersja" % (slow, n), flush=True)
         return None
     print("    [skracanie] %d -> %d slow" % (slow, n), flush=True)
+    if druga_proba and n > config.NOTE_SKROC_POWYZEJ:
+        return skroc_notke(conn, run_id, etap, nowa, dol, gora, druga_proba=False) or nowa
     return nowa
+
+
+_SKROT_PRZED_KROPKA = re.compile(r"(?:[A-Z]|Mr|Ms|Mrs|Dr|St|vs|Inc|Ltd|Co|No|U\.S|U\.K|e\.g|i\.e|etc)\.")
+
+
+def w_trzy_wiersze(tekst: str) -> str:
+    """E25: notka formy TRZY_WIERSZE dostaje podzial na wiersze KODEM (16.11.2026).
+
+    Na sucho pisarz ani razu nie zlamal wierszy mimo polecenia (prosba w poleceniu nie jest bramka), a skracanie
+    i tak splaszcza biale znaki. Tekst bez nowej linii, ktory ma 2-5 zdan, dostaje pusta linie miedzy zdaniami.
+    Inna liczba zdan albo tekst juz z wierszami zostaje bez zmian. Skrot („U.S.", „Dr.", pojedyncza litera
+    z kropka) nie konczy zdania."""
+    if not isinstance(tekst, str) or "\n" in tekst.strip():
+        return tekst
+    zdania, biez = [], []
+    for slowo in tekst.split():
+        biez.append(slowo)
+        rdzen = slowo.rstrip("\"'”’)")
+        if re.search(r"[.!?]$", rdzen) and not _SKROT_PRZED_KROPKA.fullmatch(rdzen.lstrip("(\"'“‘")):
+            zdania.append(" ".join(biez))
+            biez = []
+    if biez:
+        zdania.append(" ".join(biez))
+    if not 2 <= len(zdania) <= 5:
+        return tekst
+    return "\n\n".join(zdania)
 
 
 def z_dlugoscia(prompt: str, dol: int, gora: int) -> str:
@@ -6961,6 +6993,11 @@ def notki_dnia(
         # PRZESLANIE ZE SLEDZTWA — identyfikator do dziennika; po nim
         # `sledztwo.wez_przeslanie` wie, ze przeslanie wyszlo.
         wynik["przeslanie_id"] = _przes.get("id") if _przes else None
+        # E25: UKLAD TRZECH WIERSZY KODEM, na gotowym tekscie (po skracaniu i naprawie, ktore splaszczaja wiersze).
+        if wynik.get("forma") == "TRZY_WIERSZE":
+            for _k in wynik.get("candidates") or []:
+                if isinstance(_k, dict) and isinstance(_k.get("note"), str):
+                    _k["note"] = w_trzy_wiersze(_k["note"])
         # RAMIONA EKSPERYMENTOW PRZEPLATANYCH I WERSJA KODU — do dziennika (`run.py`).
         # E16 (pora) to ramie DOBY — liczy je tez `run.py`, gdy wstrzymuje notki.
         wynik["eksperymenty"] = {nazwa: r for nazwa, r in (

@@ -46,6 +46,31 @@ sprawdz("przed oknem brak ramienia", stages.ramie("forma_trzy_wiersze", 1, "2026
 _k = [stages.ramie("krotka_notka", i, _d) for i in range(400)]
 sprawdz("los niezalezny od E17/E18 (rozne hasze)", _r != _k)
 
+T = "Podqi asked ChatGPT about 151 brands in the U.S. market. It is like a friend who points down the street. I would verify the shop."
+sprawdz("uklad kodem: zdania w osobnych wierszach, skrot U.S. nie konczy zdania",
+        stages.w_trzy_wiersze(T) == "Podqi asked ChatGPT about 151 brands in the U.S. market.\n\nIt is like a friend who points down the street.\n\nI would verify the shop.",
+        repr(stages.w_trzy_wiersze(T)))
+sprawdz("tekst z wierszami i jedno zdanie zostaja bez zmian",
+        stages.w_trzy_wiersze("A.\n\nB.") == "A.\n\nB." and stages.w_trzy_wiersze("Only one.") == "Only one.")
+sprawdz("szesc zdan zostaje bez zmian", stages.w_trzy_wiersze("A a. B b. C c. D d. E e. F f.") == "A a. B b. C c. D d. E e. F f.")
+sprawdz("uklad nakladany na gotowy tekst tylko formy TRZY_WIERSZE",
+        'if wynik.get("forma") == "TRZY_WIERSZE":' in SRC and '_k["note"] = w_trzy_wiersze(_k["note"])' in SRC
+        and SRC.index('_k["note"] = w_trzy_wiersze(_k["note"])') < SRC.index('("forma_trzy_wiersze", _ramie_formy)) if r}'))
+
+print("=== 1b. druga proba skracania ===")
+_odp = iter([" ".join(["w"] * 101), " ".join(["v"] * 66)])
+with patch.object(stages.llm, "call", lambda *a, **k: json.dumps({"note": next(_odp)})):
+    _w = stages.skroc_notke(None, 1, "note", " ".join(["x"] * 152), 40, 70)
+sprawdz("152 -> 101 -> 66: druga proba od krotszej", _w == " ".join(["v"] * 66), len((_w or "").split()))
+_odp = iter([" ".join(["w"] * 101), " ".join(["v"] * 120)])
+with patch.object(stages.llm, "call", lambda *a, **k: json.dumps({"note": next(_odp)})):
+    _w = stages.skroc_notke(None, 1, "note", " ".join(["x"] * 152), 40, 70)
+sprawdz("nieudana druga proba = zostaje pierwsza krotsza", _w == " ".join(["w"] * 101), len((_w or "").split()))
+_odp = iter([" ".join(["w"] * 60)])
+with patch.object(stages.llm, "call", lambda *a, **k: json.dumps({"note": next(_odp)})):
+    _w = stages.skroc_notke(None, 1, "note", " ".join(["x"] * 152), 40, 70)
+sprawdz("w oknie od razu = bez drugiego wywolania", _w == " ".join(["w"] * 60))
+
 print("=== 2. naprawa MYSL ===")
 OBAL = {"zarzuty": [{"claim": "48% of schools switched it off", "status": "refuted"}]}
 CZYSTY = {"zarzuty": [], "claims": [], "safe_to_post": True}
