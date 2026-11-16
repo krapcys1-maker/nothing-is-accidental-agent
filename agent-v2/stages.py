@@ -8047,7 +8047,8 @@ def napraw_mysl(conn: sqlite3.Connection, run_id: int, tekst: str, audyt: dict[s
     if not nowy or nowy == tekst.strip() or _zapora_notki(nowy):
         print("    [naprawa MYSL] pusta, bez zmian albo zatrzymana na zaporze — tekst bez zmian", flush=True)
         return None
-    audyt2 = zweryfikuj(conn, run_id, nowy, kontekst)
+    # Jak pierwsze sprawdzenie MYSL w `note` (`szukaj=False`): MYSL nie ma faktow do szukania w sieci.
+    audyt2 = zweryfikuj(conn, run_id, nowy, kontekst, szukaj=False)
     zostalo = [c for c in audyt2.get("zarzuty") or [] if _status_twierdzenia(c) in ("refuted", "outdated")]
     if audyt2.get("nie_sprawdzone") or zostalo:
         print("    [naprawa MYSL] ODRZUCONA (%s) — tekst bez zmian"

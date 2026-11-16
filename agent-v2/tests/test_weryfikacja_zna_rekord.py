@@ -119,8 +119,11 @@ print("=== 5. MYSL: BEZ SZUKANIA I BEZ NAPRAWY (Q4) ===")
 _note = inspect.getsource(stages.note)
 sprawdz("MYSL nie wola wyszukiwania",
         'szukaj=(note_type != "MYSL")' in _note)
-sprawdz("MYSL nie idzie do naprawy",
-        'None if note_type == "MYSL" else napraw_obalone' in _note)
+# 16.11.2026: MYSL ma WLASNA naprawe (`napraw_mysl`: usuwa obalone, nic nie dodaje), nie `napraw_obalone`,
+# ktora poprawia z materialu, ktorego MYSL nie ma; ponowne sprawdzenie tez bez szukania.
+sprawdz("MYSL idzie do wlasnej naprawy, nie do napraw_obalone",
+        'if note_type == "MYSL" else napraw_obalone' in _note and "napraw_mysl(" in _note
+        and "zweryfikuj(conn, run_id, nowy, kontekst, szukaj=False)" in inspect.getsource(stages.napraw_mysl))
 # KONTRDOWOD SFORMULOWANY WPROST: pozostale typy naprawiane byc MAJA.
 sprawdz("a pozostale typy nadal sa naprawiane",
         "napraw_obalone(" in _note)
