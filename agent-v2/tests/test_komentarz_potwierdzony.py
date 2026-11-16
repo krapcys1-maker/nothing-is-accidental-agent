@@ -468,8 +468,10 @@ sprawdz("STARY KOD zdejmowal host z listy platnych mimo porazki",
 # Trzy, nie dwa: stary kod placil jeszcze za ocene martwego hosta, wiec do
 # petli wchodzil o jeden cel wiecej — i tez go zaliczal. Nowy kod na tym samym
 # scenariuszu melduje 0.
-sprawdz("STARY KOD meldowal 3 komentarze, z ktorych nie wszedl ANI JEDEN",
-        licznik(wydruk_s) == 3, licznik(wydruk_s))
+# Od 16.11.2026 przydzial poza eksperymentem to artykuly max(1, N//2), notki N: przy budzecie 2 pod artykulami
+# jest JEDNO miejsce (dawniej dwa), a w scenariuszu jest jedna notka — stary kod melduje wiec 2, a nie 3.
+sprawdz("STARY KOD meldowal 2 komentarze, z ktorych nie wszedl ANI JEDEN",
+        licznik(wydruk_s) == 2, licznik(wydruk_s))
 sprawdz("STARY KOD placil za ocene martwego hosta",
         any(MARTWY in u for u in ocena_artykulow(slad_s)),
         ocena_artykulow(slad_s))

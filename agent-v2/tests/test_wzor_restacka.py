@@ -32,7 +32,6 @@ def sprawdz(nazwa, warunek, szczegol=""):
 
 ORYG_EKSP = dict(config.EKSPERYMENTY)
 ORYG_LLM = stages.llm
-ORYG_DATA = config.DATA_DIR
 ZAWSZE = {"od": "2000-01-01", "do": "2999-12-31"}
 # Tekst kontenera notki zaczyna sie naglowkiem: autor, wiek, potem tresc (tak jak w kanale).
 NOTKA = {"autor": "Jordan Example", "tekst": "Jordan Example 2h Airlines overbook because a predictable "
@@ -40,7 +39,7 @@ NOTKA = {"autor": "Jordan Example", "tekst": "Jordan Example 2h Airlines overboo
 WOLANIA = []
 # Pamiec glosu czyta dziennik z `config.DATA_DIR`. Pusty katalog: test nie zalezy od zywego dziennika.
 _TMP = tempfile.TemporaryDirectory()
-config.DATA_DIR = pathlib.Path(_TMP.name)
+ORYG_DATA = config.uzyj_katalogu_danych(pathlib.Path(_TMP.name))
 
 
 def podstaw(zdanie, restack=True, surowy=None):
@@ -296,7 +295,7 @@ try:
 finally:
     stages.llm = ORYG_LLM
     config.EKSPERYMENTY = dict(ORYG_EKSP)
-    config.DATA_DIR = ORYG_DATA
+    config.przywroc_katalog_danych(ORYG_DATA)
     _TMP.cleanup()
 
 print()
