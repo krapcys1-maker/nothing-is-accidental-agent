@@ -263,7 +263,7 @@
 {{"powtorka_nr": <number of the bank fact it repeats, or 0 if none>, "powod": "<one short sentence>"}}
 ```
 
-#### `przeslania.md` (104 wierszy)
+#### `przeslania.md` (105 wierszy)
 
 **Pola wejściowe:** `artykulowy`, `glosy`, `hipotezy`, `karta`, `katy`, `ksiega`, `marka`, `n_kand`, `n_max`, `odbior`, `ramy`, `typ_historii`
 
@@ -483,7 +483,7 @@
 {{"contradicted_belief": {{"present": true|false, "the_belief": "<the reader's wrong belief in their own words, or empty string>", "evidence": "<what in the card breaks it, or why nothing does>"}}, "named_decider": {{"present": true|false, "evidence": "<who, from the card, or why nobody is named>"}}, "felt_number": {{"present": true|false, "evidence": "<the figure and what it measures, or why the only figures are labels>"}}, "second_domain": {{"present": true|false, "evidence": "<the other field, or why the parallels stay inside one industry>"}}, "unsettled_outcome": {{"present": true|false, "the_question": "<the open question in the reader's own words, or empty string>", "the_situation": "<what the reader pictures, or empty string>", "governed_by": "<the written rule from the card that decides it, quoted or named — or why nothing in the card governs it>"}}, "what_would_rescue_it": "<one sentence naming the shape of the missing piece>", "explanatory_value": {{"present": true|false, "question": "<plain reader question>", "mechanism": "<how the evidence answers it>", "reader_value": "<why understanding this matters>", "evidence": "<one exact supporting passage or claim from the card>"}}, "one_line_verdict": "<one sentence on what this card actually has>"}}
 ```
 
-#### `weryfikacja.md` (198 wierszy)
+#### `weryfikacja.md` (203 wierszy)
 
 **Pola wejściowe:** `context`, `dzis`, `text`
 

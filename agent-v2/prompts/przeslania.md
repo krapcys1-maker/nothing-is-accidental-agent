@@ -50,7 +50,8 @@ and stands on its own. For each note give:
   "first") and comparison in it must appear in the evidence of the claims you cite,
   about the same entity the sentence names; if that evidence says "if", "once",
   "will" or "plans", so must the sentence. A vendor's claim, a single-source report,
-  a listing or an opinion names its source in the sentence itself. A technical term
+  a listing or an opinion names its source in the sentence itself. When the evidence includes the primary
+  document (the company's, regulator's, court's or paper's own text), credit it rather than the press summary. A technical term
   gets a short gloss.
 - `hak`: the checked detail behind that sentence.
 - `fakty`: the numbers of the confirmed claims the note stands on, its core claim

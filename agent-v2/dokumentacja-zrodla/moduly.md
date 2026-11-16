@@ -56,7 +56,7 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-13095 wierszy, 244 funkcji na poziomie modułu, 0 klas
+13170 wierszy, 245 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -222,6 +222,7 @@
 | `_slowa_zarzutu(c)` *(wewn.)* | Slowa trescioweko z samego twierdzenia — drugi sygnal tozsamosci. |
 | `_adres_zarzutu(c)` *(wewn.)* | — |
 | `_ten_sam_zarzut(a, b)` *(wewn.)* | Czy dwa zarzuty mowia o tym samym fakcie. ZACHOWAWCZO, i to celowo. |
+| `napraw_mysl(conn, run_id, tekst, audyt)` | Naprawa notki MYSL (16.11.2026): obalone twierdzenie wychodzi z tekstu, bo nie ma materialu do poprawy. |
 | `napraw_obalone(conn, run_id, tekst, audyt)` | Poprawia zdanie, ktoremu zapis przeczy. Nie wycina go i nie blokuje tekstu. |
 | `_wczytaj_z_zapasem(sciezka, parser)` *(wewn.)* | Plik czytany raz na zmiane (rozmiar i czas modyfikacji), nie przy kazdym celu. |
 | `_linie_jsonl(sciezka, filtr)` *(wewn.)* | Wiersze pliku JSONL; `filtr` = napisy, z ktorych choc jeden musi byc w linii |
@@ -602,7 +603,7 @@
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-4492 wierszy, 49 funkcji na poziomie modułu, 0 klas
+4508 wierszy, 49 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|

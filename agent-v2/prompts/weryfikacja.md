@@ -13,6 +13,11 @@ Anything a reader could look up and find false:
 - numbers, dates, quantities, rankings
 - statements about what a document, law or company **says** or **does**
 - statements about what someone excluded, decided, admitted or predicted
+- **loaded characterisations of how something happened** — "quietly", "secretly", "ignores",
+  "placebo", "buried", "admitted": the source must support the characterisation itself, not just the
+  event. If the source describes warning headers and the text says "quietly ignores", that is `refuted`
+- **who said it**: if the text credits a claim to a named outlet or calls a report "independent", the
+  claim must appear in that outlet, and the report must not come from the party it is about
 
 **Not** claims: opinions, interpretations, analogies, questions, predictions,
 and statements about what the thing being responded to said.

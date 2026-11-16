@@ -2119,7 +2119,7 @@ Answer with JSON only, no other text:
 
 #### `prompts/przeslania.md`
 
-**104 wierszy.** Pola wejsciowe: `artykulowy`, `glosy`, `hipotezy`, `karta`, `katy`, `ksiega`, `marka`, `n_kand`, `n_max`, `odbior`, `ramy`, `typ_historii`
+**105 wierszy.** Pola wejsciowe: `artykulowy`, `glosy`, `hipotezy`, `karta`, `katy`, `ksiega`, `marka`, `n_kand`, `n_max`, `odbior`, `ramy`, `typ_historii`
 
 ````markdown
 We investigated one AI story for {marka}, an account that explains AI to curious
@@ -2174,7 +2174,8 @@ and stands on its own. For each note give:
   "first") and comparison in it must appear in the evidence of the claims you cite,
   about the same entity the sentence names; if that evidence says "if", "once",
   "will" or "plans", so must the sentence. A vendor's claim, a single-source report,
-  a listing or an opinion names its source in the sentence itself. A technical term
+  a listing or an opinion names its source in the sentence itself. When the evidence includes the primary
+  document (the company's, regulator's, court's or paper's own text), credit it rather than the press summary. A technical term
   gets a short gloss.
 - `hak`: the checked detail behind that sentence.
 - `fakty`: the numbers of the confirmed claims the note stands on, its core claim
@@ -2823,7 +2824,7 @@ Your readers have already read the news. What they cannot get anywhere else is a
 
 How this works — read it twice:
 
-1. FACTS ARE THE GROUND YOU STAND ON, NOT THE POINT. Anything that happened, was said, was announced or was measured comes only from the numbered facts; never invent such things and never dress a hunch up as a fact. Use the fewest facts a note needs. Name a source in at most one short clause per note, only where the claim would be doubted without it. No arithmetic, ratios or lists of figures, and no repeating what the reader already read. A plan or claim that is only reported is "reportedly" — say so once, then think on top of it.
+1. FACTS ARE THE GROUND YOU STAND ON, NOT THE POINT. Anything that happened, was said, was announced or was measured comes only from the numbered facts; never invent such things and never dress a hunch up as a fact. Use the fewest facts a note needs. Name a source in at most one short clause per note, only where the claim would be doubted without it. No arithmetic, ratios or lists of figures, and no repeating what the reader already read. A plan or claim that is only reported is "reportedly" — say so once, then think on top of it. When a fact comes from the company's, regulator's, court's or paper's own document, credit that document, not the outlet that summarised it; when it rests only on a vendor's blog or a newsletter, say whose claim it is.
 
 2. THE THINKING IS YOURS AND IT MAY BE WRONG. Say what you think, how you got there, and how sure you are, like a person does: "we are not certain, but...", "our guess is...", "this could be nonsense, yet...", "we would not be shocked if...". Commit to a view while admitting doubt — never hedge into mush ("it remains to be seen", "could possibly perhaps"). Being wrong in an interesting way is better than being right in a boring way.
 
@@ -3304,7 +3305,7 @@ Return only valid JSON:
 
 #### `prompts/weryfikacja.md`
 
-**198 wierszy.** Pola wejsciowe: `context`, `dzis`, `text`
+**203 wierszy.** Pola wejsciowe: `context`, `dzis`, `text`
 
 ````markdown
 Check a short text that is about to be published in public — a comment, a note
@@ -3322,6 +3323,11 @@ Anything a reader could look up and find false:
 - numbers, dates, quantities, rankings
 - statements about what a document, law or company **says** or **does**
 - statements about what someone excluded, decided, admitted or predicted
+- **loaded characterisations of how something happened** — "quietly", "secretly", "ignores",
+  "placebo", "buried", "admitted": the source must support the characterisation itself, not just the
+  event. If the source describes warning headers and the text says "quietly ignores", that is `refuted`
+- **who said it**: if the text credits a claim to a named outlet or calls a report "independent", the
+  claim must appear in that outlet, and the report must not come from the party it is about
 
 **Not** claims: opinions, interpretations, analogies, questions, predictions,
 and statements about what the thing being responded to said.

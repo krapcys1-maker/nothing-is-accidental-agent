@@ -4986,7 +4986,11 @@ def note(
         #
         # Wlasciwa reakcja to przepisanie bez liczby, czego `naprawa.md` wprost
         # zabrania. Wiec nie naprawiamy — zastrzezenie zostaje w logu.
-        poprawka = None if note_type == "MYSL" else napraw_obalone(
+        # MYSL MA WLASNA NAPRAWE (16.11.2026, analiza przyrostu): 3.11 MYSL wyszla z 2 z 3 twierdzen obalonych.
+        # `napraw_obalone` poprawia Z MATERIALU, ktorego MYSL nie ma, wiec `napraw_mysl` usuwa albo uogolnia
+        # obalone twierdzenie, nic nie dodajac, i sprawdza wynik od nowa.
+        poprawka = napraw_mysl(conn, run_id, proza, audyt_do_naprawy, kontekst=kontekst,
+                               min_slow=_min_slow, max_slow=_maks_slow) if note_type == "MYSL" else napraw_obalone(
             conn, run_id, proza, audyt_do_naprawy,
             kontekst=kontekst,
             min_slow=_min_slow,
@@ -6540,6 +6544,7 @@ def notki_dnia(
         _ramie_pisarza = ""   # E11 — ustawiane przy wyborze pisarza
         _wariant: dict[str, bool] = {}   # E17/E18 — ustawiane przy wyborze pisarza
         _ramie_krotkiej = _ramie_pytania = ""
+        _ramie_formy = ""   # E25 — ustawiane przed wywolaniem pisarza
         # PRZESLANIE ZE SLEDZTWA — przed zwyklym wyborem faktu, jak seria:
         # historia zbadana i przemyslana ma pierwszenstwo przed pojedynczym
         # faktem. Typ notki wyznacza rodzaj przeslania (`sledztwo.TYP_NOTKI`).
@@ -6796,6 +6801,14 @@ def notki_dnia(
             if any(_wariant.values()):
                 print("  [notka] wariant: %s" % ", ".join(
                     k for k, v in _wariant.items() if v), flush=True)
+        # E25 — FORMA „TRZY WIERSZE” (16.11.2026, analiza przyrostu, `config.EKSPERYMENTY["forma_trzy_wiersze"]`):
+        # fakt prostymi slowami, porownanie z codziennosci, stanowisko. Wlasne losowanie na miejsce notki, obie
+        # galezie (przeslanie i bank); bez MYSL (nie ma faktu), promocji artykulu, czesci serii i form dlugich.
+        if typ not in ("MYSL", "ARTYKUL") and not seria_kontekst and forma not in config.FORMY_DLUGIE:
+            _ramie_formy = ramie("forma_trzy_wiersze", od + nr)
+            if _ramie_formy == "on":
+                forma = "TRZY_WIERSZE"
+                print("  [notka] E25: forma trzy wiersze", flush=True)
         print("  [pisarz] %s (%s)" % (config.MODEL_FOR.get(etap_pisarza, "?"),
                                       etap_pisarza), flush=True)
         wynik = note(conn, run_id, typ, material,
@@ -6954,7 +6967,8 @@ def notki_dnia(
             ("wniosek", _ramie_wniosku), ("pisarz", _ramie_pisarza),
             ("pora_notki", ramie("pora_notki", 0)),
             ("krotka_notka", _ramie_krotkiej),
-            ("pytanie_na_koncu", _ramie_pytania)) if r}
+            ("pytanie_na_koncu", _ramie_pytania),
+            ("forma_trzy_wiersze", _ramie_formy)) if r}
         # RAMIE LICZONE PRZY PISANIU SERII (E22 `dlugosc_serii`): niesie je wpis kolejki.
         wynik["eksperymenty"].update({k: v for k, v in ((_przes or {}).get("eksperymenty") or {}).items() if v})
         wynik["wersja"] = WERSJA_KODU
@@ -7983,6 +7997,67 @@ def _ten_sam_zarzut(a: dict[str, Any], b: dict[str, Any]) -> bool:
         return True
     ua, ub = _adres_zarzutu(a), _adres_zarzutu(b)
     return bool(ua and ua == ub and (la & lb))
+
+
+NAPRAWA_MYSLI = """This is a short opinion note: a thought, not a report. A fact-check found that it states
+the claims below as facts, and they are false, outdated or unsupported.
+
+--- CHALLENGED CLAIMS ---
+{zarzuty}
+
+--- THE NOTE ---
+{tekst}
+
+Rewrite the note so it keeps its thought but no longer makes these claims: remove each one, or turn it into
+the general observation it was illustrating. Add no number, date, study, statistic or named organisation.
+Leave every unchallenged sentence word for word. Keep it {min_slow}-{max_slow} words and make sure it still
+reads as one complete thought.
+
+Return only valid JSON: {{"text": "<the corrected note>", "co_zmienione": "<one line: what you removed>"}}"""
+
+
+def napraw_mysl(conn: sqlite3.Connection, run_id: int, tekst: str, audyt: dict[str, Any], *,
+                kontekst: str, min_slow: int, max_slow: int) -> dict[str, Any] | None:
+    """Naprawa notki MYSL (16.11.2026): obalone twierdzenie wychodzi z tekstu, bo nie ma materialu do poprawy.
+
+    Wynik ma ten sam ksztalt co `napraw_obalone`. Wchodzi TYLKO, gdy ponowne sprawdzenie odbylo sie i nie
+    obala niczego; inaczej None i notka idzie jak dotad (z zastrzezeniem w logu)."""
+    if not config.NAPRAWA_OBALONYCH:
+        return None
+    do_naprawy = [c for c in audyt.get("zarzuty") or [] if _status_twierdzenia(c) in ("refuted", "outdated")]
+    if not do_naprawy:
+        return None
+    zuzyte = _NAPRAW_ZUZYTE.get(run_id, 0)
+    if zuzyte >= config.NAPRAW_NA_PRZEBIEG:
+        print("    [naprawa MYSL] sufit %d na przebieg wyczerpany" % config.NAPRAW_NA_PRZEBIEG, flush=True)
+        return None
+    _NAPRAW_ZUZYTE[run_id] = zuzyte + 1
+    opis = "\n".join("- %s" % str(c.get("claim") or "")[:300] for c in do_naprawy[:5])
+    print("    [naprawa MYSL] %d obalonych — usuwam, nic nie dodaje" % len(do_naprawy), flush=True)
+    try:
+        dane = llm.parse_json(llm.call("naprawa", NAPRAWA_SYSTEM,
+                                       NAPRAWA_MYSLI.format(zarzuty=opis, tekst=tekst, min_slow=min_slow,
+                                                            max_slow=max_slow), conn=conn, run_id=run_id))
+        nowy = str(dane.get("text") or "").strip()
+    except PRZERYWAJA:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        print("    [naprawa MYSL] nie wyszla (%s) — tekst bez zmian" % exc, flush=True)
+        return None
+    if not nowy or nowy == tekst.strip() or _zapora_notki(nowy):
+        print("    [naprawa MYSL] pusta, bez zmian albo zatrzymana na zaporze — tekst bez zmian", flush=True)
+        return None
+    audyt2 = zweryfikuj(conn, run_id, nowy, kontekst)
+    zostalo = [c for c in audyt2.get("zarzuty") or [] if _status_twierdzenia(c) in ("refuted", "outdated")]
+    if audyt2.get("nie_sprawdzone") or zostalo:
+        print("    [naprawa MYSL] ODRZUCONA (%s) — tekst bez zmian"
+              % ("nie sprawdzona" if audyt2.get("nie_sprawdzone") else "nadal obalone"), flush=True)
+        return None
+    slow = len(nowy.split())
+    print("    [naprawa MYSL] PRZYJETA: %d slow. %s" % (slow, str(dane.get("co_zmienione") or "")[:110]), flush=True)
+    return {"tekst": nowy, "audyt": audyt2, "co_zmienione": str(dane.get("co_zmienione") or ""),
+            "naprawionych": len(do_naprawy), "nowych": 0, "obalonych_przed": len(do_naprawy),
+            "obalonych_po": 0, "sprawdzona": True, "slow": slow}
 
 
 def napraw_obalone(

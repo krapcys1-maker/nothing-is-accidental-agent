@@ -78,8 +78,10 @@ print("=== 1. RAMPA I BUDZET DNIA ===")
 _r = config.RAMPA_AKTYWNOSCI
 # 25.10.2026: czwarty stopien obniza subskrypcje 4 -> 1 (decyzja wlasciciela: przyrost
 # subskrybentow idzie za wyswietleniami, nie za naszymi subskrypcjami).
-sprawdz("rampa: trzy stopnie wzrostu i czwarty z 25.10, daty rosnace",
-        len(_r) == 4 and [s[0] for s in _r] == sorted(s[0] for s in _r) and _r[3][0] == "2026-10-25")
+# 16.11.2026: piaty stopien od 17.11 podnosi subskrypcje 1 -> 3 (wlasciciel: „nic nie odkladaj”).
+sprawdz("rampa: trzy stopnie wzrostu, czwarty z 25.10 i piaty z 17.11, daty rosnace",
+        len(_r) == 5 and [s[0] for s in _r] == sorted(s[0] for s in _r) and _r[3][0] == "2026-10-25"
+        and _r[4][0] == "2026-11-17" and _r[4][2] == 3 and _r[4][1] == _r[3][1] and tuple(_r[4][3]) == tuple(_r[3][3]))
 sprawdz("stopnie wzrostu rosna: obserwacje, subskrypcje i dolna granica komentarzy",
         all(_r[i][1] <= _r[i + 1][1] and _r[i][2] <= _r[i + 1][2] and _r[i][3][0] <= _r[i + 1][3][0]
             for i in range(2)), _r)

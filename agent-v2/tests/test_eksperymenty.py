@@ -227,7 +227,7 @@ sprawdz("E11 na polecenie wlasciciela 28.09: pisarz MiMo 50/50, to samo okno; ob
         and set(config.EKSPERYMENTY) == {"wniosek", "pisarz", "restacki_norma", "pisarz_restackow",
                                          "cel_komentarza", "swiezosc_celu", "pora_notki",
                                          "krotka_notka", "pytanie_na_koncu", "pamiec_rozmowcy", "dlugosc_serii",
-                                         "maniera_komentarza", "wzor_restacka"},
+                                         "maniera_komentarza", "wzor_restacka", "forma_trzy_wiersze"},
         config.EKSPERYMENTY)
 # NIEZALEZNE LOSOWANIE: ramiona E10 i E11 w tych samych slotach nie moga sie
 # pokrywac systematycznie (osobny klucz = osobny hash), inaczej jeden

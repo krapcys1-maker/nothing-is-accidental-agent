@@ -236,6 +236,11 @@ EKSPERYMENTY: dict = {
     # glos, uklad): jesli wygra, rozkladamy ja na skladniki. Regula decyzji zapisana z gory w
     # `docs/WZOR_RESTACKA_E24_2026-11-16.md`.
     "wzor_restacka": {"udzial": 0.5, "od": "2026-11-17", "do": "2026-12-28"},
+    # E25 — FORMA „TRZY WIERSZE” (16.11.2026, wlasciciel: „nic nie odkladaj”): polowa notek (bez MYSL, promocji,
+    # czesci serii i form dlugich) dostaje forme `NOTE_FORMS["TRZY_WIERSZE"]`. Regula z gory: przyjac, gdy iloraz
+    # wyswietlen po 72 h wobec tla tygodnia >= 1,3 z przedzialem 95% ponad 1, po >= 30 notkach na ramie (ok. 3 tyg.);
+    # wykryje ok. +30%. Opis: `docs/ZMIANY_2026-11-16_ANALIZA_PRZYROSTU.md`.
+    "forma_trzy_wiersze": {"udzial": 0.5, "od": "2026-11-17", "do": "2026-12-28"},
 }
 
 # E12 — dobowe widelki restackow w obu ramionach (srednio 4 i 2). Widelki, nie
@@ -2022,7 +2027,9 @@ SLEDZTWO_TRYB = "lekkie"
 
 # ROZKMINA (26.10.2026): przekrojowa seria o oknie dat z roznych historii. Co ile dni najwyzej i przy jakiej
 # kolejce wolno ja zaczac (kolejka notek nie moze sie rozlewac: rozkmina dokleja 3-5 wpisow).
-ROZKMINA_CO_DNI = 3
+# 16.11.2026: 3 -> 4 (analiza przyrostu: ok. 48% kosztu idzie na wlasne notki, ktore daly 3 z 21 przypisanych
+# zapisow; zapisy przychodza z restackow i komentarzy). Nadal co najmniej jedna rozkmina na tydzien artykulu.
+ROZKMINA_CO_DNI = 4
 ROZKMINA_MAX_KOLEJKA = 8
 
 
@@ -2554,6 +2561,12 @@ NOTE_FORMS = {
     'PYTANIE': 'Ask a genuine unanswered question after enough context to understand it. Do not pretend the material has no answer when it does.',
     'ODWROCENIE': 'Explain a supported surprising difference. Name a mistaken belief only if the supplied material establishes it.',
     'ZACZEP_I_KONKRET': 'Lead with the detail that makes the subject worth understanding, then explain it. A punchline or reader assignment is optional.',
+    # E25 (16.11.2026): wzor notek drugiego konta (2x zasiegu, 6,7x odpowiedzi). Porownanie, NIGDY przezycie.
+    'TRZY_WIERSZE': ('Three short lines separated by a blank line, about 45-60 words in total. Line 1: the one supported '
+                     'fact in plain words, under 25 words, naming its source. Line 2: an everyday comparison that makes '
+                     'the fact concrete, phrased as a comparison ("it is like...", "imagine..."), never as something you '
+                     'saw, did or lived. Line 3: where you stand, addressed to someone who has to act on it (a buyer, a '
+                     'parent, a developer, a regulator); first person is fine. No jargon, no second example.'),
     'WYJASNIENIE': 'Explain one difficult idea step by step for a newcomer, in plain words and within the same short length. A concrete example if it helps. No required number of steps or terms.',
 }
 
@@ -3171,7 +3184,9 @@ FOLLOW_DZIENNIE = 5
 # 25.10.2026: 4 -> 1 (decyzja wlasciciela). Na obu kontach przyrost subskrybentow
 # idzie za wyswietleniami, a nie za liczba naszych subskrypcji; subskrypcja zapycha
 # skrzynke wlasciciela mailami cudzych publikacji. Obserwacje i komentarze zostaja.
-SUBSKRYPCJE_DZIENNIE = 1
+# 16.11.2026: 1 -> 3 (wlasciciel: „nic nie odkladaj, wdrazaj”; analiza przyrostu: 8 z 37 zapisow drugiego
+# konta to konta wczesniej przez nie zasubskrybowane, u nas 3 ze 138 odwzajemnionych subskrypcji).
+SUBSKRYPCJE_DZIENNIE = 3
 
 # SUFIT ODBIORCOW PRZY SUBSKRYPCJI. Subskrybujemy tylko publikacje, ktorych
 # publicznosc (subskrybenci albo obserwujacy z publicznego profilu) nie
@@ -3218,6 +3233,7 @@ RAMPA_AKTYWNOSCI = (
     ("2026-10-07", 4, 3, (12, 16)),
     ("2026-10-10", 5, 4, (14, 20)),
     ("2026-10-25", 5, 1, (14, 20)),   # subskrypcje 4 -> 1 (decyzja wlasciciela 25.10.2026)
+    ("2026-11-17", 5, 3, (14, 20)),   # subskrypcje 1 -> 3 (wlasciciel 16.11.2026: „nic nie odkladaj”)
 )
 
 

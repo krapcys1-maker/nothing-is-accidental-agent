@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **46 plików**, 58 531 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **46 plików**, 58 622 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -113,8 +113,8 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 > w głównej ścieżce artykułu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
-się testować bez przeglądarki i bez pieniędzy**. 234 zestawów
-testów, 7147 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+się testować bez przeglądarki i bez pieniędzy**. 235 zestawów
+testów, 7168 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -198,7 +198,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-13095 wierszy, 244 funkcji na poziomie modułu, 0 klas
+13170 wierszy, 245 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -364,6 +364,7 @@ wiec nie da sie go rozjechac z kodem.
 | `_slowa_zarzutu(c)` *(wewn.)* | Slowa trescioweko z samego twierdzenia — drugi sygnal tozsamosci. |
 | `_adres_zarzutu(c)` *(wewn.)* | — |
 | `_ten_sam_zarzut(a, b)` *(wewn.)* | Czy dwa zarzuty mowia o tym samym fakcie. ZACHOWAWCZO, i to celowo. |
+| `napraw_mysl(conn, run_id, tekst, audyt)` | Naprawa notki MYSL (16.11.2026): obalone twierdzenie wychodzi z tekstu, bo nie ma materialu do poprawy. |
 | `napraw_obalone(conn, run_id, tekst, audyt)` | Poprawia zdanie, ktoremu zapis przeczy. Nie wycina go i nie blokuje tekstu. |
 | `_wczytaj_z_zapasem(sciezka, parser)` *(wewn.)* | Plik czytany raz na zmiane (rozmiar i czas modyfikacji), nie przy kazdym celu. |
 | `_linie_jsonl(sciezka, filtr)` *(wewn.)* | Wiersze pliku JSONL; `filtr` = napisy, z ktorych choc jeden musi byc w linii |
@@ -744,7 +745,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-4492 wierszy, 49 funkcji na poziomie modułu, 0 klas
+4508 wierszy, 49 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -11829,7 +11830,7 @@ Answer with JSON only, no other text:
 
 #### `prompts/przeslania.md`
 
-**104 wierszy.** Pola wejsciowe: `artykulowy`, `glosy`, `hipotezy`, `karta`, `katy`, `ksiega`, `marka`, `n_kand`, `n_max`, `odbior`, `ramy`, `typ_historii`
+**105 wierszy.** Pola wejsciowe: `artykulowy`, `glosy`, `hipotezy`, `karta`, `katy`, `ksiega`, `marka`, `n_kand`, `n_max`, `odbior`, `ramy`, `typ_historii`
 
 ````markdown
 We investigated one AI story for {marka}, an account that explains AI to curious
@@ -11884,7 +11885,8 @@ and stands on its own. For each note give:
   "first") and comparison in it must appear in the evidence of the claims you cite,
   about the same entity the sentence names; if that evidence says "if", "once",
   "will" or "plans", so must the sentence. A vendor's claim, a single-source report,
-  a listing or an opinion names its source in the sentence itself. A technical term
+  a listing or an opinion names its source in the sentence itself. When the evidence includes the primary
+  document (the company's, regulator's, court's or paper's own text), credit it rather than the press summary. A technical term
   gets a short gloss.
 - `hak`: the checked detail behind that sentence.
 - `fakty`: the numbers of the confirmed claims the note stands on, its core claim
@@ -12533,7 +12535,7 @@ Your readers have already read the news. What they cannot get anywhere else is a
 
 How this works — read it twice:
 
-1. FACTS ARE THE GROUND YOU STAND ON, NOT THE POINT. Anything that happened, was said, was announced or was measured comes only from the numbered facts; never invent such things and never dress a hunch up as a fact. Use the fewest facts a note needs. Name a source in at most one short clause per note, only where the claim would be doubted without it. No arithmetic, ratios or lists of figures, and no repeating what the reader already read. A plan or claim that is only reported is "reportedly" — say so once, then think on top of it.
+1. FACTS ARE THE GROUND YOU STAND ON, NOT THE POINT. Anything that happened, was said, was announced or was measured comes only from the numbered facts; never invent such things and never dress a hunch up as a fact. Use the fewest facts a note needs. Name a source in at most one short clause per note, only where the claim would be doubted without it. No arithmetic, ratios or lists of figures, and no repeating what the reader already read. A plan or claim that is only reported is "reportedly" — say so once, then think on top of it. When a fact comes from the company's, regulator's, court's or paper's own document, credit that document, not the outlet that summarised it; when it rests only on a vendor's blog or a newsletter, say whose claim it is.
 
 2. THE THINKING IS YOURS AND IT MAY BE WRONG. Say what you think, how you got there, and how sure you are, like a person does: "we are not certain, but...", "our guess is...", "this could be nonsense, yet...", "we would not be shocked if...". Commit to a view while admitting doubt — never hedge into mush ("it remains to be seen", "could possibly perhaps"). Being wrong in an interesting way is better than being right in a boring way.
 
@@ -13014,7 +13016,7 @@ Return only valid JSON:
 
 #### `prompts/weryfikacja.md`
 
-**198 wierszy.** Pola wejsciowe: `context`, `dzis`, `text`
+**203 wierszy.** Pola wejsciowe: `context`, `dzis`, `text`
 
 ````markdown
 Check a short text that is about to be published in public — a comment, a note
@@ -13032,6 +13034,11 @@ Anything a reader could look up and find false:
 - numbers, dates, quantities, rankings
 - statements about what a document, law or company **says** or **does**
 - statements about what someone excluded, decided, admitted or predicted
+- **loaded characterisations of how something happened** — "quietly", "secretly", "ignores",
+  "placebo", "buried", "admitted": the source must support the characterisation itself, not just the
+  event. If the source describes warning headers and the text says "quietly ignores", that is `refuted`
+- **who said it**: if the text credits a claim to a named outlet or calls a report "independent", the
+  claim must appear in that outlet, and the report must not come from the party it is about
 
 **Not** claims: opinions, interpretations, analogies, questions, predictions,
 and statements about what the thing being responded to said.
@@ -13710,7 +13717,7 @@ wartosc i komentarz stojacy bezposrednio nad definicja.
 | `NOTE_MIN_WORDS_DLUGA` | `120` | DLUGA NOTKA — OKNO OSOBNE, BO SUFIT 64 SLOW MA ZMIERZONY KOSZT. Sufit wyzej optymalizuje ZAANGAZOWANIE i ma zrodlo. Nie optymalizuje ZROZUMI |
 | `NOTE_MAX_WORDS_DLUGA` | `200` | — |
 | `SLEDZTWO_TRYB` | `"lekkie"` | Ilu kandydatow generujemy. Dawniej bylo pieciu, potem trzech; dodatkowe warianty tego samego zdania niczego nie dokladaly, a placilismy za n |
-| `ROZKMINA_CO_DNI` | `3` | ROZKMINA (26.10.2026): przekrojowa seria o oknie dat z roznych historii. Co ile dni najwyzej i przy jakiej kolejce wolno ja zaczac (kolejka  |
+| `ROZKMINA_CO_DNI` | `4` | ROZKMINA (26.10.2026): przekrojowa seria o oknie dat z roznych historii. Co ile dni najwyzej i przy jakiej kolejce wolno ja zaczac (kolejka  |
 | `ROZKMINA_MAX_KOLEJKA` | `8` | — |
 | `ZAKLADY_WLACZONE` | `True` | KSIEGA ZAKLADOW (27.10.2026, `zaklady.py`): publiczne zgadywania z notek sa liczone i rozliczane. Wylacznik zatrzymuje caly obieg (wyciag, s |
 | `ZAKLADY_MAKS_Z_SERII` | `2` | Ile zakladow najwyzej z jednej grupy notek i jak daleko mozna ustawic termin (dni od dzis); stoja w configu, bo wchodza do promptu wyciagu j |
@@ -13769,7 +13776,7 @@ wartosc i komentarz stojacy bezposrednio nad definicja.
 | `FOLLOW_MIESIECZNIE` | `(10, 16)` | ZEROWANE 2026-08-23, PRZYWROCONE 2026-09-01 — BO WNIOSEK BYL FALSZYWY. Stalo tu `(0, 0)` z uzasadnieniem „Substack zdjal Follow ze stron pro |
 | `SUBSKRYPCJE_MIESIECZNIE` | `(12, 20)` | — |
 | `FOLLOW_DZIENNIE` | `5` | --- NIE JAK DRUGI BOT, 4.10.2026 (decyzja wlasciciela) -------------------- Przeglad 4.10 porownal nas z drugim botem w TYM SAMYM WIEKU kont |
-| `SUBSKRYPCJE_DZIENNIE` | `1` | 25.10.2026: 4 -> 1 (decyzja wlasciciela). Na obu kontach przyrost subskrybentow idzie za wyswietleniami, a nie za liczba naszych subskrypcji |
+| `SUBSKRYPCJE_DZIENNIE` | `3` | 25.10.2026: 4 -> 1 (decyzja wlasciciela). Na obu kontach przyrost subskrybentow idzie za wyswietleniami, a nie za liczba naszych subskrypcji |
 | `SUBSKRYPCJE_MAX_ODBIORCOW` | `1000` | SUFIT ODBIORCOW PRZY SUBSKRYPCJI. Subskrybujemy tylko publikacje, ktorych publicznosc (subskrybenci albo obserwujacy z publicznego profilu)  |
 | `SUBSKRYPCJE_MAKS_OGLADANYCH` | `40` | Ile kandydatow wolno OBEJRZEC w jednym przebiegu, szukajac malych kont. Sito jest tanie (publiczny JSON, bez przegladarki), ale duza czesc p |
 | `OBSERWACJE_MAX_ODBIORCOW` | `5000` | SUFIT ODBIORCOW PRZY OBSERWACJI (6.10.2026, decyzja wlasciciela: „ok to wykonaj”). Do tego dnia obserwacja nie miala sita: od 4.10 cztery z  |

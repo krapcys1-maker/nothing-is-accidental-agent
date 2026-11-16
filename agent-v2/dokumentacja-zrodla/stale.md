@@ -149,7 +149,7 @@
 | `NOTE_MIN_WORDS_DLUGA` | `120` | DLUGA NOTKA — OKNO OSOBNE, BO SUFIT 64 SLOW MA ZMIERZONY KOSZT. Sufit wyzej optymalizuje ZAANGAZOWANIE i ma zrodlo. Nie optymalizuje ZROZUMI |
 | `NOTE_MAX_WORDS_DLUGA` | `200` | — |
 | `SLEDZTWO_TRYB` | `"lekkie"` | Ilu kandydatow generujemy. Dawniej bylo pieciu, potem trzech; dodatkowe warianty tego samego zdania niczego nie dokladaly, a placilismy za n |
-| `ROZKMINA_CO_DNI` | `3` | ROZKMINA (26.10.2026): przekrojowa seria o oknie dat z roznych historii. Co ile dni najwyzej i przy jakiej kolejce wolno ja zaczac (kolejka  |
+| `ROZKMINA_CO_DNI` | `4` | ROZKMINA (26.10.2026): przekrojowa seria o oknie dat z roznych historii. Co ile dni najwyzej i przy jakiej kolejce wolno ja zaczac (kolejka  |
 | `ROZKMINA_MAX_KOLEJKA` | `8` | — |
 | `ZAKLADY_WLACZONE` | `True` | KSIEGA ZAKLADOW (27.10.2026, `zaklady.py`): publiczne zgadywania z notek sa liczone i rozliczane. Wylacznik zatrzymuje caly obieg (wyciag, s |
 | `ZAKLADY_MAKS_Z_SERII` | `2` | Ile zakladow najwyzej z jednej grupy notek i jak daleko mozna ustawic termin (dni od dzis); stoja w configu, bo wchodza do promptu wyciagu j |
@@ -208,7 +208,7 @@
 | `FOLLOW_MIESIECZNIE` | `(10, 16)` | ZEROWANE 2026-08-23, PRZYWROCONE 2026-09-01 — BO WNIOSEK BYL FALSZYWY. Stalo tu `(0, 0)` z uzasadnieniem „Substack zdjal Follow ze stron pro |
 | `SUBSKRYPCJE_MIESIECZNIE` | `(12, 20)` | — |
 | `FOLLOW_DZIENNIE` | `5` | --- NIE JAK DRUGI BOT, 4.10.2026 (decyzja wlasciciela) -------------------- Przeglad 4.10 porownal nas z drugim botem w TYM SAMYM WIEKU kont |
-| `SUBSKRYPCJE_DZIENNIE` | `1` | 25.10.2026: 4 -> 1 (decyzja wlasciciela). Na obu kontach przyrost subskrybentow idzie za wyswietleniami, a nie za liczba naszych subskrypcji |
+| `SUBSKRYPCJE_DZIENNIE` | `3` | 25.10.2026: 4 -> 1 (decyzja wlasciciela). Na obu kontach przyrost subskrybentow idzie za wyswietleniami, a nie za liczba naszych subskrypcji |
 | `SUBSKRYPCJE_MAX_ODBIORCOW` | `1000` | SUFIT ODBIORCOW PRZY SUBSKRYPCJI. Subskrybujemy tylko publikacje, ktorych publicznosc (subskrybenci albo obserwujacy z publicznego profilu)  |
 | `SUBSKRYPCJE_MAKS_OGLADANYCH` | `40` | Ile kandydatow wolno OBEJRZEC w jednym przebiegu, szukajac malych kont. Sito jest tanie (publiczny JSON, bez przegladarki), ale duza czesc p |
 | `OBSERWACJE_MAX_ODBIORCOW` | `5000` | SUFIT ODBIORCOW PRZY OBSERWACJI (6.10.2026, decyzja wlasciciela: „ok to wykonaj”). Do tego dnia obserwacja nie miala sita: od 4.10 cztery z  |
