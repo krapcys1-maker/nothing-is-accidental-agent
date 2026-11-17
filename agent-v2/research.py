@@ -296,7 +296,7 @@ def _search(conn, run_id, question, gap, seen, dowod="", gdzie="", stop_usd=None
         if not isinstance(item, dict):
             continue
         key = url_key(item.get("url"))
-        if not key or key not in real or key in seen:
+        if not key or not _w_wynikach(key, real) or key in seen:
             continue
         seen.add(key)
         host = urlsplit(key).hostname
@@ -629,6 +629,23 @@ def _zrodlo_zakazane(url):
     if _host_na_liscie(host, REPOZYTORIA_KODU):
         return any(_KOD_EXPLOITA.search(s) for s in p.path.lower().split("/") if s)
     return False
+
+
+def _w_wynikach(key, real):
+    """Czy adres od modelu jest jednym z adresow, ktore oddala wyszukiwarka (17.11.2026).
+
+    Wyszukiwarka oddaje adresy z doklejonymi parametrami sledzacymi (`?kuid=...&kref=...`), a model przepisuje
+    adres czysty. Scisle porownanie odrzucalo wtedy prawdziwy dokument: prospekt S-1 Anthropic na sec.gov
+    przepadl, choc stal w wynikach. Adres BEZ zapytania przechodzi, gdy wyniki maja ten sam host i sciezke;
+    adres Z zapytaniem musi pasowac dokladnie (model nie dopisze wlasnego parametru do prawdziwej sciezki)."""
+    if not key:
+        return False
+    if key in real:
+        return True
+    p = urlsplit(key)
+    if p.query:
+        return False
+    return any((q.netloc, q.path) == (p.netloc, p.path) for q in map(urlsplit, real))
 
 
 def _warianty(key):
@@ -1496,7 +1513,7 @@ def dokument(conn, run_id, co, kto, gdzie, seen=None):
         if not isinstance(item, dict) or item.get("is_the_document") is not True:
             continue
         key = url_key(item.get("url"))
-        if not key or key not in real or _warianty(key) & znane:
+        if not key or not _w_wynikach(key, real) or _warianty(key) & znane:
             continue
         host = urlsplit(key).hostname
         if _host_na_liscie(host, config.BLOCKED_HOSTS) or _zrodlo_zakazane(key):

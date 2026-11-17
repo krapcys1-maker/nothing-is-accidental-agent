@@ -1417,7 +1417,7 @@
 
 ### `research.py` — dogrywka researchu: księga pytań śledztwa (status każdego pytania z cytatem), pościg za dokumentem pierwotnym, konkurencyjne wyjaśnienia artykułu z puli, twardy sufit kosztu
 
-1516 wierszy, 51 funkcji na poziomie modułu, 1 klas
+1533 wierszy, 52 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -1444,6 +1444,7 @@
 | `deepen(conn, run_id, question, evidence, corpus, max_rund, pytania, stop_usd)` | Return enriched evidence and an auditable dossier. At most `max_rund` searches |
 | `_host_na_liscie(host, lista)` *(wewn.)* | — |
 | `_zrodlo_zakazane(url)` *(wewn.)* | — |
+| `_w_wynikach(key, real)` *(wewn.)* | Czy adres od modelu jest jednym z adresow, ktore oddala wyszukiwarka (17.11.2026). |
 | `_warianty(key)` *(wewn.)* | Ten sam dokument pod „www." i bez, przez http i https. 25.10.2026: w probie o Kimi |
 | `_norm_zapytania(zapytanie)` *(wewn.)* | Zapytanie do porownania: male litery, bez cudzyslowow i interpunkcji. |
 | `_norm_fragmentu(tekst)` *(wewn.)* | — |

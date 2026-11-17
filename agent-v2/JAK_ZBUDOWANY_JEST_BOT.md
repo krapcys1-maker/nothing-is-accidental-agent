@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **46 plików**, 58 660 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **46 plików**, 58 677 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -113,8 +113,8 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 > w głównej ścieżce artykułu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
-się testować bez przeglądarki i bez pieniędzy**. 235 zestawów
-testów, 7175 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+się testować bez przeglądarki i bez pieniędzy**. 236 zestawów
+testów, 7183 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -1559,7 +1559,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `research.py` — dogrywka researchu: księga pytań śledztwa (status każdego pytania z cytatem), pościg za dokumentem pierwotnym, konkurencyjne wyjaśnienia artykułu z puli, twardy sufit kosztu
 
-1516 wierszy, 51 funkcji na poziomie modułu, 1 klas
+1533 wierszy, 52 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -1586,6 +1586,7 @@ wiec nie da sie go rozjechac z kodem.
 | `deepen(conn, run_id, question, evidence, corpus, max_rund, pytania, stop_usd)` | Return enriched evidence and an auditable dossier. At most `max_rund` searches |
 | `_host_na_liscie(host, lista)` *(wewn.)* | — |
 | `_zrodlo_zakazane(url)` *(wewn.)* | — |
+| `_w_wynikach(key, real)` *(wewn.)* | Czy adres od modelu jest jednym z adresow, ktore oddala wyszukiwarka (17.11.2026). |
 | `_warianty(key)` *(wewn.)* | Ten sam dokument pod „www." i bez, przez http i https. 25.10.2026: w probie o Kimi |
 | `_norm_zapytania(zapytanie)` *(wewn.)* | Zapytanie do porownania: male litery, bez cudzyslowow i interpunkcji. |
 | `_norm_fragmentu(tekst)` *(wewn.)* | — |
